@@ -1,0 +1,13 @@
+id: T0071
+title: Trajectory polyline + event markers rendering
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0070, T0040]
+milestone: M5
+spec: |
+  rendering-spec section 7: camera-relative Line2 color-coded by dominant
+  body, billboarded SOI/approach/impact markers, impact warning UI hook.
+acceptance:
+  - Markers land on the correct polyline points at all zooms
+handoff_notes: ""

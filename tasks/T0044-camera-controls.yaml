@@ -1,0 +1,14 @@
+id: T0044
+title: Free camera + body focus controls
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0040]
+milestone: M2
+spec: |
+  Orbit-style camera around a focus target (any body or the ship), smooth
+  focus transfer, zoom from surface-skimming to system-wide, respecting
+  camera-relative math.
+acceptance:
+  - Focus Earth -> Jupiter transfer smooth; no float jitter at min zoom
+handoff_notes: ""

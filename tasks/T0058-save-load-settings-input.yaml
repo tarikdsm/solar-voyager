@@ -1,0 +1,15 @@
+id: T0058
+title: Save/load, settings, input mapping
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050]
+milestone: M3
+spec: |
+  architecture.md persistence: versioned localStorage envelope + JSON
+  export/import; settings (quality tiers per rendering-spec section 9);
+  rebindable input -> Commands mapping.
+acceptance:
+  - Save -> reload -> identical sim state (positions derived from time)
+  - Envelope version migration test (v1 -> v2 fixture)
+handoff_notes: ""

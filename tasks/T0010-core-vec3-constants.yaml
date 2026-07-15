@@ -1,0 +1,15 @@
+id: T0010
+title: core/vec3 float64 math + constants
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  Plain {x,y,z} float64 vector ops (add, sub, scale, dot, cross, norm,
+  normalize, distance), allocation-conscious variants included; core/constants.ts
+  (AU_KM, body-independent constants). physics-spec.md section 1.
+acceptance:
+  - Unit tests for all ops incl. edge cases (zero vector normalize)
+  - No dependencies outside core/
+handoff_notes: ""

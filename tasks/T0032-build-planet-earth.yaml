@@ -1,0 +1,14 @@
+id: T0032
+title: build_planet script + Earth asset
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0031]
+milestone: M1
+spec: |
+  Parameterized planet builder reading data/bodies.json (radius, oblateness);
+  Earth: 4k albedo + 2k normal + night lights, <= 50k tris, < 12 MB total.
+acceptance:
+  - Earth glb+ktx2 committed, manifest within budgets
+  - Re-running the script reproduces the artifact
+handoff_notes: ""

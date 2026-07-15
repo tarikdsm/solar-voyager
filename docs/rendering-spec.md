@@ -1,0 +1,63 @@
+# Rendering Specification — Solar Voyager
+
+## 1. Camera-relative rendering (floating origin)
+
+- Physics is float64 heliocentric km; the GPU is float32. The bridge lives in **exactly one place**: `render/spaceScene.ts`.
+- Every frame, for each visual: `scenePos = toFloat32(bodyPos_f64 − cameraPos_f64)`. The three.js camera sits at the scene origin `(0,0,0)` permanently.
+- **1 scene unit = 1 km.** Near objects get sub-millimeter-true positions; distant objects' float32 error is sub-pixel by construction.
+- Never store or accumulate positions in float32 — recompute from float64 each frame.
+
+## 2. Depth
+
+`WebGLRenderer({ logarithmicDepthBuffer: true })`. Near plane 0.001 (1 m), far 1e10 km (beyond Eris). No manual depth partitioning.
+
+## 3. Visual ladder — 3 tiers per body (by projected angular size)
+
+| Tier | Condition | Representation |
+|---|---|---|
+| 1 — Point | < ~1.5 px | Additive point sprite; size/brightness from apparent magnitude computed from real radius, distance, geometric albedo, phase angle. Planets look like wandering stars from afar — correct at real scale. |
+| 2 — Sphere | 1.5 px – ~200 px | Icosphere L2 with 2k/1k KTX2 albedo; no normal map. |
+| 3 — Full model | > ~200 px | Blender-authored glTF (Draco): normal maps, Saturn/Uranus rings as textured annuli (double-sided, alpha), comet coma+tail as camera-facing sprites scaled by heliocentric distance near perihelion. |
+
+- Tier-2/3 textures **lazy-load** the first time a body crosses the tier-1→2 threshold. Only Sun/Earth/Moon assets load at startup.
+- Hysteresis on tier switches (±20%) to avoid popping.
+
+## 4. Lighting & post
+
+- **One directional light**, direction Sun→camera-focus, intensity ∝ 1/d² normalized at 1 AU.
+- HDR pipeline: half-float render target, **ACES filmic tone mapping**, UnrealBloomPass (solar disc, engine glow).
+- Sun rendered as emissive sphere + billboard glare sprite.
+- Night sides genuinely dark; global ambient floor 0.02 for playability.
+- Earth atmosphere: simple rim/fresnel shader in v1 (full scattering is a future task).
+
+## 5. Starfield
+
+- Yale Bright Star Catalog (~9,100 stars, public domain) baked by `tools/bake_stars.py` into `data/stars.bin`: packed Float32 `(dirX, dirY, dirZ, mag, B−V→RGB)`, ~250 KB.
+- Rendered as one `THREE.Points` on a 1e9 km sphere centered on the camera (moves with it). Correct at every zoom; no skybox textures.
+
+## 6. Launch scene (2D)
+
+Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Earth limb, atmosphere gradient by altitude, exhaust plume scaling with throttle and ambient pressure. Parallax cloud/ground layers near the pad (Alcântara coastline silhouette).
+
+## 7. Trajectory & map rendering
+
+- Predicted path: polyline from the worker (≤2000 pts), rendered camera-relative as `Line2` (fat lines), color-coded by dominant body; event markers (SOI, closest approach, impact) as billboarded icons.
+- Osculating conic: analytic ellipse (64–256 segments) around the dominant body, updated every frame — instant feedback while the worker refines.
+- System map: separate three.js scene, top-down-capable free orbit camera, bodies as scaled icons + orbit lines, same snapshot data.
+
+## 8. Performance & asset budgets (CI-gated)
+
+| Budget | Limit |
+|---|---|
+| Repo total | < 300 MB |
+| `public/assets/` | < 150 MB |
+| Initial critical path (code + Sun/Earth/Moon + stars) | < 8 MB |
+| Frame budget (mid-range laptop, 1080p) | 16.6 ms; render ≤ 10 ms |
+| Tier-3 model | ≤ 50k tris planets, ≤ 5k asteroids |
+
+- All textures KTX2 (ETC1S for albedo, UASTC for normal maps); all meshes Draco.
+- `npm run check:budgets` fails CI when exceeded.
+
+## 9. Quality settings
+
+`low / medium / high`: texture tier cap, bloom on/off, pixel ratio cap, star count cap. Default auto-detected from `devicePixelRatio` + a first-frame timing probe.

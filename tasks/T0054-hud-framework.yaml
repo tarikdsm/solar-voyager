@@ -1,0 +1,15 @@
+id: T0054
+title: HUD framework (Preact overlay) + orbit readout + clock
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050]
+milestone: M3
+spec: |
+  ui/App.tsx + signals wiring from SimSnapshot; orbit readout panel
+  (dominant body, Ap/Pe, e, i, period), sim clock (UTC + MET).
+  game-design.md HUD table is the spec.
+acceptance:
+  - HUD updates at 60 fps without full re-renders (signals granularity)
+  - Values match sim-side osculating elements exactly
+handoff_notes: ""

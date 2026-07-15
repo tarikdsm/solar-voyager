@@ -1,0 +1,14 @@
+id: T0052
+title: Time warp with substep-budget auto-clamp
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050]
+milestone: M3
+spec: |
+  physics-spec 3.2: warp ladder, thrust lockout > 1000x, 4000-substep
+  budget, auto-clamp with reason exposed in SimSnapshot.
+acceptance:
+  - At 1e7x in LEO warp clamps automatically; in deep space it sustains
+  - Ledger integration unaffected by warp changes (test)
+handoff_notes: ""

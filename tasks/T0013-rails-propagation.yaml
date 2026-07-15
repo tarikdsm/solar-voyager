@@ -1,0 +1,15 @@
+id: T0013
+title: Rails propagation of the body catalog
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0012, T0020]
+milestone: M1
+spec: |
+  sim/propagation/rails.ts: evaluate all catalog bodies at time t
+  (physics-spec section 2). Moons are parent-relative — resolve parent chains
+  (Sun -> Jupiter -> Io) in one pass, cache per-t evaluation.
+acceptance:
+  - Positions for planets + Moon at epoch match bodies.json baked vectors < 1 km
+  - Per-frame evaluation of 50 bodies < 0.2 ms (bench test)
+handoff_notes: ""

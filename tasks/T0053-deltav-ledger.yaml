@@ -1,0 +1,14 @@
+id: T0053
+title: Delta-v / energy ledger + burn log
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0051]
+milestone: M3
+spec: |
+  physics-spec section 5: cumulative dv, mechanical energy, burn log entries
+  with prograde/normal/radial decomposition; substep-integrated.
+acceptance:
+  - Hohmann LEO->GEO within 1% of 3.90 km/s (spec 7.7)
+  - Same burn at 1x and 100x warp yields identical ledger (test)
+handoff_notes: ""

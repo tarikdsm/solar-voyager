@@ -1,0 +1,15 @@
+id: T0041
+title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0040]
+milestone: M2
+spec: |
+  rendering-spec section 3: apparent-magnitude point sprites (<1.5 px),
+  icosphere tier, full glTF tier; +-20% hysteresis; tier-2/3 textures
+  lazy-load on first threshold crossing; only Sun/Earth/Moon eager.
+acceptance:
+  - Fly-in from 1 AU to LEO transitions tiers without popping (manual + smoke test)
+  - Network panel shows no tier-2/3 fetches until approach
+handoff_notes: ""

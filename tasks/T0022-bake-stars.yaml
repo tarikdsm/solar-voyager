@@ -1,0 +1,14 @@
+id: T0022
+title: bake_stars script — Yale BSC to stars.bin
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  rendering-spec section 5: Yale Bright Star Catalog -> packed Float32 binary
+  (direction, magnitude, B-V -> RGB), ~250 KB, plus a loader in render/.
+acceptance:
+  - stars.bin < 300 KB, ~9k stars
+  - Spot-check test: Sirius/Canopus positions and relative brightness correct
+handoff_notes: ""

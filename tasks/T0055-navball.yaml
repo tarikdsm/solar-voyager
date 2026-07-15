@@ -1,0 +1,13 @@
+id: T0055
+title: Navball
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0054, T0051]
+milestone: M3
+spec: |
+  Attitude sphere vs dominant-body frame with prograde/retro/normal/radial
+  markers and thrust vector indicator.
+acceptance:
+  - Markers verified against known orbital directions in LEO (test fixtures)
+handoff_notes: ""

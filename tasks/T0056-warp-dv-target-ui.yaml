@@ -1,0 +1,14 @@
+id: T0056
+title: Warp control, delta-v meter, target panel UI
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0054, T0052, T0053]
+milestone: M3
+spec: |
+  Warp ladder control with clamp indicator + reason; dv ledger display
+  (headline m/s + energy J secondary); target selector with distance,
+  relative velocity, next closest approach.
+acceptance:
+  - Clamp reason string surfaces within one frame of clamping
+handoff_notes: ""

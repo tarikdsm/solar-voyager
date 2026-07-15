@@ -1,0 +1,15 @@
+id: T0040
+title: Camera-relative SpaceScene + logarithmic depth
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0013, T0032]
+milestone: M2
+spec: |
+  rendering-spec sections 1-2: camera at origin, per-frame float64 subtraction
+  boundary in spaceScene.ts ONLY, 1 unit = 1 km, logarithmicDepthBuffer,
+  near 0.001 / far 1e10.
+acceptance:
+  - Earth renders correctly from 200 km and from 1 AU without z-fighting or jitter
+  - Grep-able invariant: no other file converts physics positions to float32
+handoff_notes: ""

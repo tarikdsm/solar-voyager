@@ -1,0 +1,14 @@
+id: T0023
+title: Rails accuracy regression suite
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0013, T0021]
+milestone: M1
+spec: |
+  tests/sim/rails.test.ts: every catalog body vs ephemerides-check.json at
+  +30d and +365d, bounds per physics-spec section 2 table. Tighten bounds
+  empirically in this PR (update the spec table with measured values + margin).
+acceptance:
+  - All bodies within bounds; spec table updated with real measured errors
+handoff_notes: ""

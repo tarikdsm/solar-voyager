@@ -1,0 +1,15 @@
+id: T0057
+title: Osculating conic overlay
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050, T0040]
+milestone: M3
+spec: |
+  physics-spec section 6 + rendering-spec section 7: per-frame analytic
+  ellipse/hyperbola around the dominant body, camera-relative Line2,
+  dominant-body hysteresis.
+acceptance:
+  - Ellipse matches propagated path in a two-body test scene
+  - No flicker crossing SOI boundaries (hysteresis works)
+handoff_notes: ""

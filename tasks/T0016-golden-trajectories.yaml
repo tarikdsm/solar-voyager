@@ -1,0 +1,15 @@
+id: T0016
+title: Golden trajectory harness
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0014, T0015]
+milestone: M1
+spec: |
+  tests/golden/: store three 30-day propagations (LEO, Earth-Mars transfer
+  coast, Jupiter flyby) per physics-spec 7.6, with a comparison harness and a
+  documented regeneration script.
+acceptance:
+  - Goldens committed with generation parameters recorded
+  - Harness fails loudly on >tolerance drift; regen requires explicit flag
+handoff_notes: ""

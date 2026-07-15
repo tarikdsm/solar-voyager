@@ -1,0 +1,14 @@
+id: T0003
+title: Verify GitHub Pages deploy of placeholder build
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M0
+spec: |
+  Ensure deploy.yml publishes the Vite build to GitHub Pages (base
+  /solar-voyager/). Fix any pathing issues (assets, worker URLs).
+acceptance:
+  - https://tarikdsm.github.io/solar-voyager/ serves the placeholder scene
+  - No 404s in the browser console
+handoff_notes: ""

@@ -1,0 +1,15 @@
+id: T0030
+title: Blender common helpers + headless build entry
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  tools/blender/common/ (empty-scene reset, UV sphere, PBR material wiring,
+  glTF export with Draco 14/10/12, manifest printer) + build_all.py
+  orchestrator with --only/--all flags, run headless per docs/asset-pipeline.md.
+acceptance:
+  - Headless build of a test sphere emits a valid glb
+  - Manifest printed (tris, textures, bytes)
+handoff_notes: ""

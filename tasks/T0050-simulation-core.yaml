@@ -1,0 +1,15 @@
+id: T0050
+title: SimulationCore + SimSnapshot + Commands
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0013, T0014, T0015]
+milestone: M3
+spec: |
+  architecture.md: SimulationCore owning clock/bodies/ship/ledger;
+  step(wallDt); immutable per-frame SimSnapshot (typed arrays + derived);
+  Commands interface. These two interfaces are ADR-gated from now on.
+acceptance:
+  - Snapshot consumed by a stub renderer test; no render/ui imports in sim
+  - step() with zero thrust preserves two-body orbit per spec tolerances
+handoff_notes: ""

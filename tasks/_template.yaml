@@ -1,0 +1,14 @@
+# Copy to T####-short-slug.yaml. Rules: docs/task-protocol.md
+id: T0000
+title: Short imperative title
+status: TODO            # TODO | CLAIMED | IN_PROGRESS | REVIEW | DONE | BLOCKED
+agent: ""               # claude | chatgpt | grok | human — empty while TODO
+branch: ""              # task/T0000-short-slug (set when claimed)
+depends_on: []          # list of task ids that must be DONE first
+milestone: M0           # M0..M6, see docs/roadmap.md
+spec: |
+  What to build. Reference docs/ sections — the docs are the spec of record;
+  this field points into them and adds task-local detail.
+acceptance:
+  - Concrete, verifiable criteria (tests to pass, numbers to hit, budgets to respect)
+handoff_notes: ""

@@ -1,0 +1,15 @@
+id: T0014
+title: N-body gravity field evaluation
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0013]
+milestone: M1
+spec: |
+  sim/propagation/nbodyForces.ts: acceleration at point r, time t = sum over
+  ALL catalog bodies of -mu_i (r-r_i)/|r-r_i|^3 (physics-spec section 3).
+  Pure function usable by main sim and worker.
+acceptance:
+  - Analytic check vs single-body two-body acceleration
+  - Lagrange L1 Earth-Sun equilibrium: net acceleration ~0 in rotating-frame test
+handoff_notes: ""

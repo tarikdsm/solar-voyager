@@ -1,0 +1,14 @@
+id: T0043
+title: Lighting, ACES tone mapping, bloom
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0040]
+milestone: M2
+spec: |
+  rendering-spec section 4: single sun directional light 1/d^2, half-float HDR
+  target, ACES, UnrealBloomPass, emissive sun + glare billboard, ambient 0.02.
+acceptance:
+  - Night side of Earth dark with visible night lights; sun bloom without artifacts
+  - Frame budget respected on reference hardware
+handoff_notes: ""

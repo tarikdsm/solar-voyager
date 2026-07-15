@@ -1,0 +1,18 @@
+id: T0020
+title: bake_ephemerides script + initial bodies.json (planets + Moon)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  tools/bake_ephemerides.py (astroquery.jplhorizons): fetch state
+  vectors at J2026 epoch, convert to osculating elements (heliocentric planets,
+  parent-relative Moon), write data/bodies.json (GM, radius, rotation, tilt,
+  albedo, SOI, elements) and data/ephemerides-check.json (epoch, +30d, +365d).
+  Start with Sun, 8 planets, Moon. Asset/visual fields stubbed.
+acceptance:
+  - Script re-runnable and documented (README in tools/)
+  - bodies.json validates against a JSON schema committed alongside
+  - Check vectors present for all baked bodies
+handoff_notes: ""

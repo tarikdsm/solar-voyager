@@ -1,0 +1,15 @@
+id: T0021
+title: Full ~50-body catalog bake
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0020]
+milestone: M1
+spec: |
+  Extend the bake to the full docs/game-design.md catalog: dwarfs (incl.
+  Pluto/Charon), all listed moons, asteroids, comets (hyperbolic-safe
+  elements for 1P and 67P). SOI radii computed; procedural seeds assigned.
+acceptance:
+  - All catalog bodies in bodies.json + check vectors
+  - Comet elements use the correct eccentricity branch
+handoff_notes: ""

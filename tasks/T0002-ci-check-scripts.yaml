@@ -1,0 +1,17 @@
+id: T0002
+title: CI check scripts (task schema, asset budgets)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M0
+spec: |
+  npm run check:tasks — validate every tasks/*.yaml against the template schema
+  (fields, valid states, unique ids, depends_on ids exist, DAG acyclic).
+  npm run check:budgets — enforce docs/rendering-spec.md budget table
+  (assets total, per-asset sizes, critical path estimate).
+acceptance:
+  - check:tasks fails on a duplicate id, invalid state, or dependency cycle (test fixtures)
+  - check:budgets fails when a fixture exceeds a limit
+  - Both wired into .github/workflows/ci.yml
+handoff_notes: ""

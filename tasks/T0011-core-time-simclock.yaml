@@ -1,0 +1,14 @@
+id: T0011
+title: core/time — SimClock, TDB seconds, warp ladder
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  Float64 TDB seconds since J2026 epoch; conversions to/from UTC calendar date
+  for display; warp ladder constants (physics-spec 3.2) and clamp state type.
+acceptance:
+  - Epoch round-trip tests (2026-01-01T00:00:00 TDB <-> t=0)
+  - Date formatting stable across timezones (UTC only)
+handoff_notes: ""

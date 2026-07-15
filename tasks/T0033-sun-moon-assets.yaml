@@ -1,0 +1,13 @@
+id: T0033
+title: Sun + Moon assets
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0032]
+milestone: M1
+spec: |
+  Sun: emissive 2k (SDO composite) sphere. Moon: 4k albedo + 2k normal
+  (USGS/LRO). Both via builder scripts, budget-compliant.
+acceptance:
+  - Both assets committed with manifests; critical path (code+Sun+Earth+Moon+stars) < 8 MB
+handoff_notes: ""

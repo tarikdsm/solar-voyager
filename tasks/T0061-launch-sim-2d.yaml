@@ -1,0 +1,15 @@
+id: T0061
+title: 2D launch simulation (Alcantara)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0060, T0011]
+milestone: M4
+spec: |
+  physics-spec section 4: polar EOM with Earth rotation initial condition,
+  co-rotating atmosphere drag with Cd(Mach), pitch-rate control + prograde
+  hold, RK4 100 Hz, max-q tracking, gravity/drag loss integrals.
+acceptance:
+  - Scripted profile regression, 200 +/- 5 km orbit, golden dv +/- 1%, max-q +/- 2% (spec 7.4)
+  - Bit-reproducible across runs
+handoff_notes: ""

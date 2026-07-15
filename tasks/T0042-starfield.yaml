@@ -1,0 +1,13 @@
+id: T0042
+title: Starfield renderer
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0022, T0040]
+milestone: M2
+spec: |
+  rendering-spec section 5: one THREE.Points from stars.bin on a 1e9 km
+  camera-centered sphere; magnitude -> size/alpha; B-V color.
+acceptance:
+  - Orion recognizable; stars stable at all warp/zoom levels
+handoff_notes: ""

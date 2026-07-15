@@ -1,0 +1,16 @@
+id: T0012
+title: Kepler solver (elliptic + hyperbolic) and elements <-> state vectors
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0010]
+milestone: M1
+spec: |
+  physics-spec.md section 2: Newton-Raphson Kepler solve (elliptic |dE|<1e-12,
+  max 30 iters, E0=M or pi if e>0.8; hyperbolic branch for comets), perifocal
+  frame, Rz(O)Rx(i)Rz(w) rotation, and full osculating elements <-> state
+  vector conversions with e->0 / i->0 degeneracy handling.
+acceptance:
+  - physics-spec 7.1 tolerances met across e in [0,0.99] and (1,5]
+  - Round-trip elements<->state 1e-10 relative
+handoff_notes: ""

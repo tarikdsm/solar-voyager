@@ -1,0 +1,15 @@
+id: T0015
+title: DP54 adaptive integrator
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0010]
+milestone: M1
+spec: |
+  physics-spec 3.1 / ADR-002: Dormand-Prince 5(4) FSAL, published tableau to
+  full double precision, PI step control, tolerances from spec. Pure
+  propagate(state, t0, t1, accelFn, tol).
+acceptance:
+  - physics-spec 7.2 two-body tests pass (10 periods, <1e-3 km, drift <1e-9)
+  - Step controller respects the 4000-substep budget interface
+handoff_notes: ""

@@ -1,0 +1,15 @@
+id: T0062
+title: 2D -> 3D handoff
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0061, T0013]
+milestone: M4
+spec: |
+  physics-spec 4.6: polar -> launch plane -> ECI (i = latitude, RAAN from
+  Earth rotation angle at ignition) -> ecliptic -> heliocentric. Write the
+  explicit rotation matrices into the spec section in this PR.
+acceptance:
+  - Energy/angular momentum round-trip < 1e-9 relative (spec 7.5)
+  - Handoff at 140 km produces the expected LEO osculating elements
+handoff_notes: ""

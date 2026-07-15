@@ -1,0 +1,15 @@
+id: T0051
+title: Ship state, thrust, attitude modes
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050]
+milestone: M3
+spec: |
+  shipState.ts: r, v, attitude quaternion, throttle; manual rotation +
+  hold modes (pro/retro/normal/anti/radial/target). Thrust term into the
+  DP54 accelFn (physics-spec section 3).
+acceptance:
+  - Prograde hold tracks velocity direction through an orbit (test)
+  - Thrust changes trigger predictor invalidation event
+handoff_notes: ""

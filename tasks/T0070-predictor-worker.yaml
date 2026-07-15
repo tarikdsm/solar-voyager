@@ -1,0 +1,16 @@
+id: T0070
+title: Trajectory predictor worker
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050]
+milestone: M5
+spec: |
+  workers/predictor.worker.ts + protocol: thrust-free propagation reusing
+  dp54/nbodyForces verbatim, horizon max(2 periods, 90 d, user-extended),
+  <=2000-pt polyline via transferable Float64Array, events (SOI, closest
+  approach, impact + time-to-impact). Debounce rules per architecture.md.
+acceptance:
+  - Worker polyline within 1 km of main-thread propagation over 30 days (test)
+  - Main-thread frame impact < 0.5 ms
+handoff_notes: ""

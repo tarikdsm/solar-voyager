@@ -1,0 +1,18 @@
+id: T0001
+title: Project scaffold (Vite + TS + three.js + Preact + tooling)
+status: TODO
+agent: ""
+branch: ""
+depends_on: []
+milestone: M0
+spec: |
+  Scaffold per docs/architecture.md: Vite + TypeScript strict + three.js + Preact
+  (+ @preact/signals), ESLint with import/no-restricted-paths enforcing
+  core <- sim <- game <- render/ui, Prettier, Vitest. vite.config.ts with
+  base '/solar-voyager/'. npm scripts: dev, build, test, lint, typecheck.
+  Placeholder scene: spinning cube + "Solar Voyager" title.
+acceptance:
+  - npm run lint/typecheck/test/build all pass
+  - Import-direction ESLint rule demonstrably rejects a sim -> render import
+  - Placeholder scene renders locally via npm run dev
+handoff_notes: ""
