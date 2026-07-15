@@ -12,3 +12,5 @@ Thumbs.db
 tools/blender/__pycache__/
 __pycache__/
 .vite/
+tools/blender/_*
+tools/blender/*.bat
