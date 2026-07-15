@@ -14,6 +14,7 @@
     "typecheck": "tsc -b tsconfig.node.json --pretty false && tsc --noEmit --project tsconfig.json",
     "format:check": "prettier --check .",
     "check:tasks": "node tools/checks/taskSchema.mjs",
+    "check:budgets": "node tools/checks/assetBudgets.mjs",
     "bench:scaffold": "node tools/bench/scaffoldBench.mjs"
   },
   "dependencies": {
