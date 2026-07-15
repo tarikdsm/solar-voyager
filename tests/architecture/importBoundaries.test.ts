@@ -7,26 +7,38 @@ import { test, expect } from 'vitest';
 test.sequential('rejects an extensionless sim import from render', async () => {
   const projectRoot = process.cwd();
   const fixtureId = `${process.pid}-${Date.now()}`;
-  const simFixture = join(projectRoot, 'src', 'sim', `boundary-${fixtureId}.ts`);
+  const renderDirectory = join(projectRoot, 'src', 'render');
+  const virtualSimFixture = join(projectRoot, 'src', 'sim', `boundary-${fixtureId}.ts`);
   const renderFixture = join(projectRoot, 'src', 'render', `boundary-${fixtureId}.ts`);
+  let createdRenderDirectory = false;
 
   try {
-    await mkdir(join(projectRoot, 'src', 'sim'), { recursive: true });
-    await mkdir(join(projectRoot, 'src', 'render'), { recursive: true });
+    createdRenderDirectory = (await mkdir(renderDirectory, { recursive: true })) !== undefined;
     await writeFile(renderFixture, 'export const forbiddenValue = 1;\n');
-    await writeFile(
-      simFixture,
-      `import { forbiddenValue } from '../render/boundary-${fixtureId}';\n\nexport const leakedValue = forbiddenValue;\n`,
-    );
+    const invalidSimSource = `import { forbiddenValue } from '../render/boundary-${fixtureId}';\n\nexport const leakedValue = forbiddenValue;\n`;
 
-    const eslint = new ESLint({ cwd: projectRoot });
-    const [result] = await eslint.lintFiles([simFixture]);
+    const eslint = new ESLint({
+      cwd: projectRoot,
+      overrideConfig: {
+        languageOptions: {
+          parserOptions: {
+            projectService: {
+              allowDefaultProject: ['src/sim/boundary-*.ts'],
+            },
+          },
+        },
+      },
+    });
+    const [result] = await eslint.lintText(invalidSimSource, { filePath: virtualSimFixture });
 
-    expect(result?.messages.some(({ ruleId }) => ruleId === 'import/no-restricted-paths')).toBe(true);
+    expect(
+      result?.messages.some(({ ruleId }) => ruleId === 'import/no-restricted-paths'),
+      JSON.stringify(result?.messages),
+    ).toBe(true);
   } finally {
-    await Promise.all([
-      rm(simFixture, { force: true }),
-      rm(renderFixture, { force: true }),
-    ]);
+    await rm(renderFixture, { force: true });
+    if (createdRenderDirectory) {
+      await rm(renderDirectory);
+    }
   }
 }, 15_000);
