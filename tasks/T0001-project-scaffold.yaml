@@ -2,7 +2,7 @@ id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
 status: IN_PROGRESS
 agent: chatgpt
-branch: task/T0001-project-scaffold
+branch: task/T0001-project-scaffold-v2
 depends_on: []
 milestone: M0
 spec: |
@@ -17,4 +17,11 @@ acceptance:
   - npm run lint/typecheck/test/build all pass
   - Import-direction ESLint rule demonstrably rejects a sim -> render import
   - Placeholder scene renders locally via npm run dev
-handoff_notes: ""
+handoff_notes: |
+  First delivery attempt is preserved at origin/task/T0001-project-scaffold
+  and PR #1. Final review found that the implementation plan introduced the
+  renderer before arranging the mandatory before/after benchmark evidence
+  required by performance-spec.md section 6. The maintainer rejected an M0
+  exception on 2026-07-15 and requested a clean restart. The v2 branch must
+  establish a measurable pre-Three.js baseline first, then add the renderer
+  and report before/after numbers in the PR.
