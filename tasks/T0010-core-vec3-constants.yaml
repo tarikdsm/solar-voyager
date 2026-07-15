@@ -1,8 +1,8 @@
 id: T0010
 title: core/vec3 float64 math + constants
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0010-core-vec3-constants
 depends_on: [T0001]
 milestone: M1
 spec: |
