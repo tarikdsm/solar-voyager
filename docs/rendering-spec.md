@@ -7,9 +7,9 @@
 - **1 scene unit = 1 km.** Near objects get sub-millimeter-true positions; distant objects' float32 error is sub-pixel by construction.
 - Never store or accumulate positions in float32 — recompute from float64 each frame.
 
-## 2. Depth
+## 2. Depth (ADR-008)
 
-`WebGLRenderer({ logarithmicDepthBuffer: true })`. Near plane 0.001 (1 m), far 1e10 km (beyond Eris). No manual depth partitioning.
+Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — faster (keeps early-Z) and more precise; fall back to `logarithmicDepthBuffer: true`. Near plane 0.001 (1 m), far 1e10 km (beyond Eris). No manual depth partitioning. Both paths CI-tested for z-artifacts (Earth from 200 km and from 1 AU). Context creation policy (high-performance, software-rasterizer detection): `docs/performance-spec.md` §2.
 
 ## 3. Visual ladder — 3 tiers per body (by projected angular size)
 
@@ -53,7 +53,8 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
 | Repo total | < 300 MB |
 | `public/assets/` | < 150 MB |
 | Initial critical path (code + Sun/Earth/Moon + stars) | < 8 MB |
-| Frame budget (mid-range laptop, 1080p) | 16.6 ms; render ≤ 10 ms |
+| Frame budget (mid-range laptop, 1080p) | 16.6 ms; render ≤ 10 ms — full budget table and 60 fps contract: `performance-spec.md` §1 |
+| Draw calls / triangles (typical view) | ≤ 150 / ≤ 500k |
 | Tier-3 model | ≤ 50k tris planets, ≤ 5k asteroids |
 
 - All textures KTX2 (ETC1S for albedo, UASTC for normal maps); all meshes Draco.
@@ -67,6 +68,6 @@ A miniature 3D axis triad in its own small viewport (same WebGL renderer, scisso
 
 When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.
 
-## 11. Quality settings
+## 11. Quality settings — adaptive governor (ADR-008)
 
-`low / medium / high`: texture tier cap, bloom on/off, pixel ratio cap, star count cap. Default auto-detected from `devicePixelRatio` + a first-frame timing probe.
+Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins) and shows the governor's current tier. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.

@@ -39,6 +39,14 @@
 - Public interfaces (`SimSnapshot`, `Commands`, module entry points) get doc comments.
 - If you change behavior described in a `docs/*.md`, update the doc in the same PR.
 
+## Performance (mandatory — see docs/performance-spec.md for the full contract)
+
+- **Zero allocations in the frame loop** (`sim/`, `render/`, rAF path): no `new`, literals, closures, spread, or array helpers in hot paths — preallocated scratch objects, pools, ring buffers, typed-array SoA + indexed `for` loops. CI runs a heap-growth-zero check; reviewers block violations.
+- Never create three.js materials/geometries/textures/render targets during gameplay; precompile shaders at load (`compileAsync`); `matrixAutoUpdate = false` for static objects; instancing for repeated objects.
+- HUD updates via signals to leaf nodes at 10–20 Hz (except FPS counter); animate only `transform`/`opacity`.
+- PRs touching `render/` or the frame loop must include before/after `npm run bench` numbers in the description.
+- Budgets (frame ms, draw calls, triangles, bundle size) are CI-gated; do not weaken gates to pass.
+
 ## Dependencies
 
 - Adding a runtime dependency requires an ADR. Dev-dependencies are fine if mainstream and maintained.

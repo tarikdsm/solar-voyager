@@ -28,7 +28,8 @@ src/
 │   ├── analysis/               # osculating.ts, soi.ts, warnings.ts
 │   └── simulation.ts           # SimulationCore
 ├── workers/                    # predictor.worker.ts + predictorProtocol.ts
-├── render/                     # spaceScene, bodyVisual, starfield, (launchScene: deferred)
+├── render/                     # spaceScene, bodyVisual, starfield, telemetry, perfGovernor,
+│                               # (launchScene: deferred)
 │                               # trajectoryLine, lighting, lod
 ├── game/                       # sceneManager, saveLoad, settings, input
 └── ui/                         # App.tsx, hud/, map/, menus/
@@ -90,6 +91,12 @@ future:  MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D) 
 | More ships | `Vessel` interface between sim and ship config |
 | Other star systems | `SystemDefinition` loaded from `data/*.json`; new system = new data file + bake |
 | Docking/stations | Ship state is generic rigid state; rendezvous math already in analysis/ |
+
+## Performance architecture
+
+- `render/telemetry.ts` is the single source of perf truth (frame-time ring buffer, ms splits per subsystem, renderer.info snapshots); consumed by the perf HUD (top-left), the adaptive quality governor (`render/perfGovernor.ts`) and the bench harness. The sim reports its own step time inside `SimSnapshot`.
+- GPU context creation policy (forced hardware acceleration + software-rasterizer banner) lives in one place: the renderer bootstrap in `main.ts`/`render/`. Contract: `docs/performance-spec.md` §2, ADR-008.
+- The frame loop is owned by `main.ts`: `commands → sim.step() → snapshot → render + UI`, instrumented at each seam. Zero-allocation rules apply to everything this loop calls (performance-spec §5).
 
 ## Invariants (CI-enforced where possible)
 

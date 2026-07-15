@@ -20,13 +20,13 @@ Scaffold Vite + TS + three.js + Preact; ESLint (incl. import-direction rule) + P
 
 ## M2 — 3D world
 
-Camera-relative SpaceScene, visual tier ladder (sprite/sphere/glTF), starfield, lighting + bloom + ACES, free camera + body focus, lazy texture loading. Lanes B/C keep producing remaining bodies/assets.
+Camera-relative SpaceScene, **GPU context policy (forced hardware acceleration + software-rasterizer banner, reversed/log depth selection — performance-spec §2)**, **render telemetry module**, visual tier ladder (sprite/sphere/glTF), starfield, lighting + bloom + ACES, free camera + body focus, lazy texture loading. Lanes B/C keep producing remaining bodies/assets.
 
-**Exit:** fly the camera from Earth to Jupiter; bodies transition tiers without popping; 60 fps on reference hardware.
+**Exit:** fly the camera from Earth to Jupiter; bodies transition tiers without popping; 60 fps on reference hardware with telemetry proving it.
 
 ## M3 — Ship + HUD  →  first playable
 
-Ship state (relativistic) + thrust + attitude modes, warp system with substep-budget clamp, **photon-drive energy ledger (Wh)**, HUD (orbit readout, navball, warp control, **energy panel**, **bottom-right state-vector 3D widget**, target select, **dual clock t/τ**), osculating conic overlay, save/load, settings, input rebinding, `build_ship.py` model, Playwright smoke test. **New-game start: ship in a 400 km low Earth orbit, carrying Earth's real ~30 km/s barycentric velocity.**
+Ship state (relativistic) + thrust + attitude modes, warp system with substep-budget clamp, **photon-drive energy ledger (Wh)**, HUD (**top-left perf panel**, orbit readout, navball, warp control, **energy panel**, **bottom-right state-vector 3D widget**, target select, **dual clock t/τ**), **adaptive quality governor**, **bench harness + CI perf gates**, osculating conic overlay, save/load, settings, input rebinding, `build_ship.py` model, Playwright smoke test. **New-game start: ship in a 400 km low Earth orbit, carrying Earth's real ~30 km/s barycentric velocity.**
 
 **Exit (playable milestone):** ship spawned in LEO can reach any body in the catalog; Hohmann LEO→GEO ledger tests within 1% (proper Δv and E_spent); a near-c cruise shows correct time dilation on the dual clock.
 

@@ -10,7 +10,9 @@ spec: |
   (+ @preact/signals), ESLint with import/no-restricted-paths enforcing
   core <- sim <- game <- render/ui, Prettier, Vitest. vite.config.ts with
   base '/solar-voyager/'. npm scripts: dev, build, test, lint, typecheck.
-  Placeholder scene: spinning cube + "Solar Voyager" title.
+  Placeholder scene: spinning cube + "Solar Voyager" title. Renderer created
+  with powerPreference 'high-performance' from day one (full context policy
+  arrives in T0045; do not create the context with defaults).
 acceptance:
   - npm run lint/typecheck/test/build all pass
   - Import-direction ESLint rule demonstrably rejects a sim -> render import

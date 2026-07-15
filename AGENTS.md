@@ -15,6 +15,7 @@ Realistic browser-based solar-system exploration game. Three.js + TypeScript + V
 - Every formula you implement must match `docs/physics-spec.md`; if it isn't there, add it there in the same PR.
 - Changes to `SimSnapshot`, `Commands`, the `bodies.json` schema or `physics-spec.md` require an ADR in `docs/decisions/`.
 - Tests required for all `src/sim` code (Vitest). CI must pass before merge.
+- **Performance is a spec, not a polish pass:** zero allocations in the frame loop, no runtime material/geometry creation, precompiled shaders, instancing for repeated objects — full mandatory rules in `docs/performance-spec.md` §5. CI enforces heap-growth-zero and budget gates; 60 fps is a floor.
 - Blender scenes are code: edit `tools/blender/*.py`, never hand-edit exported `.glb`.
 
 ## Shared resources

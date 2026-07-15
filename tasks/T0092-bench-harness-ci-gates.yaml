@@ -1,0 +1,20 @@
+id: T0092
+title: Bench harness + CI performance gates
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0059, T0091]
+milestone: M3
+spec: |
+  performance-spec section 6: npm run bench — deterministic scripted
+  flight (LEO -> Moon flyby -> Jupiter approach, fixed seed) via
+  Playwright reporting median/p75/p99 frame time, draw calls, triangles,
+  heap growth; report format committed under docs/bench/. CI gates on
+  every PR: draw-call/triangle golden counts (+-10%) from the smoke
+  scene, heap-growth-zero over 30 s of frames (allocation-ban enforcer),
+  bundle-size budget.
+acceptance:
+  - Injected per-frame allocation (fixture) fails the heap gate
+  - Injected extra draw calls (fixture) fail the golden-count gate
+  - Bench produces a stable report twice on the same machine (< 5% variance)
+handoff_notes: ""

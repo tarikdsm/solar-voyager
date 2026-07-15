@@ -50,7 +50,8 @@ One vessel in v1 (modeled in Blender, `tools/blender/build_ship.py`):
 |---|---|---|
 | **State-vector widget** (signature element) | **Bottom-right** | An elegant miniature 3D axis triad (own tiny viewport, same renderer) showing live vectors **relative to the solar-system barycenter (CM)**: velocity (starts at Earth's real ~30 km/s — visible from frame one), proper acceleration, relativistic linear momentum p = γm·v_rel and angular momentum L. Vector magnitudes labeled with prefix formatting; γ and % of c readouts integrated. Rotatable with the camera or pinnable to ecliptic axes. |
 | **Energy panel** (headline metric) | **Bottom-right, beside/below the widget** | Cumulative energy spent in **Wh with SI prefixes k…Y** (e.g. `4.82 PWh`); live power draw (W) while thrusting; secondary: proper Δv (m/s) and ΔE_kin. Per-burn and per-session. |
-| Orbit readout | Top-left | Dominant body, Ap/Pe, eccentricity, inclination, period — osculating elements, instant |
+| **Perf panel** | **Top-left corner** | Elegant compact row: FPS + frame-time sparkline (budget line at 16.6 ms), render resolution (e.g. `1920×1080 @0.85`), quality-tier badge. Expands (F3) to full telemetry: 1% lows, ms splits, draw calls/triangles, memory, GPU name, governor state. Spec: performance-spec §4 |
+| Orbit readout | Left side, below perf panel | Dominant body, Ap/Pe, eccentricity, inclination, period — osculating elements, instant |
 | Navball | Bottom-center | Attitude vs dominant-body frame, prograde/retrograde/normal/radial markers, thrust vector |
 | Warp control | Top-center | Current warp, clamp indicator with reason ("gravity well: max 1000x") |
 | Trajectory | In-world | Predicted n-body path (worker-computed), SOI transitions, closest-approach markers, impact warning with time-to-impact |

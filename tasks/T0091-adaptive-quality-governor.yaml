@@ -1,0 +1,19 @@
+id: T0091
+title: Adaptive quality governor (60 fps floor)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0045, T0043]
+milestone: M3
+spec: |
+  performance-spec section 3 / ADR-008: control loop on p75 frame time
+  (120-frame windows), step-down on 2 consecutive over-budget windows,
+  step-up after 10 s of headroom, 3 s cooldown, hysteresis; knob ladder:
+  render scale -> bloom res/off -> AA -> star cap -> texture cap -> tier
+  thresholds. Settings tier-lock override always wins. All actions logged
+  to telemetry and surfaced in the perf panel.
+acceptance:
+  - Synthetic GPU load test: governor recovers 60 fps within 3 rungs without oscillating
+  - Manual lock disables all governor actions
+  - Each rung's visual effect documented with screenshots in the PR
+handoff_notes: ""

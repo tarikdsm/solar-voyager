@@ -1,0 +1,19 @@
+id: T0090
+title: Top-left perf panel (FPS, sparkline, resolution, tier)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0045, T0054]
+milestone: M3
+spec: |
+  performance-spec section 4: elegant compact row — FPS (1 s avg),
+  120-frame frame-time sparkline with 16.6 ms budget line, render
+  resolution with scale (1920x1080 @0.85), quality-tier badge; F3 expands
+  to full telemetry (1% lows, ms splits, draw calls/triangles, memory,
+  GPU name, governor state). 4 Hz updates except the sparkline (ring
+  buffer, per frame). Monospace numerals, low-contrast until hover.
+acceptance:
+  - Panel total cost < 0.2 ms/frame (measured by its own telemetry)
+  - Values cross-checked against browser devtools FPS meter
+  - Zero allocations per frame in the sparkline path
+handoff_notes: ""

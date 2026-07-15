@@ -1,0 +1,21 @@
+id: T0045
+title: GPU context policy + render telemetry module
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0040]
+milestone: M2
+spec: |
+  performance-spec sections 2 and 6 / ADR-008: renderer bootstrap with
+  powerPreference high-performance and failIfMajorPerformanceCaveat probe;
+  retry + hardware-acceleration warning banner (with per-browser fix
+  instructions) on software rasterizers (caveat flag + UNMASKED_RENDERER
+  heuristics); reversedDepthBuffer via EXT_clip_control with logarithmic
+  fallback, choice reported. render/telemetry.ts: frame-time ring buffer,
+  sim/render/UI ms splits, renderer.info snapshots, GPU timer queries when
+  available — single source of perf truth.
+acceptance:
+  - Forcing a software context (browser flag) shows the banner; hardware path does not
+  - Both depth paths pass the z-artifact scenes (Earth from 200 km and 1 AU)
+  - Telemetry overhead < 0.1 ms/frame; exposed to HUD/governor consumers
+handoff_notes: ""
