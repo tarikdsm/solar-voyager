@@ -1,6 +1,6 @@
 id: T0032
 title: build_planet script + Earth asset
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0031]
@@ -11,4 +11,11 @@ spec: |
 acceptance:
   - Earth glb+ktx2 committed, manifest within budgets
   - Re-running the script reproduces the artifact
-handoff_notes: ""
+handoff_notes: |
+  Earth source asset was committed directly to main in d0996d7: build_earth.py,
+  earth.glb, 8k source textures, processed maps, and SOURCES.md. The model is not
+  task-complete: T0030 and T0031 are still TODO, the builder is Earth-specific
+  rather than the parameterized build_planet script in the spec, and T0035 does
+  not yet exist as a working ingest command, so no KTX2/runtime artifact or
+  reproducibility/ingest acceptance evidence is available. Reconcile through the
+  prerequisite tasks, then claim T0032 to audit, generalize, ingest, and verify.

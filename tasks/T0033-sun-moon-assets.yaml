@@ -1,6 +1,6 @@
 id: T0033
 title: Sun + Moon assets
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0032]
@@ -10,4 +10,12 @@ spec: |
   (USGS/LRO). Both via builder scripts, budget-compliant.
 acceptance:
   - Both assets committed with manifests; critical path (code+Sun+Earth+Moon+stars) < 8 MB
-handoff_notes: ""
+handoff_notes: |
+  Sun source asset was committed directly to main in 8d482f5 with build_sun.py,
+  sun.glb, SOURCES.md, and a printed source manifest. Moon is still missing, so
+  the combined acceptance criterion is not met. T0032 is also not DONE and T0035
+  is not implemented, preventing a compliant claim and critical-path ingest
+  measurement. Maintainer approved a Moon design on 2026-07-15: LRO/USGS-based
+  albedo with moderately enhanced contrast, controlled geometric microdisplacement
+  plus normal map, maximum normalized radius 1.0, and Blender MCP preview approval
+  before ingest. Resume after T0032 is DONE.

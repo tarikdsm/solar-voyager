@@ -16,4 +16,8 @@ acceptance:
   - Sun looks alive at every distance from Mercury flyby to Neptune (screenshot set)
   - Shader cost within render budget at 1080p; low-octave rung measurably cheaper
   - No visible tiling/banding artifacts; limb darkening matches reference photos
-handoff_notes: ""
+handoff_notes: |
+  Static fallback Sun geometry was committed directly to main in 8d482f5 via
+  build_sun.py. It does not implement this task's procedural runtime shader,
+  animation, prominence, governor rung, screenshot set, or performance evidence.
+  Treat it only as the optional fallback described by ADR-010.

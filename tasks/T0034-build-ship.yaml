@@ -1,6 +1,6 @@
 id: T0034
 title: Ship model (build_ship script)
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0030]
@@ -15,4 +15,11 @@ acceptance:
   - Ship glb + ktx2 committed, manifest within the 8 MB ship budget
   - Nozzle node named per rendering-spec so the plume can attach
   - Re-running the script reproduces the artifact
-handoff_notes: ""
+handoff_notes: |
+  Hand-authored ship source was committed directly to main in 641d092 after an
+  interactive blender-mcp session; assets/blender/ship.blend, ship.glb, and
+  SOURCES.md exist. The task is not complete: T0030 remains TODO,
+  tools/blender/build_ship.py is missing, no KTX2/runtime ingest output exists,
+  and reproducibility plus engine_nozzle acceptance evidence has not been
+  recorded. Resume after T0030, back-port the approved model to the builder, then
+  ingest and verify the node and 8 MB budget.

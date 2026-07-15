@@ -1,0 +1,23 @@
+id: T0093
+title: Audit and ingest Pluto source asset
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0035]
+milestone: M6
+spec: |
+  Reconcile the Pluto source model committed directly to main in 66a4ab0 with
+  docs/asset-pipeline.md and assets/models/MODELING-GUIDE.md. Audit the existing
+  deterministic build_pluto.py, normalized dwarf geometry, texture provenance,
+  and Blender preview; run the canonical ingest pipeline and deliver the runtime
+  artifacts without changing the approved appearance unless validation requires it.
+acceptance:
+  - Re-running build_pluto.py reproduces a normalized, guide-compliant source asset and prints a manifest
+  - SOURCES.md provenance and licenses pass ingest validation
+  - Runtime GLB and KTX2 artifacts pass the dwarf 4 MB budget
+  - Blender preview and ingested asset show no UV seam, pole distortion, or embedded lights/cameras
+handoff_notes: |
+  Existing source work: commit 66a4ab0 contains build_pluto.py, pluto.glb,
+  pluto_albedo.jpg, SOURCES.md, assets/blender/pluto.blend, and two preview PNGs.
+  This follow-up exists because the source was delivered before T0035 and outside
+  the shared task queue, so ingest and formal acceptance remain outstanding.

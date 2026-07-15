@@ -23,4 +23,10 @@ acceptance:
   - Shadow and backlight cues visible and correct vs Sun geometry (test scene)
   - Flythrough: flying through the ring plane shows parallax ice chunks with no visible pop to the annulus; 60 fps floor held on reference hardware
   - Ring set within the 2 MB per-planet budget (particles are procedural, ~0 bytes)
-handoff_notes: ""
+handoff_notes: |
+  A Saturn source model and annulus texture were committed directly to main in
+  b8d7cd9 with build_saturn.py, saturn.glb, albedo/ring maps, and SOURCES.md.
+  This is partial prior art only: the task still requires all four ringed planets,
+  runtime shadow/backlight shaders, close-range flythrough particles, ingest,
+  performance evidence, and its T0041/T0043 dependencies. Keep TODO until the
+  dependencies are DONE and the full task can be claimed.
