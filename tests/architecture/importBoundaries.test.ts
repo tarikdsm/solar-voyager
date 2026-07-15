@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { ESLint } from 'eslint';
@@ -54,7 +54,7 @@ test('rejects an extensionless sim import from render', async () => {
   } finally {
     await rm(renderFixture, { force: true });
     if (ownsRenderDirectory) {
-      await rm(renderDirectory);
+      await rmdir(renderDirectory);
     }
   }
 }, 15_000);
