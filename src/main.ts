@@ -1,5 +1,10 @@
-import { advanceBaselineAngle } from './baselineState.js';
+import { render } from 'preact';
+
+import { createPlaceholderScene } from './render/createPlaceholderScene.js';
+import { createRenderer } from './render/createRenderer.js';
+import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import './style.css';
+import { App } from './ui/App.js';
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
@@ -12,60 +17,47 @@ if (!(appElement instanceof HTMLElement)) {
   throw new Error('Solar Voyager application root was not found.');
 }
 
-const context = canvasElement.getContext('2d');
-
-if (context === null) {
-  throw new Error('Solar Voyager requires a 2D canvas context.');
-}
-
 const canvas = canvasElement;
-const drawingContext = context;
-const heading = document.createElement('h1');
-heading.textContent = 'Solar Voyager';
-appElement.replaceChildren(heading);
+const appRoot = appElement;
+const renderer = createRenderer(canvas);
+const { scene, camera, cube } = createPlaceholderScene();
+const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 
-let canvasCssWidth = 0;
-let canvasCssHeight = 0;
-let canvasPixelRatio = 1;
-let previousFrameTimeMs = 0;
-let squareAngleRad = 0;
+function resizeRenderer(): void {
+  const clientWidth = canvas.clientWidth;
+  const clientHeight = canvas.clientHeight;
+  const pixelRatio = renderer.getPixelRatio();
+  const drawingBufferWidth = calculateDrawingBufferDimension(clientWidth, pixelRatio);
+  const drawingBufferHeight = calculateDrawingBufferDimension(clientHeight, pixelRatio);
 
-function resizeCanvas(): void {
-  canvasCssWidth = window.innerWidth;
-  canvasCssHeight = window.innerHeight;
-  canvasPixelRatio = Math.min(window.devicePixelRatio, 2);
-
-  const backingWidth = Math.round(canvasCssWidth * canvasPixelRatio);
-  const backingHeight = Math.round(canvasCssHeight * canvasPixelRatio);
-
-  if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
-    canvas.width = backingWidth;
-    canvas.height = backingHeight;
+  if (canvas.width !== drawingBufferWidth || canvas.height !== drawingBufferHeight) {
+    renderer.setSize(clientWidth, clientHeight, false);
+    camera.aspect = clientWidth / clientHeight;
+    camera.updateProjectionMatrix();
   }
 }
 
-function drawFrame(frameTimeMs: number): void {
-  const elapsedMs = previousFrameTimeMs === 0 ? 0 : frameTimeMs - previousFrameTimeMs;
-  previousFrameTimeMs = frameTimeMs;
-  squareAngleRad = advanceBaselineAngle(squareAngleRad, elapsedMs);
-
-  drawingContext.setTransform(1, 0, 0, 1, 0, 0);
-  drawingContext.clearRect(0, 0, canvas.width, canvas.height);
-  drawingContext.setTransform(
-    canvasPixelRatio,
-    0,
-    0,
-    canvasPixelRatio,
-    canvasCssWidth * 0.5,
-    canvasCssHeight * 0.5,
-  );
-  drawingContext.rotate(squareAngleRad);
-  drawingContext.fillRect(-40, -40, 80, 80);
-
-  requestAnimationFrame(drawFrame);
+function renderFrame(): void {
+  cube.rotation.x += 0.01;
+  cube.rotation.y += 0.01;
+  cube.updateMatrix();
+  renderer.render(scene, camera);
+  requestAnimationFrame(renderFrame);
 }
 
-drawingContext.fillStyle = '#38bdf8';
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas, { passive: true });
-requestAnimationFrame(drawFrame);
+function handleCompileSuccess(): void {
+  requestAnimationFrame(renderFrame);
+}
+
+function handleCompileFailure(cause: unknown): never {
+  throw new Error('Solar Voyager failed to compile startup shaders.', { cause });
+}
+
+function startApplication(): void {
+  render(App(), appRoot);
+  resizeRenderer();
+  window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
+  void renderer.compileAsync(scene, camera).then(handleCompileSuccess, handleCompileFailure);
+}
+
+startApplication();
