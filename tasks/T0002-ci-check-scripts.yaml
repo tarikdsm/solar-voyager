@@ -1,8 +1,8 @@
 id: T0002
 title: CI check scripts (task schema, asset budgets)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0002-ci-check-scripts
 depends_on: [T0001]
 milestone: M0
 spec: |
