@@ -1,6 +1,6 @@
 id: T0003
 title: Verify GitHub Pages deploy of placeholder build
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0003-pages-deploy-verified
 depends_on: [T0001]
@@ -18,4 +18,6 @@ handoff_notes: |
   2c9998286c001979f413438da8daf1a8aefd895e. In the browser, the page title and
   visible heading were both "Solar Voyager"; the WebGL canvas rendered at
   1600x900 (1280x720 CSS pixels). The browser error log was empty, including
-  no 404 responses. Requires independent review before DONE.
+  no 404 responses. Independent review confirmed the PR diff, local gates,
+  Pages API configuration, successful deployment status, live HTTP responses,
+  and green CI before marking the task DONE.
