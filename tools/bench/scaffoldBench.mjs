@@ -1,16 +1,16 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { once } from 'node:events';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
 
+import { percentile } from './scaffoldBenchUtils.mjs';
+
 const HOST = '127.0.0.1';
-const PORT = 4174;
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
-const PAGE_URL = `http://${HOST}:${PORT}/solar-voyager/`;
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),
 );
@@ -54,9 +54,44 @@ function runBuild() {
   });
 }
 
-async function previewIsReady() {
+function pageUrlForPort(port) {
+  return `http://${HOST}:${String(port)}/solar-voyager/`;
+}
+
+function useAvailablePort(port) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const server = createServer();
+
+    server.once('error', rejectPromise);
+    server.listen(port, HOST, () => {
+      const address = server.address();
+
+      if (address === null || typeof address === 'string') {
+        server.close(() => {
+          rejectPromise(new Error('Unable to determine the benchmark preview port.'));
+        });
+        return;
+      }
+
+      server.close((error) => {
+        if (error === undefined) {
+          resolvePromise(address.port);
+          return;
+        }
+
+        rejectPromise(error);
+      });
+    });
+  });
+}
+
+function findAvailablePort() {
+  return useAvailablePort(0);
+}
+
+async function previewIsReady(pageUrl) {
   try {
-    const response = await fetch(PAGE_URL, { signal: AbortSignal.timeout(1_000) });
+    const response = await fetch(pageUrl, { signal: AbortSignal.timeout(1_000) });
     const html = await response.text();
     return response.ok && html.includes('id="space-canvas"') && !html.includes('@vite/client');
   } catch {
@@ -70,70 +105,106 @@ function delay(delayMs) {
   });
 }
 
-async function startOrReusePreview() {
-  if (await previewIsReady()) {
-    return null;
-  }
-
+function startPreview(port) {
   const previewProcess = spawn(
     process.execPath,
-    [VITE_BIN_PATH, 'preview', '--host', HOST, '--port', String(PORT), '--strictPort'],
+    [VITE_BIN_PATH, 'preview', '--host', HOST, '--port', String(port), '--strictPort'],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     },
   );
+  const lifecycle = {
+    child: previewProcess,
+    closed: null,
+    closedResult: null,
+    spawnError: null,
+  };
+
+  lifecycle.closed = new Promise((resolvePromise) => {
+    previewProcess.once('close', (exitCode, signal) => {
+      lifecycle.closedResult = { exitCode, signal };
+      resolvePromise(lifecycle.closedResult);
+    });
+  });
+  previewProcess.once('error', (error) => {
+    lifecycle.spawnError = error;
+  });
 
   previewProcess.stdout.resume();
   previewProcess.stderr.resume();
 
+  return lifecycle;
+}
+
+async function waitForPreview(lifecycle, pageUrl) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (await previewIsReady()) {
-      return previewProcess;
+    if (lifecycle.spawnError !== null) {
+      throw new Error('Unable to spawn the Vite preview process.', {
+        cause: lifecycle.spawnError,
+      });
     }
 
-    if (previewProcess.exitCode !== null) {
+    if (lifecycle.closedResult !== null) {
       throw new Error(
-        `Vite preview exited before becoming ready (${String(previewProcess.exitCode)}).`,
+        `Vite preview closed before becoming ready (${String(lifecycle.closedResult.exitCode)}, ${String(lifecycle.closedResult.signal)}).`,
       );
+    }
+
+    if (await previewIsReady(pageUrl)) {
+      return;
     }
 
     await delay(100);
   }
 
-  previewProcess.kill('SIGTERM');
-  throw new Error(`Vite preview did not become ready at ${PAGE_URL}.`);
+  throw new Error(`Vite preview did not become ready at ${pageUrl}.`);
 }
 
-async function stopPreview(previewProcess) {
-  if (previewProcess === null || previewProcess.exitCode !== null) {
+function waitForClose(lifecycle, timeoutMs) {
+  if (lifecycle.closedResult !== null) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolvePromise) => {
+    let waiting = true;
+    const timeoutId = setTimeout(() => {
+      waiting = false;
+      resolvePromise(false);
+    }, timeoutMs);
+
+    lifecycle.closed.then(() => {
+      if (waiting) {
+        waiting = false;
+        clearTimeout(timeoutId);
+        resolvePromise(true);
+      }
+    });
+  });
+}
+
+async function stopPreview(lifecycle) {
+  if (lifecycle === null) {
     return;
   }
 
-  previewProcess.kill('SIGTERM');
-
-  await Promise.race([
-    once(previewProcess, 'exit'),
-    delay(5_000).then(() => {
-      if (previewProcess.exitCode === null) {
-        previewProcess.kill('SIGKILL');
-      }
-    }),
-  ]);
-}
-
-function percentile(sortedValues, fraction) {
-  const position = (sortedValues.length - 1) * fraction;
-  const lowerIndex = Math.floor(position);
-  const upperIndex = Math.ceil(position);
-  const lowerValue = sortedValues[lowerIndex];
-  const upperValue = sortedValues[upperIndex];
-
-  if (lowerValue === undefined || upperValue === undefined) {
-    throw new Error('Cannot calculate a percentile without frame samples.');
+  if (lifecycle.closedResult === null) {
+    lifecycle.child.kill('SIGTERM');
   }
 
-  return lowerValue + (upperValue - lowerValue) * (position - lowerIndex);
+  const closedGracefully = await waitForClose(lifecycle, 5_000);
+
+  if (!closedGracefully) {
+    lifecycle.child.kill('SIGKILL');
+
+    if (!(await waitForClose(lifecycle, 5_000))) {
+      throw new Error(
+        `Preview child ${String(lifecycle.child.pid)} did not close after forced termination.`,
+      );
+    }
+  }
+
+  await lifecycle.closed;
 }
 
 function roundMilliseconds(value) {
@@ -153,7 +224,7 @@ function readGitSha() {
   return result.stdout.trim();
 }
 
-async function collectBenchmark() {
+async function collectBenchmark(pageUrl) {
   const browser = await chromium.launch({
     headless: true,
     args: ['--enable-precise-memory-info'],
@@ -172,14 +243,15 @@ async function collectBenchmark() {
   });
 
   try {
-    await page.goto(PAGE_URL, { waitUntil: 'networkidle' });
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
 
     const measurement = await page.evaluate(
       ({ sampleFrames, warmupFrames }) =>
         new Promise((resolvePromise) => {
-          const frameDeltasMs = [];
+          const frameDeltasMs = new Float64Array(sampleFrames);
           let framesToWarm = warmupFrames;
           let previousFrameTimeMs = 0;
+          let sampleIndex = 0;
           let heapBeforeBytes = null;
 
           function readHeapBytes() {
@@ -203,17 +275,19 @@ async function collectBenchmark() {
               return;
             }
 
-            frameDeltasMs.push(frameTimeMs - previousFrameTimeMs);
+            frameDeltasMs[sampleIndex] = frameTimeMs - previousFrameTimeMs;
+            sampleIndex += 1;
             previousFrameTimeMs = frameTimeMs;
 
-            if (frameDeltasMs.length < sampleFrames) {
+            if (sampleIndex < sampleFrames) {
               globalThis.requestAnimationFrame(measureFrame);
               return;
             }
 
+            const heapAfterBytes = readHeapBytes();
             resolvePromise({
-              frameDeltasMs,
-              heapAfterBytes: readHeapBytes(),
+              frameDeltasMs: Array.from(frameDeltasMs),
+              heapAfterBytes,
               heapBeforeBytes,
             });
           }
@@ -263,13 +337,18 @@ async function collectBenchmark() {
 
 async function main() {
   const outputPath = readOutputPath();
-  let previewProcess = null;
+  let previewLifecycle = null;
+  let previewPort = null;
 
   try {
     await runBuild();
-    previewProcess = await startOrReusePreview();
+    previewPort = await findAvailablePort();
+    const pageUrl = pageUrlForPort(previewPort);
+    previewLifecycle = startPreview(previewPort);
+    await waitForPreview(previewLifecycle, pageUrl);
+    console.log(`Benchmark preview port: ${String(previewPort)}`);
 
-    const result = await collectBenchmark();
+    const result = await collectBenchmark(pageUrl);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 
@@ -279,7 +358,12 @@ async function main() {
 
     console.log(JSON.stringify(result, null, 2));
   } finally {
-    await stopPreview(previewProcess);
+    await stopPreview(previewLifecycle);
+
+    if (previewLifecycle !== null && previewPort !== null) {
+      await useAvailablePort(previewPort);
+      console.log(`Benchmark preview port released: ${String(previewPort)}`);
+    }
   }
 }
 
