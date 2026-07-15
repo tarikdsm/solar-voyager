@@ -6,10 +6,13 @@ branch: ""
 depends_on: [T0050]
 milestone: M3
 spec: |
-  shipState.ts: r, v, attitude quaternion, throttle; manual rotation +
-  hold modes (pro/retro/normal/anti/radial/target). Thrust term into the
-  DP54 accelFn (physics-spec section 3).
+  shipState.ts: r, celerity u, attitude quaternion, throttle as fraction of
+  max PROPER acceleration alpha (physics-spec section 3 / ADR-007); manual
+  rotation + hold modes (pro/retro/normal/anti/radial/target). Thrust enters
+  the relativistic derivative function (T0017); drive power P = F*c exposed
+  for the ledger and HUD.
 acceptance:
   - Prograde hold tracks velocity direction through an orbit (test)
+  - Coordinate acceleration falls as 1/gamma^3 parallel to motion (test at gamma=2)
   - Thrust changes trigger predictor invalidation event
 handoff_notes: ""

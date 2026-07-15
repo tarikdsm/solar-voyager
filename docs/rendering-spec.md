@@ -21,6 +21,7 @@
 
 - Tier-2/3 textures **lazy-load** the first time a body crosses the tier-1→2 threshold. Only Sun/Earth/Moon assets load at startup.
 - Hysteresis on tier switches (±20%) to avoid popping.
+- **Fidelity rule — no artistic scaling, ever:** a body's rendered angular size always equals its true angular size from the camera position (real radii, real distances). The view out the window is exactly what a real ship at that state vector would see. The tier ladder changes *representation*, never *apparent size or brightness class*.
 
 ## 4. Lighting & post
 
@@ -58,6 +59,14 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
 - All textures KTX2 (ETC1S for albedo, UASTC for normal maps); all meshes Draco.
 - `npm run check:budgets` fails CI when exceeded.
 
-## 9. Quality settings
+## 9. HUD state-vector widget (bottom-right)
+
+A miniature 3D axis triad in its own small viewport (same WebGL renderer, scissor test), rendering the CM-relative vectors from the snapshot (physics-spec §6): velocity, proper acceleration, linear momentum p = γmv, angular momentum L. Design goals: *elegant* — thin anti-aliased lines, soft glow tips, subtle grid disc for the ecliptic plane, magnitude labels with SI-prefix formatting, logarithmic vector-length scaling (linear would be useless across 30 km/s → 0.99c). Orientation follows the main camera by default; pinnable to fixed ecliptic axes. Adjacent energy panel (DOM, Preact) shows Wh/W figures. Budget: the widget viewport must cost < 1 ms/frame.
+
+## 10. Relativistic visual effects (quality-gated, ship near c)
+
+When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.
+
+## 11. Quality settings
 
 `low / medium / high`: texture tier cap, bloom on/off, pixel ratio cap, star count cap. Default auto-detected from `devicePixelRatio` + a first-frame timing probe.

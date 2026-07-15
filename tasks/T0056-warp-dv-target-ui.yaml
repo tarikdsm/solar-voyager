@@ -1,14 +1,19 @@
 id: T0056
-title: Warp control, delta-v meter, target panel UI
+title: Warp control, energy panel, target panel UI
 status: TODO
 agent: ""
 branch: ""
 depends_on: [T0054, T0052, T0053]
 milestone: M3
 spec: |
-  Warp ladder control with clamp indicator + reason; dv ledger display
-  (headline m/s + energy J secondary); target selector with distance,
-  relative velocity, next closest approach.
+  Warp ladder control with clamp indicator + reason; ENERGY PANEL
+  (bottom-right, beside the T0080 vector widget): cumulative Wh with SI
+  prefixes, live power draw while thrusting, secondary proper dv and
+  dE_kin (game-design HUD table); target selector with distance, relative
+  velocity, next closest approach. Dual clock (UTC t + ship tau, gamma
+  readout when > 1.001) in the top-right.
 acceptance:
   - Clamp reason string surfaces within one frame of clamping
+  - Energy figures use the shared prefix formatter (4.82 PWh style, 3 sig figs)
+  - Dual clock visibly diverges during a gamma > 1.1 cruise
 handoff_notes: ""

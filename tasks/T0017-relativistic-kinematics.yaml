@@ -1,0 +1,19 @@
+id: T0017
+title: Relativistic kinematics module (celerity, gamma, proper time)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0010]
+milestone: M1
+spec: |
+  sim/ship/relativity.ts per physics-spec section 3 / ADR-007: celerity
+  state u = gamma*v, gamma = sqrt(1+|u|^2/c^2), v = u/gamma, dtau/dt = 1/gamma;
+  derivative function for the (r, u, tau) 7-component state combining the
+  Newtonian n-body field with proper-acceleration thrust; helpers for
+  % of c, relativistic momentum p = gamma*m*v and kinetic energy (gamma-1)*m*c^2.
+  Pure module, shared by SimulationCore and the predictor worker.
+acceptance:
+  - Hyperbolic-motion analytic test (physics-spec 7.8) to 1e-9 up to gamma = 10
+  - Newtonian-limit test (7.9), 10-orbit LEO coast agrees with pure Newtonian to 1e-9
+  - Time-dilation test (7.11); |v| < c invariant under integrator stress
+handoff_notes: ""

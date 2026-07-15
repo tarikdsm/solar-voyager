@@ -1,14 +1,18 @@
 id: T0053
-title: Delta-v / energy ledger + burn log
+title: Energy ledger (photon drive, Wh) + burn log
 status: TODO
 agent: ""
 branch: ""
 depends_on: [T0051]
 milestone: M3
 spec: |
-  physics-spec section 5: cumulative dv, mechanical energy, burn log entries
-  with prograde/normal/radial decomposition; substep-integrated.
+  physics-spec section 5 / ADR-007: E_spent = integral of P dt with P = F*c,
+  substep-integrated (warp-invariant); secondary proper delta-v = integral of
+  alpha dtau and kinetic-energy change (gamma-1)*m*c^2; burn log entries with
+  t/tau spans, energy, peak power, prograde/normal/radial decomposition.
+  SI-prefix Wh/W formatter (k..Y) in core/ for HUD reuse.
 acceptance:
-  - Hohmann LEO->GEO within 1% of 3.90 km/s (spec 7.7)
+  - Hohmann LEO->GEO proper dv within 1% of 3.90 km/s AND E_spent within 1% of c*m*dv (spec 7.7)
+  - Plane-change pricing test passes (spec 7.10)
   - Same burn at 1x and 100x warp yields identical ledger (test)
 handoff_notes: ""

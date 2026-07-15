@@ -1,0 +1,17 @@
+id: T0081
+title: Relativistic visual effects (aberration, Doppler, beaming)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0042, T0043]
+milestone: M6
+spec: |
+  rendering-spec section 10: quality-gated full-screen pass active when
+  gamma > ~1.05 — relativistic aberration of star/body directions, Doppler
+  color shift of the starfield, headlight beaming. Smooth interpolation to
+  identity as gamma -> 1 (no popping). OFF at low quality tier.
+acceptance:
+  - At 0.9c the forward sky visibly compresses and blueshifts; behind reddens
+  - No visual discontinuity crossing the activation threshold
+  - Frame budget still met with the pass enabled at high quality
+handoff_notes: ""

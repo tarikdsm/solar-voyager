@@ -2,7 +2,9 @@
 
 ## Vision
 
-A pure-sandbox exploration game where the solar system itself is the antagonist. The player commands a single spaceship with **unlimited propulsion energy** — the challenge is never fuel, it is *physics*: every maneuver costs exactly what it would cost a real spacecraft, and the HUD keeps the score. Reaching Mercury is hard because plane changes and deep gravity wells are hard, not because the game says so.
+A pure-sandbox exploration game where the solar system itself is the antagonist. The player commands a single spaceship with **unlimited propulsion energy** — the challenge is never fuel, it is *physics*: every joule the drive draws is metered at its honest physical price (photon-drive bound, ADR-007), and the HUD keeps the score in Wh. Reaching Mercury is hard because plane changes and deep gravity wells are hard, not because the game says so.
+
+Speed is capped only by the universe: the ship can push **arbitrarily close to the speed of light**, and the game plays special relativity straight — time dilation between ship clock and solar-system clock, energy diverging as γ grows, acceleration that feels heavier and heavier near c. Sizes, distances and sight-lines are exactly real: what you see out the window — how large Jupiter looms, how the Sun shrinks from Neptune — is what a real ship at that position would see.
 
 The fantasy: you are flying a real trajectory through the real solar system, at real scale, and the numbers on your HUD would satisfy a mission engineer.
 
@@ -12,7 +14,7 @@ The fantasy: you are flying a real trajectory through the real solar system, at 
 2. **Burn** — orient the ship, throttle up, watch the predicted trajectory bend in real time.
 3. **Coast** — time-warp through the cruise, watching for encounter markers and SOI transitions.
 4. **Arrive** — capture burn, orbit insertion, flyby, or rendezvous. The mission log records what it cost.
-5. **Compare** — cumulative Δv and energy are the player's "score"; doing the same trip cheaper is the replay driver.
+5. **Compare** — cumulative energy (Wh) is the player's "score", with proper Δv alongside; doing the same trip cheaper is the replay driver.
 
 There are no fail states other than physics itself (crashing into a body, missing an encounter). No currency, no unlocks in v1.
 
@@ -24,7 +26,9 @@ There are no fail states other than physics itself (crashing into a body, missin
 - Full 3D, camera-relative rendering at real scale.
 - The ship feels the gravity of **every body in the catalog simultaneously** (full n-body on the ship). Planets and moons follow analytic Keplerian rails baked from JPL Horizons (see ADR-001).
 - Time warp ladder: 1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6, 1e7. Thrust allowed up to 1000x; above that, coast only. Warp auto-clamps near gravity wells.
-- v1 exploration verbs: reach orbit of any body, flyby, escape, plane change, Lagrange-point parking, rendezvous with a targeted body.
+- v1 exploration verbs: reach orbit of any body, flyby, escape, plane change, Lagrange-point parking, rendezvous with a targeted body, **relativistic cruise** (push toward c and watch the two clocks split).
+- **Relativistic travel (ADR-007):** the ship's dynamics are special-relativistic. |v| asymptotes to c (never reaches it — that asymptote IS the endgame challenge); the HUD shows speed as % of c and γ; the mission clock runs in ship proper time τ while the solar system runs in coordinate time — return from a near-c round trip and the planets have moved on without you (twin "paradox", played straight).
+- **The launch inheritance:** starting in LEO, the ship already carries Earth's real ~30 km/s barycentric orbital velocity and the solar system's angular momentum — visible on the vector widget from frame one. Leaving the planetary plane (e.g., to visit the Sun's north pole) means rotating that inherited momentum vector, and the energy meter prices it honestly: it *feels* heavy, like flooring a car from standstill, because the physics makes it so.
 - **Landing is out of scope for v1** but the architecture reserves a phase for it (see `architecture.md` § future expansion).
 
 ### Deferred — Launch phase (2D, optional post-v1 expansion)
@@ -35,22 +39,24 @@ Fully specified (physics-spec §4, tasks T0060–T0062) but **not part of v1**: 
 
 One vessel in v1 (modeled in Blender, `tools/blender/build_ship.py`):
 
-- Unlimited energy, finite thrust: main engine with realistic thrust-to-mass (configurable in `data/bodies.json`-adjacent ship config), RCS for attitude.
-- Attitude control: manual rotation + hold modes (prograde, retrograde, normal, anti-normal, radial in/out, target).
-- No propellant mass depletion (infinite energy premise) — mass is constant; **cost is metered, not stocked**.
+- **Pure-energy (propellantless) drive**: the player commands proper acceleration (throttle = fraction of max α, configurable in the ship config); the drive draws power P = F·c (photon-drive bound, physics-spec §5). Unlimited reserve, honest meter.
+- Attitude control: manual rotation + hold modes (prograde, retrograde, normal, anti-normal, radial in/out, target). RCS for attitude is treated as free (negligible next to translation costs).
+- No propellant mass depletion — rest mass is constant; **cost is metered, not stocked**.
+- The "weight" of a maneuver is emergent: near c, or when bending a large momentum vector, the same throttle produces visibly less coordinate acceleration (γ³ effect) while the power meter screams — no artificial handicaps.
 
 ## HUD (space phase)
 
-| Element | Content |
-|---|---|
-| **Δv ledger** (headline) | Cumulative Δv spent (m/s), session and per-burn; mechanical energy delivered (J) as secondary readout — same Δv costs more energy at high speed (Oberth effect made visible) |
-| Orbit readout | Dominant body, Ap/Pe, eccentricity, inclination, period — osculating elements, instant |
-| Navball | Attitude vs dominant-body frame, prograde/retrograde/normal/radial markers, thrust vector |
-| Warp control | Current warp, clamp indicator with reason ("gravity well: max 1000x") |
-| Trajectory | Predicted n-body path (worker-computed), SOI transitions, closest-approach markers, impact warning with time-to-impact |
-| Target panel | Selected body: distance, relative velocity, next closest approach |
-| Mission log | Burn history: time, duration, Δv, prograde/normal/radial split, dominant body |
-| Clock | UTC sim date + mission elapsed time |
+| Element | Position | Content |
+|---|---|---|
+| **State-vector widget** (signature element) | **Bottom-right** | An elegant miniature 3D axis triad (own tiny viewport, same renderer) showing live vectors **relative to the solar-system barycenter (CM)**: velocity (starts at Earth's real ~30 km/s — visible from frame one), proper acceleration, relativistic linear momentum p = γm·v_rel and angular momentum L. Vector magnitudes labeled with prefix formatting; γ and % of c readouts integrated. Rotatable with the camera or pinnable to ecliptic axes. |
+| **Energy panel** (headline metric) | **Bottom-right, beside/below the widget** | Cumulative energy spent in **Wh with SI prefixes k…Y** (e.g. `4.82 PWh`); live power draw (W) while thrusting; secondary: proper Δv (m/s) and ΔE_kin. Per-burn and per-session. |
+| Orbit readout | Top-left | Dominant body, Ap/Pe, eccentricity, inclination, period — osculating elements, instant |
+| Navball | Bottom-center | Attitude vs dominant-body frame, prograde/retrograde/normal/radial markers, thrust vector |
+| Warp control | Top-center | Current warp, clamp indicator with reason ("gravity well: max 1000x") |
+| Trajectory | In-world | Predicted n-body path (worker-computed), SOI transitions, closest-approach markers, impact warning with time-to-impact |
+| Target panel | Right side | Selected body: distance, relative velocity, next closest approach |
+| Mission log | Collapsible panel | Burn history: time (t and τ), duration, energy, proper Δv, prograde/normal/radial split, dominant body |
+| **Dual clock** | Top-right | Coordinate UTC sim date **and ship proper time τ (MET)** side by side — they visibly diverge at relativistic speed; γ shown between them when > 1.001 |
 
 (Launch-phase HUD — altitude, Mach, dynamic pressure/max-q, pitch, gravity/drag losses — is specified with the deferred launch expansion, not v1.)
 

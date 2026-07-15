@@ -1,0 +1,19 @@
+id: T0080
+title: Bottom-right 3D state-vector widget (v, a, p, L relative to CM)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0040, T0054]
+milestone: M3
+spec: |
+  rendering-spec section 9 + physics-spec section 6: miniature 3D axis triad
+  in its own scissored viewport (same renderer), showing CM-relative velocity,
+  proper acceleration, relativistic linear momentum and angular momentum from
+  the snapshot. Logarithmic vector-length scaling, thin AA lines, glow tips,
+  ecliptic grid disc, SI-prefix magnitude labels, gamma and %c readouts.
+  Follows main camera orientation by default, pinnable to ecliptic axes.
+acceptance:
+  - In the LEO start state the velocity vector reads ~30 km/s (Earth's real barycentric velocity)
+  - Widget viewport costs < 1 ms/frame on reference hardware
+  - Vectors remain readable from 30 km/s to 0.99c (log scaling verified)
+handoff_notes: ""

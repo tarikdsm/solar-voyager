@@ -3,13 +3,19 @@ title: SimulationCore + SimSnapshot + Commands
 status: TODO
 agent: ""
 branch: ""
-depends_on: [T0013, T0014, T0015]
+depends_on: [T0013, T0014, T0015, T0017]
 milestone: M3
 spec: |
   architecture.md: SimulationCore owning clock/bodies/ship/ledger;
   step(wallDt); immutable per-frame SimSnapshot (typed arrays + derived);
-  Commands interface. These two interfaces are ADR-gated from now on.
+  Commands interface. Snapshot includes the relativistic ship state (u,
+  gamma, %c, proper time tau, power draw), the solar-system barycenter
+  state and CM-relative derived vectors (v, a, p, L — physics-spec
+  section 6). These two interfaces are ADR-gated from now on (ADR-007
+  already covers the relativistic fields).
 acceptance:
   - Snapshot consumed by a stub renderer test; no render/ui imports in sim
   - step() with zero thrust preserves two-body orbit per spec tolerances
+  - Barycenter derivation matches mass-weighted sum over the catalog (test)
+  - New-game LEO state carries Earth's barycentric velocity (~30 km/s rel CM)
 handoff_notes: ""

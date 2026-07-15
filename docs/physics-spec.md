@@ -11,8 +11,11 @@ This is the contract all physics code and tests are written against. Implementat
 | Time | s (float64 TDB seconds since epoch) |
 | GM (μ) | km³/s² |
 | Angles | rad internally; deg only at the UI boundary |
+| Energy | J internally; **Wh on the HUD** (1 Wh = 3600 J), SI prefixes k…Y |
+| Power | W (same prefix formatter) |
 
-- **Epoch:** J2026 = 2026-01-01 00:00:00 TDB. Sim time `t` = seconds since this epoch (float64).
+- **Epoch:** J2026 = 2026-01-01 00:00:00 TDB. Sim time `t` = seconds since this epoch (float64). Ship proper time τ integrated separately (§3).
+- **c = 299792.458 km/s** (exact) in `core/constants.ts`.
 - **Frame:** heliocentric, ecliptic J2000 (ICRF-aligned). +X toward the J2000 vernal equinox, +Z toward the north ecliptic pole.
 - **All physics state is float64.** float32 exists only on the GPU side (see rendering-spec).
 - Constants: `AU = 1.495978707e8 km`, `G` never used directly — bodies carry GM (more precise).
@@ -45,21 +48,35 @@ Properties: O(1) per body, exact evaluation at any t (no drift at any warp), det
 
 (Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. Bounds are generous by design — tighten empirically after the bake, in the same PR that adds the data.)
 
-## 3. Ship dynamics — full n-body + thrust
+## 3. Ship dynamics — full n-body + thrust, special-relativistic (ADR-007)
 
-Ship acceleration at position **r**, velocity **v**, time t:
+The ship is relativistic; bodies are not (they stay on rails, §2). `c = 299792.458 km/s` (in `core/constants.ts`).
+
+**State:** `(r, u, τ)` — position (km), **proper velocity (celerity) u = γv** (km/s), ship proper time τ (s). Derived:
 
 ```
-a(r, t) = Σ_i  −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³   +   a_thrust(t)
+γ = √(1 + |u|²/c²)        v = u/γ        (|v| < c always, by construction)
 ```
 
-Sum over **all** bodies in the catalog (~50). `rᵢ(t)` from rails (§2). `a_thrust = (T·throttle/m) · û`, û = attitude unit vector, m = constant ship mass (infinite-energy premise: no propellant depletion).
+**Equations of motion** (coordinate time t):
+
+```
+dr/dt = v = u/γ
+du/dt = g(r, t) + (F_thrust/m)·û          # thrust as PROPER acceleration α = F/m
+dτ/dt = 1/γ                               # time dilation, integrated alongside
+g(r, t) = Σ_i −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³     # Newtonian n-body field, ALL ~50 bodies
+```
+
+û = attitude unit vector, m = constant rest mass (propellantless drive, ADR-007). Approximations (documented limits): gravity is a Newtonian force on rest mass — no GR, no light-delay of the field; exact SR kinematics otherwise. At v ≪ c this reduces to the Newtonian model term-for-term (γ→1, u→v, τ→t).
+
+**Emergent feel (do not script it):** coordinate acceleration parallel to v falls as α/γ³ — the drive feels "heavier" the faster you go; combined with E = c·|Δp| cost (§5), expensive maneuvers (plane changes, near-c pushes, ecliptic escapes) are *felt* as sluggish response, like a power-limited vehicle.
 
 ### 3.1 Integrator: Dormand–Prince 5(4), adaptive (ADR-002)
 
 - Embedded RK5(4) pair, FSAL, standard DP54 tableau (cite Hairer–Nørsett–Wanner; tableau constants in `dp54.ts` must match the published values to full double precision).
-- Error control: `err = |y5 − y4|` component-wise against `tol = absTol + relTol·|y|`, with `relTol = 1e-9`, `absTol = 1e-6 km` (position), `1e-9 km/s` (velocity). PI step controller: `h_new = h · min(5, max(0.2, 0.9·(1/err)^(1/5)))`.
-- The propagator is a pure function: `propagate(state, t0, t1, accelFn, tol) → state` — shared verbatim by SimulationCore and the predictor worker.
+- Integrated state is the 7-component `(r, u, τ)` of §3 (celerity formulation — the integrator can never overshoot past c).
+- Error control: `err = |y5 − y4|` component-wise against `tol = absTol + relTol·|y|`, with `relTol = 1e-9`, `absTol = 1e-6 km` (position), `1e-9 km/s` (celerity), `1e-6 s` (τ). PI step controller: `h_new = h · min(5, max(0.2, 0.9·(1/err)^(1/5)))`.
+- The propagator is a pure function: `propagate(state, t0, t1, derivFn, tol) → state` — shared verbatim by SimulationCore and the predictor worker.
 
 ### 3.2 Time warp
 
@@ -124,17 +141,27 @@ Trigger: altitude > 140 km (drag ≈ 0 there; the 90–200 km taper means residu
 
 **Tests:** round-trip specific energy and angular momentum (2D values vs 3D Earth-relative values) agree to 1e-9 relative.
 
-## 5. Δv / energy ledger
+## 5. Energy / Δv ledger — pure-energy propulsion (ADR-007)
 
-Integrated inside the same substeps as motion (warp-invariant):
+Propulsion is propellantless; the physically honest cost model is the **photon-drive bound**:
 
-- **Cumulative Δv** `= ∫ |a_thrust| dt` (m/s on HUD) — the headline cost metric; identical to what plane changes/captures "really cost".
-- **Mechanical energy delivered** `= ∫ m·(a_thrust · v) dt` (J) — secondary readout; exposes the Oberth effect.
-- **Launch losses** (launch phase only): gravity loss `= ∫ (μ⊕/r²)·sin γ dt`, drag loss `= ∫ (D/m) dt` — shown post-launch.
-- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, Δv, energy, dominant body, prograde/normal/radial decomposition}`.
+```
+P = F·c            (drive power for thrust F; braking and turning cost the same as accelerating)
+E_spent = ∫ P dt   (coordinate time; integrated inside the same substeps as motion — warp-invariant)
+```
+
+- **Headline HUD metric: cumulative E_spent, displayed in Wh** (1 Wh = 3600 J; internal unit J). Formatter uses SI prefixes k, M, G, T, P, E, Z, Y — values are astronomically large by design (a LEO plane change is TWh-scale; pushing toward c diverges as (γ−1)mc²). 3 significant digits, e.g. `4.82 PWh`.
+- **Current power draw** `P = F·c` (W, same prefix formatter) shown live while thrusting.
+- Secondary readouts:
+  - **Proper Δv** `= ∫ α dτ` (m/s) — what the crew experiences; the orbital-mechanics currency at low speed.
+  - **Kinetic energy change** `ΔE_kin`, with `E_kin = (γ−1)·m·c²` — exposes both the Oberth effect and the relativistic divergence near c.
+- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, τ_start, τ_end, E_spent, proper Δv, peak power, dominant body, prograde/normal/radial decomposition}`.
+- **Why plane changes hurt (verify in tests):** E = c·|Δp| for any momentum change; leaving the ecliptic plane inherited from the solar system's angular momentum requires rotating a ~30 km/s momentum vector — the ledger must price that honestly (§7.8).
+- **Launch losses** (deferred launch phase only): gravity loss `= ∫ (μ⊕/r²)·sin γ_fp dt`, drag loss `= ∫ (D/m) dt`.
 
 ## 6. Analysis
 
+- **Solar-system barycenter (CM):** `r_cm = Σ mᵢrᵢ / Σ mᵢ`, `v_cm = Σ mᵢvᵢ / Σ mᵢ` over the whole catalog (masses from GM/G), evaluated per frame from rails. The HUD state-vector widget displays, **relative to the CM**: ship velocity `v − v_cm` (this starts at ~30 km/s in LEO — Earth's real orbital velocity, deliberately visible from the first frame), proper acceleration vector, **relativistic linear momentum** `p = γ·m·(v − v_cm)` and **angular momentum** `L = (r − r_cm) × p`. Also derived: speed as % of c, and γ.
 - **Dominant body:** argmax over bodies of `μᵢ/|r − rᵢ|²`; SOI radii (`r_SOI = a·(m/M)^(2/5)`, precomputed in bodies.json) as tie-break/hysteresis (10% band to avoid flicker).
 - **Osculating elements** wrt dominant body from state vectors (standard conversion via h, e, n vectors; handle e→0 and i→0 degeneracies explicitly). Computed every frame for the HUD; it is an *approximation* in an n-body field — the worker prediction is the truth.
 - **Trajectory prediction:** worker propagates thrust-free with §3.1 over max(2 osculating periods, 90 days, user-extended); downsampled polyline ≤ 2000 points; events: SOI transitions, closest approach to target, **impact** (path crosses body radius + atmosphere top) with time-to-impact.
@@ -148,4 +175,8 @@ Integrated inside the same substeps as motion (warp-invariant):
 4. **Launch regression** *(deferred with §4)*: scripted throttle/pitch profile reaches 200±5 km orbit; total Δv within ±1% of the golden value; max-q within ±2%.
 5. **Handoff** *(deferred with §4)*: energy/angular-momentum round-trip < 1e-9 relative.
 6. **Golden trajectories:** three 30-day ship propagations (LEO, Earth–Mars transfer, Jupiter flyby) stored in `tests/golden/`; any change that moves them requires an explicit golden update in the PR (reviewable diff).
-7. **Ledger:** Δv of an impulsive-approximation Hohmann LEO→GEO within 1% of the analytic 3.90 km/s.
+7. **Ledger:** proper Δv of an impulsive-approximation Hohmann LEO→GEO within 1% of the analytic 3.90 km/s; E_spent for the same maneuver within 1% of c·m·Δv.
+8. **Relativistic kinematics:** constant proper acceleration α from rest — analytic hyperbolic-motion solution `v(t) = αt/√(1+(αt/c)²)`, `τ(t) = (c/α)·asinh(αt/c)`: DP54 matches to 1e-9 relative over a span reaching γ = 10; |v| < c strictly at all times; γ from u exact.
+9. **Newtonian limit:** the full relativistic propagator vs the pure Newtonian model on a 10-orbit LEO coast — trajectories agree to 1e-9 relative (γ−1 ≈ 3e-10 at 7.7 km/s must not distort orbits).
+10. **Plane-change pricing:** rotating a 30 km/s velocity vector by 90° at constant speed via continuous thrust — ledger E_spent within 2% of the analytic ∫Fc dt for the flown profile, and strictly greater than c·m·|Δp| (the impulsive lower bound).
+11. **Time dilation:** 1 year of coordinate time at γ = 2 yields τ within 1e-9 of t/2 (with dτ integrated, not recomputed).

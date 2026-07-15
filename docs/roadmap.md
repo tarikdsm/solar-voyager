@@ -12,7 +12,7 @@ Scaffold Vite + TS + three.js + Preact; ESLint (incl. import-direction rule) + P
 
 ## M1 — Sim core (3 parallel lanes)
 
-- **Lane A (physics):** `core/vec3`, `core/time`, Kepler solver (elliptic + hyperbolic), rails propagation, `nbodyForces`, DP54 + full test suite per physics-spec §7.
+- **Lane A (physics):** `core/vec3`, `core/time`, Kepler solver (elliptic + hyperbolic), rails propagation, `nbodyForces`, DP54 over the relativistic (r, u, τ) state, **relativistic kinematics module (γ, celerity, proper time, hyperbolic-motion tests)** + full test suite per physics-spec §7.
 - **Lane B (data):** `bake_ephemerides.py` (Horizons → `bodies.json` + `ephemerides-check.json`), `bake_stars.py` → `stars.bin`, task-schema CI check.
 - **Lane C (assets):** Blender common helpers, `build_planet.py`, Sun/Earth/Moon assets, KTX2/Draco toolchain, budget-check script.
 
@@ -26,9 +26,9 @@ Camera-relative SpaceScene, visual tier ladder (sprite/sphere/glTF), starfield, 
 
 ## M3 — Ship + HUD  →  first playable
 
-Ship state + thrust + attitude modes, warp system with substep-budget clamp, Δv/energy ledger, HUD (orbit readout, navball, warp control, Δv meter, target select, clock), osculating conic overlay, save/load, settings, input rebinding, `build_ship.py` model, Playwright smoke test. **New-game start: ship in a 400 km low Earth orbit.**
+Ship state (relativistic) + thrust + attitude modes, warp system with substep-budget clamp, **photon-drive energy ledger (Wh)**, HUD (orbit readout, navball, warp control, **energy panel**, **bottom-right state-vector 3D widget**, target select, **dual clock t/τ**), osculating conic overlay, save/load, settings, input rebinding, `build_ship.py` model, Playwright smoke test. **New-game start: ship in a 400 km low Earth orbit, carrying Earth's real ~30 km/s barycentric velocity.**
 
-**Exit (playable milestone):** ship spawned in LEO can reach any body in the catalog; Hohmann LEO→GEO ledger test within 1%.
+**Exit (playable milestone):** ship spawned in LEO can reach any body in the catalog; Hohmann LEO→GEO ledger tests within 1% (proper Δv and E_spent); a near-c cruise shows correct time dilation on the dual clock.
 
 ## M5 — Navigation suite
 
@@ -38,7 +38,7 @@ Predictor worker (transferable buffers), trajectory polyline + event markers, SO
 
 ## M6 — v1 polish
 
-Full ~50-body roster + assets (procedural asteroids, real shape models, comet visuals), performance audit vs frame budget, orbital-navigation tutorial overlay, quality settings auto-detect, load-time optimization, landing page/README polish → **tag v1.0**.
+Full ~50-body roster + assets (procedural asteroids, real shape models, comet visuals), **relativistic visual effects (aberration, Doppler, beaming — rendering-spec §10)**, performance audit vs frame budget, orbital-navigation tutorial overlay, quality settings auto-detect, load-time optimization, landing page/README polish → **tag v1.0**.
 
 ## M4 — Launch phase (DEFERRED — optional post-v1 expansion)
 
