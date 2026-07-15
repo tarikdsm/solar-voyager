@@ -1,6 +1,6 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0001-project-scaffold-v2
 depends_on: []
@@ -48,5 +48,8 @@ handoff_notes: |
   satisfy the runtime-dependency ADR rule in coding-standards.md and the
   renderer policy in performance-spec.md; no duplicate ADR was added.
 
-  A different agent or the human maintainer must review the full branch and
-  verify CI before merge. Only that reviewer may merge and flip T0001 to DONE.
+  Independent final review approved the complete branch with no Critical,
+  Important, or Minor findings. PR #2 CI was green before the DONE transition;
+  the merger will verify CI again on this final task-status commit before merge.
+  This DONE transition is authored by that approved independent reviewer; the
+  branch will be retained after the non-force merge.
