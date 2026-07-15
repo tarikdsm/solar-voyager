@@ -1,6 +1,6 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0001-project-scaffold-v2
 depends_on: []
@@ -18,10 +18,28 @@ acceptance:
   - Import-direction ESLint rule demonstrably rejects a sim -> render import
   - Placeholder scene renders locally via npm run dev
 handoff_notes: |
-  First delivery attempt is preserved at origin/task/T0001-project-scaffold
-  and PR #1. Final review found that the implementation plan introduced the
-  renderer before arranging the mandatory before/after benchmark evidence
-  required by performance-spec.md section 6. The maintainer rejected an M0
-  exception on 2026-07-15 and requested a clean restart. The v2 branch must
-  establish a measurable pre-Three.js baseline first, then add the renderer
-  and report before/after numbers in the PR.
+  Ready for external review on task/T0001-project-scaffold-v2. The preserved
+  2D baseline at bec528937b703b41c6e1ed86da4699340d6870ea measured
+  median/p75/p99 16.7/16.7/16.8 ms and heap delta +61,148 bytes. Two identical
+  final-build benchmark runs at fec3ff3f07dbf6e9fdb3bf6c1b6f711f00da9418
+  both measured median/p75/p99 16.7/16.7/16.8 ms (p75 variance 0%); heap deltas
+  were -1,007,904 and -1,070,052 bytes. Both used 120 warm-up and 600 sampled
+  frames at 1280x720 CSS/backing size, recorded zero console/page errors, and
+  released fixed port 4174. Canonical after data and comparison are committed
+  in 851d869.
+
+  Fresh delivery gates: lint PASS; strict typecheck PASS; all Vitest tests PASS
+  (5 files, 10 tests); focused architecture boundary suite PASS (1 file,
+  3 tests); production build PASS; Prettier format check PASS; git diff check
+  PASS; built index contains exactly two /solar-voyager/assets/ references.
+  Vite reports the expected warning for the 531.30 kB uncompressed JavaScript
+  chunk (135.03 kB gzip in Vite output).
+
+  Browser gate at 1280x720: visible accessible Solar Voyager h1 PASS; visible
+  canvas PASS; canvas and Preact root sibling relationship PASS; WebGL2 context
+  PASS; console errors 0; page errors 0. Screenshot artifact:
+  output/playwright/T0001-browser-gate.png (37,302 bytes, intentionally
+  untracked). Gate server stopped and port 4174 released.
+
+  A different agent or the human maintainer must review the full branch and
+  verify CI before merge. Only that reviewer may merge and flip T0001 to DONE.
