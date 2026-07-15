@@ -1,6 +1,6 @@
 id: T0003
 title: Verify GitHub Pages deploy of placeholder build
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0003-pages-deploy-verified
 depends_on: [T0001]
