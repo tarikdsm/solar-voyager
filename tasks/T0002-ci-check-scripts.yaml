@@ -1,6 +1,6 @@
 id: T0002
 title: CI check scripts (task schema, asset budgets)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0002-ci-check-scripts
 depends_on: [T0001]
@@ -36,6 +36,8 @@ handoff_notes: |
   and check:tasks now always run. The existing Vite warning for the >500 kB
   JavaScript chunk remains.
 
-  A different agent or the human maintainer must review this branch and verify
-  CI is green before merge. Only that reviewer may merge and flip T0002 to
-  DONE.
+  Independent final review approved the complete branch with no Critical,
+  Important, or Minor findings. PR #3 CI was green before the DONE transition;
+  the merger will verify CI again on this final task-status commit before merge.
+  This DONE transition is authored by that approved independent reviewer; the
+  branch will be retained after the non-force merge.
