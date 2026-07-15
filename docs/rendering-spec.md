@@ -68,6 +68,19 @@ A miniature 3D axis triad in its own small viewport (same WebGL renderer, scisso
 
 When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.
 
-## 11. Quality settings — adaptive governor (ADR-008)
+## 11. Close-range surface fidelity (real-scale bodies)
+
+Real scale means a 4k equirectangular map on Earth is ~10 km/pixel — sharp from afar, mush from low orbit. Fidelity near a body comes from **layers**, not from impossibly large textures:
+
+1. **Hero texture tier:** 8k albedo for Earth/Mars/Moon (4k others), 4k macro normal maps — the base layer (MODELING-GUIDE §5).
+2. **Tiling detail maps (the workhorse):** seamless 1k detail normal + albedo-variation pairs per surface class (rock, ice, regolith, gas banding), blended in by the surface shader starting at ~5 body-radii and fully in by ~1.2 radii, keyed by a per-body detail scale. Two octaves (macro tile + micro tile at ~8× frequency) kill visible repetition. Fades with distance so the far view is untouched.
+3. **Procedural shader noise:** low-cost fbm modulating roughness/normal at the closest range, seeded per body — breaks up the last visible texel edges.
+4. **Mipmap discipline:** KTX2 full mip chains, anisotropy 4; never sample beyond native resolution (the detail layers take over instead).
+5. **Atmosphere & clouds:** Earth cloud layer as a slightly larger shell (independent rotation), rim/fresnel atmosphere shader — both mask the surface transition zone naturally.
+6. **Geometry:** tier-3 meshes (≤50k tris) are enough for orbital-only v1 (no terrain landing); silhouette smoothness is guaranteed by the quad-sphere subdivision, not displacement. If landing arrives post-v1, a CDLOD/quadtree patch system becomes its own ADR.
+
+Ring systems (Saturn, Uranus, Jupiter, Neptune): annulus at true radial ratios, 2048×64 radial strip where alpha = optical depth; shader adds planet shadow across the ring, ring shadow on the planet, and backlit transmission (unlit side glows faintly when the Sun is behind) — the three cues that read as "real rings".
+
+## 12. Quality settings — adaptive governor (ADR-008)
 
 Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins) and shows the governor's current tier. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.

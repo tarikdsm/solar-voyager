@@ -1,0 +1,18 @@
+id: T0082
+title: Close-range surface detail shading (detail maps + procedural noise)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0041, T0043]
+milestone: M2
+spec: |
+  rendering-spec section 11: surface shader layer blending tiling detail
+  normal/albedo pairs (two octaves) from ~5 body-radii, fully in by ~1.2
+  radii, plus low-cost fbm roughness/normal modulation at closest range;
+  distance fade so far views are untouched; per-body detail scale from the
+  asset manifest. Earth cloud shell + rim atmosphere included here.
+acceptance:
+  - Earth from 400 km LEO shows no visible texel blur or tiling repetition (screenshot review)
+  - Far views byte-identical to the non-detail path (regression capture)
+  - Shader cost within the render budget at 1080p on reference hardware
+handoff_notes: ""

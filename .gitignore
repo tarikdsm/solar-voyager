@@ -8,6 +8,7 @@ Thumbs.db
 .env.*
 *.blend
 *.blend1
+!assets/blender/**/*.blend
 tools/blender/__pycache__/
 __pycache__/
 .vite/

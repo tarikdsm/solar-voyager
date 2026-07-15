@@ -1,15 +1,20 @@
 # Skill: Blender Asset Authoring
 
-How assets are made. Spec of record: `docs/asset-pipeline.md`. Iron rule: **scripts are the source of truth; exported .glb/.ktx2 are build artifacts.**
+How assets are made. **Read `assets/models/MODELING-GUIDE.md` first — it is the authoring contract** (format, normalized scale, orientation, texture tiers, budgets, SOURCES.md). Spec of record for the pipeline: `docs/asset-pipeline.md` (ADR-009: one asset per body, never a whole-system scene).
 
-## Headless build (the normal path)
+Two authoring paths, one exit:
+- **Scripted** (preferred for anything parameterizable): `tools/blender/` builders writing to `assets/models/`.
+- **Hand/MCP-authored** (hero assets: ship, tweaked planets): work in Blender, save the `.blend` to `assets/blender/` (textures external), export per the guide.
+
+Both MUST pass through `npm run assets:ingest` (validate → Draco → KTX2 → budgets → `public/assets/`).
+
+## Headless build (the scripted path)
 
 ```bash
 # Windows (this machine):
 "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python tools/blender/build_all.py -- --only earth
 # any body id from data/bodies.json, or --all
-npm run assets:textures   # toktx pass: source textures → KTX2
-npm run check:budgets     # must pass before committing assets
+npm run assets:ingest     # validate + Draco + KTX2 + budgets -> public/assets/
 ```
 
 ## Writing/editing a builder script

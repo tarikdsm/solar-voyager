@@ -1,0 +1,18 @@
+id: T0083
+title: Realistic ring systems (Saturn, Uranus, Jupiter, Neptune)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0041, T0043]
+milestone: M6
+spec: |
+  rendering-spec section 11 + MODELING-GUIDE sections 3-5: annulus meshes
+  at true radial ratios, 2048x64 radial strips (alpha = optical depth)
+  from real ring data; shader with planet shadow across the ring, ring
+  shadow on the planet, and backlit transmission on the unlit side.
+  Assets for all four ringed planets delivered through ingest.
+acceptance:
+  - Saturn ring proportions verified against published radii (D ring to F ring)
+  - Shadow and backlight cues visible and correct vs Sun geometry (test scene)
+  - Ring set within the 2 MB per-planet budget
+handoff_notes: ""

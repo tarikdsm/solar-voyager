@@ -1,5 +1,5 @@
 id: T0031
-title: Texture toolchain (fetch script + toktx pass)
+title: Texture fetch/processing script
 status: TODO
 agent: ""
 branch: ""
@@ -7,9 +7,11 @@ depends_on: [T0030]
 milestone: M1
 spec: |
   tools/fetch_textures.py documenting source URL + processing per body
-  (asset-pipeline credit table); npm run assets:textures running toktx
-  (ETC1S albedo, UASTC normals). Raw downloads not committed.
+  (asset-pipeline credit table: Solar System Scope CC BY 4.0, NASA/USGS
+  public domain), producing guide-compliant equirectangular PNGs into
+  assets/textures-src/<body-id>/ and SOURCES.md entries. KTX2 encoding is
+  the ingest step's job (T0035), not this script's.
 acceptance:
-  - Earth 4k albedo end-to-end: fetch -> process -> ktx2 within budget
-  - Credits table updated
+  - Earth 8k albedo end-to-end (fetch -> process -> PNG + SOURCES.md), ingested within the hero budget
+  - Credits table + license notes updated
 handoff_notes: ""

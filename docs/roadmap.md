@@ -14,7 +14,7 @@ Scaffold Vite + TS + three.js + Preact; ESLint (incl. import-direction rule) + P
 
 - **Lane A (physics):** `core/vec3`, `core/time`, Kepler solver (elliptic + hyperbolic), rails propagation, `nbodyForces`, DP54 over the relativistic (r, u, τ) state, **relativistic kinematics module (γ, celerity, proper time, hyperbolic-motion tests)** + full test suite per physics-spec §7.
 - **Lane B (data):** `bake_ephemerides.py` (Horizons → `bodies.json` + `ephemerides-check.json`), `bake_stars.py` → `stars.bin`, task-schema CI check.
-- **Lane C (assets):** Blender common helpers, `build_planet.py`, Sun/Earth/Moon assets, KTX2/Draco toolchain, budget-check script.
+- **Lane C (assets):** Blender common helpers, **asset ingest pipeline (`assets/` → validate → Draco/KTX2 → `public/assets/`)**, texture fetch script, `build_planet.py`, Sun/Earth/Moon assets (guide-compliant), budget gates.
 
 **Exit:** rails match Horizons within spec bounds; DP54 passes two-body goldens; Earth/Moon/Sun glb+ktx2 in budget.
 

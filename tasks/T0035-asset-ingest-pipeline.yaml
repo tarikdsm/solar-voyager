@@ -1,0 +1,22 @@
+id: T0035
+title: Asset ingest pipeline (assets/ -> public/assets/)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0001]
+milestone: M1
+spec: |
+  npm run assets:ingest per docs/asset-pipeline.md + assets/models/
+  MODELING-GUIDE.md: validate deliverables (naming, category, normalized
+  scale = radius 1.0 via bounding sphere, pole orientation, tri budgets,
+  texture sizes/aspect, SOURCES.md present, no embedded textures/lights/
+  cameras/animations), then Draco-compress meshes (14/10/12), encode
+  KTX2 (ETC1S albedo/emissive, UASTC normals, full mip chains), enforce
+  per-body byte budgets, emit to public/assets/ + a manifest json the
+  loader consumes. Clear, actionable error messages — humans and agents
+  will hit these.
+acceptance:
+  - A guide-violating fixture (wrong scale, missing SOURCES.md, embedded texture) fails with a message naming the violated guide section
+  - Earth fixture round-trips within the 20 MB hero budget
+  - Ingest is idempotent (re-run produces identical bytes)
+handoff_notes: ""
