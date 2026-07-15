@@ -1,6 +1,6 @@
 id: T0002
 title: CI check scripts (task schema, asset budgets)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0002-ci-check-scripts
 depends_on: [T0001]
@@ -14,4 +14,23 @@ acceptance:
   - check:tasks fails on a duplicate id, invalid state, or dependency cycle (test fixtures)
   - check:budgets fails when a fixture exceeds a limit
   - Both wired into .github/workflows/ci.yml
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review on task/T0002-ci-check-scripts. Task-schema
+  fixtures cover 28 focused cases, including exact fields/types, invalid
+  states, ownership, duplicate ids, unknown/self dependencies, cycles, strict
+  YAML errors, filename matching, and CLI aggregation. Asset-budget fixtures
+  cover 29 focused cases using real temporary directories and sparse files,
+  including all byte limits and equality semantics, exclusions, critical-path
+  matching, canonical alias deduplication, optional/malformed manifests,
+  triangle limits, and CLI aggregation.
+
+  Real checkers PASS: 52 task files validated; repository content 61,826,915
+  bytes (58.96 MiB), public/assets 86 bytes, and initial critical path 532,926
+  bytes (0.51 MiB). Full Vitest PASS (6 files, 66 tests); lint PASS; strict
+  typecheck PASS; production build PASS; Prettier format check PASS; git diff
+  check PASS. CI invokes check:budgets and check:tasks unconditionally after
+  build. The existing Vite warning for the >500 kB JavaScript chunk remains.
+
+  A different agent or the human maintainer must review this branch and verify
+  CI is green before merge. Only that reviewer may merge and flip T0002 to
+  DONE.
