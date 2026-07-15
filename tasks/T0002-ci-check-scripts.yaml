@@ -19,17 +19,21 @@ handoff_notes: |
   fixtures cover 28 focused cases, including exact fields/types, invalid
   states, ownership, duplicate ids, unknown/self dependencies, cycles, strict
   YAML errors, filename matching, and CLI aggregation. Asset-budget fixtures
-  cover 29 focused cases using real temporary directories and sparse files,
+  cover 32 focused cases using real temporary directories and sparse files,
   including all byte limits and equality semantics, exclusions, critical-path
-  matching, canonical alias deduplication, optional/malformed manifests,
-  triangle limits, and CLI aggregation.
+  matching, canonical alias deduplication after logical classification,
+  file/directory symlink escape violations, optional/malformed manifests,
+  triangle limits, and CLI aggregation. A dedicated CI workflow regression
+  proves the permanent project gates have no scaffold or docs-only condition
+  and invoke the two checker commands exactly once.
 
-  Real checkers PASS: 52 task files validated; repository content 61,826,915
-  bytes (58.96 MiB), public/assets 86 bytes, and initial critical path 532,926
-  bytes (0.51 MiB). Full Vitest PASS (6 files, 66 tests); lint PASS; strict
+  Real checkers PASS: 52 task files validated; repository content 61,832,627
+  bytes (58.97 MiB), public/assets 86 bytes, and initial critical path 532,926
+  bytes (0.51 MiB). Full Vitest PASS (7 files, 70 tests); lint PASS; strict
   typecheck PASS; production build PASS; Prettier format check PASS; git diff
-  check PASS. CI invokes check:budgets and check:tasks unconditionally after
-  build. The existing Vite warning for the >500 kB JavaScript chunk remains.
+  check PASS. CI setup, install, lint, typecheck, test, build, check:budgets,
+  and check:tasks now always run. The existing Vite warning for the >500 kB
+  JavaScript chunk remains.
 
   A different agent or the human maintainer must review this branch and verify
   CI is green before merge. Only that reviewer may merge and flip T0002 to
