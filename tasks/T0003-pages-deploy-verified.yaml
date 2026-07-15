@@ -1,6 +1,6 @@
 id: T0003
 title: Verify GitHub Pages deploy of placeholder build
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0003-pages-deploy-verified
 depends_on: [T0001]
@@ -11,4 +11,13 @@ spec: |
 acceptance:
   - https://tarikdsm.github.io/solar-voyager/ serves the placeholder scene
   - No 404s in the browser console
-handoff_notes: ""
+handoff_notes: |
+  Verified the production deployment at https://tarikdsm.github.io/solar-voyager/
+  on 2026-07-15. GitHub Pages is configured for workflow deployment with HTTPS,
+  and deploy run 29459115870 completed successfully for commit
+  2c9998286c001979f413438da8daf1a8aefd895e. In the browser, the page title and
+  visible heading were both "Solar Voyager"; the WebGL canvas rendered at
+  1600x900 (1280x720 CSS pixels). The browser error log was empty, including
+  no 404 responses. Independent review confirmed the PR diff, local gates,
+  Pages API configuration, successful deployment status, live HTTP responses,
+  and green CI before marking the task DONE.
