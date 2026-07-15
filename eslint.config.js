@@ -49,4 +49,9 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },
+  {
+    files: ['tests/**/*.ts'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: globals.node },
+  },
 );
