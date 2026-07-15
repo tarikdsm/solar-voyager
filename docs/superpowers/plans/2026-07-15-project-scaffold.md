@@ -22,6 +22,7 @@
 ### Task 1: Package and toolchain configuration
 
 **Files:**
+
 - Create: `package.json`
 - Create: `tsconfig.json`
 - Create: `tsconfig.node.json`
@@ -31,6 +32,7 @@
 - Create: `.prettierrc.json`
 
 **Interfaces:**
+
 - Consumes: Node.js 22 and npm.
 - Produces: `npm run dev`, `build`, `test`, `lint`, `typecheck`, and `format:check`.
 
@@ -65,12 +67,14 @@
 ### Task 2: Layer boundaries and automated guard
 
 **Files:**
+
 - Create: `src/core/appInfo.ts`
 - Create: `src/sim/scaffoldState.ts`
 - Create: `src/game/createScaffoldState.ts`
 - Create: `tests/architecture/importBoundaries.test.ts`
 
 **Interfaces:**
+
 - Consumes: ESLint flat configuration from Task 1.
 - Produces: `APP_TITLE: string`, `ScaffoldState`, and `createScaffoldState(): ScaffoldState`.
 
@@ -101,11 +105,13 @@
 ### Task 3: High-performance renderer and placeholder scene
 
 **Files:**
+
 - Create: `src/render/createRenderer.ts`
 - Create: `src/render/createPlaceholderScene.ts`
 - Create: `src/render/placeholderScene.test.ts`
 
 **Interfaces:**
+
 - Produces: `createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer` and `createPlaceholderScene(): { scene: THREE.Scene; camera: THREE.PerspectiveCamera; cube: THREE.Mesh }`.
 
 - [ ] **Step 1: Write the failing scene-construction test**
@@ -135,12 +141,14 @@
 ### Task 4: Preact title overlay and bootstrap loop
 
 **Files:**
+
 - Create: `src/ui/App.tsx`
 - Create: `src/ui/app.css`
 - Create: `src/main.ts`
 - Create: `src/style.css`
 
 **Interfaces:**
+
 - Consumes: `createScaffoldState`, `createRenderer`, and `createPlaceholderScene`.
 - Produces: browser entry point mounted into `#app`.
 
@@ -165,10 +173,12 @@
 ### Task 5: Full verification and task delivery
 
 **Files:**
+
 - Modify: `tasks/T0001-project-scaffold.yaml`
 - Modify: `README.md` only if actual commands differ from its Development section.
 
 **Interfaces:**
+
 - Produces: review-ready T0001 branch and evidence for every acceptance criterion.
 
 - [ ] **Step 1: Run all required checks**

@@ -1,0 +1,35 @@
+node_modules/
+dist/
+coverage/
+.vite/
+.superpowers/
+.github/
+.mcp.json
+
+# Binary, generated, and source-asset areas.
+assets/
+public/assets/
+data/
+tools/*
+!tools/bench/
+
+# Existing repository prose stays outside this scaffold's formatting baseline.
+/AGENTS.md
+/CLAUDE.md
+/README.md
+agents/
+src/README.md
+tests/README.md
+tools/README.md
+
+# Keep the backlog and documentation ignored except for T0001-owned evidence.
+tasks/*
+!tasks/T0001-project-scaffold.yaml
+docs/*
+!docs/bench/
+!docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/plans/
+docs/superpowers/plans/*
+!docs/superpowers/plans/2026-07-15-project-scaffold.md
+!docs/superpowers/plans/2026-07-15-project-scaffold-v2.md
