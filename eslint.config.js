@@ -16,6 +16,11 @@ export default tseslint.config(
       },
     },
     plugins: { import: importPlugin },
+    settings: {
+      'import/resolver': {
+        typescript: true,
+      },
+    },
   },
   {
     files: ['src/**/*.{ts,tsx}'],
