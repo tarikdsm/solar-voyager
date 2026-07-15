@@ -1,8 +1,8 @@
 id: T0003
 title: Verify GitHub Pages deploy of placeholder build
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0003-pages-deploy-verified
 depends_on: [T0001]
 milestone: M0
 spec: |
