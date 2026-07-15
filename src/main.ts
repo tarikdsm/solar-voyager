@@ -52,4 +52,16 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
-requestAnimationFrame(frame);
+function startFrameLoop(): void {
+  requestAnimationFrame(frame);
+}
+
+function handleShaderCompilationFailure(error: unknown): never {
+  throw new Error('Solar Voyager startup failed: shader compilation failed.', {
+    cause: error,
+  });
+}
+
+void renderer
+  .compileAsync(scene, camera)
+  .then(startFrameLoop, handleShaderCompilationFailure);
