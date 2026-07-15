@@ -39,12 +39,33 @@ function canonicalKey(filePath) {
   return process.platform === 'win32' ? filePath.toLowerCase() : filePath;
 }
 
+export function addCanonicalSize(canonicalPaths, canonicalPath, sizeBytes) {
+  const key = canonicalKey(canonicalPath);
+  if (canonicalPaths.has(key)) {
+    return 0;
+  }
+  canonicalPaths.add(key);
+  return sizeBytes;
+}
+
 async function sumFiles(directory, options = {}) {
-  const { excludedDirectories = new Set(), includeFile = () => true, canonicalPaths } = options;
+  const {
+    excludedDirectories = new Set(),
+    includeFile = () => true,
+    canonicalPaths,
+    canonicalDirectories,
+  } = options;
   let totalBytes = 0;
   let entries;
 
   try {
+    if (canonicalDirectories !== undefined) {
+      const directoryKey = canonicalKey(await realpath(directory));
+      if (canonicalDirectories.has(directoryKey)) {
+        return 0;
+      }
+      canonicalDirectories.add(directoryKey);
+    }
     entries = await readdir(directory, { withFileTypes: true });
   } catch (error) {
     if (isMissing(error)) {
@@ -55,24 +76,28 @@ async function sumFiles(directory, options = {}) {
 
   for (const entry of entries) {
     const entryPath = resolve(directory, entry.name);
+    const entryStats = entry.isSymbolicLink() && canonicalPaths !== undefined
+      ? await stat(entryPath)
+      : null;
 
-    if (entry.isDirectory()) {
+    if (entry.isDirectory() || entryStats?.isDirectory()) {
       if (!excludedDirectories.has(entry.name)) {
         totalBytes += await sumFiles(entryPath, options);
       }
       continue;
     }
 
-    if (!entry.isFile() || !includeFile(entryPath)) {
+    if ((!entry.isFile() && !entryStats?.isFile()) || !includeFile(entryPath)) {
       continue;
     }
 
     if (canonicalPaths !== undefined) {
-      const canonicalPath = canonicalKey(await realpath(entryPath));
-      if (canonicalPaths.has(canonicalPath)) {
-        continue;
-      }
-      canonicalPaths.add(canonicalPath);
+      totalBytes += addCanonicalSize(
+        canonicalPaths,
+        await realpath(entryPath),
+        (entryStats ?? (await stat(entryPath))).size,
+      );
+      continue;
     }
 
     totalBytes += (await stat(entryPath)).size;
@@ -113,6 +138,7 @@ export async function measureBudgets(root) {
   const repositoryRoot = resolve(root);
   const publicAssetsPath = resolve(repositoryRoot, 'public', 'assets');
   const canonicalCriticalPaths = new Set();
+  const canonicalCriticalDirectories = new Set();
   const repoBytes = await sumFiles(repositoryRoot, {
     excludedDirectories: REPO_EXCLUDED_DIRECTORIES,
   });
@@ -120,10 +146,12 @@ export async function measureBudgets(root) {
   const builtCodeBytes = await sumFiles(resolve(repositoryRoot, 'dist'), {
     includeFile: isBuiltCode,
     canonicalPaths: canonicalCriticalPaths,
+    canonicalDirectories: canonicalCriticalDirectories,
   });
   const runtimeCriticalBytes = await sumFiles(publicAssetsPath, {
     includeFile: (filePath) => identifiesCriticalAsset(publicAssetsPath, filePath),
     canonicalPaths: canonicalCriticalPaths,
+    canonicalDirectories: canonicalCriticalDirectories,
   });
 
   return {

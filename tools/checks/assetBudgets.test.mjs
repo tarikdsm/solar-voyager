@@ -1,12 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { BUDGET_LIMITS, measureBudgets, validateBudgets } from './assetBudgets.mjs';
+import * as assetBudgets from './assetBudgets.mjs';
+
+const { BUDGET_LIMITS, measureBudgets, validateBudgets } = assetBudgets;
 
 const CHECKER_PATH = fileURLToPath(new URL('./assetBudgets.mjs', import.meta.url));
 const MIB = 1024 * 1024;
@@ -84,6 +86,38 @@ describe('measureBudgets', () => {
 
       const measurements = await measureBudgets(root);
       expect(measurements.criticalPathBytes).toBe(1_500);
+    });
+  });
+
+  it('counts two critical aliases to one canonical file only once', async () => {
+    await withRepository(async (root) => {
+      const sharedFile = await writeSparseFile(root, 'shared/runtime.bin', 777);
+      const sharedDirectory = dirname(sharedFile);
+      const publicAssets = join(root, 'public', 'assets');
+      await mkdir(publicAssets, { recursive: true });
+
+      try {
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        await symlink(sharedDirectory, join(publicAssets, 'sun'), linkType);
+        await symlink(sharedDirectory, join(publicAssets, 'earth'), linkType);
+      } catch (error) {
+        if (
+          process.platform === 'win32' &&
+          error instanceof Error &&
+          'code' in error &&
+          (error.code === 'EPERM' || error.code === 'EACCES')
+        ) {
+          const canonicalPaths = new Set();
+          const addCanonicalSize = assetBudgets.addCanonicalSize;
+          expect(addCanonicalSize?.(canonicalPaths, sharedFile, 777)).toBe(777);
+          expect(addCanonicalSize?.(canonicalPaths, sharedFile, 777)).toBe(0);
+          return;
+        }
+        throw error;
+      }
+
+      const measurements = await measureBudgets(root);
+      expect(measurements.criticalPathBytes).toBe(777);
     });
   });
 

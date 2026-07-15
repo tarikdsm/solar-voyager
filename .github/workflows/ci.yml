@@ -43,11 +43,11 @@ jobs:
 
       - name: Asset budgets
         if: steps.scaffold.outputs.exists == 'true'
-        run: npm run check:budgets --if-present
+        run: npm run check:budgets
 
       - name: Task-file schema check
         if: steps.scaffold.outputs.exists == 'true'
-        run: npm run check:tasks --if-present
+        run: npm run check:tasks
 
       - name: Docs-only repo (pre-scaffold)
         if: steps.scaffold.outputs.exists == 'false'
