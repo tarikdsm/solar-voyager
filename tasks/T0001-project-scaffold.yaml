@@ -38,7 +38,7 @@ handoff_notes: |
   Browser gate at 1280x720: visible accessible Solar Voyager h1 PASS; visible
   canvas PASS; canvas and Preact root sibling relationship PASS; WebGL2 context
   PASS; console errors 0; page errors 0. Screenshot artifact:
-  output/playwright/T0001-browser-gate.png (37,302 bytes, intentionally
+  output/playwright/T0001-browser-gate.png (36,756 bytes, intentionally
   untracked). Gate server stopped and port 4174 released.
 
   A different agent or the human maintainer must review the full branch and
