@@ -1,6 +1,6 @@
 id: T0002
 title: CI check scripts (task schema, asset budgets)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0002-ci-check-scripts
 depends_on: [T0001]
