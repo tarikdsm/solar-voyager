@@ -41,5 +41,11 @@ handoff_notes: |
   output/playwright/T0001-browser-gate.png (36,756 bytes, intentionally
   untracked). Gate server stopped and port 4174 released.
 
+  Dependency ADR coverage: accepted ADR-005 selects Preact plus
+  @preact/signals for the HUD, and accepted ADR-008 selects the three.js
+  WebGLRenderer/WebGL2 path and renderer performance policy. Together they
+  satisfy the runtime-dependency ADR rule in coding-standards.md and the
+  renderer policy in performance-spec.md; no duplicate ADR was added.
+
   A different agent or the human maintainer must review the full branch and
   verify CI before merge. Only that reviewer may merge and flip T0001 to DONE.

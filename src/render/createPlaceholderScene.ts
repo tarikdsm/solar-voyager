@@ -19,6 +19,8 @@ export function createPlaceholderScene(): PlaceholderScene {
   const scene = new Scene();
   const camera = new PerspectiveCamera(75, 1, 0.1, 1_000);
   camera.position.z = 5;
+  camera.matrixAutoUpdate = false;
+  camera.updateMatrix();
 
   const geometry = new BoxGeometry(1, 1, 1);
   const material = new MeshStandardMaterial({ color: 0x2f80ed });
@@ -27,8 +29,12 @@ export function createPlaceholderScene(): PlaceholderScene {
   cube.updateMatrix();
 
   const ambientLight = new AmbientLight(0xffffff, 1);
+  ambientLight.matrixAutoUpdate = false;
+  ambientLight.updateMatrix();
   const directionalLight = new DirectionalLight(0xffffff, 2);
   directionalLight.position.set(3, 4, 5);
+  directionalLight.matrixAutoUpdate = false;
+  directionalLight.updateMatrix();
 
   scene.add(cube, ambientLight, directionalLight);
 

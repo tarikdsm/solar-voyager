@@ -1,5 +1,5 @@
-import { AmbientLight, DirectionalLight, Material, Mesh } from 'three';
-import { describe, expect, it } from 'vitest';
+import { AmbientLight, DirectionalLight, Material, Mesh, Object3D } from 'three';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createPlaceholderScene } from './createPlaceholderScene.js';
 
@@ -30,5 +30,29 @@ describe('createPlaceholderScene', () => {
     expect(cube.geometry).toBeDefined();
     expect(cube.material).toBeInstanceOf(Material);
     expect(cube.matrixAutoUpdate).toBe(false);
+  });
+
+  it('initializes each static object matrix during setup', () => {
+    const updateMatrixSpy = vi.spyOn(Object3D.prototype, 'updateMatrix');
+
+    try {
+      const { scene, camera } = createPlaceholderScene();
+      const ambientLight = scene.children.find((object) => object instanceof AmbientLight);
+      const directionalLight = scene.children.find((object) => object instanceof DirectionalLight);
+
+      expect(camera.matrixAutoUpdate).toBe(false);
+      expect(ambientLight?.matrixAutoUpdate).toBe(false);
+      expect(directionalLight?.matrixAutoUpdate).toBe(false);
+      expect(updateMatrixSpy.mock.contexts.filter((context) => context === camera)).toHaveLength(1);
+      expect(
+        updateMatrixSpy.mock.contexts.filter((context) => context === ambientLight),
+      ).toHaveLength(1);
+      expect(
+        updateMatrixSpy.mock.contexts.filter((context) => context === directionalLight),
+      ).toHaveLength(2);
+      expect(directionalLight?.matrix.elements.slice(12, 15)).toEqual([3, 4, 5]);
+    } finally {
+      updateMatrixSpy.mockRestore();
+    }
   });
 });

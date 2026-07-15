@@ -2,11 +2,19 @@
 
 ## Method
 
-Both reports use the unchanged `npm run bench:scaffold` harness with a production build,
+Both reports use unchanged measurement logic from `npm run bench:scaffold` with a production build,
 Playwright Chromium, a 1280 x 720 viewport, 120 warm-up frames, 600 sampled frames, and fixed
 preview port 4174. The final build was measured twice. Both final runs recorded commit
 `fec3ff3f07dbf6e9fdb3bf6c1b6f711f00da9418`, completed without console or page errors, and
 released port 4174.
+
+## Dependency decisions
+
+The scaffold's runtime dependencies are covered by existing accepted decisions: ADR-005 selects
+Preact plus `@preact/signals` for the HUD, and ADR-008 selects three.js `WebGLRenderer` with
+WebGL2. These records satisfy the runtime-dependency ADR requirement in
+`docs/coding-standards.md`; ADR-008 also owns the renderer policy referenced by
+`docs/performance-spec.md`. No duplicate ADR is needed for T0001.
 
 ## Before and after
 
