@@ -1,6 +1,6 @@
 id: T0002
 title: CI check scripts (task schema, asset budgets)
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0002-ci-check-scripts
 depends_on: [T0001]
@@ -14,4 +14,30 @@ acceptance:
   - check:tasks fails on a duplicate id, invalid state, or dependency cycle (test fixtures)
   - check:budgets fails when a fixture exceeds a limit
   - Both wired into .github/workflows/ci.yml
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review on task/T0002-ci-check-scripts. Task-schema
+  fixtures cover 28 focused cases, including exact fields/types, invalid
+  states, ownership, duplicate ids, unknown/self dependencies, cycles, strict
+  YAML errors, filename matching, and CLI aggregation. Asset-budget fixtures
+  cover 34 focused cases using real temporary directories and sparse files,
+  including all byte limits and equality semantics, exclusions, critical-path
+  matching, canonical alias deduplication after logical classification,
+  file/directory symlink escape violations, public/assets root containment
+  before traversal or manifest reads, optional/malformed manifests, triangle
+  limits, and CLI aggregation. A dedicated CI workflow regression
+  proves the permanent project gates have no scaffold or docs-only condition
+  and invoke the two checker commands exactly once.
+
+  Real checkers PASS: 52 task files validated; repository content 61,835,487
+  bytes (58.97 MiB), public/assets 86 bytes, and initial critical path 532,926
+  bytes (0.51 MiB). Full Vitest PASS (7 files, 72 tests); lint PASS; strict
+  typecheck PASS; production build PASS; Prettier format check PASS; git diff
+  check PASS. CI setup, install, lint, typecheck, test, build, check:budgets,
+  and check:tasks now always run. The existing Vite warning for the >500 kB
+  JavaScript chunk remains.
+
+  Independent final review approved the complete branch with no Critical,
+  Important, or Minor findings. PR #3 CI was green before the DONE transition;
+  the merger will verify CI again on this final task-status commit before merge.
+  This DONE transition is authored by that approved independent reviewer; the
+  branch will be retained after the non-force merge.

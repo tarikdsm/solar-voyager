@@ -11,44 +11,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect scaffold
-        id: scaffold
-        run: echo "exists=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
       - uses: actions/setup-node@v4
-        if: steps.scaffold.outputs.exists == 'true'
         with:
           node-version: 22
           cache: npm
 
       - name: Install
-        if: steps.scaffold.outputs.exists == 'true'
         run: npm ci
 
       - name: Lint
-        if: steps.scaffold.outputs.exists == 'true'
         run: npm run lint
 
       - name: Typecheck
-        if: steps.scaffold.outputs.exists == 'true'
         run: npm run typecheck
 
       - name: Test
-        if: steps.scaffold.outputs.exists == 'true'
         run: npm test
 
       - name: Build
-        if: steps.scaffold.outputs.exists == 'true'
         run: npm run build
 
       - name: Asset budgets
-        if: steps.scaffold.outputs.exists == 'true'
-        run: npm run check:budgets --if-present
+        run: npm run check:budgets
 
       - name: Task-file schema check
-        if: steps.scaffold.outputs.exists == 'true'
-        run: npm run check:tasks --if-present
-
-      - name: Docs-only repo (pre-scaffold)
-        if: steps.scaffold.outputs.exists == 'false'
-        run: echo "No package.json yet — docs-only phase, CI passes trivially."
+        run: npm run check:tasks
