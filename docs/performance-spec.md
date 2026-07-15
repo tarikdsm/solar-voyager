@@ -39,9 +39,10 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
   1. Render scale: 1.0 → 0.85 → 0.7 → 0.55 (internal resolution; canvas CSS size unchanged)
   2. Bloom: full-res → half-res → off
   3. AA: SMAA → FXAA → off
-  4. Star count cap: 9k → 4k → 2k
-  5. Texture tier cap: full → 2k max → 1k max (applies on next lazy load)
-  6. Tier-3 model threshold raised (bodies stay spheres longer)
+  4. Procedural shader octaves: full → half → minimum (ADR-010 — Sun granulation, gas-giant flow, detail noise)
+  5. Star count cap: 9k → 4k → 2k
+  6. Texture tier cap: full → 2k max → 1k max (applies on next lazy load)
+  7. Tier-3 model threshold raised (bodies stay spheres longer)
 - Every change is logged to telemetry and surfaced in the perf HUD as the current tier (e.g. `Q4/6`). The governor must never fight the user: a settings lock disables it.
 - **Degradation is invisible-first:** the ladder was ordered so the player notices the FPS drop being fixed before they notice what paid for it.
 

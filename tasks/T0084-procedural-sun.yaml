@@ -1,0 +1,19 @@
+id: T0084
+title: Procedural Sun shader (granulation, limb darkening, prominences)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0043]
+milestone: M2
+spec: |
+  ADR-010 Tier A: fully procedural Sun — animated convective granulation
+  (domain-warped fbm, time-scaled so it also respects sim warp visually),
+  limb darkening, emissive intensity feeding the bloom pass, billboard
+  corona/glare, occasional prominence arcs on the limb. Low-octave
+  fallback rung for the governor. TSL-portable, seeded. Replaces the
+  static SDO texture as primary path (texture remains optional fallback).
+acceptance:
+  - Sun looks alive at every distance from Mercury flyby to Neptune (screenshot set)
+  - Shader cost within render budget at 1080p; low-octave rung measurably cheaper
+  - No visible tiling/banding artifacts; limb darkening matches reference photos
+handoff_notes: ""

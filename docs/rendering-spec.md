@@ -27,7 +27,7 @@ Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — 
 
 - **One directional light**, direction Sun→camera-focus, intensity ∝ 1/d² normalized at 1 AU.
 - HDR pipeline: half-float render target, **ACES filmic tone mapping**, UnrealBloomPass (solar disc, engine glow).
-- Sun rendered as emissive sphere + billboard glare sprite.
+- Sun rendered **procedurally** (ADR-010, task T0084): animated convective granulation, limb darkening, prominence arcs + billboard glare — the static emissive texture is only a fallback. Gas giants animate their real base maps with procedural band flow (T0085). Policy for all procedural shading (tiers, bake-at-load rule, governor octave rung): ADR-010.
 - Night sides genuinely dark; global ambient floor 0.02 for playability.
 - Earth atmosphere: simple rim/fresnel shader in v1 (full scattering is a future task).
 

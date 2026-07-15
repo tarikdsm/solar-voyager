@@ -1,0 +1,19 @@
+id: T0085
+title: Gas giant animated band shaders (texture base + procedural flow)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0041, T0043]
+milestone: M6
+spec: |
+  ADR-010 Tier B: Jupiter/Saturn/Uranus/Neptune tier-3 materials animate
+  the real base mosaic — latitude-dependent band flow (differential
+  rotation), domain-warped turbulence between bands, Great Red Spot
+  rotation, subtle storm shimmer. Bake-at-load for any static component;
+  animated component honors the governor octave rung. Deterministic per
+  body seed.
+acceptance:
+  - Side-by-side vs static texture shows motion without distorting recognizable features
+  - Zero additional texture downloads beyond the existing base maps
+  - Cost within render budget; octave fallback verified
+handoff_notes: ""
