@@ -121,6 +121,67 @@ describe('measureBudgets', () => {
     });
   });
 
+  it('counts a critical alias after a generic alias traverses the same directory first', async () => {
+    await withRepository(async (root) => {
+      const sharedFile = await writeSparseFile(root, 'shared/runtime.bin', 777);
+      const sharedDirectory = dirname(sharedFile);
+      const publicAssets = join(root, 'public', 'assets');
+      await mkdir(publicAssets, { recursive: true });
+
+      const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+      await symlink(sharedDirectory, join(publicAssets, 'aaa-generic'), linkType);
+      await symlink(sharedDirectory, join(publicAssets, 'sun'), linkType);
+
+      const measurements = await measureBudgets(root);
+      expect(measurements.criticalPathBytes).toBe(777);
+    });
+  });
+
+  it('reports and excludes a critical file symlink that resolves outside the repository', async () => {
+    await withRepository(async (root) => {
+      const outsideRoot = await mkdtemp(join(tmpdir(), 'solar-voyager-outside-'));
+
+      try {
+        const outsideFile = await writeSparseFile(outsideRoot, 'payload.bin', 777);
+        const publicAssets = join(root, 'public', 'assets');
+        await mkdir(publicAssets, { recursive: true });
+        await symlink(outsideFile, join(publicAssets, 'sun.bin'), 'file');
+
+        const measurements = await measureBudgets(root);
+        expect(measurements.criticalPathBytes).toBe(0);
+        expect(validateBudgets(measurements)).toContainEqual(
+          expect.stringContaining(
+            'public/assets/sun.bin resolves outside the repository root',
+          ),
+        );
+      } finally {
+        await rm(outsideRoot, { force: true, recursive: true });
+      }
+    });
+  });
+
+  it('reports and excludes a critical directory symlink that resolves outside the repository', async () => {
+    await withRepository(async (root) => {
+      const outsideRoot = await mkdtemp(join(tmpdir(), 'solar-voyager-outside-'));
+
+      try {
+        await writeSparseFile(outsideRoot, 'payload.bin', 777);
+        const publicAssets = join(root, 'public', 'assets');
+        await mkdir(publicAssets, { recursive: true });
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        await symlink(outsideRoot, join(publicAssets, 'sun'), linkType);
+
+        const measurements = await measureBudgets(root);
+        expect(measurements.criticalPathBytes).toBe(0);
+        expect(validateBudgets(measurements)).toContainEqual(
+          expect.stringContaining('public/assets/sun resolves outside the repository root'),
+        );
+      } finally {
+        await rm(outsideRoot, { force: true, recursive: true });
+      }
+    });
+  });
+
   it('uses zero built-code bytes when dist is absent', async () => {
     await withRepository(async (root) => {
       await writeSparseFile(root, 'public/assets/models/mars.glb', 10);

@@ -1,5 +1,5 @@
 import { readFile, readdir, realpath, stat } from 'node:fs/promises';
-import { extname, relative, resolve } from 'node:path';
+import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const MIB = 1024 * 1024;
@@ -39,6 +39,20 @@ function canonicalKey(filePath) {
   return process.platform === 'win32' ? filePath.toLowerCase() : filePath;
 }
 
+function isWithinRoot(canonicalRoot, canonicalPath) {
+  const relativePath = relative(canonicalRoot, canonicalPath);
+  return (
+    relativePath === '' ||
+    (!isAbsolute(relativePath) && relativePath !== '..' && !relativePath.startsWith('../') &&
+      !relativePath.startsWith('..\\'))
+  );
+}
+
+function reportOutsideRoot(options, logicalPath) {
+  const normalizedPath = relative(options.logicalRoot, logicalPath).replaceAll('\\', '/');
+  options.pathFindings.push(`${normalizedPath} resolves outside the repository root`);
+}
+
 export function addCanonicalSize(canonicalPaths, canonicalPath, sizeBytes) {
   const key = canonicalKey(canonicalPath);
   if (canonicalPaths.has(key)) {
@@ -53,18 +67,28 @@ async function sumFiles(directory, options = {}) {
     excludedDirectories = new Set(),
     includeFile = () => true,
     canonicalPaths,
-    canonicalDirectories,
+    activeCanonicalDirectories,
+    canonicalRoot,
+    logicalRoot,
+    pathFindings,
   } = options;
   let totalBytes = 0;
   let entries;
+  let activeDirectoryKey;
 
   try {
-    if (canonicalDirectories !== undefined) {
-      const directoryKey = canonicalKey(await realpath(directory));
-      if (canonicalDirectories.has(directoryKey)) {
+    if (activeCanonicalDirectories !== undefined) {
+      const canonicalDirectory = await realpath(directory);
+      if (!isWithinRoot(canonicalRoot, canonicalDirectory)) {
+        reportOutsideRoot({ logicalRoot, pathFindings }, directory);
         return 0;
       }
-      canonicalDirectories.add(directoryKey);
+      const directoryKey = canonicalKey(canonicalDirectory);
+      if (activeCanonicalDirectories.has(directoryKey)) {
+        return 0;
+      }
+      activeCanonicalDirectories.add(directoryKey);
+      activeDirectoryKey = directoryKey;
     }
     entries = await readdir(directory, { withFileTypes: true });
   } catch (error) {
@@ -74,36 +98,52 @@ async function sumFiles(directory, options = {}) {
     throw error;
   }
 
-  for (const entry of entries) {
-    const entryPath = resolve(directory, entry.name);
-    const entryStats = entry.isSymbolicLink() && canonicalPaths !== undefined
-      ? await stat(entryPath)
-      : null;
+  try {
+    entries.sort((left, right) => left.name.localeCompare(right.name));
 
-    if (entry.isDirectory() || entryStats?.isDirectory()) {
-      if (!excludedDirectories.has(entry.name)) {
-        totalBytes += await sumFiles(entryPath, options);
+    for (const entry of entries) {
+      const entryPath = resolve(directory, entry.name);
+      let canonicalTarget;
+      let entryStats;
+
+      if (entry.isSymbolicLink() && canonicalPaths !== undefined) {
+        canonicalTarget = await realpath(entryPath);
+        if (!isWithinRoot(canonicalRoot, canonicalTarget)) {
+          reportOutsideRoot({ logicalRoot, pathFindings }, entryPath);
+          continue;
+        }
+        entryStats = await stat(entryPath);
       }
-      continue;
+
+      if (entry.isDirectory() || entryStats?.isDirectory()) {
+        if (!excludedDirectories.has(entry.name)) {
+          totalBytes += await sumFiles(entryPath, options);
+        }
+        continue;
+      }
+
+      if ((!entry.isFile() && !entryStats?.isFile()) || !includeFile(entryPath)) {
+        continue;
+      }
+
+      if (canonicalPaths !== undefined) {
+        totalBytes += addCanonicalSize(
+          canonicalPaths,
+          canonicalTarget ?? (await realpath(entryPath)),
+          (entryStats ?? (await stat(entryPath))).size,
+        );
+        continue;
+      }
+
+      totalBytes += (await stat(entryPath)).size;
     }
 
-    if ((!entry.isFile() && !entryStats?.isFile()) || !includeFile(entryPath)) {
-      continue;
+    return totalBytes;
+  } finally {
+    if (activeDirectoryKey !== undefined) {
+      activeCanonicalDirectories.delete(activeDirectoryKey);
     }
-
-    if (canonicalPaths !== undefined) {
-      totalBytes += addCanonicalSize(
-        canonicalPaths,
-        await realpath(entryPath),
-        (entryStats ?? (await stat(entryPath))).size,
-      );
-      continue;
-    }
-
-    totalBytes += (await stat(entryPath)).size;
   }
-
-  return totalBytes;
 }
 
 async function readManifest(root) {
@@ -136,22 +176,29 @@ function identifiesCriticalAsset(publicAssetsPath, filePath) {
 
 export async function measureBudgets(root) {
   const repositoryRoot = resolve(root);
+  const canonicalRepositoryRoot = await realpath(repositoryRoot);
   const publicAssetsPath = resolve(repositoryRoot, 'public', 'assets');
   const canonicalCriticalPaths = new Set();
-  const canonicalCriticalDirectories = new Set();
+  const activeCanonicalDirectories = new Set();
+  const pathFindings = [];
+  const canonicalOptions = {
+    canonicalPaths: canonicalCriticalPaths,
+    activeCanonicalDirectories,
+    canonicalRoot: canonicalRepositoryRoot,
+    logicalRoot: repositoryRoot,
+    pathFindings,
+  };
   const repoBytes = await sumFiles(repositoryRoot, {
     excludedDirectories: REPO_EXCLUDED_DIRECTORIES,
   });
   const publicAssetsBytes = await sumFiles(publicAssetsPath);
   const builtCodeBytes = await sumFiles(resolve(repositoryRoot, 'dist'), {
     includeFile: isBuiltCode,
-    canonicalPaths: canonicalCriticalPaths,
-    canonicalDirectories: canonicalCriticalDirectories,
+    ...canonicalOptions,
   });
   const runtimeCriticalBytes = await sumFiles(publicAssetsPath, {
     includeFile: (filePath) => identifiesCriticalAsset(publicAssetsPath, filePath),
-    canonicalPaths: canonicalCriticalPaths,
-    canonicalDirectories: canonicalCriticalDirectories,
+    ...canonicalOptions,
   });
 
   return {
@@ -159,6 +206,7 @@ export async function measureBudgets(root) {
     publicAssetsBytes,
     criticalPathBytes: builtCodeBytes + runtimeCriticalBytes,
     manifest: await readManifest(repositoryRoot),
+    pathFindings,
   };
 }
 
@@ -258,7 +306,7 @@ function validateManifest(manifest, findings) {
 }
 
 export function validateBudgets(measurements) {
-  const findings = [];
+  const findings = [...(measurements.pathFindings ?? [])];
   validateByteLimit(findings, 'Repo content', measurements.repoBytes, BUDGET_LIMITS.repoBytes);
   validateByteLimit(
     findings,
