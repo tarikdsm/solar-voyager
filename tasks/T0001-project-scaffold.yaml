@@ -1,6 +1,6 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0001-project-scaffold
 depends_on: []
@@ -17,4 +17,10 @@ acceptance:
   - npm run lint/typecheck/test/build all pass
   - Import-direction ESLint rule demonstrably rejects a sim -> render import
   - Placeholder scene renders locally via npm run dev
-handoff_notes: ""
+handoff_notes: |
+  Verification on 2026-07-15: lint and typecheck exited 0; Vitest passed 2/2 tests;
+  the focused import-boundary test confirmed import/no-restricted-paths; Vite built
+  successfully with assets rooted below /solar-voyager/. Playwright loaded the page,
+  found the Solar Voyager heading and a visible 1280x720 WebGL2 canvas, captured the
+  rendered cube, and reported no console or page errors. A different agent or the
+  maintainer must review this task before merge and mark it DONE.
