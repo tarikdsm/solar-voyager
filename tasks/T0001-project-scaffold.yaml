@@ -1,6 +1,6 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0001-project-scaffold-v2
 depends_on: []
@@ -18,10 +18,38 @@ acceptance:
   - Import-direction ESLint rule demonstrably rejects a sim -> render import
   - Placeholder scene renders locally via npm run dev
 handoff_notes: |
-  First delivery attempt is preserved at origin/task/T0001-project-scaffold
-  and PR #1. Final review found that the implementation plan introduced the
-  renderer before arranging the mandatory before/after benchmark evidence
-  required by performance-spec.md section 6. The maintainer rejected an M0
-  exception on 2026-07-15 and requested a clean restart. The v2 branch must
-  establish a measurable pre-Three.js baseline first, then add the renderer
-  and report before/after numbers in the PR.
+  Ready for external review on task/T0001-project-scaffold-v2. The preserved
+  2D baseline at bec528937b703b41c6e1ed86da4699340d6870ea measured
+  median/p75/p99 16.7/16.7/16.8 ms and heap delta +61,148 bytes. Two identical
+  final-build benchmark runs at f5688114b662c023fd6a0b7fddf43c8628dcb8c1
+  both measured median/p75/p99 16.7/16.7/16.8 ms (p75 variance 0%); heap deltas
+  were -944,020 and -963,808 bytes. Both used 120 warm-up and 600 sampled
+  frames at 1280x720 CSS/backing size, recorded zero console/page errors, and
+  released fixed port 4174. Canonical after data and comparison are committed
+  on this branch.
+
+  Fresh delivery gates: lint PASS; strict typecheck PASS; all Vitest tests PASS
+  (4 files, 9 tests); focused architecture boundary suite PASS (1 file,
+  3 tests); production build PASS; Prettier format check PASS; git diff check
+  PASS; built index contains exactly two /solar-voyager/assets/ references.
+  Vite reports the expected warning for the 531.42 kB uncompressed JavaScript
+  chunk (135.05 kB gzip in Vite output).
+
+  Browser gate at 1280x720: visible accessible Solar Voyager h1 PASS; visible
+  canvas PASS; canvas and Preact root sibling relationship PASS; WebGL2 context
+  PASS; console errors 0; page errors 0. Screenshot artifact:
+  output/playwright/T0001-browser-gate.png (36,874 bytes, intentionally
+  untracked). Gate server stopped and port 4174 released.
+
+  Dependency ADR coverage: accepted docs/decisions/ADR-005-preact-hud.md
+  selects Preact plus @preact/signals for the HUD, and accepted
+  docs/decisions/ADR-008-webgl2-adaptive-quality.md selects the three.js
+  WebGLRenderer/WebGL2 path and renderer performance policy. Together they
+  satisfy the runtime-dependency ADR rule in coding-standards.md and the
+  renderer policy in performance-spec.md; no duplicate ADR was added.
+
+  Independent final review approved the complete branch with no Critical,
+  Important, or Minor findings. PR #2 CI was green before the DONE transition;
+  the merger will verify CI again on this final task-status commit before merge.
+  This DONE transition is authored by that approved independent reviewer; the
+  branch will be retained after the non-force merge.
