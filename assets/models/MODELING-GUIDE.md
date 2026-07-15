@@ -18,7 +18,7 @@ Categories: `sun/ planets/ moons/ dwarfs/ asteroids/ comets/ ship/ rings/`. Body
 ## 2. File format
 
 - **glTF 2.0 Binary (`.glb`)** — the only accepted model format. Blender: File → Export → glTF 2.0, format "glTF Binary".
-- Textures **external** (PNG 8-bit or 16-bit for normals; EXR not accepted) — the ingest pass converts to KTX2. Do NOT embed textures in the .glb, do NOT Draco-compress at authoring (ingest does it).
+- Textures **external** — the ingest pass converts to KTX2. Formats: **JPEG is acceptable (and preferred, for repo size) for photographic maps** (albedo, night lights, clouds — sources are lossy anyway); **PNG required for normal maps** (8- or 16-bit; lossy compression corrupts normals); EXR not accepted. Do NOT embed textures in the .glb, do NOT Draco-compress at authoring (ingest does it).
 - Export settings: +Y up (glTF default), apply modifiers ON, no cameras, no lights, no animations (rotation/tilt are simulated by the engine from `bodies.json`), no vertex colors except asteroids (baked AO).
 
 ## 3. Units, scale, orientation — the normalization contract
