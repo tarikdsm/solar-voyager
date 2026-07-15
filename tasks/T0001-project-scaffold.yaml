@@ -1,6 +1,6 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0001-project-scaffold
 depends_on: []
