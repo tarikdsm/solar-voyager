@@ -182,6 +182,51 @@ describe('measureBudgets', () => {
     });
   });
 
+  it('rejects an escaped public/assets root before traversing asset bytes', async () => {
+    await withRepository(async (root) => {
+      const outsideRoot = await mkdtemp(join(tmpdir(), 'solar-voyager-outside-'));
+
+      try {
+        await writeSparseFile(outsideRoot, 'sun.bin', 777);
+        await writeFile(join(outsideRoot, 'manifest.json'), '{"assets": []}\n', 'utf8');
+        await mkdir(join(root, 'public'), { recursive: true });
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        await symlink(outsideRoot, join(root, 'public', 'assets'), linkType);
+
+        const measurements = await measureBudgets(root);
+        expect(measurements.publicAssetsBytes).toBe(0);
+        expect(measurements.criticalPathBytes).toBe(0);
+        expect(validateBudgets(measurements)).toContainEqual(
+          expect.stringContaining('public/assets resolves outside the repository root'),
+        );
+      } finally {
+        await rm(outsideRoot, { force: true, recursive: true });
+      }
+    });
+  });
+
+  it('rejects an escaped public/assets root before reading its manifest', async () => {
+    await withRepository(async (root) => {
+      const outsideRoot = await mkdtemp(join(tmpdir(), 'solar-voyager-outside-'));
+
+      try {
+        await writeSparseFile(outsideRoot, 'sun.bin', 777);
+        await writeFile(join(outsideRoot, 'manifest.json'), '{"assets": []}\n', 'utf8');
+        await mkdir(join(root, 'public'), { recursive: true });
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        await symlink(outsideRoot, join(root, 'public', 'assets'), linkType);
+
+        const measurements = await measureBudgets(root);
+        expect(measurements.manifest).toEqual({ present: false });
+        expect(validateBudgets(measurements)).toContainEqual(
+          expect.stringContaining('public/assets resolves outside the repository root'),
+        );
+      } finally {
+        await rm(outsideRoot, { force: true, recursive: true });
+      }
+    });
+  });
+
   it('uses zero built-code bytes when dist is absent', async () => {
     await withRepository(async (root) => {
       await writeSparseFile(root, 'public/assets/models/mars.glb', 10);

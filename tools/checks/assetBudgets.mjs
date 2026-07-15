@@ -1,4 +1,4 @@
-import { readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -51,6 +51,18 @@ function isWithinRoot(canonicalRoot, canonicalPath) {
 function reportOutsideRoot(options, logicalPath) {
   const normalizedPath = relative(options.logicalRoot, logicalPath).replaceAll('\\', '/');
   options.pathFindings.push(`${normalizedPath} resolves outside the repository root`);
+}
+
+async function classifyCanonicalLocation(logicalPath, canonicalRoot) {
+  try {
+    await lstat(logicalPath);
+    return isWithinRoot(canonicalRoot, await realpath(logicalPath)) ? 'contained' : 'escaped';
+  } catch (error) {
+    if (isMissing(error)) {
+      return 'absent';
+    }
+    throw error;
+  }
 }
 
 export function addCanonicalSize(canonicalPaths, canonicalPath, sizeBytes) {
@@ -181,6 +193,17 @@ export async function measureBudgets(root) {
   const canonicalCriticalPaths = new Set();
   const activeCanonicalDirectories = new Set();
   const pathFindings = [];
+  const publicAssetsLocation = await classifyCanonicalLocation(
+    publicAssetsPath,
+    canonicalRepositoryRoot,
+  );
+  const canReadPublicAssets = publicAssetsLocation === 'contained';
+  if (publicAssetsLocation === 'escaped') {
+    reportOutsideRoot(
+      { logicalRoot: repositoryRoot, pathFindings },
+      publicAssetsPath,
+    );
+  }
   const canonicalOptions = {
     canonicalPaths: canonicalCriticalPaths,
     activeCanonicalDirectories,
@@ -191,21 +214,23 @@ export async function measureBudgets(root) {
   const repoBytes = await sumFiles(repositoryRoot, {
     excludedDirectories: REPO_EXCLUDED_DIRECTORIES,
   });
-  const publicAssetsBytes = await sumFiles(publicAssetsPath);
+  const publicAssetsBytes = canReadPublicAssets ? await sumFiles(publicAssetsPath) : 0;
   const builtCodeBytes = await sumFiles(resolve(repositoryRoot, 'dist'), {
     includeFile: isBuiltCode,
     ...canonicalOptions,
   });
-  const runtimeCriticalBytes = await sumFiles(publicAssetsPath, {
-    includeFile: (filePath) => identifiesCriticalAsset(publicAssetsPath, filePath),
-    ...canonicalOptions,
-  });
+  const runtimeCriticalBytes = canReadPublicAssets
+    ? await sumFiles(publicAssetsPath, {
+        includeFile: (filePath) => identifiesCriticalAsset(publicAssetsPath, filePath),
+        ...canonicalOptions,
+      })
+    : 0;
 
   return {
     repoBytes,
     publicAssetsBytes,
     criticalPathBytes: builtCodeBytes + runtimeCriticalBytes,
-    manifest: await readManifest(repositoryRoot),
+    manifest: canReadPublicAssets ? await readManifest(repositoryRoot) : { present: false },
     pathFindings,
   };
 }
