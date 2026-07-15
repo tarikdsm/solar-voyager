@@ -1,16 +1,17 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
 
-import { percentile } from './scaffoldBenchUtils.mjs';
+import { assertPortAvailable, percentile } from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
+const PORT = 4174;
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),
 );
@@ -52,41 +53,6 @@ function runBuild() {
       );
     });
   });
-}
-
-function pageUrlForPort(port) {
-  return `http://${HOST}:${String(port)}/solar-voyager/`;
-}
-
-function useAvailablePort(port) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const server = createServer();
-
-    server.once('error', rejectPromise);
-    server.listen(port, HOST, () => {
-      const address = server.address();
-
-      if (address === null || typeof address === 'string') {
-        server.close(() => {
-          rejectPromise(new Error('Unable to determine the benchmark preview port.'));
-        });
-        return;
-      }
-
-      server.close((error) => {
-        if (error === undefined) {
-          resolvePromise(address.port);
-          return;
-        }
-
-        rejectPromise(error);
-      });
-    });
-  });
-}
-
-function findAvailablePort() {
-  return useAvailablePort(0);
 }
 
 async function previewIsReady(pageUrl) {
@@ -338,17 +304,15 @@ async function collectBenchmark(pageUrl) {
 async function main() {
   const outputPath = readOutputPath();
   let previewLifecycle = null;
-  let previewPort = null;
 
   try {
     await runBuild();
-    previewPort = await findAvailablePort();
-    const pageUrl = pageUrlForPort(previewPort);
-    previewLifecycle = startPreview(previewPort);
-    await waitForPreview(previewLifecycle, pageUrl);
-    console.log(`Benchmark preview port: ${String(previewPort)}`);
+    await assertPortAvailable(PORT, HOST);
+    previewLifecycle = startPreview(PORT);
+    await waitForPreview(previewLifecycle, PAGE_URL);
+    console.log(`Benchmark preview port: ${String(PORT)}`);
 
-    const result = await collectBenchmark(pageUrl);
+    const result = await collectBenchmark(PAGE_URL);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 
@@ -360,9 +324,9 @@ async function main() {
   } finally {
     await stopPreview(previewLifecycle);
 
-    if (previewLifecycle !== null && previewPort !== null) {
-      await useAvailablePort(previewPort);
-      console.log(`Benchmark preview port released: ${String(previewPort)}`);
+    if (previewLifecycle !== null) {
+      await assertPortAvailable(PORT, HOST);
+      console.log(`Benchmark preview port released: ${String(PORT)}`);
     }
   }
 }
