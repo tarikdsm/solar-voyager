@@ -1,4 +1,6 @@
-# Solar Voyager — Agent Entry Point (ChatGPT, Grok, and any other agent)
+# Solar Voyager — Agent Entry Point (ALL agents: Claude Code, ChatGPT, Grok, humans)
+
+> This is the single canonical entry point. `CLAUDE.md` is only a pointer here — never duplicate rules there.
 
 Realistic browser-based solar-system exploration game. Three.js + TypeScript + Vite + Preact, custom float64 n-body physics, Blender-scripted assets, deployed to GitHub Pages.
 
