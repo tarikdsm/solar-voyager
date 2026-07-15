@@ -72,7 +72,9 @@ Ladder: `1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6, 1e7`. Per frame the sim advances
 
 Bodies integrated mutually with velocity-Verlet (leapfrog), fixed 300 s step, on a worker; warp capped at 1e5x. Symplectic ⇒ bounded energy error. Regression: 1-year inner-system integration, relative energy drift < 1e-9.
 
-## 4. Launch phase (2D)
+## 4. Launch phase (2D) — DEFERRED (optional post-v1 expansion)
+
+> **Scope note (2026-07-15):** this entire section is fully specified but **not part of v1**. v1 starts with the ship in a 400 km LEO. Keep this spec current; implement via tasks T0060–T0062 when the launch expansion is prioritized.
 
 ### 4.1 State & frame
 
@@ -143,7 +145,7 @@ Integrated inside the same substeps as motion (warp-invariant):
 1. **Kepler solver:** |E| residual < 1e-12 across e ∈ [0, 0.99] and hyperbolic e ∈ (1, 5]; round-trip elements ↔ state vectors to 1e-10 relative.
 2. **Two-body DP54:** circular and e=0.7 orbits, 10 periods: position error vs analytic < 1e-3 km; energy and |h| drift < 1e-9 relative.
 3. **Rails accuracy:** vs `ephemerides-check.json` within §2 bounds.
-4. **Launch regression:** scripted throttle/pitch profile reaches 200±5 km orbit; total Δv within ±1% of the golden value; max-q within ±2%.
-5. **Handoff:** energy/angular-momentum round-trip < 1e-9 relative.
+4. **Launch regression** *(deferred with §4)*: scripted throttle/pitch profile reaches 200±5 km orbit; total Δv within ±1% of the golden value; max-q within ±2%.
+5. **Handoff** *(deferred with §4)*: energy/angular-momentum round-trip < 1e-9 relative.
 6. **Golden trajectories:** three 30-day ship propagations (LEO, Earth–Mars transfer, Jupiter flyby) stored in `tests/golden/`; any change that moves them requires an explicit golden update in the PR (reviewable diff).
 7. **Ledger:** Δv of an impulsive-approximation Hohmann LEO→GEO within 1% of the analytic 3.90 km/s.

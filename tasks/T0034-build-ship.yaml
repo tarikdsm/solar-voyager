@@ -1,0 +1,18 @@
+id: T0034
+title: Ship model (build_ship script)
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0030]
+milestone: M3
+spec: |
+  tools/blender/build_ship.py per docs/asset-pipeline.md: original design,
+  ~30k tris, PBR materials (albedo/metal-rough/normal/emissive engine glow),
+  separate engine-nozzle node for the renderer's plume attachment. Iterate
+  via blender-mcp if desired, but back-port everything into the script.
+  Needed by M3 (the ship is on screen from the first playable).
+acceptance:
+  - Ship glb + ktx2 committed, manifest within the 8 MB ship budget
+  - Nozzle node named per rendering-spec so the plume can attach
+  - Re-running the script reproduces the artifact
+handoff_notes: ""

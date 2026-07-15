@@ -24,11 +24,11 @@ src/
 │   ├── bodies/                 # catalog.ts (loads data/bodies.json), kepler.ts
 │   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts, leapfrog.ts
 │   ├── ship/                   # shipState.ts, deltaV.ts (ledger)
-│   ├── launch/                 # atmosphere.ts, launchSim.ts, handoff.ts
+│   ├── launch/                 # [deferred, post-v1] atmosphere.ts, launchSim.ts, handoff.ts
 │   ├── analysis/               # osculating.ts, soi.ts, warnings.ts
 │   └── simulation.ts           # SimulationCore
 ├── workers/                    # predictor.worker.ts + predictorProtocol.ts
-├── render/                     # spaceScene, launchScene, bodyVisual, starfield,
+├── render/                     # spaceScene, bodyVisual, starfield, (launchScene: deferred)
 │                               # trajectoryLine, lighting, lod
 ├── game/                       # sceneManager, saveLoad, settings, input
 └── ui/                         # App.tsx, hud/, map/, menus/
@@ -54,19 +54,21 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 - derived: dominant body id, osculating elements, Δv ledger totals, active warnings
 
 **`Commands`** (the ONLY way player intent enters the sim; changes require an ADR):
-- `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`, launch-phase: `setPitchRate(r)`, `stage()`
+- `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`; (deferred launch phase adds `setPitchRate(r)`, `stage()` via ADR when built)
 
 `render/` and `ui/` are pure consumers of `SimSnapshot`. They never mutate sim state. UI agents and physics agents meet ONLY at these two interfaces — this is what makes parallel multi-agent work safe.
 
 ## Scene state machine (`game/sceneManager.ts`)
 
 ```
-MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D)
+v1:      MainMenu → SpacePhase (3D)            — new game starts in a 400 km LEO
+future:  MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D)   [deferred, optional]
+                  → ApproachPhase/SurfacePhase                              [landing, deferred]
 ```
 
-- One WebGL renderer for both phases. LaunchScene uses an orthographic camera (2D side view); SpaceScene uses perspective + camera-relative positioning.
-- Handoff trigger: altitude > 140 km. `sim/launch/handoff.ts` converts the 2D polar state to a heliocentric 3D state vector (pure function, unit-tested for energy/angular-momentum round-trip).
-- **Future landing = a new state** (`ApproachPhase`/`SurfacePhase`) added to this machine; bodies already carry a `surface` descriptor in `bodies.json` (unused in v1).
+- **v1 ships only `MainMenu → SpacePhase`.** The state machine is built to accept the future states without refactoring — phases are pluggable states, never hardcoded transitions.
+- Deferred launch phase (post-v1, optional): LaunchScene with an orthographic camera (2D side view) on the same WebGL renderer; handoff at 140 km via `sim/launch/handoff.ts` (2D polar → heliocentric 3D, pure function, energy/angular-momentum round-trip tested). Spec: physics-spec §4; tasks T0060–T0062.
+- **Future landing = a new state** added to this machine; bodies already carry a `surface` descriptor in `bodies.json` (unused in v1).
 
 ## Threading model
 

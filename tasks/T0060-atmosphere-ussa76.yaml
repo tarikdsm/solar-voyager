@@ -1,6 +1,6 @@
 id: T0060
 title: US Standard Atmosphere 1976 module
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0010]
@@ -10,4 +10,4 @@ spec: |
   to 120 km, T/p/rho/speed-of-sound outputs.
 acceptance:
   - Matches USSA-1976 published table values at 0/11/20/47/86 km to 0.1%
-handoff_notes: ""
+handoff_notes: "DEFERRED: launch phase moved to optional post-v1 expansion (maintainer decision 2026-07-15, see docs/roadmap.md). Do not claim for v1."

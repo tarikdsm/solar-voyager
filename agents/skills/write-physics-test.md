@@ -22,6 +22,6 @@ describe('dp54 — physics-spec §3.1 / §7.2', () => { ... })
 - Numeric comparisons: use relative error `|a−b|/max(|a|,|b|)` for large quantities (positions in km), absolute for near-zero quantities.
 - Long integrations in tests: keep under ~1 s runtime each; use coarser tolerance profiles only if the spec defines them.
 
-## Launch-phase tests
+## Launch-phase tests (deferred — applies to the post-v1 launch expansion, tasks T0060–T0062)
 
 The 2D launch sim is fixed-step RK4 → **bit-reproducible**. Regression: the scripted ascent profile in `tests/sim/launch/profile.ts` must reach 200±5 km orbit with golden Δv ±1% and max-q ±2% (spec §7.4).

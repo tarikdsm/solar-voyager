@@ -35,7 +35,7 @@
 - Yale Bright Star Catalog (~9,100 stars, public domain) baked by `tools/bake_stars.py` into `data/stars.bin`: packed Float32 `(dirX, dirY, dirZ, mag, B−V→RGB)`, ~250 KB.
 - Rendered as one `THREE.Points` on a 1e9 km sphere centered on the camera (moves with it). Correct at every zoom; no skybox textures.
 
-## 6. Launch scene (2D)
+## 6. Launch scene (2D) — DEFERRED (optional post-v1 expansion, see roadmap)
 
 Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Earth limb, atmosphere gradient by altitude, exhaust plume scaling with throttle and ambient pressure. Parallax cloud/ground layers near the pad (Alcântara coastline silhouette).
 

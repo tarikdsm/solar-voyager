@@ -1,6 +1,6 @@
 id: T0062
 title: 2D -> 3D handoff
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0061, T0013]
@@ -12,4 +12,4 @@ spec: |
 acceptance:
   - Energy/angular momentum round-trip < 1e-9 relative (spec 7.5)
   - Handoff at 140 km produces the expected LEO osculating elements
-handoff_notes: ""
+handoff_notes: "DEFERRED: launch phase moved to optional post-v1 expansion (maintainer decision 2026-07-15, see docs/roadmap.md). Do not claim for v1."

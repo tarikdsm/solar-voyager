@@ -1,6 +1,6 @@
 id: T0061
 title: 2D launch simulation (Alcantara)
-status: TODO
+status: BLOCKED
 agent: ""
 branch: ""
 depends_on: [T0060, T0011]
@@ -12,4 +12,4 @@ spec: |
 acceptance:
   - Scripted profile regression, 200 +/- 5 km orbit, golden dv +/- 1%, max-q +/- 2% (spec 7.4)
   - Bit-reproducible across runs
-handoff_notes: ""
+handoff_notes: "DEFERRED: launch phase moved to optional post-v1 expansion (maintainer decision 2026-07-15, see docs/roadmap.md). Do not claim for v1."

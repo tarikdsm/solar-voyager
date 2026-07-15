@@ -1,6 +1,8 @@
 # Roadmap — Solar Voyager v1
 
-Dependency spine: `M0 → M1 → M2 → M3 → M5`; **M4 depends only on M1+M2** and can run in parallel with M5. The asset lane runs continuously from M1 to M6. Tasks encode the exact DAG via `depends_on`.
+Dependency spine: `M0 → M1 → M2 → M3 → M5 → M6`. The asset lane runs continuously from M1 to M6. Tasks encode the exact DAG via `depends_on`.
+
+> **Scope change (2026-07-15):** the 2D launch phase (M4) is **deferred to post-v1 as an optional expansion**. v1 starts with the ship already in low Earth orbit; the focus is 3D navigation across the solar system. The launch spec (physics-spec §4) and its tasks (T0060–T0062) remain in the repo for the future — do not claim them for v1.
 
 ## M0 — Foundation (serial — one agent, nothing parallelizes before M0 is merged)
 
@@ -24,17 +26,11 @@ Camera-relative SpaceScene, visual tier ladder (sprite/sphere/glTF), starfield, 
 
 ## M3 — Ship + HUD  →  first playable
 
-Ship state + thrust + attitude modes, warp system with substep-budget clamp, Δv/energy ledger, HUD (orbit readout, navball, warp control, Δv meter, target select, clock), osculating conic overlay, save/load, settings, input rebinding, Playwright smoke test.
+Ship state + thrust + attitude modes, warp system with substep-budget clamp, Δv/energy ledger, HUD (orbit readout, navball, warp control, Δv meter, target select, clock), osculating conic overlay, save/load, settings, input rebinding, `build_ship.py` model, Playwright smoke test. **New-game start: ship in a 400 km low Earth orbit.**
 
 **Exit (playable milestone):** ship spawned in LEO can reach any body in the catalog; Hohmann LEO→GEO ledger test within 1%.
 
-## M4 — Launch phase (parallel with M5)
-
-USSA-1976 atmosphere + tests, 2D launch sim (RK4, drag, max-q) + regression profile, LaunchScene (2D presentation), launch HUD, handoff math + conservation tests, `build_ship.py` model, handoff cinematic.
-
-**Exit:** manual launch from Alcântara to a 200 km orbit hands off seamlessly to 3D with matching state.
-
-## M5 — Navigation suite (parallel with M4)
+## M5 — Navigation suite
 
 Predictor worker (transferable buffers), trajectory polyline + event markers, SOI/impact warnings, system map view, burn log panel, mission clock UTC.
 
@@ -42,8 +38,14 @@ Predictor worker (transferable buffers), trajectory polyline + event markers, SO
 
 ## M6 — v1 polish
 
-Full ~50-body roster + assets (procedural asteroids, real shape models, comet visuals), performance audit vs frame budget, launch tutorial overlay, quality settings auto-detect, load-time optimization, landing page/README polish → **tag v1.0**.
+Full ~50-body roster + assets (procedural asteroids, real shape models, comet visuals), performance audit vs frame budget, orbital-navigation tutorial overlay, quality settings auto-detect, load-time optimization, landing page/README polish → **tag v1.0**.
+
+## M4 — Launch phase (DEFERRED — optional post-v1 expansion)
+
+USSA-1976 atmosphere + tests, 2D launch sim from Alcântara (RK4, drag, max-q) + regression profile, LaunchScene (2D presentation), launch HUD, handoff math + conservation tests, handoff cinematic. Fully specified in physics-spec §4; tasks T0060–T0062. Depends only on M1 — can be picked up any time after v1 (or before, if explicitly re-prioritized by the maintainer).
+
+**Exit:** manual launch from Alcântara to a 200 km orbit hands off seamlessly to 3D with matching state; "start from launch pad" becomes an optional new-game mode alongside "start in orbit".
 
 ## Post-v1 (backlog only — architecture hooks in place)
 
-Landing & surface phase · multiple ships/`Vessel` configs · other star systems via `SystemDefinition` · aerobraking/re-entry · docking · missions layer.
+**Launch phase (M4, above)** · Landing & surface phase · multiple ships/`Vessel` configs · other star systems via `SystemDefinition` · aerobraking/re-entry · docking · missions layer.
