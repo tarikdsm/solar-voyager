@@ -7,12 +7,20 @@ depends_on: [T0041, T0043]
 milestone: M6
 spec: |
   rendering-spec section 11 + MODELING-GUIDE sections 3-5: annulus meshes
-  at true radial ratios, 2048x64 radial strips (alpha = optical depth)
-  from real ring data; shader with planet shadow across the ring, ring
-  shadow on the planet, and backlit transmission on the unlit side.
-  Assets for all four ringed planets delivered through ingest.
+  at true radial ratios (alpha = optical depth) from real ring data;
+  shader with planet shadow across the ring, ring shadow on the planet,
+  and backlit transmission on the unlit side. Assets for all four ringed
+  planets delivered through ingest.
+  CLOSE-RANGE FLYTHROUGH (v1 scope, maintainer decision 2026-07-15):
+  when the ship nears the ring plane (Saturn), spawn an instanced ice-
+  particle field (InstancedMesh, single draw call, thousands of seeded
+  chunks) around the camera; density/color/size sampled from the same
+  radial ring data; smooth cross-fade to the textured annulus with
+  distance; particles orbit at local Keplerian speed. Budget-gated by
+  the perf governor (particle count is a quality knob).
 acceptance:
   - Saturn ring proportions verified against published radii (D ring to F ring)
   - Shadow and backlight cues visible and correct vs Sun geometry (test scene)
-  - Ring set within the 2 MB per-planet budget
+  - Flythrough: flying through the ring plane shows parallax ice chunks with no visible pop to the annulus; 60 fps floor held on reference hardware
+  - Ring set within the 2 MB per-planet budget (particles are procedural, ~0 bytes)
 handoff_notes: ""
