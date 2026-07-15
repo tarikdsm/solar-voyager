@@ -1,8 +1,8 @@
 id: T0001
 title: Project scaffold (Vite + TS + three.js + Preact + tooling)
-status: CLAIMED
-agent: claude
-branch: task/T0001-project-scaffold
+status: TODO
+agent: ""
+branch: ""
 depends_on: []
 milestone: M0
 spec: |
