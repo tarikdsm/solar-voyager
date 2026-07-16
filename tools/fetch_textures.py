@@ -32,6 +32,12 @@ class TextureRecipe:
         width,
         height,
         output_name,
+        output_format="png",
+        quality=90,
+        contrast=1.0,
+        grayscale=False,
+        normalize=False,
+        blur=0.0,
     ):
         self.id = id
         self.body_id = body_id
@@ -44,6 +50,12 @@ class TextureRecipe:
         self.width = width
         self.height = height
         self.output_name = output_name
+        self.output_format = output_format
+        self.quality = quality
+        self.contrast = contrast
+        self.grayscale = grayscale
+        self.normalize = normalize
+        self.blur = blur
 
     @classmethod
     def test(cls, id, source_url="https://example.test/texture.png", output_name=None):
@@ -70,6 +82,13 @@ class TextureRecipe:
             raise ValueError(f'Recipe "{self.id}" must target a positive 2:1 image')
         if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", self.body_id) is None:
             raise ValueError(f'Recipe "{self.id}" body id must be a lowercase slug')
+        if self.output_format not in {"png", "jpeg"}:
+            raise ValueError(f'Recipe "{self.id}" has unsupported output format')
+        expected_extensions = {"png": {".png"}, "jpeg": {".jpg", ".jpeg"}}
+        if pathlib.Path(self.output_name).suffix.lower() not in expected_extensions[self.output_format]:
+            raise ValueError(f'Recipe "{self.id}" output extension does not match its format')
+        if not 1 <= self.quality <= 100 or self.contrast <= 0 or self.blur < 0:
+            raise ValueError(f'Recipe "{self.id}" has invalid processing options')
         return self
 
 
@@ -86,7 +105,39 @@ RECIPES = {
         width=8192,
         height=4096,
         output_name="earth_albedo.png",
-    )
+    ),
+    "moon-albedo": TextureRecipe(
+        id="moon-albedo",
+        body_id="moon",
+        role="albedo",
+        source_url="https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_8k.tif",
+        product_url="https://svs.gsfc.nasa.gov/4720",
+        license="NASA/US Government work; see NASA media usage guidelines",
+        credit="Moon color map: NASA Scientific Visualization Studio; LROC data, NASA/GSFC/Arizona State University.",
+        sha256="4af8b0cd4d50c30851359d98e7e72040240dd8d03256b58b345b5b76e9edb4ef",
+        width=4096,
+        height=2048,
+        output_name="moon_albedo.jpg",
+        output_format="jpeg",
+        quality=88,
+        contrast=1.08,
+    ),
+    "moon-height": TextureRecipe(
+        id="moon-height",
+        body_id="moon",
+        role="height",
+        source_url="https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_16_uint.tif",
+        product_url="https://svs.gsfc.nasa.gov/4720",
+        license="NASA/US Government work; see NASA media usage guidelines",
+        credit="Moon elevation map: NASA Scientific Visualization Studio; LOLA data, NASA/GSFC/MIT.",
+        sha256="45a2b32d56e81ed30db07fead8abc842b249b6511219d9ca2c53f81bc2dc5d62",
+        width=2048,
+        height=1024,
+        output_name="moon_height.png",
+        grayscale=True,
+        normalize=True,
+        blur=8.0,
+    ),
 }
 
 
@@ -142,6 +193,26 @@ def download_verified(url, destination, expected_sha256, max_bytes=MAX_DOWNLOAD_
         temporary.unlink(missing_ok=True)
 
 
+def _processing_description(recipe):
+    operations = [f"resized to {recipe.width}×{recipe.height}"]
+    if recipe.normalize:
+        operations.append("normalized to the available luminance range")
+    if recipe.blur:
+        operations.append(f"Gaussian-filtered at sigma {recipe.blur:g}")
+    if recipe.contrast != 1.0:
+        operations.append(f"contrast scaled by {recipe.contrast:g} around midpoint 128")
+    operations.append(f"encoded as metadata-free {recipe.output_format.upper()}")
+    return ", ".join(operations)
+
+
+def _changes_description(recipe):
+    if recipe.normalize or recipe.blur:
+        return "resized, luminance-normalized and filtered, re-encoded, and stripped of metadata"
+    if recipe.contrast != 1.0:
+        return "resized, contrast-enhanced, re-encoded, and stripped of metadata"
+    return "format normalization and metadata removal; image content is otherwise unchanged"
+
+
 def render_sources(body_id, recipes):
     lines = [f"# Texture sources — {body_id}", ""]
     for recipe in sorted(recipes, key=lambda item: item.id):
@@ -153,10 +224,10 @@ def render_sources(body_id, recipes):
                 f"- Exact download: {recipe.source_url}",
                 f"- License: {recipe.license}",
                 f"- Pinned source SHA-256: `{recipe.sha256}`",
-                f"- Processing: decoded, converted to metadata-free RGB PNG, and normalized to {recipe.width}×{recipe.height}.",
+                f"- Processing: {_processing_description(recipe)}.",
                 f"- Output: `{recipe.output_name}` ({recipe.role})",
                 f"- Required credit: {recipe.credit}",
-                "- Changes: format normalization and metadata removal; image content is otherwise unchanged.",
+                f"- Changes: {_changes_description(recipe)}.",
                 "",
             )
         )
@@ -164,7 +235,7 @@ def render_sources(body_id, recipes):
     return "\n".join(lines) + "\n"
 
 
-def process_image(source, destination, recipe, node_executable=None):
+def process_image(source, destination, recipe, node_executable=None, runner=subprocess.run):
     node = node_executable or shutil.which("node")
     if node is None:
         raise FileNotFoundError("Node.js is required for deterministic Sharp image processing")
@@ -172,8 +243,7 @@ def process_image(source, destination, recipe, node_executable=None):
     temporary = destination.with_name(f".{destination.name}.process.tmp")
     temporary.unlink(missing_ok=True)
     try:
-        subprocess.run(
-            (
+        command = [
                 node,
                 str(PROCESSOR_PATH),
                 "--input",
@@ -184,7 +254,21 @@ def process_image(source, destination, recipe, node_executable=None):
                 str(recipe.width),
                 "--height",
                 str(recipe.height),
-            ),
+                "--format",
+                recipe.output_format,
+                "--quality",
+                str(recipe.quality),
+                "--contrast",
+                str(recipe.contrast),
+            ]
+        if recipe.grayscale:
+            command.append("--grayscale")
+        if recipe.normalize:
+            command.append("--normalize")
+        if recipe.blur:
+            command.extend(("--blur", str(recipe.blur)))
+        runner(
+            command,
             cwd=REPOSITORY_ROOT,
             check=True,
         )
@@ -204,7 +288,7 @@ def write_sources(body_directory, body_id, recipes):
     return destination
 
 
-def _publish_body(body_id, recipes, output_root, source_override, processor):
+def _publish_body(body_id, recipes, output_root, source_override, processor, recipe_catalog):
     output_root = pathlib.Path(output_root).resolve()
     body_directory = (output_root / body_id).resolve()
     body_directory.relative_to(output_root)
@@ -237,7 +321,13 @@ def _publish_body(body_id, recipes, output_root, source_override, processor):
                 processor(raw_path, destination, recipe)
             finally:
                 raw_path.unlink(missing_ok=True)
-        write_sources(staging, body_id, recipes)
+        attribution_recipes = {
+            recipe.id: recipe
+            for recipe in recipe_catalog.values()
+            if recipe.body_id == body_id and (staging / recipe.output_name).is_file()
+        }
+        attribution_recipes.update({recipe.id: recipe for recipe in recipes})
+        write_sources(staging, body_id, tuple(attribution_recipes.values()))
 
         if body_directory.exists():
             os.replace(body_directory, backup)
@@ -254,14 +344,27 @@ def _publish_body(body_id, recipes, output_root, source_override, processor):
             shutil.rmtree(staging, ignore_errors=True)
 
 
-def execute(recipes, output_root, source_override=None, processor=process_image):
+def execute(
+    recipes,
+    output_root,
+    source_override=None,
+    processor=process_image,
+    recipe_catalog=RECIPES,
+):
     if source_override is not None and len(recipes) != 1:
         raise ValueError("--source requires exactly one selected recipe")
     by_body = {}
     for recipe in recipes:
         by_body.setdefault(recipe.body_id, []).append(recipe)
     for body_id, body_recipes in sorted(by_body.items()):
-        _publish_body(body_id, body_recipes, output_root, source_override, processor)
+        _publish_body(
+            body_id,
+            body_recipes,
+            output_root,
+            source_override,
+            processor,
+            recipe_catalog,
+        )
         for recipe in body_recipes:
             print(f"Prepared {recipe.id}: {output_path(output_root, recipe)}")
         print(f"Wrote attribution: {pathlib.Path(output_root).resolve() / body_id / 'SOURCES.md'}")

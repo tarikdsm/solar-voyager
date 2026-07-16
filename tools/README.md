@@ -123,6 +123,12 @@ Build every implemented catalog asset, or a deterministic selected subset:
 
 # Direct category-level planet build (catalog shape + texture contract)
 & blender --background --python tools/blender/build_planet.py -- --id earth
+& blender --background --python tools/blender/build_moon.py
+
+# Reproducible authored-Moon review render
+& blender --background --python tools/blender/render_moon_preview.py -- `
+  --model assets/models/moons/moon/moon.glb `
+  --output build/moon-preview.png
 
 # Disposable Blender -> authored GLB -> runtime ingest acceptance
 npm run test:blender
@@ -149,8 +155,19 @@ python tools/fetch_textures.py --only earth-albedo `
 ```
 
 The initial `earth-albedo` recipe resolves the official Solar System Scope 8k
-Earth Day Map to 8192×4096. Recipe URLs, license, required credit, processing,
-and source checksum are recorded in the generated `SOURCES.md`.
+Earth Day Map to 8192×4096. The `moon-albedo` and `moon-height` recipes resolve
+the pinned NASA SVS LROC/LOLA sources to the ADR-022 authoring tier. Generate the
+Moon's derived maps after fetching:
+
+```powershell
+node tools/textures/prepareMoonMaps.mjs `
+  --input assets/textures-src/moon/moon_height.png `
+  --output-root assets/textures-src/moon `
+  --seed 301
+```
+
+Recipe URLs, license, required credit, processing, and source checksum are
+recorded in the generated `SOURCES.md`.
 
 ## Runtime asset ingest
 

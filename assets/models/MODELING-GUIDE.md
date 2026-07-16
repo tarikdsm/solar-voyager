@@ -51,18 +51,21 @@ Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (q
 
 **Real scale means a 4k map on Earth ≈ 10 km/pixel** — fine from 2,000 km, mush from low orbit. The game solves this in layers (rendering-spec §12); your job as the modeler is to deliver the layers:
 
-| Map | Planets hero (Earth, Mars, Moon) | Other planets/major moons | Small bodies | Notes |
-|---|---|---|---|---|
-| Albedo (equirectangular 2:1) | **8k** (8192×4096) | 4k | 1k–2k | sRGB |
-| Normal | 4k | 2k | baked into mesh | tangent-space, 16-bit PNG preferred |
-| Roughness (or packed ORM) | 2k | 2k | – | linear |
-| Emissive | Earth night lights 4k; Sun 4k emissive | – | comet nucleus 1k | sRGB |
-| **Detail maps** (tiling, close-range) | 1k tiling albedo-noise + 1k tiling normal, seamless | same set can be shared per surface class | – | see below |
-| Clouds (Earth) | 4k separate layer with alpha | – | – | rendered as a slightly larger shell |
+| Map | Earth/Mars hero | Startup Moon | Other planets/major moons | Small bodies | Notes |
+|---|---|---|---|---|---|
+| Albedo (equirectangular 2:1) | **8k** (8192×4096) | **4k** (4096×2048) | 4k | 1k–2k | sRGB; Moon exception is ADR-022 |
+| Normal | 4k | **2k** (2048×1024) | 2k | baked into mesh | tangent-space PNG |
+| Roughness (or packed ORM) | 2k | – | 2k | – | linear |
+| Emissive | Earth night lights 4k | – | – | comet nucleus 1k | sRGB; Sun is procedural per ADR-010 |
+| **Detail maps** (tiling, close-range) | 1k tiling albedo-noise + 1k tiling normal, seamless | 1k regolith pair | same set can be shared per surface class | – | see below |
+| Clouds (Earth) | 4k separate layer with alpha | – | – | – | rendered as a slightly larger shell |
 
 Source maps may be delivered above the runtime tier when licensing or authoring
 workflow requires it. Ingest deterministically downsamples hero cloud and emissive
 layers to 4096×2048; other maps must already fit their listed tier.
+The startup Moon uses BasisLZ quality level 90 for its albedo; this measured
+exception preserves recognizable LROC detail while satisfying the hard 8 MiB
+critical-path gate (ADR-022).
 
 **Detail maps are mandatory for tier-3 bodies**: a seamless 1k tiling normal+albedo-variation pair per surface class (rock, ice, gas banding, regolith), blended in by the shader below ~5 body-radii distance. This is what keeps a real-size planet crisp when the ship is close — resolution comes from tiling detail + macro normal map, not from impossible 100k textures. Deliver them in the body folder (or reference a shared set in `assets/models/_shared-detail/`).
 

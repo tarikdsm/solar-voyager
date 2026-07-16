@@ -110,6 +110,53 @@ class TextureFetchTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertTrue(first.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
 
+    def test_moon_recipes_pin_nasa_sources_and_processing_contracts(self):
+        albedo = self.fetch.RECIPES["moon-albedo"]
+        height = self.fetch.RECIPES["moon-height"]
+
+        self.assertEqual((albedo.body_id, albedo.role), ("moon", "albedo"))
+        self.assertEqual((albedo.width, albedo.height), (4096, 2048))
+        self.assertEqual((albedo.output_format, albedo.quality), ("jpeg", 88))
+        self.assertAlmostEqual(albedo.contrast, 1.08)
+        self.assertEqual(albedo.sha256, "4af8b0cd4d50c30851359d98e7e72040240dd8d03256b58b345b5b76e9edb4ef")
+        self.assertEqual((height.body_id, height.role), ("moon", "height"))
+        self.assertEqual((height.width, height.height), (2048, 1024))
+        self.assertEqual(height.output_format, "png")
+        self.assertEqual(height.sha256, "45a2b32d56e81ed30db07fead8abc842b249b6511219d9ca2c53f81bc2dc5d62")
+        for recipe in (albedo, height):
+            self.assertEqual(recipe.product_url, "https://svs.gsfc.nasa.gov/4720")
+            self.assertIn("NASA", recipe.credit)
+
+        attribution = self.fetch.render_sources("moon", (albedo, height))
+        self.assertNotIn("image content is otherwise unchanged", attribution)
+        self.assertIn("contrast-enhanced", attribution)
+        self.assertIn("luminance-normalized and filtered", attribution)
+
+    def test_process_image_forwards_recipe_owned_output_options(self):
+        recipe = self.fetch.TextureRecipe.test("options", output_name="texture.jpg")
+        recipe.width = 4
+        recipe.height = 2
+        recipe.output_format = "jpeg"
+        recipe.quality = 88
+        recipe.contrast = 1.08
+        calls = []
+
+        def runner(command, **kwargs):
+            calls.append((command, kwargs))
+            pathlib.Path(command[command.index("--output") + 1]).write_bytes(b"processed")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            source = root / "source.png"
+            source.write_bytes(b"source")
+            destination = root / "output.jpg"
+            self.fetch.process_image(source, destination, recipe, node_executable="node", runner=runner)
+
+        command = calls[0][0]
+        self.assertEqual(command[command.index("--format") + 1], "jpeg")
+        self.assertEqual(command[command.index("--quality") + 1], "88")
+        self.assertEqual(command[command.index("--contrast") + 1], "1.08")
+
     def test_processing_failure_preserves_previous_body_directory(self):
         source_bytes = b"pinned local source"
         recipe = self.fetch.TextureRecipe.test("earth-albedo", output_name="earth_albedo.png")
@@ -134,6 +181,36 @@ class TextureFetchTests(unittest.TestCase):
             self.assertEqual((body / "SOURCES.md").read_text(encoding="utf-8"), "previous attribution")
             self.assertFalse((root / ".earth.texture-stage").exists())
             self.assertFalse((root / ".earth.texture-backup").exists())
+
+    def test_sequential_body_recipes_preserve_complete_attribution(self):
+        first_bytes = b"first source"
+        second_bytes = b"second source"
+        first = self.fetch.TextureRecipe.test("first", output_name="first.png")
+        second = self.fetch.TextureRecipe.test("second", output_name="second.png")
+        first.body_id = second.body_id = "moon"
+        first.sha256 = hashlib.sha256(first_bytes).hexdigest()
+        second.sha256 = hashlib.sha256(second_bytes).hexdigest()
+
+        def copying_processor(source, destination, _recipe):
+            destination.write_bytes(source.read_bytes())
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            first_source = root / "first-source"
+            second_source = root / "second-source"
+            first_source.write_bytes(first_bytes)
+            second_source.write_bytes(second_bytes)
+            recipes = {"first": first, "second": second}
+            self.fetch.execute(
+                (first,), root / "output", first_source, copying_processor, recipe_catalog=recipes
+            )
+            self.fetch.execute(
+                (second,), root / "output", second_source, copying_processor, recipe_catalog=recipes
+            )
+            sources = (root / "output" / "moon" / "SOURCES.md").read_text(encoding="utf-8")
+
+        self.assertIn("## first", sources)
+        self.assertIn("## second", sources)
 
 
 if __name__ == "__main__":

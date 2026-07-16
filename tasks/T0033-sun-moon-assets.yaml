@@ -1,6 +1,6 @@
 id: T0033
 title: Sun + Moon assets
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0033-sun-moon-assets
 depends_on: [T0032]
@@ -20,3 +20,16 @@ handoff_notes: |
   plus normal map, maximum normalized radius 1.0, and Blender MCP preview approval
   before ingest. T0032 and T0035 are now DONE; the prior blocking conditions
   are resolved and the task was claimed by ChatGPT on 2026-07-16.
+  Delivery 2026-07-16: NASA SVS LROC/LOLA recipes are checksum-pinned; Moon
+  authoring and runtime assets plus the deterministic Sun rebuild are committed.
+  Two texture preparations, Blender builds, and focused ingests were byte-identical.
+  BlenderMCP cannot serve in background mode, so the approved pre-ingest preview
+  was rendered reproducibly by Blender 5.1 through render_moon_preview.py.
+  Final Moon runtime payload is 1,827,065 bytes; the official critical-path gate
+  passes at 8,361,095 bytes (7.97 MiB, 27,513-byte margin). Verification: 224
+  Vitest tests pass (3 skipped), 48 Python tests pass, lint/typecheck/format/build,
+  task schema, budgets, Blender smoke, and Earth byte-repro verification pass.
+  Independent review by agent review_t0022 approved head 70173a4 on 2026-07-16
+  after verifying provenance, deterministic source/build/ingest outputs, Blender
+  geometry and preview, runtime KTX2/Draco bindings, tests, CI, and the critical
+  budget. No findings remain.

@@ -23,6 +23,14 @@ describe('KTX2 encoding', () => {
     expect(args).toContain('1');
   });
 
+  it('uses the measured startup quality tier for the Moon albedo only', () => {
+    const moon = buildKtxArguments('moon_albedo.jpg', 'moon_albedo.ktx2', { channels: 3 });
+    const earth = buildKtxArguments('earth_albedo.jpg', 'earth_albedo.ktx2', { channels: 3 });
+    expect(moon).toContain('--qlevel');
+    expect(moon).toContain('90');
+    expect(earth).not.toContain('--qlevel');
+  });
+
   it('downscales hero cloud and emissive layers to the documented 4k tier', () => {
     for (const name of ['earth_clouds.jpg', 'earth_emissive_night.jpg']) {
       const args = buildKtxArguments(name, `${name}.ktx2`, { channels: 3, width: 8192, height: 4096 });

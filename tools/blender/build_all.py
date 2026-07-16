@@ -57,7 +57,12 @@ def parse_build_request(arguments, builders):
 
 
 def _run_builder(path):
-    runpy.run_path(str(path), run_name="__main__")
+    previous_argv = sys.argv
+    try:
+        sys.argv = [str(path)]
+        runpy.run_path(str(path), run_name="__main__")
+    finally:
+        sys.argv = previous_argv
 
 
 def run_builders(body_ids, builders, runner=_run_builder):
