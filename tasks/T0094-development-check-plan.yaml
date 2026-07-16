@@ -1,0 +1,18 @@
+id: T0094
+title: Publish standalone development check plan
+status: TODO
+agent: ""
+branch: ""
+depends_on: []
+milestone: M6
+spec: |
+  Create docs/check_plan.html as a standalone, read-only visual snapshot of the
+  complete project plan. Derive task state and dependencies from tasks/*.yaml,
+  group work by roadmap milestone, and distinguish formal tasks from additional
+  planned actions documented in the architecture, roadmap, and design specs.
+acceptance:
+  - Every canonical task id appears exactly once in the task inventory
+  - Only tasks whose canonical status is DONE render with a checked checkbox
+  - The page includes milestone checkpoints, dependency/status context, overall progress, a legend, and non-task planned actions
+  - HTML, CSS, and JavaScript are self-contained in docs/check_plan.html and pass local structural validation
+handoff_notes: ""
