@@ -38,16 +38,30 @@ Position at time t:
 
 Properties: O(1) per body, exact evaluation at any t (no drift at any warp), deterministic saves.
 
-**Accuracy bounds** (regression-tested vs `data/ephemerides-check.json` Horizons vectors):
+**Accuracy bounds** (regression-tested vs `data/ephemerides-check.json` Horizons vectors;
+cells show measured class maximum / regression limit):
 
-| Body class | max error @ +30 d | @ +365 d |
-|---|---|---|
-| Planets and Moon (Luna) | 50,000 km | 1,500,000 km |
-| Dwarfs, Mars moons, Charon | 100,000 km | 1,500,000 km |
-| Giant-planet moons | 250,000 km | 1,000,000 km |
-| Asteroids and comets | 10,000 km | 750,000 km |
+| Body class | position @ +30 d (measured / limit) | position @ +365 d (measured / limit) |
+|---|---:|---:|
+| Planets and Moon (Luna) | 34,077.128 / 38,000 km | 1,159,878.882 / 1,300,000 km |
+| Dwarfs, Mars moons, Charon | 65,375.338 / 72,000 km | 815,969.108 / 900,000 km |
+| Giant-planet moons | 186,935.792 / 210,000 km | 644,966.151 / 710,000 km |
+| Asteroids and comets | 3,428.256 / 3,800 km | 645,327.779 / 710,000 km |
 
-(Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. The planet/Luna bounds were calibrated against the T0020 J2026 bake in ADR-015; the full-catalog classes use conservative T0021 ceilings from ADR-019. T0023 will tighten them with the dedicated complete regression.)
+| Body class | velocity @ +30 d (measured / limit) | velocity @ +365 d (measured / limit) |
+|---|---:|---:|
+| Planets and Moon (Luna) | 0.0376412 / 0.042 km/s | 0.252232 / 0.28 km/s |
+| Dwarfs, Mars moons, Charon | 0.950343 / 1.1 km/s | 1.902382 / 2.1 km/s |
+| Giant-planet moons | 14.653602 / 17 km/s | 25.025758 / 28 km/s |
+| Asteroids and comets | 0.00267517 / 0.0030 km/s | 0.0475048 / 0.053 km/s |
+
+Limits are the measured maximum multiplied by 1.10 and rounded upward to two
+significant digits. The Sun remains exact. Every catalog id must belong to a
+calibrated class, so catalog growth fails CI until this table and the regression are
+updated. Errors come from neglected mutual perturbations; resulting orbits remain
+physically plausible. ADR-015 records the original planet/Luna calibration and
+ADR-019 records the provisional full-catalog ceilings superseded by the calibrated
+position-and-velocity contract in ADR-020.
 
 ## 3. Ship dynamics — full n-body + thrust, special-relativistic (ADR-007)
 
