@@ -14,6 +14,7 @@ Horizons comet designations also resolve to multiple apparition records. A bake 
 - Keep `kind` as content/rendering classification only. It never selects dynamics.
 - Pin unique integer Horizons records `90000030` for 1P and `90000702` for 67P. This preserves the existing integer `horizonsId` schema and makes the J2026 bake reproducible.
 - Validate every returned element pair before publishing either catalog file.
+- Use `|a|` as the positive characteristic scale in the catalog SOI approximation so a schema-valid hyperbolic record cannot emit a negative radius. This is an influence-scale visualization/gameplay value, not a claim that an unbound object has a closed classical SOI.
 
 ## Consequences
 

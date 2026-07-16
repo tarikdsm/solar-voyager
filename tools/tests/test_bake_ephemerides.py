@@ -169,6 +169,10 @@ class BakeCoreTests(unittest.TestCase):
             bake.sphere_of_influence_km(100_000.0, 1.0, 1_000.0),
             100_000.0 * (1.0 / 1_000.0) ** (2.0 / 5.0),
         )
+        self.assertAlmostEqual(
+            bake.sphere_of_influence_km(-100_000.0, 1.0, 1_000.0),
+            100_000.0 * (1.0 / 1_000.0) ** (2.0 / 5.0),
+        )
 
     def test_builds_canonical_parent_order_and_nullable_sun_orbit(self):
         catalog = bake.build_catalog(sample_elements())

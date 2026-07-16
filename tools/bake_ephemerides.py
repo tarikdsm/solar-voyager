@@ -142,8 +142,10 @@ def state_from_row(row: Mapping[str, Any]) -> Dict[str, List[float]]:
 def sphere_of_influence_km(
     semi_major_axis_km: float, child_mu_km3_s2: float, parent_mu_km3_s2: float
 ) -> float:
-    """Compute a*(m/M)^(2/5); the GM ratio equals the mass ratio."""
-    return semi_major_axis_km * (child_mu_km3_s2 / parent_mu_km3_s2) ** (2.0 / 5.0)
+    """Compute |a|*(m/M)^(2/5); the GM ratio equals the mass ratio."""
+    return abs(semi_major_axis_km) * (
+        child_mu_km3_s2 / parent_mu_km3_s2
+    ) ** (2.0 / 5.0)
 
 
 def build_catalog(elements_by_id: Mapping[str, Mapping[str, float]]) -> Dict[str, Any]:
