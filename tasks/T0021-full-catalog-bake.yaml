@@ -1,6 +1,6 @@
 id: T0021
 title: Full ~50-body catalog bake
-status: IN_PROGRESS
+status: REVIEW
 agent: "chatgpt"
 branch: "task/T0021-full-catalog-bake"
 depends_on: [T0020]
@@ -12,4 +12,9 @@ spec: |
 acceptance:
   - All catalog bodies in bodies.json + check vectors
   - Comet elements use the correct eccentricity branch
-handoff_notes: ""
+handoff_notes: >-
+  Baked all 43 game-design bodies and three complete check epochs with generalized
+  parent-relative centers, pinned comet records, branch validation, positive SOIs,
+  provisional fail-closed rails bounds, and refreshed full-field goldens. Independent
+  review reproduced both data JSONs byte-for-byte; 183 Vitest, 13 Python, and all CI
+  gates pass. T0023 retains tighter bounds and velocity-error calibration.
