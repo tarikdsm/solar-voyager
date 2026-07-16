@@ -1,8 +1,8 @@
 id: T0016
 title: Golden trajectory harness
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: "chatgpt"
+branch: "task/T0016-golden-trajectories"
 depends_on: [T0014, T0015]
 milestone: M1
 spec: |
