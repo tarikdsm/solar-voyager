@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-07-16T21:22:00.185Z",
-  "gitSha": "cd2c18ea53f9cbd3038484aed44cee8700c3bf1e",
+  "timestamp": "2026-07-16T21:54:14.352Z",
+  "gitSha": "1d9579d68610a23081b617a771167fef46d335c5",
   "warmupFrames": 120,
   "sampleFrames": 600,
-  "medianMs": 150,
-  "p75Ms": 166.6,
-  "p99Ms": 166.8,
+  "medianMs": 166.7,
+  "p75Ms": 183.3,
+  "p99Ms": 216.7,
   "canvas": {
     "backingHeight": 720,
     "backingWidth": 1280,
@@ -14,5 +14,5 @@
   },
   "consoleErrors": [],
   "pageErrors": [],
-  "heapDeltaBytes": 319392
+  "heapDeltaBytes": 629776
 }
