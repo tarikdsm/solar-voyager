@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 1,
+  "epoch": {
+    "name": "J2026",
+    "jdTdb": 2461041.5
+  },
+  "frame": "heliocentric-ecliptic-j2000",
+  "bodies": [
+    {
+      "id": "sun",
+      "name": "Sun",
+      "kind": "star",
+      "horizonsId": 10,
+      "parentId": null,
+      "muKm3S2": 132712440041.9394,
+      "meanRadiusKm": 695700.0,
+      "siderealRotationPeriodSec": 2164320.0,
+      "axialTiltRad": 0.1265363707695889,
+      "geometricAlbedo": 1.0,
+      "soiRadiusKm": null,
+      "elements": null,
+      "surface": {
+        "kind": "stellar",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#fff4d6",
+        "assetRef": null,
+        "proceduralSeed": 10
+      }
+    },
+    {
+      "id": "mercury",
+      "name": "Mercury",
+      "kind": "planet",
+      "horizonsId": 199,
+      "parentId": "sun",
+      "muKm3S2": 22031.86855,
+      "meanRadiusKm": 2439.7,
+      "siderealRotationPeriodSec": 5067014.4,
+      "axialTiltRad": 0.000593411945678072,
+      "geometricAlbedo": 0.142,
+      "soiRadiusKm": 112409.3221688494,
+      "elements": {
+        "semiMajorAxisKm": 57909051.27942419,
+        "eccentricity": 0.2056426160956197,
+        "inclinationRad": 0.12223278695102517,
+        "longitudeAscendingNodeRad": 0.8429733757862273,
+        "argumentPeriapsisRad": 0.5096154196945967,
+        "meanAnomalyRad": 2.751531782658752
+      },
+      "surface": {
+        "kind": "solid",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#aaa39a",
+        "assetRef": null,
+        "proceduralSeed": 199
+      }
+    },
+    {
+      "id": "venus",
+      "name": "Venus",
+      "kind": "planet",
+      "horizonsId": 299,
+      "parentId": "sun",
+      "muKm3S2": 324858.592,
+      "meanRadiusKm": 6051.8,
+      "siderealRotationPeriodSec": -20997360.0,
+      "axialTiltRad": 3.095515961337143,
+      "geometricAlbedo": 0.689,
+      "soiRadiusKm": 616279.4004522851,
+      "elements": {
+        "semiMajorAxisKm": 108209293.61401759,
+        "eccentricity": 0.006780942266658413,
+        "inclinationRad": 0.05924331923203966,
+        "longitudeAscendingNodeRad": 1.3370468659166328,
+        "argumentPeriapsisRad": 0.9577175741248287,
+        "meanAnomalyRad": 2.533021677981288
+      },
+      "surface": {
+        "kind": "solid",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#d9b36c",
+        "assetRef": null,
+        "proceduralSeed": 299
+      }
+    },
+    {
+      "id": "earth",
+      "name": "Earth",
+      "kind": "planet",
+      "horizonsId": 399,
+      "parentId": "sun",
+      "muKm3S2": 398600.435507,
+      "meanRadiusKm": 6371.0084,
+      "siderealRotationPeriodSec": 86164.10035200001,
+      "axialTiltRad": 0.40909262775014904,
+      "geometricAlbedo": 0.434,
+      "soiRadiusKm": 923902.3602607828,
+      "elements": {
+        "semiMajorAxisKm": 149477430.13253143,
+        "eccentricity": 0.01591429536350342,
+        "inclinationRad": 6.194270785002562e-05,
+        "longitudeAscendingNodeRad": 3.1000172190975666,
+        "argumentPeriapsisRad": 4.9978702250645,
+        "meanAnomalyRad": 6.219523266804182
+      },
+      "surface": {
+        "kind": "solid",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#4f78a8",
+        "assetRef": null,
+        "proceduralSeed": 399
+      }
+    },
+    {
+      "id": "moon",
+      "name": "Moon",
+      "kind": "moon",
+      "horizonsId": 301,
+      "parentId": "earth",
+      "muKm3S2": 4902.800118,
+      "meanRadiusKm": 1737.4,
+      "siderealRotationPeriodSec": 2360591.5104,
+      "axialTiltRad": 0.1165879940332212,
+      "geometricAlbedo": 0.12,
+      "soiRadiusKm": 66194.77366673933,
+      "elements": {
+        "semiMajorAxisKm": 384468.8281472882,
+        "eccentricity": 0.06293561497195871,
+        "inclinationRad": 0.08830688167581609,
+        "longitudeAscendingNodeRad": 5.944322621501035,
+        "argumentPeriapsisRad": 1.763374389269298,
+        "meanAnomalyRad": 6.0484821824655794
+      },
+      "surface": {
+        "kind": "solid",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#aaa8a3",
+        "assetRef": null,
+        "proceduralSeed": 301
+      }
+    },
+    {
+      "id": "mars",
+      "name": "Mars",
+      "kind": "planet",
+      "horizonsId": 499,
+      "parentId": "sun",
+      "muKm3S2": 42828.375214,
+      "meanRadiusKm": 3389.5,
+      "siderealRotationPeriodSec": 88642.6632,
+      "axialTiltRad": 0.4396484385773716,
+      "geometricAlbedo": 0.17,
+      "soiRadiusKm": 577233.115668759,
+      "elements": {
+        "semiMajorAxisKm": 227941421.6480371,
+        "eccentricity": 0.09348461380205672,
+        "inclinationRad": 0.032244790780223076,
+        "longitudeAscendingNodeRad": 0.8636442711245212,
+        "argumentPeriapsisRad": 5.002518154276925,
+        "meanAnomalyRad": 5.512132167950031
+      },
+      "surface": {
+        "kind": "solid",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#b85c3b",
+        "assetRef": null,
+        "proceduralSeed": 499
+      }
+    },
+    {
+      "id": "jupiter",
+      "name": "Jupiter",
+      "kind": "planet",
+      "horizonsId": 599,
+      "parentId": "sun",
+      "muKm3S2": 126686534.911,
+      "meanRadiusKm": 69911.0,
+      "siderealRotationPeriodSec": 35729.856,
+      "axialTiltRad": 0.054628805587422516,
+      "geometricAlbedo": 0.538,
+      "soiRadiusKm": 48208557.78672589,
+      "elements": {
+        "semiMajorAxisKm": 778388856.4707987,
+        "eccentricity": 0.04815922780877058,
+        "inclinationRad": 0.0227449320143153,
+        "longitudeAscendingNodeRad": 1.7543262498589978,
+        "argumentPeriapsisRad": 4.777162073465423,
+        "meanAnomalyRad": 1.557333577797503
+      },
+      "surface": {
+        "kind": "gas",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#c9a477",
+        "assetRef": null,
+        "proceduralSeed": 599
+      }
+    },
+    {
+      "id": "saturn",
+      "name": "Saturn",
+      "kind": "planet",
+      "horizonsId": 699,
+      "parentId": "sun",
+      "muKm3S2": 37931207.8,
+      "meanRadiusKm": 58232.0,
+      "siderealRotationPeriodSec": 38362.464,
+      "axialTiltRad": 0.4665265090580843,
+      "geometricAlbedo": 0.499,
+      "soiRadiusKm": 54586460.15282691,
+      "elements": {
+        "semiMajorAxisKm": 1427745884.2200341,
+        "eccentricity": 0.05540366888330445,
+        "inclinationRad": 0.043400328563223275,
+        "longitudeAscendingNodeRad": 1.9820110182122646,
+        "argumentPeriapsisRad": 5.906880253704148,
+        "meanAnomalyRad": 4.815691327073566
+      },
+      "surface": {
+        "kind": "gas",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#d8c28e",
+        "assetRef": null,
+        "proceduralSeed": 699
+      }
+    },
+    {
+      "id": "uranus",
+      "name": "Uranus",
+      "kind": "planet",
+      "horizonsId": 799,
+      "parentId": "sun",
+      "muKm3S2": 5793951.322,
+      "meanRadiusKm": 25362.0,
+      "siderealRotationPeriodSec": -62063.712,
+      "axialTiltRad": 1.706408409674856,
+      "geometricAlbedo": 0.488,
+      "soiRadiusKm": 52016988.75875279,
+      "elements": {
+        "semiMajorAxisKm": 2884827997.531245,
+        "eccentricity": 0.04681618294428753,
+        "inclinationRad": 0.013521504250119309,
+        "longitudeAscendingNodeRad": 1.2911849182409856,
+        "argumentPeriapsisRad": 1.5945951204720321,
+        "meanAnomalyRad": 4.527476804240359
+      },
+      "surface": {
+        "kind": "gas",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#9ccbd3",
+        "assetRef": null,
+        "proceduralSeed": 799
+      }
+    },
+    {
+      "id": "neptune",
+      "name": "Neptune",
+      "kind": "planet",
+      "horizonsId": 899,
+      "parentId": "sun",
+      "muKm3S2": 6835099.5,
+      "meanRadiusKm": 24622.0,
+      "siderealRotationPeriodSec": 57996.0,
+      "axialTiltRad": 0.4942772441647941,
+      "geometricAlbedo": 0.442,
+      "soiRadiusKm": 86761220.6487091,
+      "elements": {
+        "semiMajorAxisKm": 4503937660.170686,
+        "eccentricity": 0.01096394748823198,
+        "inclinationRad": 0.030959693336402628,
+        "longitudeAscendingNodeRad": 2.3024992091900165,
+        "argumentPeriapsisRad": 4.838950015404036,
+        "meanAnomalyRad": 5.458777584094758
+      },
+      "surface": {
+        "kind": "gas",
+        "atmosphereTopKm": null
+      },
+      "visual": {
+        "albedoColor": "#4169a9",
+        "assetRef": null,
+        "proceduralSeed": 899
+      }
+    }
+  ]
+}

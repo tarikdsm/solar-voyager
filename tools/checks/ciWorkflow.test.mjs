@@ -16,5 +16,7 @@ describe('CI workflow', () => {
     expect(workflow).not.toContain('Docs-only repo');
     expect(workflow.match(/^\s*run: npm run check:budgets\s*$/gmu)).toHaveLength(1);
     expect(workflow.match(/^\s*run: npm run check:tasks\s*$/gmu)).toHaveLength(1);
+    expect(workflow).toContain('actions/setup-python@v5');
+    expect(workflow.match(/^\s*run: npm run test:tools\s*$/gmu)).toHaveLength(1);
   });
 });

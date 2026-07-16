@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
+    "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "lint": "eslint .",
     "typecheck": "tsc -b tsconfig.node.json --pretty false && tsc --noEmit --project tsconfig.json",
     "format:check": "prettier --check .",
