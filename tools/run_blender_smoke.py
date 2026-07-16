@@ -2,6 +2,7 @@
 
 import json
 import hashlib
+import math
 import os
 import pathlib
 import shutil
@@ -57,15 +58,75 @@ def run_checked(command):
     return result.stdout
 
 
-def read_glb_json(path):
+def read_glb(path):
     with pathlib.Path(path).open("rb") as stream:
-        magic, version, _length = struct.unpack("<4sII", stream.read(12))
+        magic, version, length = struct.unpack("<4sII", stream.read(12))
         if magic != b"glTF" or version != 2:
             raise RuntimeError(f"Not a glTF 2 GLB: {path}")
-        chunk_length, chunk_type = struct.unpack("<I4s", stream.read(8))
-        if chunk_type != b"JSON":
-            raise RuntimeError(f"First GLB chunk is not JSON: {path}")
-        return json.loads(stream.read(chunk_length).decode("utf-8"))
+        document = None
+        binary = None
+        while stream.tell() < length:
+            chunk_length, chunk_type = struct.unpack("<I4s", stream.read(8))
+            chunk = stream.read(chunk_length)
+            if chunk_type == b"JSON":
+                document = json.loads(chunk.decode("utf-8"))
+            elif chunk_type == b"BIN\0":
+                binary = chunk
+        if document is None or binary is None:
+            raise RuntimeError(f"GLB must contain JSON and BIN chunks: {path}")
+        return document, binary
+
+
+def read_glb_json(path):
+    return read_glb(path)[0]
+
+
+def read_float_vectors(document, binary, accessor_index, components):
+    accessor = document["accessors"][accessor_index]
+    view = document["bufferViews"][accessor["bufferView"]]
+    if accessor["componentType"] != 5126 or accessor["type"] != f"VEC{components}":
+        raise RuntimeError("Expected a floating-point vector accessor")
+    stride = view.get("byteStride", components * 4)
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    return [
+        struct.unpack_from(f"<{components}f", binary, offset + index * stride)
+        for index in range(accessor["count"])
+    ]
+
+
+def read_indices(document, binary, accessor_index):
+    accessor = document["accessors"][accessor_index]
+    view = document["bufferViews"][accessor["bufferView"]]
+    formats = {5121: "B", 5123: "H", 5125: "I"}
+    format_code = formats.get(accessor["componentType"])
+    if format_code is None:
+        raise RuntimeError("Unsupported index component type")
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    return struct.unpack_from(f'<{accessor["count"]}{format_code}', binary, offset)
+
+
+def validate_quad_sphere_glb(path):
+    document, binary = read_glb(path)
+    primitive = document["meshes"][0]["primitives"][0]
+    positions = read_float_vectors(document, binary, primitive["attributes"]["POSITION"], 3)
+    texcoords = read_float_vectors(document, binary, primitive["attributes"]["TEXCOORD_0"], 2)
+    if len(positions) != len(texcoords):
+        raise RuntimeError("Quad sphere position and UV counts differ")
+    for (x, y, z), (u, v) in zip(positions, texcoords):
+        radius = math.sqrt(x * x + y * y + z * z)
+        expected_v = 0.5 - math.asin(max(-1.0, min(1.0, y / radius))) / math.pi
+        if abs(v - expected_v) > 1e-5:
+            raise RuntimeError("Exported quad sphere V is not glTF latitude mapped")
+        if math.hypot(x, z) > 1e-7:
+            expected_u = (0.5 + math.atan2(z, x) / (2.0 * math.pi)) % 1.0
+            wrapped_error = min(abs(u - expected_u), abs(u - expected_u - 1.0))
+            if wrapped_error > 1e-5:
+                raise RuntimeError("Exported quad sphere U is not glTF longitude mapped")
+    indices = read_indices(document, binary, primitive["indices"])
+    for offset in range(0, len(indices), 3):
+        triangle_u = [texcoords[index][0] for index in indices[offset : offset + 3]]
+        if max(triangle_u) - min(triangle_u) > 0.5 + 1e-5:
+            raise RuntimeError("Exported quad sphere triangle crosses the equirectangular seam")
 
 
 def validate_authored_glb(path):
@@ -109,12 +170,17 @@ def main():
 
     authored_glb = AUTHORED_ROOT / "sun" / "sun.glb"
     validate_authored_glb(authored_glb)
+    quad_glb = AUTHORED_ROOT.parent / "quad-contract.glb"
+    validate_quad_sphere_glb(quad_glb)
     repeated_output = run_builder(blender, AUTHORED_REPEAT_ROOT)
     if "=== ASSET MANIFEST ===" not in repeated_output:
         raise RuntimeError("Repeated Blender builder did not print its asset manifest")
     repeated_glb = AUTHORED_REPEAT_ROOT / "sun" / "sun.glb"
     if sha256(authored_glb) != sha256(repeated_glb):
         raise RuntimeError("Two identical Blender builds emitted different GLB bytes")
+    repeated_quad_glb = AUTHORED_REPEAT_ROOT.parent / "quad-contract.glb"
+    if sha256(quad_glb) != sha256(repeated_quad_glb):
+        raise RuntimeError("Two identical quad-sphere builds emitted different GLB bytes")
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if npm is None:
         raise FileNotFoundError("npm not found on PATH")

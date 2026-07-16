@@ -21,9 +21,11 @@ def _apply_equirectangular_uv(obj):
         loop_records = []
         for loop_index in polygon.loop_indices:
             position = obj.data.vertices[obj.data.loops[loop_index].vertex_index].co.normalized()
-            u = (0.5 + math.atan2(position.z, position.x) / (2.0 * math.pi)) % 1.0
-            v = 0.5 + math.asin(max(-1.0, min(1.0, position.y))) / math.pi
-            loop_records.append([loop_index, u, v, math.hypot(position.x, position.z)])
+            # Blender (X, Y, Z) exports to glTF (X, Z, -Y); its exporter also
+            # flips V, placing the glTF north pole at the top of a 2:1 image.
+            u = (0.5 + math.atan2(-position.y, position.x) / (2.0 * math.pi)) % 1.0
+            v = 0.5 + math.asin(max(-1.0, min(1.0, position.z))) / math.pi
+            loop_records.append([loop_index, u, v, math.hypot(position.x, position.y)])
         values = [record[1] for record in loop_records if record[3] > 1e-9]
         if values and max(values) - min(values) > 0.5:
             for record in loop_records:
