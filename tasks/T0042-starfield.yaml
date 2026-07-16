@@ -1,6 +1,6 @@
 id: T0042
 title: Starfield renderer
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0042-starfield
 depends_on: [T0022, T0040]
@@ -46,3 +46,8 @@ handoff_notes: |
     coordinates. Normal and reversed framebuffer hashes match exactly.
   - Removed the trailing whitespace reported by independent review; focused
     typecheck, starfield Chromium regression, and diff check pass.
+
+  Independent merger approval (2026-07-16):
+  - Re-reviewed head 9ba3555 with no Critical, Important, or Minor findings.
+    CI run 29540198663 passed; logarithmic/reversed opaque-body occlusion and
+    observed isolated Orion peak/belt controls passed in real Chromium.
