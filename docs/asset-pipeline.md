@@ -7,6 +7,10 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 ## Toolchain
 
 - **Blender 4+** headless. This machine: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
+- Headless acceptance: `npm run test:blender` builds a disposable normalized Sun
+  under `build/blender-smoke/`, checks the authored GLB contract, and proves that
+  runtime ingest accepts it. Set `BLENDER_PATH` when Blender is not installed at
+  the documented Windows path or available on `PATH`.
 - Run: `blender --background --python tools/blender/build_all.py -- --only earth` (or `--all`) — builders write to `assets/models/`.
 - Ingest: `npm run assets:ingest` — validate (guide contract, SOURCES.md, budgets) → Draco → KTX2 (KTX-Software 4.4.x) → `public/assets/`.
 - **blender-mcp** (in `.mcp.json`, runs via `uvx blender-mcp`) for interactive sessions. Requires the blender-mcp addon installed and enabled in Blender's preferences (see the addon's README; one-time manual setup per machine).
@@ -18,6 +22,17 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 - Idempotent: each script starts from an empty scene (`bpy.ops.wm.read_factory_settings(use_empty=True)`).
 - Each run prints an **asset manifest** (name, tris, texture sizes, byte size) that must fit the budget table below.
 - Parameters come from `data/bodies.json` (radius, oblateness, ring geometry, procedural seed) — one source of truth shared with the sim.
+
+`tools/blender/common/` is the shared authoring boundary for scene reset,
+normalized UV/quad spheres, Principled PBR materials, strict GLB export, catalog
+identity, and stable JSON manifests. Builders use those helpers instead of
+copying export settings. `build_all.py` discovers implemented `build_<id>.py`
+scripts whose ids exist in the catalog; pass exactly one of `--all` or one or more
+`--only <id>` flags. Execution order is stable by id.
+The strict exporter canonicalizes triangle order after Blender writes the GLB,
+removing process-dependent index ordering while preserving triangle winding.
+Quad spheres receive longitude/latitude UVs compatible with the required 2:1
+equirectangular surface maps, including per-loop seam and pole handling.
 
 ## glTF export settings
 

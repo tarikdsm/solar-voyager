@@ -1,6 +1,6 @@
 id: T0030
 title: Blender common helpers + headless build entry
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0030-blender-common
 depends_on: [T0001]
@@ -14,4 +14,15 @@ spec: |
 acceptance:
   - Headless build of a test sphere emits a guide-compliant glb into assets/models/
   - Manifest printed (tris, textures, bytes); ingest (T0035) accepts the output
-handoff_notes: ""
+handoff_notes: |
+  Added catalog-backed Blender helpers for scene reset, normalized UV/quad
+  spheres, Principled PBR materials, strict uncompressed GLB export, and stable
+  JSON manifests. Added deterministic build selection through build_all.py and
+  migrated the Sun builder. `npm run test:blender` creates a disposable Sun,
+  validates the authored GLB, and proves T0035 ingest emits a Draco runtime GLB.
+  The smoke runs Blender twice and requires byte-identical authored GLBs; export
+  canonicalizes Blender's process-dependent triangle ordering. Quad spheres use
+  seam-safe longitude/latitude UVs compatible with 2:1 equirectangular maps.
+  Verified with Blender 5.1.2: 16,128 triangles and radius 1.000000171.
+  Gates: 214 Vitest passed (3 skipped), 30 Python passed, lint, typecheck,
+  Prettier, Vite build, task schema, asset budgets, and Blender smoke all pass.
