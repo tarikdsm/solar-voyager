@@ -37,13 +37,13 @@ async function createSourceTree() {
   const root = await mkdtemp(join(tmpdir(), 'solar-voyager-ingest-tree-'));
   temporaryDirectories.push(root);
   const modelsRoot = join(root, 'assets', 'models');
-  const earth = join(modelsRoot, 'planets', 'earth');
-  await mkdir(earth, { recursive: true });
-  await writeFile(join(earth, 'earth.glb'), createGlb());
-  await sharp({ create: { width: 8, height: 4, channels: 3, background: '#336699' } })
+  const vesta = join(modelsRoot, 'asteroids', 'vesta');
+  await mkdir(vesta, { recursive: true });
+  await writeFile(join(vesta, 'vesta.glb'), createGlb());
+  await sharp({ create: { width: 1024, height: 512, channels: 3, background: '#336699' } })
     .jpeg()
-    .toFile(join(earth, 'earth_albedo.jpg'));
-  await writeFile(join(earth, 'SOURCES.md'), '- earth.glb — fixture — test\n- earth_albedo.jpg — fixture — test\n');
+    .toFile(join(vesta, 'vesta_albedo.jpg'));
+  await writeFile(join(vesta, 'SOURCES.md'), '- vesta.glb — fixture — test\n- vesta_albedo.jpg — fixture — test\n');
   return { modelsRoot, outputRoot: join(root, 'public', 'assets') };
 }
 
@@ -64,9 +64,9 @@ describe('complete asset ingest', () => {
     const manifest = JSON.parse(await readFile(join(paths.outputRoot, 'manifest.json'), 'utf8'));
     expect(manifest).toEqual({
       assets: [{
-        category: 'planet',
-        files: ['models/earth.glb', 'textures/earth_albedo.ktx2'],
-        id: 'earth',
+        category: 'asteroid',
+        files: ['models/vesta.glb', 'textures/vesta_albedo.ktx2'],
+        id: 'vesta',
         triangles: 8,
       }],
       schemaVersion: 1,
@@ -77,7 +77,7 @@ describe('complete asset ingest', () => {
     const paths = await createSourceTree();
     await mkdir(paths.outputRoot, { recursive: true });
     await writeFile(join(paths.outputRoot, 'sentinel.txt'), 'last known good');
-    await rm(join(paths.modelsRoot, 'planets', 'earth', 'SOURCES.md'));
+    await rm(join(paths.modelsRoot, 'asteroids', 'vesta', 'SOURCES.md'));
 
     await expect(ingestAssets({ ...paths, encodeTexture: fakeEncode })).rejects.toThrow(
       'MODELING-GUIDE.md §8',

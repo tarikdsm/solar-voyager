@@ -33,6 +33,15 @@ describe('KTX2 encoding', () => {
     }
   });
 
+  it('marks PBR data maps as linear rather than sRGB', () => {
+    for (const name of ['earth_roughness.png', 'earth_orm.png', 'ship_metallic.jpg', 'rock_ao.png']) {
+      const args = buildKtxArguments(name, `${name}.ktx2`, { channels: 3 });
+      expect(args).toContain('linear');
+      expect(args).toContain('none');
+      expect(args).not.toContain('R8G8B8_SRGB');
+    }
+  });
+
   it('passes the executable and canonical arguments to the runner', async () => {
     const run = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
     await encodeTexture('earth_albedo.jpg', 'earth_albedo.ktx2', {

@@ -32,4 +32,27 @@ describe('asset processing', () => {
     expect(json.meshes[0].primitives[0].extensions.KHR_draco_mesh_compression).toBeDefined();
     expect((await readFile(output)).length).toBeGreaterThan(0);
   });
+
+  it('wires external KTX2 textures to named runtime materials', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'solar-voyager-process-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'earth.glb');
+    const output = join(directory, 'compressed.glb');
+    await writeFile(input, createGlb({ materialName: 'mat_surface' }));
+
+    await compressGlb(input, output, {
+      textures: [
+        { role: 'albedo', uri: '../textures/earth_albedo.ktx2' },
+        { role: 'normal', uri: '../textures/earth_normal.ktx2' },
+      ],
+    });
+
+    const json = parseGlbJson(await readFile(output));
+    expect(json.extensionsRequired).toContain('KHR_texture_basisu');
+    expect(json.images.map((image) => image.uri)).toEqual([
+      '../textures/earth_albedo.ktx2', '../textures/earth_normal.ktx2',
+    ]);
+    expect(json.materials[0].pbrMetallicRoughness.baseColorTexture).toBeDefined();
+    expect(json.materials[0].normalTexture).toBeDefined();
+  });
 });

@@ -38,6 +38,29 @@ export function parseGlbJson(bytes, label = 'GLB') {
   throw new Error(`${label} does not contain a JSON chunk`);
 }
 
+export function replaceGlbJson(bytes, json) {
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const length = bytes.readUInt32LE(offset);
+    const type = bytes.readUInt32LE(offset + 4);
+    const end = offset + 8 + length;
+    if (type === JSON_CHUNK) {
+      const source = Buffer.from(JSON.stringify(json));
+      const padding = (4 - (source.length % 4)) % 4;
+      const jsonBytes = Buffer.concat([source, Buffer.alloc(padding, 0x20)]);
+      const header = Buffer.from(bytes.subarray(0, 12));
+      const chunkHeader = Buffer.alloc(8);
+      chunkHeader.writeUInt32LE(jsonBytes.length, 0);
+      chunkHeader.writeUInt32LE(JSON_CHUNK, 4);
+      const output = Buffer.concat([header, chunkHeader, jsonBytes, bytes.subarray(end)]);
+      output.writeUInt32LE(output.length, 8);
+      return output;
+    }
+    offset = end;
+  }
+  throw new Error('GLB does not contain a JSON chunk');
+}
+
 export async function readGlbJson(path) {
   return parseGlbJson(await readFile(path), path);
 }
@@ -105,6 +128,6 @@ export function measureDocument(document, primaryNodeName) {
   const measuredNodes = primaryNodes.length > 0 ? primaryNodes : allNodes;
   const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
   const primaryTransformIdentity = measuredNodes.every((node) =>
-    node.getMatrix().every((value, index) => Math.abs(value - identityMatrix[index]) <= 1e-8));
+    node.getWorldMatrix().every((value, index) => Math.abs(value - identityMatrix[index]) <= 1e-8));
   return { ...measureNodes(measuredNodes), primaryTransformIdentity, triangles };
 }

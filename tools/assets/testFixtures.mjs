@@ -3,7 +3,7 @@ export function pad4(buffer, byte = 0) {
   return remainder === 0 ? buffer : Buffer.concat([buffer, Buffer.alloc(4 - remainder, byte)]);
 }
 
-export function createGlb({ embeddedImage = false, radius = 1, rootMatrix } = {}) {
+export function createGlb({ embeddedImage = false, materialName, nodeName, parentMatrix, radius = 1, rootMatrix } = {}) {
   const positions = new Float32Array([
     radius, 0, 0, -radius, 0, 0, 0, radius, 0,
     0, -radius, 0, 0, 0, radius, 0, 0, -radius,
@@ -18,8 +18,11 @@ export function createGlb({ embeddedImage = false, radius = 1, rootMatrix } = {}
   const binary = pad4(Buffer.concat([positionBytes, indexBytes, imageBytes]));
   const json = {
     asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, ...(rootMatrix === undefined ? {} : { matrix: rootMatrix }) }],
-    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+    nodes: parentMatrix === undefined
+      ? [{ mesh: 0, ...(nodeName === undefined ? {} : { name: nodeName }), ...(rootMatrix === undefined ? {} : { matrix: rootMatrix }) }]
+      : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, ...(materialName === undefined ? {} : { material: 0 }) }] }],
+    ...(materialName === undefined ? {} : { materials: [{ name: materialName }] }),
     accessors: [
       { bufferView: 0, componentType: 5126, count: 6, max: [radius, radius, radius], min: [-radius, -radius, -radius], type: 'VEC3' },
       { bufferView: 1, componentType: 5123, count: 24, type: 'SCALAR' },

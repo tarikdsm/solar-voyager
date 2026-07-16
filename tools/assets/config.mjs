@@ -14,7 +14,7 @@ export const CATEGORY_CONFIG = Object.freeze({
 export const NORMALIZED_RADIUS_TOLERANCE = 1e-4;
 export const ORIGIN_TOLERANCE = 1e-4;
 const MIB = 1024 * 1024;
-const HERO_IDS = new Set(['earth', 'mars', 'moon']);
+export const HERO_IDS = new Set(['earth', 'mars', 'moon']);
 const MAJOR_MOON_IDS = new Set(['moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'triton']);
 
 export function assetByteBudget(category, id) {

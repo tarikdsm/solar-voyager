@@ -3,6 +3,10 @@ import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import draco3d from 'draco3dgltf';
+
 import { parseGlbJson } from './glb.mjs';
 import { ingestAssets } from './ingest.mjs';
 
@@ -50,6 +54,24 @@ const firstHashes = await hashTree(outputRoot);
 const glbJson = parseGlbJson(await readFile(join(outputRoot, 'models', 'earth.glb')));
 if (!(glbJson.extensionsRequired ?? []).includes('KHR_draco_mesh_compression')) {
   throw new Error('Earth runtime GLB is missing required Draco compression');
+}
+if (!(glbJson.extensionsRequired ?? []).includes('KHR_texture_basisu')) {
+  throw new Error('Earth runtime GLB is missing required KTX2 texture bindings');
+}
+const io = new NodeIO()
+  .registerExtensions(ALL_EXTENSIONS)
+  .registerDependencies({ 'draco3d.decoder': await draco3d.createDecoderModule() });
+const document = await io.read(join(outputRoot, 'models', 'earth.glb'));
+const materials = new Map(document.getRoot().listMaterials().map((material) => [material.getName(), material]));
+const surface = materials.get('mat_surface');
+const clouds = materials.get('mat_clouds');
+if (
+  surface?.getBaseColorTexture()?.getURI() !== '../textures/earth_albedo.ktx2' ||
+  surface.getNormalTexture()?.getURI() !== '../textures/earth_normal.ktx2' ||
+  surface.getEmissiveTexture()?.getURI() !== '../textures/earth_emissive_night.ktx2' ||
+  clouds?.getBaseColorTexture()?.getURI() !== '../textures/earth_clouds.ktx2'
+) {
+  throw new Error('Earth decoded materials do not reference the expected runtime KTX2 textures');
 }
 for (const texture of (await readdir(join(outputRoot, 'textures'))).sort()) {
   const bytes = await readFile(join(outputRoot, 'textures', texture));

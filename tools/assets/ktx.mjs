@@ -17,16 +17,21 @@ export function isNormalTexture(path) {
   return /(^|[_-])normal([_.-]|$)/i.test(path);
 }
 
+export function isLinearTexture(path) {
+  return /(^|[_-])(normal|roughness|orm|metallic|ao|occlusion|clouds?)([_.-]|$)/i.test(path);
+}
+
 export function buildKtxArguments(inputPath, outputPath, metadata) {
   const normal = isNormalTexture(inputPath);
+  const linear = isLinearTexture(inputPath);
   const usesFourKilopixelTier = /(^|[_-])(clouds?|emissive)([_.-]|$)/i.test(inputPath);
   const args = [
     'create',
-    '--format', textureFormat(metadata.channels ?? 4, normal),
+    '--format', textureFormat(metadata.channels ?? 4, linear),
     '--encode', normal ? 'uastc' : 'basis-lz',
     '--generate-mipmap',
-    '--assign-tf', normal ? 'linear' : 'srgb',
-    '--assign-primaries', normal ? 'none' : 'bt709',
+    '--assign-tf', linear ? 'linear' : 'srgb',
+    '--assign-primaries', linear ? 'none' : 'bt709',
   ];
   if (usesFourKilopixelTier && (metadata.width ?? 0) > 4096) {
     args.push('--width', '4096', '--height', '2048');
