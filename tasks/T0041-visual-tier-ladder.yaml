@@ -1,8 +1,8 @@
 id: T0041
 title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0041-visual-tier-ladder
 depends_on: [T0040]
 milestone: M2
 spec: |
