@@ -1,6 +1,6 @@
 id: T0017
 title: Relativistic kinematics module (celerity, gamma, proper time)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0017-relativistic-kinematics
 depends_on: [T0010]
