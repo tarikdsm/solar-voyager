@@ -1,6 +1,6 @@
 id: T0016
 title: Golden trajectory harness
-status: CLAIMED
+status: IN_PROGRESS
 agent: "chatgpt"
 branch: "task/T0016-golden-trajectories"
 depends_on: [T0014, T0015]
