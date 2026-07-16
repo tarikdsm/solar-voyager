@@ -20,7 +20,9 @@ The bake must reject any other bytes so an upstream revision is an explicit revi
 event. A local `--source` option accepts the same pinned gzip for offline rebuilds.
 
 The parser reads HR number, J2000 right ascension/declination, V magnitude, and B-V
-from the documented byte ranges. Fourteen historical entries have blank J2000
+from the documented byte ranges. CDS preserves the logical fixed-width offsets but
+right-trims unused trailing fields, so records may be 160-197 bytes; the parser
+requires the 114 bytes that cover every consumed field. Fourteen historical entries have blank J2000
 coordinates and are skipped; all 9,096 coordinate-bearing entries have V
 magnitudes and are emitted in ascending HR/source order.
 

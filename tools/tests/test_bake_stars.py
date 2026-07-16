@@ -60,9 +60,13 @@ class StarParserTests(unittest.TestCase):
 
         self.assertIsNone(bake.parse_record("".join(line)))
 
-    def test_rejects_malformed_or_incomplete_records(self):
-        with self.assertRaisesRegex(ValueError, "197 bytes"):
-            bake.parse_record(CANOPUS_LINE[:-1])
+    def test_accepts_right_trimmed_records_and_rejects_missing_required_bytes(self):
+        full = bake.parse_record(CANOPUS_LINE)
+        trimmed = bake.parse_record(CANOPUS_LINE[:170])
+        self.assertEqual(trimmed, full)
+
+        with self.assertRaisesRegex(ValueError, "at least 114 bytes"):
+            bake.parse_record(CANOPUS_LINE[:113])
 
         line = list(CANOPUS_LINE)
         line[102:107] = " " * 5

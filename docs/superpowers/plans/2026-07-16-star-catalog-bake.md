@@ -52,8 +52,10 @@ self.assertGreater(
 )
 ```
 
-Blank bytes 76-90 must return `None`; a malformed 196-byte line and a
-coordinate-bearing line with blank V magnitude must raise `ValueError` naming HR.
+Blank bytes 76-90 must return `None`; a line shorter than the 114 consumed bytes and
+a coordinate-bearing line with blank V magnitude must raise `ValueError` naming HR.
+An otherwise identical record right-trimmed to 170 bytes must parse identically to
+its 197-byte form because CDS omits unused trailing blanks.
 
 Run:
 
@@ -85,7 +87,7 @@ class StarRecord:
     bv: float | None
 ```
 
-Use one-based inclusive `_field(line, first, last)` slices. Require 197 bytes,
+Use one-based inclusive `_field(line, first, last)` slices. Require at least 114 bytes,
 parse RA bytes 76-83, declination bytes 84-90, Vmag 103-107, B-V 110-114, and
 validate the declination sign. Return `None` only when every J2000 coordinate field
 is blank; partial coordinates are errors.

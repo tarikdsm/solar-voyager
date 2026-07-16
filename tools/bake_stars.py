@@ -22,7 +22,7 @@ EXPECTED_STAR_COUNT = 9_096
 STRIDE_FLOATS = 7
 BYTES_PER_STAR = STRIDE_FLOATS * 4
 J2000_OBLIQUITY_RAD = math.radians(23.439291111)
-CATALOG_RECORD_BYTES = 197
+CATALOG_REQUIRED_BYTES = 114
 
 
 @dataclass(frozen=True)
@@ -40,9 +40,9 @@ def _field(line: str, first_byte: int, last_byte: int) -> str:
 
 def parse_record(line: str) -> StarRecord | None:
     """Parse one CDS V/50 fixed-width record, or skip a blank historical entry."""
-    if len(line) != CATALOG_RECORD_BYTES:
+    if len(line) < CATALOG_REQUIRED_BYTES:
         raise ValueError(
-            f"Yale catalog record must contain {CATALOG_RECORD_BYTES} bytes, received {len(line)}"
+            f"Yale catalog record must contain at least {CATALOG_REQUIRED_BYTES} bytes, received {len(line)}"
         )
 
     hr = int(_field(line, 1, 4))
