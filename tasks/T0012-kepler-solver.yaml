@@ -24,8 +24,11 @@ handoff_notes: |
   cancellation-resistant forms; state conversion selects an energy- or
   angular-momentum-based semi-major axis according to conditioning and
   canonicalizes numerical periapsis. Inclination recovery uses atan2 to retain
-  near-equatorial inclinations. A 378-case property grid covered e=[0,0.99]
-  and e=[1.000001,5], inclinations [0,pi], and M=[-10,10], with worst state
-  round-trip error 8.28e-11. Full verification passed: lint, typecheck, 105
-  tests, build, Prettier, task schema, asset budgets, and diff check. Requires
-  independent review before DONE.
+  near-equatorial inclinations. Review-driven regressions extend the stable
+  hyperbolic series through H^17 and use conditioned scalar invariants plus a
+  cancellation-resistant transverse velocity in the e-to-1 limit. A 393-case
+  property grid covered e=[0,0.99], e=[1.000001,5], inclinations [0,pi],
+  M=[-10,10], and q=1000 km down to e=1+1e-12, with worst state round-trip
+  error 9.52e-11. Full verification passed: lint, typecheck, 107 tests, build,
+  Prettier, task schema, asset budgets, and diff check. Requires independent
+  review before DONE.
