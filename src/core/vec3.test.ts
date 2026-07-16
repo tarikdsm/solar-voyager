@@ -17,7 +17,7 @@ import {
   vec3,
 } from './vec3.js';
 
-describe('vec3', () => {
+describe('vec3 — physics-spec.md §1', () => {
   it('constructs a zero vector by default and accepts components', () => {
     expect(vec3()).toEqual({ x: 0, y: 0, z: 0 });
     expect(vec3(1, -2, 3)).toEqual({ x: 1, y: -2, z: 3 });
@@ -56,11 +56,12 @@ describe('vec3', () => {
   });
 
   it('normalizes vectors and maps the zero vector to zero', () => {
-    const normalized = normalize(vec3(0, 3, 4));
+    const input = vec3(0, 3, 4);
+    const normalized = normalize(input);
 
     expect(normalized.x).toBe(0);
-    expect(normalized.y).toBeCloseTo(0.6, 15);
-    expect(normalized.z).toBeCloseTo(0.8, 15);
+    expect(norm(normalized)).toBe(1);
+    expect(dot(normalized, input)).toBe(norm(input));
     expect(normalize(vec3())).toEqual({ x: 0, y: 0, z: 0 });
   });
 
@@ -88,9 +89,9 @@ describe('vec3', () => {
     scaleInto(right, right, 2);
     expect(right).toEqual({ x: 2, y: 4, z: 6 });
     normalizeInto(right, right);
-    expect(right.x).toBeCloseTo(2 / Math.sqrt(56), 15);
-    expect(right.y).toBeCloseTo(4 / Math.sqrt(56), 15);
-    expect(right.z).toBeCloseTo(6 / Math.sqrt(56), 15);
+    expect(norm(right)).toBe(1);
+    expect(right.y).toBe(right.x * 2);
+    expect(right.z).toBe(right.x * 3);
   });
 
   it('keeps crossInto alias-safe for either input', () => {

@@ -17,10 +17,12 @@ export function vec3(x = 0, y = 0, z = 0): Vec3 {
   return { x, y, z };
 }
 
+/** Returns a newly allocated component-wise sum. */
 export function add(left: ReadonlyVec3, right: ReadonlyVec3): Vec3 {
   return addInto(vec3(), left, right);
 }
 
+/** Writes a component-wise sum into `output`, which may alias either input. */
 export function addInto(output: Vec3, left: ReadonlyVec3, right: ReadonlyVec3): Vec3 {
   output.x = left.x + right.x;
   output.y = left.y + right.y;
@@ -28,10 +30,12 @@ export function addInto(output: Vec3, left: ReadonlyVec3, right: ReadonlyVec3): 
   return output;
 }
 
+/** Returns a newly allocated component-wise difference. */
 export function sub(left: ReadonlyVec3, right: ReadonlyVec3): Vec3 {
   return subInto(vec3(), left, right);
 }
 
+/** Writes a component-wise difference into `output`, which may alias either input. */
 export function subInto(output: Vec3, left: ReadonlyVec3, right: ReadonlyVec3): Vec3 {
   output.x = left.x - right.x;
   output.y = left.y - right.y;
@@ -39,10 +43,12 @@ export function subInto(output: Vec3, left: ReadonlyVec3, right: ReadonlyVec3): 
   return output;
 }
 
+/** Returns a newly allocated vector multiplied by `scalar`. */
 export function scale(vector: ReadonlyVec3, scalar: number): Vec3 {
   return scaleInto(vec3(), vector, scalar);
 }
 
+/** Writes a scalar product into `output`, which may alias `vector`. */
 export function scaleInto(output: Vec3, vector: ReadonlyVec3, scalar: number): Vec3 {
   output.x = vector.x * scalar;
   output.y = vector.y * scalar;
@@ -50,10 +56,12 @@ export function scaleInto(output: Vec3, vector: ReadonlyVec3, scalar: number): V
   return output;
 }
 
+/** Computes the scalar dot product without allocating. */
 export function dot(left: ReadonlyVec3, right: ReadonlyVec3): number {
   return left.x * right.x + left.y * right.y + left.z * right.z;
 }
 
+/** Returns a newly allocated right-handed cross product. */
 export function cross(left: ReadonlyVec3, right: ReadonlyVec3): Vec3 {
   return crossInto(vec3(), left, right);
 }
@@ -70,10 +78,12 @@ export function crossInto(output: Vec3, left: ReadonlyVec3, right: ReadonlyVec3)
   return output;
 }
 
+/** Computes the Euclidean norm without allocating. */
 export function norm(vector: ReadonlyVec3): number {
   return Math.hypot(vector.x, vector.y, vector.z);
 }
 
+/** Returns a newly allocated unit vector, or finite zero for a zero input. */
 export function normalize(vector: ReadonlyVec3): Vec3 {
   return normalizeInto(vec3(), vector);
 }
@@ -93,6 +103,7 @@ export function normalizeInto(output: Vec3, vector: ReadonlyVec3): Vec3 {
   return scaleInto(output, vector, inverseLength);
 }
 
+/** Computes Euclidean distance without allocating. */
 export function distance(left: ReadonlyVec3, right: ReadonlyVec3): number {
   return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z);
 }
