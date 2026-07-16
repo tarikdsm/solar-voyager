@@ -22,6 +22,7 @@ export interface EpochState {
   readonly bodies: readonly EpochBodyDefinition[];
   readonly positionsKm: Float64Array;
   readonly cameraPositionKm: ReadonlyVec3;
+  readonly cameraLookDirection: ReadonlyVec3;
 }
 
 /** Evaluates the catalog's fixed J2026 rails and initial LEO camera state. */
@@ -54,14 +55,27 @@ export function createEpochState(): EpochState {
   if (earth === undefined || earthX === undefined || earthY === undefined || earthZ === undefined) {
     throw new Error('Earth catalog state is incomplete.');
   }
+  const earthSunDistanceKm = Math.sqrt(earthX * earthX + earthY * earthY + earthZ * earthZ);
+  if (!Number.isFinite(earthSunDistanceKm) || earthSunDistanceKm <= 0) {
+    throw new Error('Earth must have a finite nonzero heliocentric distance.');
+  }
+  const cameraDistanceKm = earth.meanRadiusKm + LEO_ALTITUDE_KM;
+  const sunwardX = -earthX / earthSunDistanceKm;
+  const sunwardY = -earthY / earthSunDistanceKm;
+  const sunwardZ = -earthZ / earthSunDistanceKm;
 
   return {
     bodies,
     positionsKm: railsState.positionsKm,
     cameraPositionKm: {
-      x: earthX + earth.meanRadiusKm + LEO_ALTITUDE_KM,
-      y: earthY,
-      z: earthZ,
+      x: earthX + sunwardX * cameraDistanceKm,
+      y: earthY + sunwardY * cameraDistanceKm,
+      z: earthZ + sunwardZ * cameraDistanceKm,
+    },
+    cameraLookDirection: {
+      x: -sunwardX,
+      y: -sunwardY,
+      z: -sunwardZ,
     },
   };
 }

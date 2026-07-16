@@ -1,5 +1,12 @@
 import bodiesDocument from '../../data/bodies.json';
-import { BoxGeometry, Mesh, Points, type Object3D, type WebGLRenderer } from 'three';
+import {
+  BoxGeometry,
+  Mesh,
+  Points,
+  Vector3,
+  type Object3D,
+  type WebGLRenderer,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
@@ -19,7 +26,7 @@ describe('createEpochWorld', () => {
     const bodyCount = bodiesDocument.bodies.length;
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
-    expect(world.spaceScene.camera.rotation.y).toBeCloseTo(Math.PI / 2, 12);
+    expect(world.spaceScene.camera.getWorldDirection(new Vector3()).length()).toBeCloseTo(1, 12);
     const spheres = world.spaceScene.scene.children.filter(
       (child): child is Mesh => child instanceof Mesh,
     );

@@ -11,15 +11,24 @@ describe('createEpochState', () => {
     if (earth === undefined) throw new Error('Earth fixture is missing.');
     const earthOffset = earthIndex * 3;
     const earthX = state.positionsKm[earthOffset];
-    if (earthX === undefined) throw new Error('Earth rail position is missing.');
+    const earthY = state.positionsKm[earthOffset + 1];
+    const earthZ = state.positionsKm[earthOffset + 2];
+    if (earthX === undefined || earthY === undefined || earthZ === undefined) {
+      throw new Error('Earth rail position is missing.');
+    }
 
     expect(state.bodies).toHaveLength(bodiesDocument.bodies.length);
     expect(state.positionsKm).toHaveLength(bodiesDocument.bodies.length * 3);
     expect(Array.from(state.positionsKm).every(Number.isFinite)).toBe(true);
-    expect(state.cameraPositionKm).toEqual({
-      x: earthX + earth.meanRadiusKm + 400,
-      y: state.positionsKm[earthOffset + 1],
-      z: state.positionsKm[earthOffset + 2],
-    });
+    const offsetX = state.cameraPositionKm.x - earthX;
+    const offsetY = state.cameraPositionKm.y - earthY;
+    const offsetZ = state.cameraPositionKm.z - earthZ;
+    expect(Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ)).toBeCloseTo(
+      earth.meanRadiusKm + 400,
+      8,
+    );
+    expect(offsetX * earthX + offsetY * earthY + offsetZ * earthZ).toBeLessThan(0);
+    const look = state.cameraLookDirection;
+    expect(Math.sqrt(look.x * look.x + look.y * look.y + look.z * look.z)).toBeCloseTo(1, 12);
   });
 });

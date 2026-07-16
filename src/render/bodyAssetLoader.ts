@@ -79,9 +79,7 @@ export async function createThreeAssetBackend(
   const ktx2Loader = new KTX2Loader()
     .setTranscoderPath(`${assetBaseUrl}codecs/basis/`)
     .detectSupport(renderer);
-  const dracoLoader = new DRACOLoader()
-    .setDecoderPath(`${assetBaseUrl}codecs/draco/`)
-    .setDecoderConfig({ type: 'wasm' });
+  const dracoLoader = new DRACOLoader().setDecoderPath(`${assetBaseUrl}codecs/draco/`);
   const gltfLoader = new GLTFLoader().setKTX2Loader(ktx2Loader).setDRACOLoader(dracoLoader);
 
   return {

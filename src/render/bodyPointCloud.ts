@@ -11,6 +11,8 @@ import {
 const MAX_POINT_DIAMETER_PX = 1.5;
 
 const VERTEX_SHADER = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
 attribute vec3 aColor;
 attribute float aSize;
 attribute float aOpacity;
@@ -21,16 +23,19 @@ varying float vOpacity;
 void main() {
   vColor = aColor * aIntensity;
   vOpacity = aOpacity;
-  gl_PointSize = aSize;
+  gl_PointSize = max(aSize, 1.5);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
 }
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
 varying vec3 vColor;
 varying float vOpacity;
 
 void main() {
+  #include <logdepthbuf_fragment>
   vec2 centered = gl_PointCoord * 2.0 - 1.0;
   float radiusSquared = dot(centered, centered);
   if (radiusSquared > 1.0) discard;

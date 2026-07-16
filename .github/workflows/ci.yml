@@ -41,6 +41,9 @@ jobs:
       - name: Render depth regression
         run: npm run test:render-depth
 
+      - name: Visual tier fly-in regression
+        run: npm run test:visual-tiers
+
       - name: Tool tests
         run: npm run test:tools
 

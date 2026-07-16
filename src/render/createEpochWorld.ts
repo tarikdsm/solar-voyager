@@ -63,14 +63,22 @@ export async function createEpochWorld(
   }
 
   const spaceScene = new CameraRelativeSpaceScene();
-  spaceScene.camera.rotation.y = Math.PI / 2;
+  spaceScene.camera.lookAt(
+    epochState.cameraLookDirection.x,
+    epochState.cameraLookDirection.y,
+    epochState.cameraLookDirection.z,
+  );
   spaceScene.camera.updateMatrix();
 
   const ambientLight = new AmbientLight(0xffffff, 0.02);
   ambientLight.matrixAutoUpdate = false;
   ambientLight.updateMatrix();
   const directionalLight = new DirectionalLight(0xffffff, 2);
-  directionalLight.position.set(3, 4, 5);
+  directionalLight.position.set(
+    -epochState.cameraLookDirection.x,
+    -epochState.cameraLookDirection.y,
+    -epochState.cameraLookDirection.z,
+  );
   directionalLight.matrixAutoUpdate = false;
   directionalLight.updateMatrix();
   spaceScene.scene.add(ambientLight, directionalLight);
