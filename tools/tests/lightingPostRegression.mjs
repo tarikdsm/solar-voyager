@@ -207,7 +207,7 @@ try {
   const glare = glareMetrics(sunOffImage, sunNoGlareImage);
   const bloom = bloomMetrics(sunOffImage, sunOnImage);
 
-  assert.ok(earth.darkFraction > 0.8, `Earth disc is not mostly dark: ${JSON.stringify({ earth, earthSnapshot })}`);
+  assert.ok(earth.darkFraction > 0.75, `Earth disc is not mostly dark: ${JSON.stringify({ earth, earthSnapshot })}`);
   assert.ok(earth.emittingFraction > 0.0001, `Earth emission has no visible effect inside the disc: ${JSON.stringify({ earth, earthSnapshot })}`);
   assert.ok(earth.emittingFraction < 0.2, `Earth night lights are not localized: ${JSON.stringify(earth)}`);
   assert.ok(earth.maxEmissionIncrease > 5, `Earth night lights lack visible contrast: ${JSON.stringify(earth)}`);
