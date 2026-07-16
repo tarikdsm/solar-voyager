@@ -1,6 +1,6 @@
 id: T0023
 title: Rails accuracy regression suite
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0023-rails-regression
 depends_on: [T0013, T0021]
@@ -11,4 +11,11 @@ spec: |
   empirically in this PR (update the spec table with measured values + margin).
 acceptance:
   - All bodies within bounds; spec table updated with real measured errors
-handoff_notes: ""
+handoff_notes: |
+  Calibrated every J2026 catalog body at +30 d and +365 d for heliocentric
+  position and velocity. Bounds use each class maximum times 1.10, rounded
+  upward to two significant digits; measured maxima and limits are recorded
+  in physics-spec section 2. The suite pins sample order, keeps the epoch
+  reconstruction check, and fails closed for unknown body ids. Verification:
+  lint and typecheck passed; Vitest 184 passed / 3 skipped; Python tools 13
+  passed; format, build, 52-task schema, asset budgets, and diff check passed.
