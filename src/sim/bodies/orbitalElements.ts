@@ -1,6 +1,7 @@
 import { vec3, type Vec3 } from '../../core/vec3.js';
 import {
   createKeplerSolution,
+  hyperbolicMeanAnomalyRad,
   solveKeplerEllipticInto,
   solveKeplerHyperbolicInto,
   type KeplerSolution,
@@ -10,6 +11,8 @@ import {
 
 const NUMERICAL_DEGENERACY_LIMIT = 64 * Number.EPSILON;
 const ENERGY_CONDITION_LIMIT = Math.cbrt(Number.EPSILON);
+const INVARIANT_ECCENTRICITY_CONDITION_LIMIT = Math.sqrt(Number.EPSILON);
+const NEAR_PARABOLIC_ECCENTRICITY_LIMIT = 1e-10;
 const HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT = Math.sqrt(Number.EPSILON);
 const FULL_TURN_RAD = 2 * Math.PI;
 
@@ -183,8 +186,8 @@ export function stateToElementsInto(
     ),
   );
   const conditionedEccentricity =
-    energyCondition > ENERGY_CONDITION_LIMIT &&
-    Math.abs(measuredEccentricity - 1) <= HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT
+    energyCondition > INVARIANT_ECCENTRICITY_CONDITION_LIMIT &&
+    Math.abs(measuredEccentricity - 1) <= NEAR_PARABOLIC_ECCENTRICITY_LIMIT
       ? invariantEccentricity
       : measuredEccentricity;
   const circular = conditionedEccentricity <= NUMERICAL_DEGENERACY_LIMIT;
@@ -192,7 +195,7 @@ export function stateToElementsInto(
   const retrogradeEquatorial = equatorial && hz < 0;
   const eccentricity = circular ? 0 : conditionedEccentricity;
   const semilatusRectumKm = (angularMomentumKm2S * angularMomentumKm2S) / parentMuKm3S2;
-  const semiMajorAxisKm =
+  let semiMajorAxisKm =
     energyCondition > ENERGY_CONDITION_LIMIT
       ? -parentMuKm3S2 / (2 * specificEnergyKm2S2)
       : semilatusRectumKm / (1 - eccentricity * eccentricity);
@@ -273,7 +276,14 @@ export function stateToElementsInto(
       const hyperbolicSine =
         radialDotKm2S / (eccentricity * Math.sqrt(parentMuKm3S2 * -semiMajorAxisKm));
       const hyperbolicAnomalyRad = Math.asinh(hyperbolicSine);
-      meanAnomalyRad = eccentricity * hyperbolicSine - hyperbolicAnomalyRad;
+      if (
+        energyCondition <= ENERGY_CONDITION_LIMIT &&
+        eccentricity - 1 <= NEAR_PARABOLIC_ECCENTRICITY_LIMIT
+      ) {
+        const hyperbolicCosine = Math.hypot(1, hyperbolicSine);
+        semiMajorAxisKm = -radiusKm / (eccentricity * hyperbolicCosine - 1);
+      }
+      meanAnomalyRad = hyperbolicMeanAnomalyRad(hyperbolicAnomalyRad, eccentricity);
     }
   }
 

@@ -25,14 +25,17 @@ function sinhMinusArgument(argumentRad: number): number {
   return argumentRad * squared * series;
 }
 
+/** Evaluates `M = e·sinh(H) - H` without cancellation for small `H`. */
+export function hyperbolicMeanAnomalyRad(anomalyRad: number, eccentricity: number): number {
+  return (eccentricity - 1) * anomalyRad + eccentricity * sinhMinusArgument(anomalyRad);
+}
+
 function hyperbolicResidual(
   anomalyRad: number,
   meanAnomalyRad: number,
   eccentricity: number,
 ): number {
-  return (
-    (eccentricity - 1) * anomalyRad + eccentricity * sinhMinusArgument(anomalyRad) - meanAnomalyRad
-  );
+  return hyperbolicMeanAnomalyRad(anomalyRad, eccentricity) - meanAnomalyRad;
 }
 
 /** Caller-owned output from a Kepler solve. */
@@ -92,10 +95,17 @@ export function solveKeplerHyperbolicInto(
   eccentricity: number,
 ): KeplerSolution {
   const absoluteMeanAnomalyRad = Math.abs(meanAnomalyRad);
-  let anomalyRad =
-    meanAnomalyRad === 0
-      ? 0
-      : Math.sign(meanAnomalyRad) * Math.log((2 * absoluteMeanAnomalyRad) / eccentricity + 1.8);
+  let anomalyRad: number;
+  if (meanAnomalyRad === 0) {
+    anomalyRad = 0;
+  } else if (absoluteMeanAnomalyRad < 1) {
+    const linearEstimateRad = absoluteMeanAnomalyRad / (eccentricity - 1);
+    const cubicEstimateRad = Math.cbrt((6 * absoluteMeanAnomalyRad) / eccentricity);
+    anomalyRad = Math.sign(meanAnomalyRad) * Math.min(linearEstimateRad, cubicEstimateRad);
+  } else {
+    anomalyRad =
+      Math.sign(meanAnomalyRad) * Math.log((2 * absoluteMeanAnomalyRad) / eccentricity + 1.8);
+  }
 
   output.converged = false;
   output.iterations = 0;
