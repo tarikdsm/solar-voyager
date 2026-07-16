@@ -1,8 +1,8 @@
 id: T0021
 title: Full ~50-body catalog bake
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: "chatgpt"
+branch: "task/T0021-full-catalog-bake"
 depends_on: [T0020]
 milestone: M1
 spec: |
