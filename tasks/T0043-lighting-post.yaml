@@ -1,8 +1,8 @@
 id: T0043
 title: Lighting, ACES tone mapping, bloom
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0043-lighting-post
 depends_on: [T0040]
 milestone: M2
 spec: |
