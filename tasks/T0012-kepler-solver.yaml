@@ -1,6 +1,6 @@
 id: T0012
 title: Kepler solver (elliptic + hyperbolic) and elements <-> state vectors
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0012-kepler-solver
 depends_on: [T0010]
@@ -35,5 +35,6 @@ handoff_notes: |
   M=[-10,10], and q=1000 km down to e=1+1e-12 with adjacent M values from
   1e-10 through 1e-3, with worst state round-trip error 1.77e-11. Full
   verification passed: lint, typecheck, 108 tests, build,
-  Prettier, task schema, asset budgets, and diff check. Requires independent
-  review before DONE.
+  Prettier, task schema, asset budgets, and diff check. Independent review of
+  SHA 87317ba passed with no findings; its additional 336-case grid had worst
+  state round-trip error 9.18e-11.
