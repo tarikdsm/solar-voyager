@@ -1,5 +1,16 @@
 import bodiesDocument from '../../data/bodies.json';
-import { BoxGeometry, Mesh, Points, Vector3, type Object3D, type WebGLRenderer } from 'three';
+import {
+  AmbientLight,
+  BoxGeometry,
+  DirectionalLight,
+  Mesh,
+  MeshLambertMaterial,
+  Points,
+  Sprite,
+  Vector3,
+  type Object3D,
+  type WebGLRenderer,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
@@ -38,8 +49,22 @@ describe('createEpochWorld', () => {
     const points = world.spaceScene.scene.children.filter(
       (child): child is Points => child instanceof Points,
     );
+    const ambientLights = world.spaceScene.scene.children.filter(
+      (child): child is AmbientLight => child instanceof AmbientLight,
+    );
+    const directionalLights = world.spaceScene.scene.children.filter(
+      (child): child is DirectionalLight => child instanceof DirectionalLight,
+    );
+    const sprites = world.spaceScene.scene.children.filter(
+      (child): child is Sprite => child instanceof Sprite,
+    );
     expect(spheres).toHaveLength(bodyCount * 2);
+    expect(spheres.every((sphere) => sphere.material instanceof MeshLambertMaterial)).toBe(true);
     expect(points).toHaveLength(2);
+    expect(ambientLights).toEqual([world.lighting.ambientLight]);
+    expect(directionalLights).toEqual([world.lighting.directionalLight]);
+    expect(sprites).toEqual([world.lighting.glare]);
+    expect(world.lighting.directionalLight.intensity).toBeGreaterThan(0);
     expect(world.visualSystem.pointCloud.points.geometry.getAttribute('position').count).toBe(
       bodyCount,
     );

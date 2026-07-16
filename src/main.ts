@@ -3,6 +3,7 @@ import { render } from 'preact';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
+import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import './style.css';
 import { App } from './ui/App.js';
 
@@ -22,9 +23,9 @@ const appRoot = appElement;
 const renderer = createRenderer(canvas);
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
+let postPipeline: LightingPostPipeline | null = null;
 
 function resizeRenderer(): void {
-  if (world === null) return;
   const clientWidth = canvas.clientWidth;
   const clientHeight = canvas.clientHeight;
   const pixelRatio = renderer.getPixelRatio();
@@ -33,29 +34,41 @@ function resizeRenderer(): void {
 
   if (canvas.width !== drawingBufferWidth || canvas.height !== drawingBufferHeight) {
     renderer.setSize(clientWidth, clientHeight, false);
+    if (world === null) return;
     world.spaceScene.camera.aspect = clientWidth / clientHeight;
     world.spaceScene.camera.updateProjectionMatrix();
+    postPipeline?.resize(clientWidth, clientHeight, pixelRatio);
   }
 }
 
 function renderFrame(nowMs: number): void {
-  if (world === null) return;
-  const { spaceScene, visualSystem, cameraPositionKm } = world;
+  if (world === null || postPipeline === null) return;
+  const { spaceScene, visualSystem, lighting, cameraPositionKm } = world;
   visualSystem.update(
     cameraPositionKm,
     canvas.height,
     spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
   );
+  lighting.update();
   spaceScene.updateCameraRelative(cameraPositionKm);
-  renderer.render(spaceScene.scene, spaceScene.camera);
+  postPipeline.render();
   requestAnimationFrame(renderFrame);
 }
 
 async function startApplication(): Promise<void> {
   render(App(), appRoot);
-  world = await createEpochWorld(renderer);
   resizeRenderer();
+  world = await createEpochWorld(renderer, { initialViewportHeightPx: canvas.height });
+  postPipeline = new LightingPostPipeline(
+    renderer,
+    world.spaceScene.scene,
+    world.spaceScene.camera,
+  );
+  postPipeline.resize(canvas.clientWidth, canvas.clientHeight, renderer.getPixelRatio());
+  world.lighting.update();
+  world.spaceScene.updateCameraRelative(world.cameraPositionKm);
+  postPipeline.warmUp();
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
   requestAnimationFrame(renderFrame);
 }

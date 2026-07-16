@@ -1,6 +1,6 @@
 id: T0043
 title: Lighting, ACES tone mapping, bloom
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0043-lighting-post
 depends_on: [T0040]
@@ -11,4 +11,13 @@ spec: |
 acceptance:
   - Night side of Earth dark with visible night lights; sun bloom without artifacts
   - Frame budget respected on reference hardware
-handoff_notes: ""
+handoff_notes: >-
+  Implemented one inverse-square solar DirectionalLight plus ambient 0.02,
+  Lambert sphere tiers, HDR Sun/glare and visible Earth night emission. Added
+  the half-float RenderPass -> UnrealBloomPass -> OutputPass chain with ACES,
+  warm-up and resize integration. Chromium regression proves the real Earth
+  night side is 99.95% dark with localized lights and that bloom is symmetric
+  with dark corners; all 282 unit tests, 49 tool tests, four browser suites,
+  build, budgets and schema checks pass. Paired software benchmark p75 is
+  150.0 ms before and 250.1 ms after; docs/bench/T0043-summary.md records that
+  reference-GPU verification remains required for the hardware FPS gate.

@@ -2,7 +2,8 @@ import {
   DataTexture,
   IcosahedronGeometry,
   Mesh,
-  MeshBasicMaterial,
+  MeshLambertMaterial,
+  MeshStandardMaterial,
   RGBAFormat,
   type Material,
   type Object3D,
@@ -45,6 +46,8 @@ const LOAD_LOADING = 1;
 const LOAD_READY = 2;
 const LOAD_FAILED = 3;
 const HERO_IDS = new Set(['sun', 'earth', 'moon']);
+export const SUN_EMISSIVE_INTENSITY = 4;
+export const EARTH_NIGHT_EMISSIVE_INTENSITY = 32;
 
 function loadStateName(state: number): BodyModelLoadState {
   switch (state) {
@@ -66,10 +69,10 @@ export class BodyVisualSystem {
   readonly pointCloud: BodyPointCloud;
 
   private readonly idToIndex = new Map<string, number>();
-  private readonly sphereFallbackMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
-  private readonly sphereTexturedMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
-  private readonly sphereFallbackMaterials: MeshBasicMaterial[] = [];
-  private readonly sphereTexturedMaterials: MeshBasicMaterial[] = [];
+  private readonly sphereFallbackMeshes: Mesh<IcosahedronGeometry, MeshLambertMaterial>[] = [];
+  private readonly sphereTexturedMeshes: Mesh<IcosahedronGeometry, MeshLambertMaterial>[] = [];
+  private readonly sphereFallbackMaterials: MeshLambertMaterial[] = [];
+  private readonly sphereTexturedMaterials: MeshLambertMaterial[] = [];
   private readonly sphereLoadStates: Uint8Array;
   private readonly sphereTextureMixes: Float32Array;
   private readonly sphereTextureFadeActive: Uint8Array;
@@ -162,14 +165,19 @@ export class BodyVisualSystem {
     for (let index = 0; index < count; index += 1) {
       const definition = definitions[index];
       if (definition === undefined) throw new Error('Body definition array is sparse.');
-      const fallbackMaterial = new MeshBasicMaterial({
+      const isSun = definition.category === 'sun';
+      const fallbackMaterial = new MeshLambertMaterial({
         color: definition.albedoColor,
+        emissive: isSun ? definition.albedoColor : 0x000000,
+        emissiveIntensity: isSun ? SUN_EMISSIVE_INTENSITY : 1,
         transparent: true,
         opacity: 0,
         depthWrite: false,
       });
-      const texturedMaterial = new MeshBasicMaterial({
+      const texturedMaterial = new MeshLambertMaterial({
         color: 0xffffff,
+        emissive: isSun ? 0xffffff : 0x000000,
+        emissiveIntensity: isSun ? SUN_EMISSIVE_INTENSITY : 1,
         map: whiteTexture,
         transparent: true,
         opacity: 0,
@@ -358,6 +366,7 @@ export class BodyVisualSystem {
     const material = this.sphereTexturedMaterials[index];
     if (material === undefined) throw new Error('Sphere material array is out of sync.');
     material.map = texture;
+    if (this.definitions[index]?.category === 'sun') material.emissiveMap = texture;
     this.sphereLoadStates[index] = LOAD_READY;
     this.sphereTextureFadePending[index] = 1;
   }
@@ -388,6 +397,19 @@ export class BodyVisualSystem {
     for (let materialIndex = 0; materialIndex < model.materials.length; materialIndex += 1) {
       const material = model.materials[materialIndex];
       if (material === undefined) throw new Error('Loaded model material array is sparse.');
+      if (definition.category === 'sun' && material instanceof MeshStandardMaterial) {
+        material.emissiveIntensity = Math.max(SUN_EMISSIVE_INTENSITY, material.emissiveIntensity);
+      }
+      if (
+        definition.id === 'earth' &&
+        material instanceof MeshStandardMaterial &&
+        material.emissiveMap !== null
+      ) {
+        material.emissiveIntensity = Math.max(
+          EARTH_NIGHT_EMISSIVE_INTENSITY,
+          material.emissiveIntensity,
+        );
+      }
       baseOpacities[materialIndex] = material.opacity;
       baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
       baseTransparencies[materialIndex] = material.transparent ? 1 : 0;

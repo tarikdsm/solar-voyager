@@ -26,7 +26,7 @@ warm-up render compiles every post shader before the first animation frame.
 The normal frame path calls only `composer.render()`; it creates no target,
 pass, geometry, material, vector, closure, or other application-owned object.
 
-`UnrealBloomPass` is configured with threshold 1.0, strength 0.55, and radius
+`UnrealBloomPass` is configured with threshold 1.0, strength 0.15, and radius
 0.35. Its official implementation creates the first bright target at half the
 composer resolution, satisfying the downscaled-bloom rule without a redundant
 copy or a second composer. Bloom can be enabled or disabled by mutating the
@@ -62,9 +62,9 @@ Ambient intensity is exactly 0.02. Tier-2 reflected spheres use a lightweight
 Lambert material instead of an unlit basic material, so their terminator and
 night side respond to the same light. The Sun's sphere fallback is emissive.
 Tier-3 glTF materials remain authored PBR materials: Earth's committed
-`earth_emissive_night.ktx2` continues through its emissive map and the Sun's
-authored emissive material is guaranteed an HDR-capable minimum intensity at
-load time.
+`earth_emissive_night.ktx2` continues through its emissive map with minimum
+intensity 32 at the fixed ACES exposure, and the Sun's authored emissive
+material is guaranteed a minimum intensity of 4 at load time.
 
 ## Solar glare
 
@@ -98,7 +98,7 @@ runtime code uses the already accepted Three.js dependency and official addons.
   Lambert sphere materials, Sun emission, ACES configuration, half-float
   targets, pass order, resize, bloom toggle, render delegation, and disposal.
 - A real Chromium fixture uses the production pipeline and real Earth glTF.
-  From the anti-solar 400 km view it requires a dark planetary disc with
+  From an anti-solar three-Earth-radii view it requires a dark planetary disc with
   spatially localized nonzero night-light pixels.
 - The same fixture renders a controlled emissive solar disc with bloom off and
   on. Bloom must add a soft, approximately symmetric exterior halo while
@@ -111,4 +111,3 @@ runtime code uses the already accepted Three.js dependency and official addons.
   gates must remain green. Paired 120+600-frame software benchmark reports are
   committed, while reference-hardware FPS remains the authoritative acceptance
   gate when that hardware is available.
-

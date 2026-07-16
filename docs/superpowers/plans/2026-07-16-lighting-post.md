@@ -47,7 +47,7 @@
 - Add a dedicated fixture under `tests/render/` and Playwright driver under
   `tools/tests/` using the production world, real Earth glTF/night emissive map,
   and production post pipeline.
-- Render Earth from the anti-solar 400 km view after the tier-3 model is ready;
+- Render Earth from the anti-solar three-Earth-radii view after the tier-3 model is ready;
   analyze the framebuffer/screenshot for a dark majority and localized visible
   night lights.
 - Render a controlled HDR solar disc with bloom disabled and enabled; prove an
