@@ -71,6 +71,45 @@ Horizons solutions and published physical parameters can be revised upstream;
 regenerate intentionally and review JSON diffs rather than treating a later
 remote result as byte-stable forever.
 
+## Yale bright-star catalog bake
+
+`bake_stars.py` converts the public-domain Yale Bright Star Catalogue, fifth
+revised edition ([CDS V/50](https://cdsarc.cds.unistra.fr/viz-bin/ReadMe/V/50)),
+into the render-ready `data/stars.bin` payload.
+
+### Setup and commands
+
+Python 3.9 or newer is required. The network path uses a pinned CA bundle because
+some local Python installations do not inherit the operating system trust store:
+
+```powershell
+python -m pip install -r tools/requirements-stars.txt
+
+# Download, verify, and bake the pinned CDS source
+python tools/bake_stars.py
+
+# Rebuild offline from the same pinned gzip bytes
+python tools/bake_stars.py --source path/to/catalog.gz
+
+# Write to a review location
+python tools/bake_stars.py --output build/stars-review.bin
+```
+
+The source is
+`https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz`, pinned at SHA-256
+`3dc44b1e90be8fbe5bcc7656032560f51275f985c7e3f783c9028e1838ec7bed`.
+The tool rejects different bytes before decompression. CDS preserves the documented
+fixed-width offsets but right-trims unused trailing fields; the parser consumes
+bytes 1-114 and accepts those 160-197-byte physical records.
+
+Fourteen historical entries without J2000 coordinates are omitted, leaving 9,096
+stars in HR/source order. Directions are rotated from equatorial to ecliptic J2000.
+V magnitude is preserved; B−V becomes bounded display RGB, and missing B−V is
+neutral white. The raw little-endian payload uses seven Float32 values per star,
+is exactly 254,688 bytes, and currently has output SHA-256
+`91a8d2304001d3936a8dc69181c52af59c555d3fecd5546d0d2db9efa3f23cae`.
+Publishing uses a same-directory temporary file and atomic replacement.
+
 ## Blender and other tools
 
 Blender builders follow `docs/asset-pipeline.md`. Their Python scripts, not

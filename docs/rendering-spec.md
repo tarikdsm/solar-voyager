@@ -33,7 +33,7 @@ Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — 
 
 ## 5. Starfield
 
-- Yale Bright Star Catalog (~9,100 stars, public domain) baked by `tools/bake_stars.py` into `data/stars.bin`: packed Float32 `(dirX, dirY, dirZ, mag, B−V→RGB)`, ~250 KB.
+- Yale Bright Star Catalog (9,096 coordinate-bearing entries, public domain) baked by `tools/bake_stars.py` into `data/stars.bin`. The 254,688-byte payload is a raw little-endian stream of seven Float32 values per star: `(dirX, dirY, dirZ, visualMagnitude, red, green, blue)`, stride 28 bytes. Directions are unit vectors in the ecliptic J2000 frame; RGB is a bounded display mapping of B−V, with neutral white for missing color indices.
 - Rendered as one `THREE.Points` on a 1e9 km sphere centered on the camera (moves with it). Correct at every zoom; no skybox textures.
 
 ## 6. Launch scene (2D) — DEFERRED (optional post-v1 expansion, see roadmap)
