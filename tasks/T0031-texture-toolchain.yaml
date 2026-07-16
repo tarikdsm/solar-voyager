@@ -1,6 +1,6 @@
 id: T0031
 title: Texture fetch/processing script
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0031-texture-fetch
 depends_on: [T0030]
