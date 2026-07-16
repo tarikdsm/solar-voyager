@@ -1,6 +1,6 @@
 id: T0010
 title: core/vec3 float64 math + constants
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0010-core-vec3-constants
 depends_on: [T0001]
@@ -12,4 +12,11 @@ spec: |
 acceptance:
   - Unit tests for all ops incl. edge cases (zero vector normalize)
   - No dependencies outside core/
-handoff_notes: ""
+handoff_notes: |
+  Added dependency-free float64 Vec3 primitives plus allocation-free, alias-safe
+  out-parameter variants for frame-loop use. Zero-vector normalization returns a
+  finite zero vector. Added AU_KM and SPEED_OF_LIGHT_KM_S from physics-spec.md §1.
+  TDD evidence: the focused tests first failed because both modules were absent,
+  then passed 12/12 after implementation. Full verification passed: lint,
+  typecheck, 84 tests, build, Prettier, task schema, asset budgets, and diff check.
+  Requires independent review before DONE.
