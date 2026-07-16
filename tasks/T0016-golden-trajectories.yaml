@@ -1,6 +1,6 @@
 id: T0016
 title: Golden trajectory harness
-status: IN_PROGRESS
+status: REVIEW
 agent: "chatgpt"
 branch: "task/T0016-golden-trajectories"
 depends_on: [T0014, T0015]
@@ -12,4 +12,7 @@ spec: |
 acceptance:
   - Goldens committed with generation parameters recorded
   - Harness fails loudly on >tolerance drift; regen requires explicit flag
-handoff_notes: ""
+handoff_notes: >-
+  Added three J2026 30-day full-field coast baselines, component-level metadata/state
+  comparison, ADR-017/spec limits, and guarded explicit regeneration. Independent review
+  resolved metadata-validation P2; 181 Vitest and 12 Python tests plus all CI gates pass.
