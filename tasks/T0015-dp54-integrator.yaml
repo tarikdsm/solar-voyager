@@ -1,6 +1,6 @@
 id: T0015
 title: DP54 adaptive integrator
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0015-dp54-integrator
 depends_on: [T0010]
