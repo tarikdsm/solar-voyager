@@ -1,8 +1,8 @@
 id: T0031
 title: Texture fetch/processing script
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0031-texture-fetch
 depends_on: [T0030]
 milestone: M1
 spec: |
