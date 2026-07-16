@@ -115,6 +115,19 @@ Publishing uses a same-directory temporary file and atomic replacement.
 Blender builders follow `docs/asset-pipeline.md`. Their Python scripts, not
 hand-edited exported GLBs, are the source of truth.
 
+Build every implemented catalog asset, or a deterministic selected subset:
+
+```powershell
+& blender --background --python tools/blender/build_all.py -- --all
+& blender --background --python tools/blender/build_all.py -- --only sun --only earth
+
+# Disposable Blender -> authored GLB -> runtime ingest acceptance
+npm run test:blender
+```
+
+The acceptance command writes only below `build/blender-smoke/`. It locates
+Blender via `BLENDER_PATH`, `PATH`, or the documented Blender 5.1 Windows path.
+
 ## Runtime asset ingest
 
 `tools/assets/ingestCli.mjs` is the only supported publisher from
