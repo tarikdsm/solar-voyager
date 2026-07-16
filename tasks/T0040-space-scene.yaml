@@ -1,6 +1,6 @@
 id: T0040
 title: Camera-relative SpaceScene + logarithmic depth
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0040-space-scene
 depends_on: [T0013, T0032]
@@ -12,4 +12,24 @@ spec: |
 acceptance:
   - Earth renders correctly from 200 km and from 1 AU without z-fighting or jitter
   - Grep-able invariant: no other file converts physics positions to float32
-handoff_notes: ""
+handoff_notes: |
+  CameraRelativeSpaceScene now owns the only explicit physics-position
+  float64-to-float32 boundary, keeps the PerspectiveCamera at the origin, and
+  uses the specified 0.001 km / 1e10 km frustum. The renderer enables the
+  logarithmic-depth fallback; T0045 remains responsible for selecting reversed
+  depth when EXT_clip_control is available. The placeholder exercises the same
+  camera-relative path at an absolute one-AU position without per-frame
+  allocations.
+
+  Acceptance evidence: focused tests cover an Earth surface view at 200 km,
+  one-AU recomputation without accumulated error, non-finite/duplicate guards,
+  renderer parameters, and a repository scan proving Math.fround appears only
+  in src/render/spaceScene.ts outside tests. Real-browser WebGL2 verification at
+  1280x720 rendered the rotating cube with a 24-bit depth buffer and zero
+  console errors or warnings. Final gates passed: lint, strict typecheck,
+  231 Vitest tests (3 skipped), format, build, budgets, 53 task schemas, and
+  diff check. Critical path is 8,362,185 bytes (7.97 MiB).
+
+  bench:scaffold before/after on the same machine (120 warm-up / 600 sampled
+  frames): both 16.7/16.7/16.8 ms median/p75/p99, zero console/page errors;
+  heap delta changed from +847,768 bytes on main to -922,796 bytes on T0040.
