@@ -1,6 +1,6 @@
 id: T0031
 title: Texture fetch/processing script
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0031-texture-fetch
 depends_on: [T0030]
@@ -14,4 +14,14 @@ spec: |
 acceptance:
   - Earth 8k albedo end-to-end (fetch -> process -> PNG + SOURCES.md), ingested within the hero budget
   - Credits table + license notes updated
-handoff_notes: ""
+handoff_notes: |
+  Added a pinned HTTPS recipe catalog and deterministic Python/Sharp pipeline.
+  The Earth albedo recipe verifies source SHA-256, emits metadata-free RGB PNG
+  at 8192x4096, and generates complete CC BY 4.0 attribution. Committed output
+  SHA-256: 087c80559b97d0ed5e1f6eed5fbf904a82459b8b5527e79e52f153d31e09b1bc.
+  Real network fetch passed against the official Solar System Scope URL.
+  T0035 acceptance with KTX-Software 4.4 produced a 32,256-triangle Earth with
+  seven runtime asset files; the complete runtime tree was 5,973,360 bytes
+  (5.70 MiB), below the 20 MiB hero budget.
+  Gates: 214 Vitest passed (3 skipped), 35 Python passed, lint, typecheck,
+  Prettier, Vite build, task schema, and asset budgets all pass.

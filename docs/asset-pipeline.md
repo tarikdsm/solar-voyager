@@ -85,6 +85,13 @@ pair for planets, moons, and dwarfs.
 
 **Licenses:** Solar System Scope textures are **CC BY 4.0** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
 
+The reproducible Earth albedo recipe uses Solar System Scope's official
+`8k_earth_daymap.jpg`, pins source SHA-256
+`88ab060b6e7d241cfc590c69f528fab2b3247b738d40124cb590999a6fe44abc`, and
+records format normalization as a modification required by CC BY 4.0. Run
+`npm run textures:fetch`; exact URLs and required credit are generated into the
+source workspace `SOURCES.md`.
+
 Source textures: prefer documenting download+processing in `tools/fetch_textures.py` (re-runnable by any agent); hand-downloaded files may be committed under `assets/textures-src/<body-id>/` when no stable scripted source exists. Only ingest-produced KTX2 goes in `public/assets/textures/`.
 
 ## Asteroids & comets (simple by design)
