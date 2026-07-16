@@ -1,7 +1,12 @@
 import type { GoldenTrajectory } from './goldenTrajectoryHarness.js';
 
 const COMPONENT_NAMES = ['rx', 'ry', 'rz', 'ux', 'uy', 'uz', 'tau'] as const;
-const COMPONENT_LIMITS = [1e-3, 1e-3, 1e-3, 1e-9, 1e-9, 1e-9, 1e-6] as const;
+const STABLE_COMPONENT_LIMITS = [1e-3, 1e-3, 1e-3, 1e-9, 1e-9, 1e-9, 1e-6] as const;
+const LEO_COMPONENT_LIMITS = [2e-2, 2e-2, 2e-2, 2e-5, 2e-5, 2e-5, 1e-6] as const;
+
+function componentLimits(scenarioId: string): readonly number[] {
+  return scenarioId === 'leo-30d' ? LEO_COMPONENT_LIMITS : STABLE_COMPONENT_LIMITS;
+}
 
 function assertScalarMatches(
   scenarioId: string,
@@ -36,6 +41,7 @@ function assertStateMatches(
   label: string,
   actualState: readonly number[],
   expectedState: readonly number[],
+  limits: readonly number[],
 ): void {
   if (actualState.length !== COMPONENT_NAMES.length) {
     throw new Error(
@@ -46,7 +52,7 @@ function assertStateMatches(
     const expectedValue = expectedState[componentIndex];
     const actualValue = actualState[componentIndex];
     const component = COMPONENT_NAMES[componentIndex];
-    const limit = COMPONENT_LIMITS[componentIndex];
+    const limit = limits[componentIndex];
     if (
       expectedValue === undefined ||
       actualValue === undefined ||
@@ -101,11 +107,13 @@ export function assertGoldenTrajectoryMatches(
     expected.integration.maxAcceptedStepsPerSegment,
   );
   assertParametersMatch(actual, expected);
+  const limits = componentLimits(expected.scenarioId);
   assertStateMatches(
     expected.scenarioId,
     'initialState',
     actual.initialState,
     expected.initialState,
+    limits,
   );
   if (actual.samples.length !== expected.samples.length) {
     throw new Error(
@@ -134,7 +142,7 @@ export function assertGoldenTrajectoryMatches(
       const expectedValue = expectedSample.state[componentIndex];
       const actualValue = actualSample.state[componentIndex];
       const component = COMPONENT_NAMES[componentIndex];
-      const limit = COMPONENT_LIMITS[componentIndex];
+      const limit = limits[componentIndex];
       if (
         expectedValue === undefined ||
         actualValue === undefined ||

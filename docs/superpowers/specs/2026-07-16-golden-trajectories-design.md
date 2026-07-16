@@ -22,13 +22,12 @@ Initial-state construction inputs and the resolved float64 state are stored with
 
 Each file contains the initial state and 30 daily samples, including both endpoints. Every one-day interval is a separate production-profile DP54 call with the normal 4,000 accepted-step budget. A failed interval is a hard error that reports the scenario, interval, integrator flags, and step counts.
 
-The comparison checks every component at every sample and reports the scenario, sample time, component, expected value, actual value, drift, and allowed drift. The proposed cross-runtime absolute limits are:
+The comparison checks every component at every sample and reports the scenario, sample time, component, expected value, actual value, drift, and allowed drift. The measured cross-runtime absolute limits are:
 
-- position: `1e-3 km`;
-- celerity: `1e-9 km/s`;
-- proper time: `1e-6 s`.
+- LEO position/celerity/proper time: `2e-2 km`, `2e-5 km/s`, `1e-6 s`;
+- transfer and flyby position/celerity/proper time: `1e-3 km`, `1e-9 km/s`, `1e-6 s`.
 
-These limits match the existing physics-spec absolute position/proper-time accuracy scale and celerity scale, while leaving JSON baselines stable across compliant JavaScript runtimes. They are added to physics-spec section 7.6 and justified in ADR-017.
+The LEO envelope is based on a complete Windows/Node 25 versus Linux/Node 22 regeneration: maximum position and celerity differences were `0.00821 km` and `9.31e-6 km/s` after roughly 40,000 adaptive steps. The other scenarios remained inside the original strict limits. The scenario-specific limits are added to physics-spec section 7.6 and justified in ADR-017.
 
 ## Regeneration safety
 

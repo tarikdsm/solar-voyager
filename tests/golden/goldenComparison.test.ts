@@ -25,13 +25,13 @@ function fixture(): GoldenTrajectory {
 }
 
 describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
-  it('accepts component drift exactly at the specified limits', () => {
+  it('accepts LEO component drift exactly at its cross-runtime limits', () => {
     const expected = fixture();
     const actual = structuredClone(expected);
     const state = actual.samples[0]?.state;
     expect(state).toBeDefined();
-    (state as number[])[0] = ((state as number[])[0] as number) + 1e-3;
-    (state as number[])[3] = ((state as number[])[3] as number) + 1e-9;
+    (state as number[])[0] = ((state as number[])[0] as number) + 2e-2;
+    (state as number[])[3] = ((state as number[])[3] as number) + 2e-5;
     (state as number[])[6] = ((state as number[])[6] as number) + 1e-6;
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).not.toThrow();
@@ -42,11 +42,23 @@ describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
     const actual = structuredClone(expected);
     const state = actual.samples[0]?.state;
     expect(state).toBeDefined();
-    (state as number[])[4] = ((state as number[])[4] as number) + 2e-9;
+    (state as number[])[4] = ((state as number[])[4] as number) + 3e-5;
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
-      /leo-30d.*timeSec=0.*component=uy.*expected=0.*actual=2e-9.*drift=2e-9.*limit=1e-9/u,
+      /leo-30d.*timeSec=0.*component=uy.*expected=0.*actual=0\.00003.*drift=0\.00003.*limit=0\.00002/u,
     );
+  });
+
+  it('keeps the strict celerity limit outside LEO', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    (expected as { scenarioId: string }).scenarioId = 'earth-mars-transfer-30d';
+    (actual as { scenarioId: string }).scenarioId = 'earth-mars-transfer-30d';
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[3] = 2e-9;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(/limit=1e-9/u);
   });
 
   it('rejects missing samples before comparing components', () => {
