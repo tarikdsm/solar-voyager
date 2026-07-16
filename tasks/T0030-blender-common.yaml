@@ -1,8 +1,8 @@
 id: T0030
 title: Blender common helpers + headless build entry
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0030-blender-common
 depends_on: [T0001]
 milestone: M1
 spec: |
