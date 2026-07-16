@@ -23,6 +23,19 @@ Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — 
 - Hysteresis on tier switches (±20%) to avoid popping.
 - **Fidelity rule — no artistic scaling, ever:** a body's rendered angular size always equals its true angular size from the camera position (real radii, real distances). The view out the window is exactly what a real ship at that state vector would see. The tier ladder changes *representation*, never *apparent size or brightness class*.
 
+Projected diameter is `2 asin(min(1, radiusKm / distanceKm)) × viewportHeightPx / verticalFovRad`.
+The nominal 1.5/200 px boundaries use twenty-percent hysteresis: point→sphere
+at 1.8 px and sphere→point below 1.2 px; sphere→model at 240 px and
+model→sphere below 160 px.
+
+Reflected-body brightness relative to the Sun at the observer is
+`p × Φ(α) × radiusKm² × observerSunKm² / (bodySunKm² × observerBodyKm²)`,
+where `p` is geometric albedo and the Lambert phase function is
+`Φ(α) = (sin α + (π - α) cos α) / π`. Solar apparent magnitude is -26.74 at
+1 AU and follows inverse-square distance. Singular centre/surface observations
+are clamped to finite physical fallback distances so tier attributes never
+receive NaN or infinity.
+
 ## 4. Lighting & post
 
 - **One directional light**, direction Sun→camera-focus, intensity ∝ 1/d² normalized at 1 AU.
