@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solar-voyager.invalid/schemas/bodies.schema.json",
+  "title": "Solar Voyager body catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "epoch", "frame", "bodies"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "epoch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "jdTdb"],
+      "properties": {
+        "name": { "const": "J2026" },
+        "jdTdb": { "const": 2461041.5 }
+      }
+    },
+    "frame": { "const": "heliocentric-ecliptic-j2000" },
+    "bodies": {
+      "type": "array",
+      "minItems": 1,
+      "contains": {
+        "type": "object",
+        "properties": { "id": { "const": "sun" } },
+        "required": ["id"]
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "items": { "$ref": "#/$defs/body" }
+    }
+  },
+  "$defs": {
+    "nullableNonNegativeNumber": {
+      "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }]
+    },
+    "elements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semiMajorAxisKm",
+        "eccentricity",
+        "inclinationRad",
+        "longitudeAscendingNodeRad",
+        "argumentPeriapsisRad",
+        "meanAnomalyRad"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "semiMajorAxisKm": { "type": "number", "exclusiveMinimum": 0 },
+            "eccentricity": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 }
+          }
+        },
+        {
+          "properties": {
+            "semiMajorAxisKm": { "type": "number", "exclusiveMaximum": 0 },
+            "eccentricity": { "type": "number", "exclusiveMinimum": 1 }
+          }
+        }
+      ],
+      "properties": {
+        "semiMajorAxisKm": { "type": "number" },
+        "eccentricity": { "type": "number", "minimum": 0 },
+        "inclinationRad": { "type": "number", "minimum": 0 },
+        "longitudeAscendingNodeRad": { "type": "number" },
+        "argumentPeriapsisRad": { "type": "number" },
+        "meanAnomalyRad": { "type": "number" }
+      }
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "atmosphereTopKm"],
+      "properties": {
+        "kind": { "enum": ["stellar", "solid", "gas"] },
+        "atmosphereTopKm": { "$ref": "#/$defs/nullableNonNegativeNumber" }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["albedoColor", "assetRef", "proceduralSeed"],
+      "properties": {
+        "albedoColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "assetRef": { "type": ["string", "null"] },
+        "proceduralSeed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "horizonsId",
+        "parentId",
+        "muKm3S2",
+        "meanRadiusKm",
+        "siderealRotationPeriodSec",
+        "axialTiltRad",
+        "geometricAlbedo",
+        "soiRadiusKm",
+        "elements",
+        "surface",
+        "visual"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["star", "planet", "dwarf", "moon", "asteroid", "comet"] },
+        "horizonsId": { "type": "integer", "minimum": 1 },
+        "parentId": {
+          "anyOf": [
+            { "type": "string", "pattern": "^[a-z0-9]+$" },
+            { "type": "null" }
+          ]
+        },
+        "muKm3S2": { "type": "number", "exclusiveMinimum": 0 },
+        "meanRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "siderealRotationPeriodSec": {
+          "type": "number",
+          "not": { "const": 0 }
+        },
+        "axialTiltRad": { "type": "number", "minimum": 0, "maximum": 6.283185307179586 },
+        "geometricAlbedo": { "type": "number", "minimum": 0, "maximum": 1 },
+        "soiRadiusKm": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "elements": {
+          "anyOf": [{ "$ref": "#/$defs/elements" }, { "type": "null" }]
+        },
+        "surface": { "$ref": "#/$defs/surface" },
+        "visual": { "$ref": "#/$defs/visual" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "id": { "const": "sun" } },
+            "required": ["id"]
+          },
+          "then": {
+            "properties": {
+              "kind": { "const": "star" },
+              "parentId": { "type": "null" },
+              "soiRadiusKm": { "type": "null" },
+              "elements": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "kind": { "not": { "const": "star" } },
+              "parentId": { "type": "string", "pattern": "^[a-z0-9]+$" },
+              "soiRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+              "elements": { "$ref": "#/$defs/elements" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
