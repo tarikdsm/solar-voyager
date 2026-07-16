@@ -1,6 +1,6 @@
 id: T0032
 title: build_planet script + Earth asset
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0032-build-planet
 depends_on: [T0031]
@@ -25,3 +25,5 @@ handoff_notes: |
   check:budgets, and test:blender all passed. Review the schema migration,
   float32 ellipsoid-normal canonicalization, authoring texture replacement, and
   generated Earth runtime GLB/albedo KTX2.
+  Independent review approved without findings at head 9181f98; CI and
+  assets:verify were green.
