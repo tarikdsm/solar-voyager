@@ -58,8 +58,8 @@ a physical-body binding. It therefore has no translational parallax and needs
 no per-frame update, even across arbitrary heliocentric warp jumps.
 
 After projection, the vertex shader assigns `gl_Position.z = gl_Position.w`,
-placing stars on the far plane. The material enables depth testing but disables
-depth writes. Opaque planets consequently occlude the background even though
+placing stars on the far plane. The material uses a less-or-equal depth test so
+that cleared far-plane pixels pass, but disables depth writes. Opaque planets consequently occlude the background even though
 their real camera-relative distance can exceed the nominal star-sphere radius.
 The starfield itself never hides later transparent effects by populating depth.
 
@@ -98,4 +98,3 @@ not substitute synthetic stars.
   and correct projected detections for zoom establish warp and zoom stability.
 - Full lint, typecheck, Vitest, production build, task-schema, asset-budget, and
   render benchmark gates run before review.
-

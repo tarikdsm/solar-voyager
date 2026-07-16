@@ -11,10 +11,15 @@ import {
   type BodyVisualDefinition,
 } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
+import { Starfield } from './starfield.js';
+
+import starCatalogUrl from '../../data/stars.bin?url';
 
 export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
+  readonly starfield: Starfield;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly positionsKm: Float64Array;
 }
@@ -22,6 +27,7 @@ export interface EpochWorld {
 export interface CreateEpochWorldOptions {
   readonly assetLoader?: BodyVisualAssetLoader;
   readonly initialViewportHeightPx?: number;
+  readonly starCatalog?: StarCatalog;
 }
 
 function runtimeCategory(kind: string): BodyVisualDefinition['category'] {
@@ -84,6 +90,10 @@ export async function createEpochWorld(
   directionalLight.updateMatrix();
   spaceScene.scene.add(ambientLight, directionalLight);
 
+  const starCatalog = options.starCatalog ?? (await loadStarCatalog(starCatalogUrl));
+  const starfield = new Starfield(starCatalog, renderer.getPixelRatio());
+  spaceScene.scene.add(starfield.points);
+
   const assetLoader =
     options.assetLoader ??
     new BodyAssetLoader(
@@ -113,6 +123,7 @@ export async function createEpochWorld(
   return {
     spaceScene,
     visualSystem,
+    starfield,
     cameraPositionKm: epochState.cameraPositionKm,
     positionsKm: epochState.positionsKm,
   };

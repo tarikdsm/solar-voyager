@@ -11,6 +11,7 @@
     "build": "vite build",
     "test": "vitest run",
     "test:render-depth": "node tools/tests/renderDepthRegression.mjs",
+    "test:starfield": "node tools/tests/starfieldRegression.mjs",
     "test:visual-tiers": "node tools/tests/visualTierFlyIn.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",

@@ -1,0 +1,139 @@
+import {
+  AdditiveBlending,
+  BufferAttribute,
+  BufferGeometry,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
+  LessEqualDepth,
+  Points,
+  ShaderMaterial,
+} from 'three';
+
+import { STAR_STRIDE_FLOATS, type StarCatalog } from './starCatalog.js';
+
+export const STARFIELD_RADIUS_KM = 1e9;
+export const STAR_MIN_SIZE_CSS_PX = 1;
+export const STAR_MAX_SIZE_CSS_PX = 4;
+
+const vertexShader = /* glsl */ `
+  uniform float uRadiusKm;
+  uniform float uPixelRatio;
+
+  attribute vec3 aColor;
+  attribute float aSizeCssPx;
+  attribute float aOpacity;
+
+  varying vec3 vStarColor;
+  varying float vStarOpacity;
+  varying float vPointSizePx;
+
+  void main() {
+    vec4 viewPosition = modelViewMatrix * vec4(position * uRadiusKm, 1.0);
+    vec4 clipPosition = projectionMatrix * viewPosition;
+    clipPosition.z = clipPosition.w;
+    gl_Position = clipPosition;
+
+    vPointSizePx = aSizeCssPx * uPixelRatio;
+    gl_PointSize = vPointSizePx;
+    vStarColor = aColor;
+    vStarOpacity = aOpacity;
+  }
+`;
+
+const fragmentShader = /* glsl */ `
+  varying vec3 vStarColor;
+  varying float vStarOpacity;
+  varying float vPointSizePx;
+
+  void main() {
+    float pointSpread = 1.0;
+    if (vPointSizePx > 1.5) {
+      float radialDistance = length(gl_PointCoord - vec2(0.5)) * 2.0;
+      pointSpread = 1.0 - smoothstep(0.65, 1.0, radialDistance);
+      if (pointSpread <= 0.0) discard;
+    }
+    gl_FragColor = vec4(vStarColor, vStarOpacity * pointSpread);
+  }
+`;
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+export function magnitudeToStarSizeCssPx(visualMagnitude: number): number {
+  const flux = 10 ** (-0.4 * visualMagnitude);
+  return clamp(
+    STAR_MIN_SIZE_CSS_PX,
+    STAR_MAX_SIZE_CSS_PX,
+    STAR_MIN_SIZE_CSS_PX + 1.5 * flux ** 0.25,
+  );
+}
+
+export function magnitudeToStarOpacity(visualMagnitude: number): number {
+  return clamp(0, 1, 10 ** (-0.4 * (visualMagnitude - 1)));
+}
+
+function assertPixelRatio(pixelRatio: number): void {
+  if (!Number.isFinite(pixelRatio) || pixelRatio <= 0) {
+    throw new RangeError(`starfield pixel ratio must be positive and finite: ${pixelRatio}`);
+  }
+}
+
+/** Setup-only ownership boundary for the complete static star catalog draw. */
+export class Starfield {
+  readonly points: Points<BufferGeometry, ShaderMaterial>;
+
+  constructor(catalog: StarCatalog, pixelRatio: number) {
+    assertPixelRatio(pixelRatio);
+
+    const catalogBuffer = new InterleavedBuffer(catalog.data, STAR_STRIDE_FLOATS);
+    const sizes = new Float32Array(catalog.starCount);
+    const opacities = new Float32Array(catalog.starCount);
+    for (let starIndex = 0; starIndex < catalog.starCount; starIndex += 1) {
+      const magnitude = catalog.data[starIndex * STAR_STRIDE_FLOATS + 3] as number;
+      sizes[starIndex] = magnitudeToStarSizeCssPx(magnitude);
+      opacities[starIndex] = magnitudeToStarOpacity(magnitude);
+    }
+
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new InterleavedBufferAttribute(catalogBuffer, 3, 0));
+    geometry.setAttribute('aMagnitude', new InterleavedBufferAttribute(catalogBuffer, 1, 3));
+    geometry.setAttribute('aColor', new InterleavedBufferAttribute(catalogBuffer, 3, 4));
+    geometry.setAttribute('aSizeCssPx', new BufferAttribute(sizes, 1));
+    geometry.setAttribute('aOpacity', new BufferAttribute(opacities, 1));
+    geometry.setDrawRange(0, catalog.starCount);
+
+    const material = new ShaderMaterial({
+      name: 'SolarVoyagerStarfield',
+      uniforms: {
+        uRadiusKm: { value: STARFIELD_RADIUS_KM },
+        uPixelRatio: { value: pixelRatio },
+      },
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthTest: true,
+      depthFunc: LessEqualDepth,
+      depthWrite: false,
+      toneMapped: false,
+    });
+
+    this.points = new Points(geometry, material);
+    this.points.name = 'starfield';
+    this.points.matrixAutoUpdate = false;
+    this.points.frustumCulled = false;
+    this.points.updateMatrix();
+  }
+
+  setPixelRatio(pixelRatio: number): void {
+    assertPixelRatio(pixelRatio);
+    const uniform = this.points.material.uniforms.uPixelRatio;
+    if (uniform !== undefined) uniform.value = pixelRatio;
+  }
+
+  dispose(): void {
+    this.points.geometry.dispose();
+    this.points.material.dispose();
+  }
+}
