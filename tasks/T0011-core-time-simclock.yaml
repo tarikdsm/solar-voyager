@@ -1,8 +1,8 @@
 id: T0011
 title: core/time — SimClock, TDB seconds, warp ladder
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0011-core-time-simclock
 depends_on: [T0001]
 milestone: M1
 spec: |
