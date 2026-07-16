@@ -28,9 +28,12 @@ handoff_notes: |
   hyperbolic series through H^17 and use conditioned scalar invariants plus a
   cancellation-resistant transverse velocity in the e-to-1 limit. The
   hyperbolic starter selects the better linear/cubic asymptote for |M|<1,
-  retaining convergence down to |M|=1e-16. A 423-case
+  retaining convergence down to |M|=1e-16. Near-parabolic factors use
+  (e-1)(e+1) and stable cosh(H)-1 forms instead of subtracting nearly equal
+  values. A 459-case
   property grid covered e=[0,0.99], e=[1.000001,5], inclinations [0,pi],
-  M=[-10,10], and q=1000 km down to e=1+1e-12, with worst state round-trip
-  error 8.26e-11. Full verification passed: lint, typecheck, 107 tests, build,
+  M=[-10,10], and q=1000 km down to e=1+1e-12 with adjacent M values from
+  1e-10 through 1e-3, with worst state round-trip error 1.77e-11. Full
+  verification passed: lint, typecheck, 108 tests, build,
   Prettier, task schema, asset budgets, and diff check. Requires independent
   review before DONE.
