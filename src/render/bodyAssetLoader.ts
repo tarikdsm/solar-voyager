@@ -66,6 +66,13 @@ function collectMaterials(root: Object3D): Material[] {
   return materials;
 }
 
+function freezeStaticModel(root: Object3D): void {
+  root.traverse((object) => {
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
+  });
+}
+
 export async function createThreeAssetBackend(
   renderer: WebGLRenderer,
   baseUrl: string,
@@ -148,7 +155,10 @@ export class BodyAssetLoader {
     const url = `${this.baseUrl}assets/${file}`;
     const promise = this.getBackend()
       .then((backend) => backend.loadModel(url))
-      .then((root): LoadedBodyModel => ({ root, materials: collectMaterials(root) }))
+      .then((root): LoadedBodyModel => {
+        freezeStaticModel(root);
+        return { root, materials: collectMaterials(root) };
+      })
       .catch((error: unknown) => {
         this.reportError(`Failed to load body model ${url}.`, error);
         return null;

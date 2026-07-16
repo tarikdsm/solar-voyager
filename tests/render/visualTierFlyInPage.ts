@@ -15,6 +15,8 @@ const EARTH_RADIUS_KM = 6_371.0084;
 const PLUTO_RADIUS_KM = 1_188.3;
 const VIEWPORT_SIZE = 256;
 const VERTICAL_FOV_RAD = Math.PI / 3;
+const TARGET_SAMPLE_MIN = 96;
+const TARGET_SAMPLE_MAX = 160;
 
 interface VisualTierSnapshot {
   readonly id: string;
@@ -31,6 +33,7 @@ interface VisualTierSnapshot {
 interface VisualTierHarness {
   stepEarthDistance(distanceKm: number, nowMs: number): VisualTierSnapshot;
   stepPlutoDistance(distanceKm: number, nowMs: number): VisualTierSnapshot;
+  renderEarthDarkControl(nowMs: number): VisualTierSnapshot;
   snapshotState(id: string): Omit<VisualTierSnapshot, 'litPixels' | 'glError'>;
 }
 
@@ -85,7 +88,7 @@ const definitions: BodyVisualDefinition[] = [
     albedoColor: 0xb7a28c,
   },
 ];
-const positionsKm = new Float64Array([-2 * AU_KM, 0, 0, 0, 0, 0, 2 * AU_KM, 1_000_000, 0]);
+const positionsKm = new Float64Array([-2 * AU_KM, 0, 0, 0, 0, 0, 2 * AU_KM, 10 * AU_KM, 0]);
 const cameraPositionKm = { x: -AU_KM, y: 0, z: 0 };
 const manifest = await loadAssetManifest(`${import.meta.env.BASE_URL}assets/manifest.json`);
 const assetLoader = new BodyAssetLoader(renderer, manifest);
@@ -124,9 +127,12 @@ function renderSnapshot(id: string): VisualTierSnapshot {
   renderer.readRenderTargetPixels(renderTarget, 0, 0, VIEWPORT_SIZE, VIEWPORT_SIZE, pixels);
   renderer.setRenderTarget(null);
   let litPixels = 0;
-  for (let offset = 0; offset < pixels.length; offset += 4) {
-    if ((pixels[offset] ?? 0) + (pixels[offset + 1] ?? 0) + (pixels[offset + 2] ?? 0) > 0) {
-      litPixels += 1;
+  for (let y = TARGET_SAMPLE_MIN; y < TARGET_SAMPLE_MAX; y += 1) {
+    for (let x = TARGET_SAMPLE_MIN; x < TARGET_SAMPLE_MAX; x += 1) {
+      const offset = (y * VIEWPORT_SIZE + x) * 4;
+      if ((pixels[offset] ?? 0) + (pixels[offset + 1] ?? 0) + (pixels[offset + 2] ?? 0) > 0) {
+        litPixels += 1;
+      }
     }
   }
   return {
@@ -153,11 +159,17 @@ globalThis.__visualTierHarness = {
   },
   stepPlutoDistance(distanceKm, nowMs) {
     cameraPositionKm.x = 2 * AU_KM - distanceKm;
-    cameraPositionKm.y = 1_000_000;
+    cameraPositionKm.y = 10 * AU_KM;
     cameraPositionKm.z = 0;
     spaceScene.camera.rotation.y = -Math.PI / 2;
     spaceScene.camera.updateMatrix();
     return updateAndRender('pluto', nowMs);
+  },
+  renderEarthDarkControl(nowMs) {
+    positionsKm[4] = -10 * AU_KM;
+    const snapshot = updateAndRender('earth', nowMs);
+    positionsKm[4] = 0;
+    return snapshot;
   },
   snapshotState(id) {
     return stateWithoutPixels(id);

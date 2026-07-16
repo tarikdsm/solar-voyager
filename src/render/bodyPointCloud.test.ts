@@ -17,7 +17,10 @@ describe('BodyPointCloud', () => {
     expect(cloud.points.geometry.getAttribute('aIntensity').count).toBe(50);
     expect(cloud.points.material).toBeInstanceOf(ShaderMaterial);
     expect((cloud.points.material as ShaderMaterial).blending).toBe(AdditiveBlending);
-    expect((cloud.points.material as ShaderMaterial).vertexShader).toContain('max(aSize, 1.5)');
+    expect((cloud.points.material as ShaderMaterial).vertexShader).toContain(
+      'gl_PointSize = max(aSize, 1.0001);',
+    );
+    expect((cloud.points.material as ShaderMaterial).vertexShader).not.toContain('max(aSize, 1.5)');
     expect((cloud.points.material as ShaderMaterial).vertexShader).toContain('logdepthbuf_vertex');
     expect(cloud.points.frustumCulled).toBe(false);
   });

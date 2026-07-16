@@ -112,6 +112,7 @@ describe('BodyAssetLoader', () => {
     await expect(first).resolves.toEqual({ root, materials: [shared, secondary] });
     expect(loadModel).toHaveBeenCalledOnce();
     expect(loadModel).toHaveBeenCalledWith('/assets/models/earth.glb');
+    root.traverse((object) => expect(object.matrixAutoUpdate).toBe(false));
   });
 
   it('returns cached null without initializing loaders for absent or mismatched tiers', async () => {

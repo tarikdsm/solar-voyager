@@ -8,6 +8,7 @@ const PORT = 4177;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/visualTierFlyIn.html`;
 const AU_KM = 149_597_870.7;
 const EARTH_LEO_CENTER_KM = 6_371.0084 + 400;
+const EARTH_POINT_EXIT_KM = 3_000_000;
 const PLUTO_APPROACH_KM = 1_188.3 + 400;
 
 function assertVisible(snapshot, label) {
@@ -56,6 +57,14 @@ try {
     0,
     'non-hero sphere fetched at startup',
   );
+  const darkControl = await page.evaluate(() =>
+    globalThis.__visualTierHarness.renderEarthDarkControl(-100),
+  );
+  assert.equal(
+    darkControl.litPixels,
+    0,
+    `target-isolation control rendered another body (${JSON.stringify(darkControl)})`,
+  );
 
   const snapshots = [];
   async function stepEarth(distanceKm, nowMs, label) {
@@ -94,7 +103,8 @@ try {
   await stepEarth(1_000_000, 800, 'model-sphere start');
   const returningSphere = await stepEarth(1_000_000, 1_050, 'returning sphere');
   assert.equal(returningSphere.tier, 2);
-  await stepEarth(AU_KM, 1_100, 'sphere-point start');
+  await stepEarth(EARTH_POINT_EXIT_KM, 1_100, 'sphere-point start');
+  await stepEarth(EARTH_POINT_EXIT_KM, 1_225, 'sphere-point midpoint');
   const returningPoint = await stepEarth(AU_KM, 1_350, 'returning point');
   assert.equal(returningPoint.tier, 1);
   assert.deepEqual(
@@ -113,6 +123,11 @@ try {
     undefined,
     { timeout: 60_000 },
   );
+  const plutoReady = await page.evaluate(
+    ([distance, now]) => globalThis.__visualTierHarness.stepPlutoDistance(distance, now),
+    [PLUTO_APPROACH_KM, 1_750],
+  );
+  assertVisible(plutoReady, 'pluto ready');
   assert.equal(assetRequests(requests, /pluto_albedo_tier2\.ktx2$/u).length, 1);
   assert.equal(assetRequests(requests, /\/models\/pluto\.glb$/u).length, 1);
   assert.equal(assetRequests(requests, /\/models\/earth\.glb$/u).length, 1);

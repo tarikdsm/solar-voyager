@@ -62,11 +62,11 @@ describe('BodyVisualSystem structure', () => {
       (child): child is Mesh => child instanceof Mesh,
     );
     expect(points).toHaveLength(1);
-    expect(spheres).toHaveLength(2);
-    expect(spheres[0]?.geometry).toBe(spheres[1]?.geometry);
-    expect(spheres.map((sphere) => sphere.scale.x)).toEqual([10, 1]);
+    expect(spheres).toHaveLength(4);
+    expect(spheres.every((sphere) => sphere.geometry === spheres[0]?.geometry)).toBe(true);
+    expect(spheres.map((sphere) => sphere.scale.x)).toEqual([10, 10, 1, 1]);
     expect(spheres.every((sphere) => sphere.visible)).toBe(true);
-    expect(spaceScene.scene.children).toHaveLength(3);
+    expect(spaceScene.scene.children).toHaveLength(5);
   });
 
   it('preloads hero sphere textures without requesting a model', async () => {
@@ -94,6 +94,30 @@ describe('BodyVisualSystem structure', () => {
 });
 
 describe('BodyVisualSystem transitions', () => {
+  it('snaps the setup view to its loaded fallback before the first rendered frame', () => {
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(() => new Promise<LoadedBodyModel | null>(() => undefined)),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      loader,
+      vi.fn(async () => undefined),
+    );
+
+    system.initializeView(cameraAtEarthDistance(5), 1_000, 1);
+
+    expect(system.getTier('earth')).toBe(3);
+    expect(system.getLoadState('earth')).toBe('loading');
+    expect(system.getOpacity('earth', 1)).toBe(0);
+    expect(system.getOpacity('earth', 2)).toBe(1);
+    expect(system.getOpacity('earth', 3)).toBe(0);
+    expect(loader.loadModel).toHaveBeenCalledOnce();
+  });
+
   it('does not request a non-hero sphere before its first approach', async () => {
     const sun = definitions()[0];
     if (sun === undefined) throw new Error('Sun fixture is missing.');
@@ -127,6 +151,68 @@ describe('BodyVisualSystem transitions', () => {
     system.update(cameraAtEarthDistance(100), 1_000, 1, 200);
     await vi.waitFor(() => expect(loadSphereAlbedo).toHaveBeenCalledOnce());
     expect(loadSphereAlbedo).toHaveBeenCalledWith('pluto', 'dwarf');
+  });
+
+  it('preserves apparent-magnitude flux below the former visibility floor', () => {
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      {
+        preloadHeroSpheres: vi.fn(async () => undefined),
+        loadSphereAlbedo: vi.fn(async () => null),
+        loadModel: vi.fn(async () => null),
+      },
+      vi.fn(async () => undefined),
+    );
+
+    system.update(cameraAtEarthDistance(2_000), 1_000, 1, 0);
+
+    const intensity = system.pointCloud.points.geometry.getAttribute('aIntensity').getX(1);
+    expect(intensity).toBeGreaterThanOrEqual(0);
+    expect(intensity).toBeLessThan(0.001);
+  });
+
+  it('crossfades a lazy sphere texture from an untinted fallback', async () => {
+    let resolveTexture!: (texture: Texture) => void;
+    const texturePromise = new Promise<Texture>((resolve) => {
+      resolveTexture = resolve;
+    });
+    const spaceScene = new CameraRelativeSpaceScene();
+    const system = new BodyVisualSystem(
+      spaceScene,
+      definitions(),
+      positions(),
+      {
+        preloadHeroSpheres: vi.fn(async () => undefined),
+        loadSphereAlbedo: vi.fn(() => texturePromise),
+        loadModel: vi.fn(async () => null),
+      },
+      vi.fn(async () => undefined),
+    );
+    const fallback = spaceScene.scene.getObjectByName('earth-sphere-fallback') as Mesh;
+    const textured = spaceScene.scene.getObjectByName('earth-sphere-textured') as Mesh;
+
+    system.update(cameraAtEarthDistance(100), 1_000, 1, 0);
+    system.update(cameraAtEarthDistance(100), 1_000, 1, 250);
+    expect((fallback.material as MeshBasicMaterial).opacity).toBe(1);
+    expect((textured.material as MeshBasicMaterial).opacity).toBe(0);
+
+    const texture = new Texture();
+    resolveTexture(texture);
+    await vi.waitFor(() => expect((textured.material as MeshBasicMaterial).map).toBe(texture));
+    expect((fallback.material as MeshBasicMaterial).opacity).toBe(1);
+    expect((textured.material as MeshBasicMaterial).opacity).toBe(0);
+
+    system.update(cameraAtEarthDistance(100), 1_000, 1, 300);
+    system.update(cameraAtEarthDistance(100), 1_000, 1, 425);
+    expect((fallback.material as MeshBasicMaterial).opacity).toBeCloseTo(0.5, 5);
+    expect((textured.material as MeshBasicMaterial).opacity).toBeCloseTo(0.5, 5);
+    expect((textured.material as MeshBasicMaterial).color.getHex()).toBe(0xffffff);
+
+    system.update(cameraAtEarthDistance(100), 1_000, 1, 550);
+    expect((fallback.material as MeshBasicMaterial).opacity).toBe(0);
+    expect((textured.material as MeshBasicMaterial).opacity).toBe(1);
   });
 
   it('flies point → sphere → model → sphere → point without darkness or duplicate loads', async () => {
@@ -179,8 +265,12 @@ describe('BodyVisualSystem transitions', () => {
     expect(system.getOpacity('earth', 2)).toBeCloseTo(0.5, 5);
     expect(system.getOpacity('earth', 3)).toBeCloseTo(0.5, 5);
     expect(system.getOpacitySum('earth')).toBeGreaterThan(0);
+    expect(model.materials[0]?.transparent).toBe(true);
+    expect(model.materials[0]?.depthWrite).toBe(false);
     system.update(cameraAtEarthDistance(5), height, fov, 750);
     expect(system.getOpacity('earth', 3)).toBe(1);
+    expect(model.materials[0]?.transparent).toBe(false);
+    expect(model.materials[0]?.depthWrite).toBe(true);
 
     system.update(cameraAtEarthDistance(20), height, fov, 800);
     expect(system.getTier('earth')).toBe(2);
@@ -189,6 +279,8 @@ describe('BodyVisualSystem transitions', () => {
 
     system.update(cameraAtEarthDistance(2_000), height, fov, 1_100);
     expect(system.getTier('earth')).toBe(1);
+    expect(system.getOpacity('earth', 1)).toBeGreaterThan(0);
+    expect(system.getOpacitySum('earth')).toBeCloseTo(1, 5);
     system.update(cameraAtEarthDistance(2_000), height, fov, 1_225);
     expect(system.getOpacitySum('earth')).toBeCloseTo(1, 5);
     system.update(cameraAtEarthDistance(2_000), height, fov, 1_350);

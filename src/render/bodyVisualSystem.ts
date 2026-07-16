@@ -1,7 +1,9 @@
 import {
+  DataTexture,
   IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
+  RGBAFormat,
   type Material,
   type Object3D,
   type Texture,
@@ -37,6 +39,7 @@ export type BodyModelCompiler = (root: Object3D) => Promise<void>;
 export type BodyModelLoadState = 'idle' | 'loading' | 'ready' | 'failed';
 
 const FADE_DURATION_MS = 250;
+const INITIAL_POINT_FADE_OPACITY = 1 / 15;
 const LOAD_IDLE = 0;
 const LOAD_LOADING = 1;
 const LOAD_READY = 2;
@@ -63,14 +66,22 @@ export class BodyVisualSystem {
   readonly pointCloud: BodyPointCloud;
 
   private readonly idToIndex = new Map<string, number>();
-  private readonly sphereMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
-  private readonly sphereMaterials: MeshBasicMaterial[] = [];
+  private readonly sphereFallbackMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
+  private readonly sphereTexturedMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
+  private readonly sphereFallbackMaterials: MeshBasicMaterial[] = [];
+  private readonly sphereTexturedMaterials: MeshBasicMaterial[] = [];
   private readonly sphereLoadStates: Uint8Array;
+  private readonly sphereTextureMixes: Float32Array;
+  private readonly sphereTextureFadeActive: Uint8Array;
+  private readonly sphereTextureFadePending: Uint8Array;
+  private readonly sphereTextureFadeStartMs: Float64Array;
   private readonly modelLoadStates: Uint8Array;
   private readonly modelRoots: Array<Object3D | null>;
   private readonly modelMaterials: Array<Material[] | null>;
   private readonly modelBaseOpacities: Array<Float32Array | null>;
   private readonly modelBaseDepthWrites: Array<Uint8Array | null>;
+  private readonly modelBaseTransparencies: Array<Uint8Array | null>;
+  private readonly modelBaseForceSinglePasses: Array<Uint8Array | null>;
   private readonly selectedTiers: Uint8Array;
   private readonly displayTargetTiers: Uint8Array;
   private readonly fadeActive: Uint8Array;
@@ -117,11 +128,17 @@ export class BodyVisualSystem {
     this.sunIndex = foundSunIndex;
 
     this.sphereLoadStates = new Uint8Array(count);
+    this.sphereTextureMixes = new Float32Array(count);
+    this.sphereTextureFadeActive = new Uint8Array(count);
+    this.sphereTextureFadePending = new Uint8Array(count);
+    this.sphereTextureFadeStartMs = new Float64Array(count);
     this.modelLoadStates = new Uint8Array(count);
     this.modelRoots = new Array<Object3D | null>(count).fill(null);
     this.modelMaterials = new Array<Material[] | null>(count).fill(null);
     this.modelBaseOpacities = new Array<Float32Array | null>(count).fill(null);
     this.modelBaseDepthWrites = new Array<Uint8Array | null>(count).fill(null);
+    this.modelBaseTransparencies = new Array<Uint8Array | null>(count).fill(null);
+    this.modelBaseForceSinglePasses = new Array<Uint8Array | null>(count).fill(null);
     this.selectedTiers = new Uint8Array(count);
     this.selectedTiers.fill(1);
     this.displayTargetTiers = new Uint8Array(count);
@@ -140,21 +157,38 @@ export class BodyVisualSystem {
     this.spaceScene.bindPackedPointPositions(this.pointCloud.points, positionsKm);
 
     const sphereGeometry = new IcosahedronGeometry(1, 2);
+    const whiteTexture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
+    whiteTexture.needsUpdate = true;
     for (let index = 0; index < count; index += 1) {
       const definition = definitions[index];
       if (definition === undefined) throw new Error('Body definition array is sparse.');
-      const material = new MeshBasicMaterial({
+      const fallbackMaterial = new MeshBasicMaterial({
         color: definition.albedoColor,
         transparent: true,
         opacity: 0,
         depthWrite: false,
       });
-      const sphere = new Mesh(sphereGeometry, material);
-      sphere.scale.setScalar(definition.meanRadiusKm);
-      sphere.visible = true;
-      this.sphereMaterials.push(material);
-      this.sphereMeshes.push(sphere);
-      this.spaceScene.bindPackedVisual(sphere, positionsKm, index * 3);
+      const texturedMaterial = new MeshBasicMaterial({
+        color: 0xffffff,
+        map: whiteTexture,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const fallbackSphere = new Mesh(sphereGeometry, fallbackMaterial);
+      const texturedSphere = new Mesh(sphereGeometry, texturedMaterial);
+      fallbackSphere.name = `${definition.id}-sphere-fallback`;
+      texturedSphere.name = `${definition.id}-sphere-textured`;
+      fallbackSphere.scale.setScalar(definition.meanRadiusKm);
+      texturedSphere.scale.setScalar(definition.meanRadiusKm);
+      fallbackSphere.visible = true;
+      texturedSphere.visible = true;
+      this.sphereFallbackMaterials.push(fallbackMaterial);
+      this.sphereTexturedMaterials.push(texturedMaterial);
+      this.sphereFallbackMeshes.push(fallbackSphere);
+      this.sphereTexturedMeshes.push(texturedSphere);
+      this.spaceScene.bindPackedVisual(fallbackSphere, positionsKm, index * 3);
+      this.spaceScene.bindPackedVisual(texturedSphere, positionsKm, index * 3);
     }
   }
 
@@ -168,6 +202,28 @@ export class BodyVisualSystem {
     }
   }
 
+  /** Selects and displays the best loaded tier before the first rendered frame. */
+  initializeView(
+    cameraPositionKm: ReadonlyVec3,
+    viewportHeightPx: number,
+    verticalFovRad: number,
+  ): void {
+    this.update(cameraPositionKm, viewportHeightPx, verticalFovRad, 0);
+    for (let index = 0; index < this.definitions.length; index += 1) {
+      const targetTier = this.displayTargetTiers[index];
+      this.pointOpacities[index] = targetTier === 1 ? 1 : 0;
+      this.sphereOpacities[index] = targetTier === 2 ? 1 : 0;
+      this.modelOpacities[index] = targetTier === 3 ? 1 : 0;
+      this.fadeActive[index] = 0;
+      if (this.sphereLoadStates[index] === LOAD_READY) {
+        this.sphereTextureMixes[index] = 1;
+        this.sphereTextureFadeActive[index] = 0;
+        this.sphereTextureFadePending[index] = 0;
+      }
+    }
+    this.update(cameraPositionKm, viewportHeightPx, verticalFovRad, 0);
+  }
+
   update(
     cameraPositionKm: ReadonlyVec3,
     viewportHeightPx: number,
@@ -178,6 +234,7 @@ export class BodyVisualSystem {
 
     for (let index = 0; index < this.definitions.length; index += 1) {
       this.advanceFade(index, nowMs);
+      this.advanceSphereTextureFade(index, nowMs);
       const definition = this.definitions[index];
       const offset = index * 3;
       const x = this.positionsKm[offset] ?? Number.NaN;
@@ -226,7 +283,7 @@ export class BodyVisualSystem {
         this.positionsKm,
         cameraPositionKm,
       );
-      const intensity = Math.min(8, Math.max(0.02, Math.pow(10, -0.4 * (magnitude - 6))));
+      const intensity = Math.min(8, Math.pow(10, -0.4 * (magnitude - 6)));
       this.pointCloud.writeAppearance(
         index,
         diameterPx,
@@ -298,11 +355,11 @@ export class BodyVisualSystem {
       this.sphereLoadStates[index] = LOAD_FAILED;
       return;
     }
-    const material = this.sphereMaterials[index];
+    const material = this.sphereTexturedMaterials[index];
     if (material === undefined) throw new Error('Sphere material array is out of sync.');
     material.map = texture;
-    material.needsUpdate = true;
     this.sphereLoadStates[index] = LOAD_READY;
+    this.sphereTextureFadePending[index] = 1;
   }
 
   private beginModelLoad(index: number): void {
@@ -326,12 +383,17 @@ export class BodyVisualSystem {
     if (definition === undefined) throw new Error('Body definition array is sparse.');
     const baseOpacities = new Float32Array(model.materials.length);
     const baseDepthWrites = new Uint8Array(model.materials.length);
+    const baseTransparencies = new Uint8Array(model.materials.length);
+    const baseForceSinglePasses = new Uint8Array(model.materials.length);
     for (let materialIndex = 0; materialIndex < model.materials.length; materialIndex += 1) {
       const material = model.materials[materialIndex];
       if (material === undefined) throw new Error('Loaded model material array is sparse.');
       baseOpacities[materialIndex] = material.opacity;
       baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
+      baseTransparencies[materialIndex] = material.transparent ? 1 : 0;
+      baseForceSinglePasses[materialIndex] = material.forceSinglePass ? 1 : 0;
       material.transparent = true;
+      material.forceSinglePass = true;
       material.opacity = 0;
       material.depthWrite = false;
     }
@@ -341,6 +403,8 @@ export class BodyVisualSystem {
     this.modelMaterials[index] = model.materials;
     this.modelBaseOpacities[index] = baseOpacities;
     this.modelBaseDepthWrites[index] = baseDepthWrites;
+    this.modelBaseTransparencies[index] = baseTransparencies;
+    this.modelBaseForceSinglePasses[index] = baseForceSinglePasses;
     this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
 
     try {
@@ -353,6 +417,19 @@ export class BodyVisualSystem {
   }
 
   private beginFade(index: number, targetTier: VisualTier, nowMs: number): void {
+    const pointOpacity = this.pointOpacities[index] ?? 0;
+    if (targetTier === 1 && pointOpacity < INITIAL_POINT_FADE_OPACITY) {
+      const sphereOpacity = this.sphereOpacities[index] ?? 0;
+      const modelOpacity = this.modelOpacities[index] ?? 0;
+      const sourceOpacity = sphereOpacity + modelOpacity;
+      if (sourceOpacity > 0) {
+        const retainedSourceOpacity = 1 - INITIAL_POINT_FADE_OPACITY;
+        const sourceScale = retainedSourceOpacity / sourceOpacity;
+        this.pointOpacities[index] = INITIAL_POINT_FADE_OPACITY;
+        this.sphereOpacities[index] = sphereOpacity * sourceScale;
+        this.modelOpacities[index] = modelOpacity * sourceScale;
+      }
+    }
     this.fadePointStarts[index] = this.pointOpacities[index] ?? 0;
     this.fadeSphereStarts[index] = this.sphereOpacities[index] ?? 0;
     this.fadeModelStarts[index] = this.modelOpacities[index] ?? 0;
@@ -380,21 +457,54 @@ export class BodyVisualSystem {
     if (progress >= 1) this.fadeActive[index] = 0;
   }
 
+  private advanceSphereTextureFade(index: number, nowMs: number): void {
+    if (this.sphereTextureFadePending[index] !== 0) {
+      this.sphereTextureFadePending[index] = 0;
+      this.sphereTextureFadeActive[index] = 1;
+      this.sphereTextureFadeStartMs[index] = nowMs;
+      this.sphereTextureMixes[index] = 0;
+    }
+    if (this.sphereTextureFadeActive[index] === 0) return;
+    const progress = Math.min(
+      1,
+      Math.max(0, (nowMs - (this.sphereTextureFadeStartMs[index] ?? 0)) / FADE_DURATION_MS),
+    );
+    this.sphereTextureMixes[index] = progress;
+    if (progress >= 1) this.sphereTextureFadeActive[index] = 0;
+  }
+
   private applyNearOpacity(index: number): void {
-    const sphere = this.sphereMeshes[index];
-    const sphereMaterial = this.sphereMaterials[index];
-    if (sphere === undefined || sphereMaterial === undefined) {
+    const fallbackSphere = this.sphereFallbackMeshes[index];
+    const texturedSphere = this.sphereTexturedMeshes[index];
+    const fallbackMaterial = this.sphereFallbackMaterials[index];
+    const texturedMaterial = this.sphereTexturedMaterials[index];
+    if (
+      fallbackSphere === undefined ||
+      texturedSphere === undefined ||
+      fallbackMaterial === undefined ||
+      texturedMaterial === undefined
+    ) {
       throw new Error('Sphere visual arrays are out of sync.');
     }
     const sphereOpacity = this.sphereOpacities[index] ?? 0;
-    sphere.visible = sphereOpacity > 0;
-    sphereMaterial.opacity = sphereOpacity;
-    sphereMaterial.depthWrite = sphereOpacity >= 1;
+    const textureMix = this.sphereTextureMixes[index] ?? 0;
+    const fallbackOpacity = sphereOpacity * (1 - textureMix);
+    const texturedOpacity = sphereOpacity * textureMix;
+    fallbackSphere.visible = fallbackOpacity > 0;
+    texturedSphere.visible = texturedOpacity > 0;
+    fallbackMaterial.opacity = fallbackOpacity;
+    fallbackMaterial.transparent = fallbackOpacity < 1;
+    fallbackMaterial.depthWrite = fallbackOpacity >= 1;
+    texturedMaterial.opacity = texturedOpacity;
+    texturedMaterial.transparent = texturedOpacity < 1;
+    texturedMaterial.depthWrite = texturedOpacity >= 1;
 
     const root = this.modelRoots[index];
     const materials = this.modelMaterials[index];
     const baseOpacities = this.modelBaseOpacities[index];
     const baseDepthWrites = this.modelBaseDepthWrites[index];
+    const baseTransparencies = this.modelBaseTransparencies[index];
+    const baseForceSinglePasses = this.modelBaseForceSinglePasses[index];
     if (
       root === null ||
       root === undefined ||
@@ -403,7 +513,11 @@ export class BodyVisualSystem {
       baseOpacities === null ||
       baseOpacities === undefined ||
       baseDepthWrites === null ||
-      baseDepthWrites === undefined
+      baseDepthWrites === undefined ||
+      baseTransparencies === null ||
+      baseTransparencies === undefined ||
+      baseForceSinglePasses === null ||
+      baseForceSinglePasses === undefined
     ) {
       return;
     }
@@ -413,7 +527,15 @@ export class BodyVisualSystem {
       const material = materials[materialIndex];
       if (material === undefined) throw new Error('Loaded model material array is sparse.');
       material.opacity = (baseOpacities[materialIndex] ?? 1) * modelOpacity;
-      material.depthWrite = modelOpacity >= 1 && baseDepthWrites[materialIndex] === 1;
+      if (modelOpacity >= 1) {
+        material.transparent = baseTransparencies[materialIndex] === 1;
+        material.depthWrite = baseDepthWrites[materialIndex] === 1;
+        material.forceSinglePass = baseForceSinglePasses[materialIndex] === 1;
+      } else {
+        material.transparent = true;
+        material.depthWrite = false;
+        material.forceSinglePass = true;
+      }
     }
   }
 }

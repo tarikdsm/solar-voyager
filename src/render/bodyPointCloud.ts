@@ -19,11 +19,14 @@ attribute float aOpacity;
 attribute float aIntensity;
 varying vec3 vColor;
 varying float vOpacity;
+varying float vUnresolved;
 
 void main() {
   vColor = aColor * aIntensity;
   vOpacity = aOpacity;
-  gl_PointSize = max(aSize, 1.5);
+  vUnresolved = aSize < 1.5 ? 1.0 : 0.0;
+  // WebGL rasterizes unresolved points at a one-pixel hardware footprint.
+  gl_PointSize = max(aSize, 1.0001);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   #include <logdepthbuf_vertex>
 }
@@ -33,13 +36,17 @@ const FRAGMENT_SHADER = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 varying vec3 vColor;
 varying float vOpacity;
+varying float vUnresolved;
 
 void main() {
   #include <logdepthbuf_fragment>
-  vec2 centered = gl_PointCoord * 2.0 - 1.0;
-  float radiusSquared = dot(centered, centered);
-  if (radiusSquared > 1.0) discard;
-  float softEdge = 1.0 - smoothstep(0.65, 1.0, radiusSquared);
+  float softEdge = 1.0;
+  if (vUnresolved < 0.5) {
+    vec2 centered = gl_PointCoord * 2.0 - 1.0;
+    float radiusSquared = dot(centered, centered);
+    if (radiusSquared > 1.0) discard;
+    softEdge = 1.0 - smoothstep(0.65, 1.0, radiusSquared);
+  }
   gl_FragColor = vec4(vColor, vOpacity * softEdge);
 }
 `;

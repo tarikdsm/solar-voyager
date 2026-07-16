@@ -21,6 +21,7 @@ export interface EpochWorld {
 
 export interface CreateEpochWorldOptions {
   readonly assetLoader?: BodyVisualAssetLoader;
+  readonly initialViewportHeightPx?: number;
 }
 
 function runtimeCategory(kind: string): BodyVisualDefinition['category'] {
@@ -103,6 +104,11 @@ export async function createEpochWorld(
   await visualSystem.initializeEager();
   spaceScene.updateCameraRelative(epochState.cameraPositionKm);
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
+  visualSystem.initializeView(
+    epochState.cameraPositionKm,
+    options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height),
+    spaceScene.camera.fov * (Math.PI / 180),
+  );
 
   return {
     spaceScene,
