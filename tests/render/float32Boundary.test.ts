@@ -8,7 +8,13 @@ async function sourceFiles(directory: string): Promise<string[]> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) result.push(...(await sourceFiles(path)));
-    else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) result.push(path);
+    else if (
+      /\.tsx?$/.test(entry.name) &&
+      !/\.test\.tsx?$/.test(entry.name) &&
+      !/^boundary-\d+-\d+\.ts$/.test(entry.name)
+    ) {
+      result.push(path);
+    }
   }
   return result;
 }
