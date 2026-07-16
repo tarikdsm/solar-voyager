@@ -3,7 +3,7 @@ export function pad4(buffer, byte = 0) {
   return remainder === 0 ? buffer : Buffer.concat([buffer, Buffer.alloc(4 - remainder, byte)]);
 }
 
-export function createGlb({ embeddedImage = false, materialName, nodeName, parentMatrix, radius = 1, rootMatrix } = {}) {
+export function createGlb({ embeddedImage = false, externalImageUri, materialName, nodeName, parentMatrix, radius = 1, rootMatrix } = {}) {
   const positions = new Float32Array([
     radius, 0, 0, -radius, 0, 0, 0, radius, 0,
     0, -radius, 0, 0, 0, radius, 0, 0, -radius,
@@ -22,7 +22,9 @@ export function createGlb({ embeddedImage = false, materialName, nodeName, paren
       ? [{ mesh: 0, ...(nodeName === undefined ? {} : { name: nodeName }), ...(rootMatrix === undefined ? {} : { matrix: rootMatrix }) }]
       : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, ...(materialName === undefined ? {} : { material: 0 }) }] }],
-    ...(materialName === undefined ? {} : { materials: [{ name: materialName }] }),
+    ...(materialName === undefined ? {} : {
+      materials: [{ name: materialName, ...(externalImageUri === undefined ? {} : { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }) }],
+    }),
     accessors: [
       { bufferView: 0, componentType: 5126, count: 6, max: [radius, radius, radius], min: [-radius, -radius, -radius], type: 'VEC3' },
       { bufferView: 1, componentType: 5123, count: 24, type: 'SCALAR' },
@@ -33,7 +35,11 @@ export function createGlb({ embeddedImage = false, materialName, nodeName, paren
       ...(embeddedImage ? [{ buffer: 0, byteLength: imageBytes.length, byteOffset: positionBytes.length + indexBytes.length }] : []),
     ],
     buffers: [{ byteLength: binary.length }],
-    ...(embeddedImage ? { images: [{ bufferView: 2, mimeType: 'image/png' }] } : {}),
+    ...(embeddedImage
+      ? { images: [{ bufferView: 2, mimeType: 'image/png' }] }
+      : externalImageUri === undefined
+        ? {}
+        : { images: [{ uri: externalImageUri }], textures: [{ source: 0 }] }),
   };
   const jsonBytes = pad4(Buffer.from(JSON.stringify(json)), 0x20);
   const header = Buffer.alloc(12);

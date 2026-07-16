@@ -77,7 +77,11 @@ export async function ingestAssets(options) {
           { executable: options.ktxExecutable },
         );
         files.push(textureRelative);
-        textureBindings.push({ role: textureRole(texture), uri: `../${textureRelative}` });
+        textureBindings.push({
+          role: textureRole(texture),
+          sourceName: texture,
+          uri: `../${textureRelative}`,
+        });
       }
       const modelRelative = `models/${asset.id}.glb`;
       const modelOutput = join(stagingRoot, 'models', `${asset.id}.glb`);

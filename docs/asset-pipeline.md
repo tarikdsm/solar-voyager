@@ -47,8 +47,8 @@ runtime file lists without timestamps or machine paths.
 `src/render/assetManifest.ts` validates and loads this manifest at startup; unsafe
 paths, duplicate ids/files, unknown categories, and malformed entries are rejected.
 
-Color albedo/emissive/ring maps are sRGB. Normals, roughness, ORM, metallic, AO,
-occlusion, and cloud masks are tagged linear with no color primaries. The source
+Color albedo/emissive/ring/cloud maps are sRGB. Normals, roughness, ORM, metallic,
+AO, and occlusion maps are tagged linear with no color primaries. The source
 validator enforces catalog id/category membership, unique flattened ids, approved
 deliverables, per-role resolution tiers, and the required 1k detail albedo/normal
 pair for planets, moons, and dwarfs.

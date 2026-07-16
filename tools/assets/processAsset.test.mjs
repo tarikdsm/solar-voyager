@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parseGlbJson } from './glb.mjs';
 import { compressGlb } from './processAsset.mjs';
 import { createGlb } from './testFixtures.mjs';
+import sharp from 'sharp';
 
 const temporaryDirectories = [];
 
@@ -54,5 +55,29 @@ describe('asset processing', () => {
     ]);
     expect(json.materials[0].pbrMetallicRoughness.baseColorTexture).toBeDefined();
     expect(json.materials[0].normalTexture).toBeDefined();
+  });
+
+  it('reuses authored external texture objects without retaining source bytes', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'solar-voyager-process-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'earth.glb');
+    const output = join(directory, 'compressed.glb');
+    await sharp({ create: { width: 2, height: 2, channels: 3, background: '#336699' } })
+      .png()
+      .toFile(join(directory, 'earth_albedo.png'));
+    await writeFile(input, createGlb({
+      externalImageUri: 'earth_albedo.png', materialName: 'mat_surface',
+    }));
+
+    await compressGlb(input, output, {
+      textures: [{ role: 'albedo', sourceName: 'earth_albedo.png', uri: '../textures/earth_albedo.ktx2' }],
+    });
+
+    const json = parseGlbJson(await readFile(output));
+    expect(json.images).toHaveLength(1);
+    expect(json.images[0].uri).toBe('../textures/earth_albedo.ktx2');
+    expect(json.images[0].bufferView).toBeUndefined();
+    expect(json.textures[0].extensions.KHR_texture_basisu.source).toBe(0);
+    expect(json.materials[0].pbrMetallicRoughness.baseColorTexture.index).toBe(0);
   });
 });

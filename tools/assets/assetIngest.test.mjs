@@ -97,6 +97,20 @@ describe('asset ingest validation', () => {
     expect(diagnostics).toContain('MODELING-GUIDE.md §1 — unapproved deliverable');
   });
 
+  it('enforces major-moon 4k albedo and required 2k normal tiers', async () => {
+    const directory = await createAssetDirectory('io');
+    await writeFile(join(directory, 'io.glb'), createGlb());
+    await sharp({ create: { width: 2, height: 1, channels: 3, background: '#aa8855' } })
+      .jpeg()
+      .toFile(join(directory, 'io_albedo.jpg'));
+    await writeFile(join(directory, 'SOURCES.md'), '- io.glb — fixture\n- io_albedo.jpg — fixture\n');
+
+    const result = await validateAssetDirectory(directory, { category: 'moons', id: 'io' });
+    const diagnostics = result.findings.join('\n');
+    expect(diagnostics).toContain('albedo must be 4096×2048');
+    expect(diagnostics).toContain('major-moon normal map is required');
+  });
+
   it('rejects unknown categories, invalid catalog ids, and duplicate flattened ids', async () => {
     const root = await mkdtemp(join(tmpdir(), 'solar-voyager-discovery-'));
     temporaryDirectories.push(root);

@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
 
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, KHRTextureBasisu } from '@gltf-transform/extensions';
@@ -21,7 +21,12 @@ function materialForRole(document, role) {
 }
 
 function attachTexture(document, binding) {
-  const texture = document.createTexture(binding.role)
+  const marker = `runtime:${binding.role}:${binding.sourceName}`;
+  const texture = document.getRoot().listTextures()
+    .find((candidate) => basename(candidate.getURI()) === binding.sourceName) ?? document.createTexture();
+  texture
+    .setName(marker)
+    .setImage(null)
     .setURI(binding.uri)
     .setMimeType('image/ktx2');
   const material = materialForRole(document, binding.role);
@@ -62,8 +67,12 @@ export async function compressGlb(inputPath, outputPath, options = {}) {
   if ((options.textures?.length ?? 0) > 0) {
     const bytes = await readFile(outputPath);
     const json = parseGlbJson(bytes, outputPath);
-    for (const [index, binding] of options.textures.entries()) {
-      json.images[index].uri = binding.uri;
+    for (const binding of options.textures) {
+      const marker = `runtime:${binding.role}:${binding.sourceName}`;
+      const image = json.images.find((candidate) => candidate.name === marker);
+      if (image === undefined) throw new Error(`Runtime texture image not emitted for ${binding.sourceName}`);
+      image.uri = binding.uri;
+      delete image.bufferView;
     }
     await writeFile(outputPath, replaceGlbJson(bytes, json));
   }

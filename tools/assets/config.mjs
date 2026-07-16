@@ -15,7 +15,7 @@ export const NORMALIZED_RADIUS_TOLERANCE = 1e-4;
 export const ORIGIN_TOLERANCE = 1e-4;
 const MIB = 1024 * 1024;
 export const HERO_IDS = new Set(['earth', 'mars', 'moon']);
-const MAJOR_MOON_IDS = new Set(['moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'triton']);
+export const MAJOR_MOON_IDS = new Set(['moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'triton']);
 
 export function assetByteBudget(category, id) {
   if (HERO_IDS.has(id)) return 20 * MIB;

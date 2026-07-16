@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import {
   CATEGORY_CONFIG,
   HERO_IDS,
+  MAJOR_MOON_IDS,
   NORMALIZED_RADIUS_TOLERANCE,
   ORIGIN_TOLERANCE,
   guideReference,
@@ -115,6 +116,18 @@ function validateTextureTier(textures, identity, findings) {
     if (albedo !== undefined) validateDimensions(albedo, 4096, 2048, findings);
     const normal = byRole.get('normal');
     if (normal !== undefined) validateDimensions(normal, 2048, 1024, findings);
+  } else if (identity.category === 'moons') {
+    const normal = byRole.get('normal');
+    if (MAJOR_MOON_IDS.has(identity.id)) {
+      if (albedo !== undefined) validateDimensions(albedo, 4096, 2048, findings);
+      if (normal === undefined) findings.push(finding(`${identity.id}.glb`, 5, 'major-moon normal map is required'));
+      else validateDimensions(normal, 2048, 1024, findings);
+    } else if (
+      albedo !== undefined &&
+      (albedo.width < 1024 || albedo.width > 2048 || albedo.height * 2 !== albedo.width)
+    ) {
+      findings.push(finding(albedo.name, 5, `small-moon albedo must be 1k–2k at 2:1; measured ${albedo.width}×${albedo.height}`));
+    }
   } else if (['dwarfs', 'asteroids', 'comets'].includes(identity.category) && albedo !== undefined) {
     if (albedo.width < 1024 || albedo.width > 2048 || albedo.height * 2 !== albedo.width) {
       findings.push(finding(albedo.name, 5, `small-body albedo must be 1k–2k at 2:1; measured ${albedo.width}×${albedo.height}`));

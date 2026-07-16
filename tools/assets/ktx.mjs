@@ -18,7 +18,7 @@ export function isNormalTexture(path) {
 }
 
 export function isLinearTexture(path) {
-  return /(^|[_-])(normal|roughness|orm|metallic|ao|occlusion|clouds?)([_.-]|$)/i.test(path);
+  return /(^|[_-])(normal|roughness|orm|metallic|ao|occlusion)([_.-]|$)/i.test(path);
 }
 
 export function buildKtxArguments(inputPath, outputPath, metadata) {

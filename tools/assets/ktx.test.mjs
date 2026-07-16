@@ -42,6 +42,14 @@ describe('KTX2 encoding', () => {
     }
   });
 
+  it('keeps cloud color maps in sRGB/BT.709', () => {
+    const args = buildKtxArguments('earth_clouds.jpg', 'earth_clouds.ktx2', { channels: 3 });
+    expect(args).toContain('R8G8B8_SRGB');
+    expect(args).toContain('srgb');
+    expect(args).toContain('bt709');
+    expect(args).not.toContain('linear');
+  });
+
   it('passes the executable and canonical arguments to the runner', async () => {
     const run = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
     await encodeTexture('earth_albedo.jpg', 'earth_albedo.ktx2', {
