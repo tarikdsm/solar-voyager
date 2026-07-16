@@ -33,8 +33,7 @@ export function solveKeplerEllipticInto(
   output.iterations = 0;
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1) {
-    const residualRad =
-      anomalyRad - eccentricity * Math.sin(anomalyRad) - reducedMeanAnomalyRad;
+    const residualRad = anomalyRad - eccentricity * Math.sin(anomalyRad) - reducedMeanAnomalyRad;
     const derivative = 1 - eccentricity * Math.cos(anomalyRad);
     const deltaRad = residualRad / derivative;
     anomalyRad -= deltaRad;
