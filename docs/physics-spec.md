@@ -170,7 +170,7 @@ E_spent = ∫ P dt   (coordinate time; integrated inside the same substeps as mo
 ## 7. Regression & validation tests (must exist before v1)
 
 1. **Kepler solver:** |E| residual < 1e-12 across e ∈ [0, 0.99] and hyperbolic e ∈ (1, 5]; round-trip elements ↔ state vectors to 1e-10 relative.
-2. **Two-body DP54:** circular and e=0.7 orbits, 10 periods: position error vs analytic < 1e-3 km; energy and |h| drift < 1e-9 relative.
+2. **Two-body DP54:** circular and e=0.7 orbits, 10 periods: position error vs analytic < 1e-3 km; energy and |h| drift < 1e-9 relative. This convergence regression uses the test-only verification profile `relTol = 2e-11`, `absTol = 2e-8 km` (position), and `2e-11 km/s` (velocity), still capped at 4,000 accepted steps. The operational ship profile remains the §3.1 profile and is separately required to cover both ten-period cases within that budget; local operational tolerance is not a promise of the stricter accumulated ten-period global error.
 3. **Rails accuracy:** vs `ephemerides-check.json` within §2 bounds.
 4. **Launch regression** *(deferred with §4)*: scripted throttle/pitch profile reaches 200±5 km orbit; total Δv within ±1% of the golden value; max-q within ±2%.
 5. **Handoff** *(deferred with §4)*: energy/angular-momentum round-trip < 1e-9 relative.
