@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const MIB = 1024 * 1024;
 const MANIFEST_RELATIVE_PATH = 'public/assets/manifest.json';
+const INITIAL_PATH_RELATIVE_PATH = 'data/initial-path.json';
 const REPO_EXCLUDED_DIRECTORIES = new Set([
   '.git',
   'node_modules',
@@ -177,6 +178,113 @@ async function readManifest(root) {
   }
 }
 
+async function readInitialPath(root) {
+  const initialPath = resolve(root, ...INITIAL_PATH_RELATIVE_PATH.split('/'));
+
+  try {
+    const source = await readFile(initialPath, 'utf8');
+
+    try {
+      return { present: true, value: JSON.parse(source) };
+    } catch {
+      return { present: true, parseError: 'malformed JSON' };
+    }
+  } catch (error) {
+    if (isMissing(error)) {
+      return { present: false };
+    }
+    throw error;
+  }
+}
+
+function normalizeInitialPathEntry(filePath) {
+  return filePath.replaceAll('\\', '/');
+}
+
+function initialPathEntryIsContained(filePath) {
+  if (filePath.length === 0 || isAbsolute(filePath)) {
+    return false;
+  }
+
+  const normalizedPath = normalizeInitialPathEntry(filePath);
+  return (
+    normalizedPath !== '..' &&
+    !normalizedPath.startsWith('../') &&
+    !normalizedPath.includes('/../')
+  );
+}
+
+async function measureInitialPathFiles(
+  repositoryRoot,
+  canonicalRepositoryRoot,
+  initialPath,
+  canonicalPaths,
+  pathFindings,
+) {
+  if (
+    !initialPath.present ||
+    initialPath.parseError !== undefined ||
+    !isRecord(initialPath.value) ||
+    !Array.isArray(initialPath.value.files)
+  ) {
+    return 0;
+  }
+
+  const seenPaths = new Set();
+  let totalBytes = 0;
+
+  for (const entry of initialPath.value.files) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+
+    const normalizedEntry = normalizeInitialPathEntry(entry);
+    if (seenPaths.has(normalizedEntry)) {
+      pathFindings.push(`${INITIAL_PATH_RELATIVE_PATH}: duplicate file "${normalizedEntry}"`);
+      continue;
+    }
+    seenPaths.add(normalizedEntry);
+
+    if (!initialPathEntryIsContained(entry)) {
+      pathFindings.push(
+        `${INITIAL_PATH_RELATIVE_PATH}: "${normalizedEntry}" must stay inside the repository`,
+      );
+      continue;
+    }
+
+    const logicalPath = resolve(repositoryRoot, ...normalizedEntry.split('/'));
+    let canonicalPath;
+    let fileStats;
+
+    try {
+      await lstat(logicalPath);
+      canonicalPath = await realpath(logicalPath);
+      fileStats = await stat(logicalPath);
+    } catch (error) {
+      if (isMissing(error)) {
+        pathFindings.push(`${INITIAL_PATH_RELATIVE_PATH}: ${normalizedEntry} does not exist`);
+        continue;
+      }
+      throw error;
+    }
+
+    if (!isWithinRoot(canonicalRepositoryRoot, canonicalPath)) {
+      pathFindings.push(
+        `${INITIAL_PATH_RELATIVE_PATH}: "${normalizedEntry}" must stay inside the repository`,
+      );
+      continue;
+    }
+    if (!fileStats.isFile()) {
+      pathFindings.push(`${INITIAL_PATH_RELATIVE_PATH}: ${normalizedEntry} must be a file`);
+      continue;
+    }
+
+    totalBytes += addCanonicalSize(canonicalPaths, canonicalPath, fileStats.size);
+  }
+
+  return totalBytes;
+}
+
 function isBuiltCode(filePath) {
   return CODE_EXTENSIONS.has(extname(filePath).toLowerCase());
 }
@@ -219,18 +327,28 @@ export async function measureBudgets(root) {
     includeFile: isBuiltCode,
     ...canonicalOptions,
   });
-  const runtimeCriticalBytes = canReadPublicAssets
-    ? await sumFiles(publicAssetsPath, {
+  const initialPath = await readInitialPath(repositoryRoot);
+  const runtimeCriticalBytes = initialPath.present
+    ? await measureInitialPathFiles(
+        repositoryRoot,
+        canonicalRepositoryRoot,
+        initialPath,
+        canonicalCriticalPaths,
+        pathFindings,
+      )
+    : canReadPublicAssets
+      ? await sumFiles(publicAssetsPath, {
         includeFile: (filePath) => identifiesCriticalAsset(publicAssetsPath, filePath),
         ...canonicalOptions,
       })
-    : 0;
+      : 0;
 
   return {
     repoBytes,
     publicAssetsBytes,
     criticalPathBytes: builtCodeBytes + runtimeCriticalBytes,
     manifest: canReadPublicAssets ? await readManifest(repositoryRoot) : { present: false },
+    initialPath,
     pathFindings,
   };
 }
@@ -330,6 +448,30 @@ function validateManifest(manifest, findings) {
   }
 }
 
+function validateInitialPath(initialPath, findings) {
+  if (initialPath === undefined || !initialPath.present) {
+    return;
+  }
+  if (initialPath.parseError !== undefined) {
+    findings.push(`${INITIAL_PATH_RELATIVE_PATH}: ${initialPath.parseError}`);
+    return;
+  }
+  if (!isRecord(initialPath.value)) {
+    findings.push(`${INITIAL_PATH_RELATIVE_PATH}: root must be an object`);
+    return;
+  }
+  if (initialPath.value.schemaVersion !== 1) {
+    findings.push(`${INITIAL_PATH_RELATIVE_PATH}: schemaVersion must be 1`);
+  }
+  if (!Array.isArray(initialPath.value.files)) {
+    findings.push(`${INITIAL_PATH_RELATIVE_PATH}: field "files" must be a list`);
+    return;
+  }
+  if (initialPath.value.files.some((file) => typeof file !== 'string')) {
+    findings.push(`${INITIAL_PATH_RELATIVE_PATH}: files must contain only strings`);
+  }
+}
+
 export function validateBudgets(measurements) {
   const findings = [...(measurements.pathFindings ?? [])];
   validateByteLimit(findings, 'Repo content', measurements.repoBytes, BUDGET_LIMITS.repoBytes);
@@ -346,6 +488,7 @@ export function validateBudgets(measurements) {
     BUDGET_LIMITS.criticalPathBytes,
   );
   validateManifest(measurements.manifest, findings);
+  validateInitialPath(measurements.initialPath, findings);
   return findings;
 }
 

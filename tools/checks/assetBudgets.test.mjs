@@ -38,6 +38,13 @@ async function writeManifest(root, value) {
   await writeFile(manifestPath, source, 'utf8');
 }
 
+async function writeInitialPath(root, value) {
+  const manifestPath = join(root, 'data', 'initial-path.json');
+  await mkdir(dirname(manifestPath), { recursive: true });
+  const source = typeof value === 'string' ? value : `${JSON.stringify(value)}\n`;
+  await writeFile(manifestPath, source, 'utf8');
+}
+
 async function findingsFor(root) {
   return validateBudgets(await measureBudgets(root));
 }
@@ -74,7 +81,7 @@ describe('measureBudgets', () => {
     });
   });
 
-  it('sums built code and named critical runtime artifacts once per path', async () => {
+  it('sums built code and explicitly listed initial runtime artifacts once per path', async () => {
     await withRepository(async (root) => {
       await writeSparseFile(root, 'dist/index.html', 100);
       await writeSparseFile(root, 'dist/assets/app.js', 200);
@@ -83,9 +90,49 @@ describe('measureBudgets', () => {
       await writeSparseFile(root, 'public/assets/models/sun-earth.glb', 400);
       await writeSparseFile(root, 'public/assets/data/stars.bin', 500);
       await writeSparseFile(root, 'public/assets/models/mars.glb', 2_000);
+      await writeInitialPath(root, {
+        schemaVersion: 1,
+        files: [
+          'public/assets/models/sun-earth.glb',
+          'public/assets/data/stars.bin',
+        ],
+      });
 
       const measurements = await measureBudgets(root);
       expect(measurements.criticalPathBytes).toBe(1_500);
+    });
+  });
+
+  it('does not count an unlisted hero tier after an explicit initial path exists', async () => {
+    await withRepository(async (root) => {
+      await writeSparseFile(root, 'dist/assets/app.js', 200);
+      await writeSparseFile(root, 'public/assets/models/earth.glb', 4_000);
+      await writeSparseFile(root, 'public/assets/textures/earth_albedo_tier2.ktx2', 300);
+      await writeSparseFile(root, 'data/stars.bin', 500);
+      await writeInitialPath(root, {
+        schemaVersion: 1,
+        files: [
+          'data/stars.bin',
+          'public/assets/textures/earth_albedo_tier2.ktx2',
+        ],
+      });
+
+      const measurements = await measureBudgets(root);
+      expect(measurements.criticalPathBytes).toBe(1_000);
+    });
+  });
+
+  it('reports malformed, escaping, duplicate, and missing initial paths', async () => {
+    await withRepository(async (root) => {
+      await writeInitialPath(root, {
+        schemaVersion: 1,
+        files: ['../escape.bin', 'data/missing.bin', 'data/missing.bin'],
+      });
+
+      const findings = await findingsFor(root);
+      expect(findings).toContainEqual(expect.stringContaining('must stay inside the repository'));
+      expect(findings).toContainEqual(expect.stringContaining('duplicate'));
+      expect(findings).toContainEqual(expect.stringContaining('data/missing.bin does not exist'));
     });
   });
 

@@ -16,10 +16,10 @@ Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — 
 | Tier | Condition | Representation |
 |---|---|---|
 | 1 — Point | < ~1.5 px | Additive point sprite; size/brightness from apparent magnitude computed from real radius, distance, geometric albedo, phase angle. Planets look like wandering stars from afar — correct at real scale. |
-| 2 — Sphere | 1.5 px – ~200 px | Icosphere L2 with 2k/1k KTX2 albedo; no normal map. |
+| 2 — Sphere | 1.5 px – ~200 px | Icosphere L2 with a dedicated KTX2 albedo (2k planets; 1k moons, dwarfs and small bodies); no normal map. |
 | 3 — Full model | > ~200 px | Blender-authored glTF (Draco): normal maps, Saturn/Uranus rings as textured annuli (double-sided, alpha), comet coma+tail as camera-facing sprites scaled by heliocentric distance near perihelion. |
 
-- Tier-2/3 textures **lazy-load** the first time a body crosses the tier-1→2 threshold. Only Sun/Earth/Moon assets load at startup.
+- Only the sphere-tier resources for Sun/Earth/Moon load at startup. Other tier-2 albedos load on approach; every tier-3 glTF and hero texture is lazy, including Sun/Earth/Moon (ADR-023).
 - Hysteresis on tier switches (±20%) to avoid popping.
 - **Fidelity rule — no artistic scaling, ever:** a body's rendered angular size always equals its true angular size from the camera position (real radii, real distances). The view out the window is exactly what a real ship at that state vector would see. The tier ladder changes *representation*, never *apparent size or brightness class*.
 
