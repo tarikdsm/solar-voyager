@@ -15,7 +15,8 @@ handoff_notes: |
   Calibrated every J2026 catalog body at +30 d and +365 d for heliocentric
   position and velocity. Bounds use each class maximum times 1.10, rounded
   upward to two significant digits; measured maxima and limits are recorded
-  in physics-spec section 2. The suite pins sample order, keeps the epoch
-  reconstruction check, and fails closed for unknown body ids. Verification:
+  in physics-spec section 2 and are governed by ADR-020. The suite pins sample
+  order, keeps the epoch reconstruction check, and fails closed for unknown body
+  ids. Verification:
   lint and typecheck passed; Vitest 184 passed / 3 skipped; Python tools 13
   passed; format, build, 52-task schema, asset budgets, and diff check passed.
