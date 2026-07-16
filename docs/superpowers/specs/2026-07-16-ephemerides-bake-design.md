@@ -93,9 +93,11 @@ not exist. `--no-cache` bypasses Astroquery's request cache.
 
 All remote rows and required columns are validated before output. Files are
 serialized deterministically with stable ordering and a final newline, written
-to sibling temporary files, and atomically replaced only after the whole bake
-succeeds. A network, target-resolution, unit, or validation failure leaves the
-committed outputs unchanged and exits nonzero with body/query context.
+to sibling temporary files, and individually atomically replaced only after
+the whole bake succeeds. Backups roll both files back if either replace fails;
+this is process-level consistency rather than cross-file crash atomicity. A
+network, target-resolution, unit, or validation failure leaves the committed
+outputs unchanged and exits nonzero with body/query context.
 
 `tools/README.md` documents environment setup, commands, data sources, center
 semantics, units, and the fact that Horizons solutions may be revised upstream.

@@ -22,6 +22,12 @@ the root and has null parent, elements, and SOI. Planets carry heliocentric
 elements; moons carry parent-relative elements. Field names include units and
 match the TypeScript orbital conversion API.
 
+The schema reserves every v1 catalog kind (`star`, `planet`, `dwarf`, `moon`,
+`asteroid`, and `comet`). Non-root bodies require a parent, elements, and a
+positive SOI. Elliptic elements require `0 <= e < 1` with positive semimajor
+axis; hyperbolic elements require `e > 1` with negative semimajor axis.
+Parabolic `e = 1` is not representable by this element set.
+
 Rotation period is signed, with negative values representing retrograde
 rotation about the declared pole. Surface and visual objects are required but
 minimal, reserving stable expansion boundaries without making runtime assets a

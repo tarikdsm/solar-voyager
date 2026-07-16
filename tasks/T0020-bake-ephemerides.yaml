@@ -1,6 +1,6 @@
 id: T0020
 title: bake_ephemerides script + initial bodies.json (planets + Moon)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0020-bake-ephemerides
 depends_on: [T0001]
@@ -15,4 +15,16 @@ acceptance:
   - Script re-runnable and documented (README in tools/)
   - bodies.json validates against a JSON schema committed alongside
   - Check vectors present for all baked bodies
-handoff_notes: ""
+handoff_notes: |
+  Implemented the pinned astroquery J2026 bake for Sun, eight planets, and Moon,
+  with parent-relative lunar elements and heliocentric regression vectors at
+  epoch, +30 d, and +365 d. Added JSON Schema v1 plus ADR-013, deterministic
+  partial/full CLI output, JD/finite-value validation, pair rollback on publish
+  failure, Python 3.9-compatible writes, documentation, and offline tests.
+  Fresh cached rebake preserved SHA-256 exactly: bodies.json
+  5563F6063447F73986E285F274C7DE68F5B00C84B4C62FF836DE8B9139423336;
+  ephemerides-check.json
+  79155F4FBC1A1D35809BC4C376079F32540F10CCF7D5B9C8FE561ECF6006593C.
+  Verified: lint, typecheck, format, build, 136 Vitest tests, 11 Python tests,
+  task schema, and asset budgets all pass. Vite retains the existing 531.42 kB
+  chunk-size warning; the enforced critical-path budget is 0.51 MiB / 8 MiB.

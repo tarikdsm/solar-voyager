@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.9"
 
       - name: Install
         run: npm ci
@@ -28,6 +28,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Format
+        run: npm run format:check
 
       - name: Test
         run: npm test

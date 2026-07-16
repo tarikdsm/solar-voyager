@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 
@@ -181,6 +182,7 @@ def query_body(
     element_rows = element_query.elements(refplane="ecliptic", cache=cache)
     if len(element_rows) != 1:
         raise ValueError(f"expected one element row, received {len(element_rows)}")
+    _validate_row_epoch(element_rows[0], EPOCH_JD_TDB, "element row")
 
     vector_epochs = [EPOCH_JD_TDB + offset for offset in CHECK_OFFSETS_DAYS]
     vector_query = horizons_factory(
@@ -194,11 +196,24 @@ def query_body(
         raise ValueError(
             f"expected {len(CHECK_OFFSETS_DAYS)} vector rows, received {len(vector_rows)}"
         )
+    for index, (row, offset_days) in enumerate(zip(vector_rows, CHECK_OFFSETS_DAYS)):
+        _validate_row_epoch(row, EPOCH_JD_TDB + offset_days, f"vector row {index}")
     return elements_from_row(element_rows[0]), [state_from_row(row) for row in vector_rows]
+
+
+def _validate_row_epoch(row: Mapping[str, Any], expected_jd: float, label: str) -> None:
+    actual_jd = _finite_values(row, ("datetime_jd",))[0]
+    if not math.isclose(actual_jd, expected_jd, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError(f"{label} epoch {actual_jd} does not match requested {expected_jd}")
 
 
 def _serialized_json(document: Mapping[str, Any]) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+
+
+def _write_utf8_text(path: Path, content: str) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as output:
+        output.write(content)
 
 
 def atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
@@ -206,10 +221,43 @@ def atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = Path(f"{path}.tmp")
     try:
-        temporary_path.write_text(_serialized_json(document), encoding="utf-8", newline="\n")
+        _write_utf8_text(temporary_path, _serialized_json(document))
         os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def _publish_json_pair(
+    catalog_path: Path,
+    catalog: Mapping[str, Any],
+    checks_path: Path,
+    checks: Mapping[str, Any],
+) -> None:
+    """Publish a consistent pair, rolling both files back on a replace failure."""
+    paths = (catalog_path, checks_path)
+    documents = (catalog, checks)
+    temporary_paths = tuple(Path(f"{path}.tmp") for path in paths)
+    backup_paths = tuple(Path(f"{path}.bak") for path in paths)
+    existed = tuple(path.exists() for path in paths)
+
+    try:
+        for temporary_path, document in zip(temporary_paths, documents):
+            _write_utf8_text(temporary_path, _serialized_json(document))
+        for path, backup_path, path_existed in zip(paths, backup_paths, existed):
+            if path_existed:
+                shutil.copyfile(path, backup_path)
+        for temporary_path, path in zip(temporary_paths, paths):
+            os.replace(temporary_path, path)
+    except Exception:
+        for path, backup_path, path_existed in zip(paths, backup_paths, existed):
+            if path_existed and backup_path.exists():
+                os.replace(backup_path, path)
+            elif not path_existed:
+                path.unlink(missing_ok=True)
+        raise
+    finally:
+        for working_path in (*temporary_paths, *backup_paths):
+            working_path.unlink(missing_ok=True)
 
 
 def _load_existing(output_dir: Path) -> Any:
@@ -264,19 +312,8 @@ def bake(
     checks = build_checks(vectors_by_id)
     catalog_path = output_dir / "bodies.json"
     checks_path = output_dir / "ephemerides-check.json"
-    catalog_temporary = Path(f"{catalog_path}.tmp")
-    checks_temporary = Path(f"{checks_path}.tmp")
     output_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        catalog_temporary.write_text(
-            _serialized_json(catalog), encoding="utf-8", newline="\n"
-        )
-        checks_temporary.write_text(_serialized_json(checks), encoding="utf-8", newline="\n")
-        os.replace(catalog_temporary, catalog_path)
-        os.replace(checks_temporary, checks_path)
-    finally:
-        catalog_temporary.unlink(missing_ok=True)
-        checks_temporary.unlink(missing_ok=True)
+    _publish_json_pair(catalog_path, catalog, checks_path, checks)
     return catalog, checks
 
 

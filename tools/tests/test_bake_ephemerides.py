@@ -1,8 +1,10 @@
 import importlib.util
 import math
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).parents[1] / "bake_ephemerides.py"
@@ -26,6 +28,13 @@ def sample_elements():
         for index, body_id in enumerate(bake.BODY_IDS)
         if body_id != "sun"
     }
+
+
+def successful_query(definition, _factory, _cache):
+    return sample_elements()[definition.id], [
+        {"positionKm": [0.0, 0.0, 0.0], "velocityKmS": [0.0, 0.0, 0.0]}
+        for _ in bake.CHECK_OFFSETS_DAYS
+    ]
 
 
 class BakeCoreTests(unittest.TestCase):
@@ -113,12 +122,30 @@ class FakeHorizons:
 
     def elements(self, **kwargs):
         self.calls.append(("elements", kwargs))
-        return [{"a": 1, "e": 0.1, "incl": 2, "Omega": 3, "w": 4, "M": 5}]
+        return [
+            {
+                "datetime_jd": bake.EPOCH_JD_TDB,
+                "a": 1,
+                "e": 0.1,
+                "incl": 2,
+                "Omega": 3,
+                "w": 4,
+                "M": 5,
+            }
+        ]
 
     def vectors(self, **kwargs):
         self.calls.append(("vectors", kwargs))
         return [
-            {"x": index, "y": 0, "z": 0, "vx": 0, "vy": 1, "vz": 0}
+            {
+                "datetime_jd": bake.EPOCH_JD_TDB + bake.CHECK_OFFSETS_DAYS[index],
+                "x": index,
+                "y": 0,
+                "z": 0,
+                "vx": 0,
+                "vy": 1,
+                "vz": 0,
+            }
             for index in range(3)
         ]
 
@@ -167,6 +194,47 @@ class BakeAdapterTests(unittest.TestCase):
 
             self.assertEqual(catalog_path.read_bytes(), b"catalog-before")
             self.assertEqual(checks_path.read_bytes(), b"checks-before")
+
+    def test_rejects_horizons_rows_with_an_unexpected_epoch(self):
+        class WrongEpochHorizons(FakeHorizons):
+            def vectors(self, **kwargs):
+                rows = super().vectors(**kwargs)
+                rows[1]["datetime_jd"] += 1
+                return rows
+
+        with self.assertRaisesRegex(ValueError, "vector row 1 epoch"):
+            bake.query_body(bake.DEFINITION_BY_ID["earth"], WrongEpochHorizons)
+
+    def test_publish_failure_rolls_back_both_outputs(self):
+        for failed_publish in (1, 2):
+            with self.subTest(failed_publish=failed_publish):
+                temporary_directory_context = tempfile.TemporaryDirectory()
+                self.addCleanup(temporary_directory_context.cleanup)
+                temporary_directory = temporary_directory_context.name
+                output_dir = Path(temporary_directory)
+                catalog_path = output_dir / "bodies.json"
+                checks_path = output_dir / "ephemerides-check.json"
+                catalog_path.write_bytes(b"catalog-before")
+                checks_path.write_bytes(b"checks-before")
+                real_replace = os.replace
+                publish_count = 0
+
+                def fail_publish(source, destination):
+                    nonlocal publish_count
+                    if str(source).endswith(".tmp"):
+                        publish_count += 1
+                        if publish_count == failed_publish:
+                            raise OSError(f"simulated publish failure {failed_publish}")
+                    return real_replace(source, destination)
+
+                with mock.patch.object(bake.os, "replace", side_effect=fail_publish):
+                    with self.assertRaisesRegex(OSError, "publish failure"):
+                        bake.bake(output_dir, query_function=successful_query)
+
+                self.assertEqual(catalog_path.read_bytes(), b"catalog-before")
+                self.assertEqual(checks_path.read_bytes(), b"checks-before")
+                self.assertFalse(Path(f"{catalog_path}.bak").exists())
+                self.assertFalse(Path(f"{checks_path}.bak").exists())
 
     def test_atomic_json_writer_is_deterministic_and_cleans_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

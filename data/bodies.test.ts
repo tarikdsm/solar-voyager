@@ -53,6 +53,74 @@ describe('body catalog - physics-spec.md section 2', () => {
     expect(validate(catalog), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('accepts the catalog kinds and hyperbolic elements required by T0021', () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
+    const template = catalog.bodies.find((body) => body.id === 'earth');
+    const sun = catalog.bodies.find((body) => body.id === 'sun');
+    expect(template).toBeDefined();
+    expect(sun).toBeDefined();
+
+    for (const kind of ['dwarf', 'asteroid', 'comet']) {
+      const candidate = structuredClone(template) as Record<string, unknown>;
+      candidate.id = `test${kind}`;
+      candidate.kind = kind;
+      if (kind === 'comet') {
+        candidate.elements = {
+          ...(candidate.elements as Record<string, unknown>),
+          semiMajorAxisKm: -1,
+          eccentricity: 1.1,
+        };
+      }
+      expect(
+        validate({ ...catalog, bodies: [sun, candidate] }),
+        JSON.stringify(validate.errors),
+      ).toBe(true);
+    }
+  });
+
+  it('rejects parabolic or sign-inconsistent element branches', () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
+    const sun = catalog.bodies.find((body) => body.id === 'sun');
+    const template = structuredClone(catalog.bodies.find((body) => body.id === 'earth')) as Record<
+      string,
+      unknown
+    >;
+    for (const [semiMajorAxisKm, eccentricity] of [
+      [-1, 0.9],
+      [1, 1.1],
+      [0, 0.9],
+      [-1, 1],
+    ]) {
+      const candidate = structuredClone(template);
+      candidate.elements = {
+        ...(candidate.elements as Record<string, unknown>),
+        semiMajorAxisKm,
+        eccentricity,
+      };
+      expect(validate({ ...catalog, bodies: [sun, candidate] })).toBe(false);
+    }
+  });
+
+  it('requires exactly one valid root and complete non-root orbital fields', () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
+    const mercury = structuredClone(catalog.bodies.find((body) => body.id === 'mercury')) as Record<
+      string,
+      unknown
+    >;
+    const sun = catalog.bodies.find((body) => body.id === 'sun');
+
+    for (const field of ['parentId', 'elements', 'soiRadiusKm']) {
+      const invalid = structuredClone(mercury);
+      invalid[field] = null;
+      expect(validate({ ...catalog, bodies: [sun, invalid] }), field).toBe(false);
+    }
+    expect(validate({ ...catalog, bodies: [mercury] }), 'missing Sun root').toBe(false);
+    expect(catalog.bodies.filter((body) => body.parentId === null).map((body) => body.id)).toEqual([
+      'sun',
+    ]);
+    expect(new Set(catalog.bodies.map((body) => body.id)).size).toBe(catalog.bodies.length);
+  });
+
   it('keeps canonical order and parent-before-child topology', () => {
     expect(catalog.bodies.map((body) => body.id)).toEqual(BODY_IDS);
     const seen = new Set<string>();

@@ -37,7 +37,9 @@ npm run test:tools
 
 Partial bakes require existing complete `bodies.json` and
 `ephemerides-check.json` files. The tool queries and validates every selected
-body before writing sibling temporary files and atomically replacing outputs.
+body before writing sibling temporary files. Each file replacement is atomic;
+if either replacement raises, backups restore both previous files. This is a
+process-level transaction, not a claim of cross-file crash atomicity.
 A query failure leaves the previous outputs unchanged.
 
 ### Frames, centers, and units
