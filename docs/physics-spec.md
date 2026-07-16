@@ -32,7 +32,7 @@ Position at time t:
 1. Mean anomaly: `M = M₀ + n·(t − t₀)`, `n = √((μ_parent + μ_body)/a³)` (elliptic) or `√((μ_parent + μ_body)/(−a)³)` (hyperbolic).
 2. Solve Kepler's equation by Newton–Raphson to |Δ| < 1e-12 rad, max 30 iterations:
    - Elliptic: `M = E − e·sin E`, start `E₀ = M` (or `π` if e > 0.8).
-   - Hyperbolic (comets): `M = e·sinh H − H`.
+   - Hyperbolic objects: `M = e·sinh H − H` (body kind does not select the branch; the v1 comets are elliptic at J2026, ADR-018).
 3. True anomaly, radius → perifocal position/velocity → rotate by `Rz(Ω)·Rx(i)·Rz(ω)` into the parent frame.
 4. Moons: add parent's heliocentric state (evaluated recursively).
 

@@ -19,7 +19,7 @@ python -m pip install -r tools/requirements-ephemerides.txt
 ### Commands
 
 ```powershell
-# Full Sun + planets + Moon bake, using Astroquery's response cache
+# Full 43-body v1 bake, using Astroquery's response cache
 python tools/bake_ephemerides.py
 
 # Force fresh Horizons requests
@@ -47,14 +47,16 @@ A query failure leaves the previous outputs unchanged.
 ### Frames, centers, and units
 
 - Epoch: J2026, `JD 2461041.5 TDB`.
-- Element center: Sun (`500@10`) for planets; Earth (`500@399`) for Moon.
+- Element center: Sun (`500@10`) for Sun children; parent body (`500@<parent Horizons id>`) for every moon.
 - Check-vector center: Sun (`500@10`) for every non-Sun body.
 - Reference plane: ecliptic, mean equinox of J2000.
 - Horizons AU/degrees/AU-per-day values become km/radians/km-per-second.
 - The Sun is the exact origin of the committed heliocentric check frame.
 
 Numeric target IDs follow the [JPL Horizons manual](https://ssd.jpl.nasa.gov/horizons/manual.html)
-and avoid ambiguous planet/barycenter name resolution. The adapter follows the
+and avoid ambiguous planet/barycenter name resolution. Numbered small bodies use
+Astroquery's `smallbody` resolver. Comets pin unique apparition records (`90000030`
+for 1P and `90000702` for 67P) because their designations are ambiguous. The adapter follows the
 [Astroquery JPL Horizons API](https://astroquery.readthedocs.io/en/stable/jplhorizons/jplhorizons.html).
 
 ### Physical metadata sources
@@ -64,6 +66,7 @@ ordered `BODY_DEFINITIONS` table. Sources are the
 [JPL planetary physical parameters](https://ssd.jpl.nasa.gov/planets/phys_par.html),
 [JPL satellite physical parameters](https://ssd.jpl.nasa.gov/sats/phys_par/),
 and [NASA planetary fact sheets](https://nssdc.gsfc.nasa.gov/planetary/factsheet/).
+Small-body metadata also uses the [JPL Small-Body Database API](https://ssd-api.jpl.nasa.gov/doc/sbdb.html).
 Horizons solutions and published physical parameters can be revised upstream;
 regenerate intentionally and review JSON diffs rather than treating a later
 remote result as byte-stable forever.
