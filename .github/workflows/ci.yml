@@ -41,6 +41,9 @@ jobs:
       - name: Render depth regression
         run: npm run test:render-depth
 
+      - name: Starfield regression
+        run: npm run test:starfield
+
       - name: Visual tier fly-in regression
         run: npm run test:visual-tiers
 
