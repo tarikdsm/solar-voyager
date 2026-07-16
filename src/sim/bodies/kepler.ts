@@ -9,16 +9,20 @@ function sinhMinusArgument(argumentRad: number): number {
   }
 
   const squared = argumentRad * argumentRad;
-  return (
-    argumentRad *
+  const series =
+    1 / 6 +
     squared *
-    (1 / 6 +
-      squared *
-        (1 / 120 +
-          squared *
-            (1 / 5_040 +
-              squared * (1 / 362_880 + squared * (1 / 39_916_800 + squared / 6_227_020_800)))))
-  );
+      (1 / 120 +
+        squared *
+          (1 / 5_040 +
+            squared *
+              (1 / 362_880 +
+                squared *
+                  (1 / 39_916_800 +
+                    squared *
+                      (1 / 6_227_020_800 +
+                        squared * (1 / 1_307_674_368_000 + squared / 355_687_428_096_000))))));
+  return argumentRad * squared * series;
 }
 
 function hyperbolicResidual(

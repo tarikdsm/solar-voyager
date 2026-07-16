@@ -146,9 +146,38 @@ describe('orbital elements conversions — physics-spec.md §2 / §7.1', () => {
         argumentPeriapsisRad: 0.9,
         meanAnomalyRad: 0,
       },
+      {
+        semiMajorAxisKm: -1e12,
+        eccentricity: 1 + 1e-9,
+        inclinationRad: 0.3,
+        longitudeAscendingNodeRad: 2.2,
+        argumentPeriapsisRad: 0.9,
+        meanAnomalyRad: -1e-9,
+      },
     ];
 
     for (const elements of cases) {
+      const { state, recovered, rebuilt } = roundTripState(elements);
+
+      expect(recovered.eccentricity).toBeGreaterThan(1);
+      expect(recovered.semiMajorAxisKm).toBeLessThan(0);
+      expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
+    }
+  });
+
+  it('round-trips the limiting hyperbolic domain around periapsis', () => {
+    const eccentricity = 1 + 1e-12;
+    const meanAnomaliesRad = [-0.001, -1e-9, 1e-9, 0.001];
+
+    for (const meanAnomalyRad of meanAnomaliesRad) {
+      const elements: OrbitalElements = {
+        semiMajorAxisKm: -1_000 / (eccentricity - 1),
+        eccentricity,
+        inclinationRad: 0.3,
+        longitudeAscendingNodeRad: 2.2,
+        argumentPeriapsisRad: 0.9,
+        meanAnomalyRad,
+      };
       const { state, recovered, rebuilt } = roundTripState(elements);
 
       expect(recovered.eccentricity).toBeGreaterThan(1);

@@ -10,6 +10,7 @@ import {
 
 const NUMERICAL_DEGENERACY_LIMIT = 64 * Number.EPSILON;
 const ENERGY_CONDITION_LIMIT = Math.cbrt(Number.EPSILON);
+const HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT = Math.sqrt(Number.EPSILON);
 const FULL_TURN_RAD = 2 * Math.PI;
 
 /** Classical osculating elements using the units and frame conventions from §1/§2. */
@@ -114,7 +115,11 @@ export function elementsToStateInto(
       perifocalYKm = -aKm * transverseFactor * hyperbolicSine;
     }
     perifocalVelocityXKmS = -velocityFactor * sineTrueAnomaly;
-    perifocalVelocityYKmS = velocityFactor * (eccentricity + cosineTrueAnomaly);
+    perifocalVelocityYKmS =
+      velocityFactor *
+      (hyperbolicAnomalyRad === 0 || eccentricity - 1 > HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT
+        ? eccentricity + cosineTrueAnomaly
+        : ((eccentricity * eccentricity - 1) * hyperbolicCosine) / denominator);
   }
 
   const cosineNode = Math.cos(elements.longitudeAscendingNodeRad);
@@ -166,14 +171,27 @@ export function stateToElementsInto(
   const eccentricityY = (vz * hx - vx * hz) / parentMuKm3S2 - ry / radiusKm;
   const eccentricityZ = (vx * hy - vy * hx) / parentMuKm3S2 - rz / radiusKm;
   const measuredEccentricity = Math.hypot(eccentricityX, eccentricityY, eccentricityZ);
-  const circular = measuredEccentricity <= NUMERICAL_DEGENERACY_LIMIT;
-  const equatorial = nodeMagnitude / angularMomentumKm2S <= NUMERICAL_DEGENERACY_LIMIT;
-  const retrogradeEquatorial = equatorial && hz < 0;
-  const eccentricity = circular ? 0 : measuredEccentricity;
-  const semilatusRectumKm = (angularMomentumKm2S * angularMomentumKm2S) / parentMuKm3S2;
   const specificEnergyKm2S2 = velocitySquaredKm2S2 / 2 - parentMuKm3S2 / radiusKm;
   const energyCondition =
     Math.abs(specificEnergyKm2S2) / (velocitySquaredKm2S2 / 2 + parentMuKm3S2 / radiusKm);
+  const invariantEccentricity = Math.sqrt(
+    Math.max(
+      0,
+      1 +
+        (2 * specificEnergyKm2S2 * angularMomentumKm2S * angularMomentumKm2S) /
+          (parentMuKm3S2 * parentMuKm3S2),
+    ),
+  );
+  const conditionedEccentricity =
+    energyCondition > ENERGY_CONDITION_LIMIT &&
+    Math.abs(measuredEccentricity - 1) <= HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT
+      ? invariantEccentricity
+      : measuredEccentricity;
+  const circular = conditionedEccentricity <= NUMERICAL_DEGENERACY_LIMIT;
+  const equatorial = nodeMagnitude / angularMomentumKm2S <= NUMERICAL_DEGENERACY_LIMIT;
+  const retrogradeEquatorial = equatorial && hz < 0;
+  const eccentricity = circular ? 0 : conditionedEccentricity;
+  const semilatusRectumKm = (angularMomentumKm2S * angularMomentumKm2S) / parentMuKm3S2;
   const semiMajorAxisKm =
     energyCondition > ENERGY_CONDITION_LIMIT
       ? -parentMuKm3S2 / (2 * specificEnergyKm2S2)

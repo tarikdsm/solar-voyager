@@ -63,6 +63,22 @@ describe('Kepler solvers — physics-spec.md §2 / §7.1', () => {
     }
   });
 
+  it('keeps the true hyperbolic residual below the limit near the stable-series boundary', () => {
+    const solution = createKeplerSolution();
+    const eccentricity = 5;
+    const targetAnomaliesRad = [0.99, 0.999_999];
+
+    for (const targetAnomalyRad of targetAnomaliesRad) {
+      const meanAnomalyRad = eccentricity * Math.sinh(targetAnomalyRad) - targetAnomalyRad;
+      solveKeplerHyperbolicInto(solution, meanAnomalyRad, eccentricity);
+      const residualRad =
+        eccentricity * Math.sinh(solution.anomalyRad) - solution.anomalyRad - meanAnomalyRad;
+
+      expect(solution.converged).toBe(true);
+      expect(Math.abs(residualRad)).toBeLessThan(RESIDUAL_LIMIT_RAD);
+    }
+  });
+
   it('reuses caller-owned result storage', () => {
     const solution = createKeplerSolution();
 
