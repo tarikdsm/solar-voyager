@@ -205,6 +205,14 @@ def _processing_description(recipe):
     return ", ".join(operations)
 
 
+def _changes_description(recipe):
+    if recipe.normalize or recipe.blur:
+        return "resized, luminance-normalized and filtered, re-encoded, and stripped of metadata"
+    if recipe.contrast != 1.0:
+        return "resized, contrast-enhanced, re-encoded, and stripped of metadata"
+    return "format normalization and metadata removal; image content is otherwise unchanged"
+
+
 def render_sources(body_id, recipes):
     lines = [f"# Texture sources — {body_id}", ""]
     for recipe in sorted(recipes, key=lambda item: item.id):
@@ -219,7 +227,7 @@ def render_sources(body_id, recipes):
                 f"- Processing: {_processing_description(recipe)}.",
                 f"- Output: `{recipe.output_name}` ({recipe.role})",
                 f"- Required credit: {recipe.credit}",
-                "- Changes: format normalization and metadata removal; image content is otherwise unchanged.",
+                f"- Changes: {_changes_description(recipe)}.",
                 "",
             )
         )

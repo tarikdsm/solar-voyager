@@ -127,6 +127,11 @@ class TextureFetchTests(unittest.TestCase):
             self.assertEqual(recipe.product_url, "https://svs.gsfc.nasa.gov/4720")
             self.assertIn("NASA", recipe.credit)
 
+        attribution = self.fetch.render_sources("moon", (albedo, height))
+        self.assertNotIn("image content is otherwise unchanged", attribution)
+        self.assertIn("contrast-enhanced", attribution)
+        self.assertIn("luminance-normalized and filtered", attribution)
+
     def test_process_image_forwards_recipe_owned_output_options(self):
         recipe = self.fetch.TextureRecipe.test("options", output_name="texture.jpg")
         recipe.width = 4
