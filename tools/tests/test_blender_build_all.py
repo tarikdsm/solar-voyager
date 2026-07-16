@@ -24,6 +24,7 @@ class BlenderBuildAllTests(unittest.TestCase):
             for name in (
                 "build_saturn.py",
                 "build_all.py",
+                "build_planet.py",
                 "build_test_sphere.py",
                 "build_earth.py",
                 "notes.txt",
@@ -76,4 +77,3 @@ class BlenderBuildAllTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

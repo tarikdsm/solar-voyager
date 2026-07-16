@@ -11,7 +11,7 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
   under `build/blender-smoke/`, checks the authored GLB contract, and proves that
   runtime ingest accepts it. Set `BLENDER_PATH` when Blender is not installed at
   the documented Windows path or available on `PATH`.
-- Run: `blender --background --python tools/blender/build_all.py -- --only earth` (or `--all`) — builders write to `assets/models/`.
+- Run: `blender --background --python tools/blender/build_all.py -- --only earth` (or `--all`) — builders write to `assets/models/`. The category-level entry point is `build_planet.py -- --id earth`; `build_earth.py` delegates to it for discovery compatibility.
 - Ingest: `npm run assets:ingest` — validate (guide contract, SOURCES.md, budgets) → Draco → KTX2 (KTX-Software 4.4.x) → `public/assets/`.
 - **blender-mcp** (in `.mcp.json`, runs via `uvx blender-mcp`) for interactive sessions. Requires the blender-mcp addon installed and enabled in Blender's preferences (see the addon's README; one-time manual setup per machine).
 
@@ -31,6 +31,9 @@ scripts whose ids exist in the catalog; pass exactly one of `--all` or one or mo
 `--only <id>` flags. Execution order is stable by id.
 The strict exporter canonicalizes triangle order after Blender writes the GLB,
 removing process-dependent index ordering while preserving triangle winding.
+Oblate planet builders also derive every float32 glTF normal analytically from
+the exported position and catalogued polar ratio; this avoids Blender 5.1's
+process-dependent smooth-normal calculation while preserving ellipsoid shading.
 Quad spheres receive longitude/latitude UVs compatible with the required 2:1
 equirectangular surface maps, including per-loop seam and pole handling.
 
