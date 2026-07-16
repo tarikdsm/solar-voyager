@@ -166,6 +166,7 @@ Expected: FAIL because state/workspace/evaluation exports do not exist.
 ```ts
 export interface RailsState {
   timeSec: number;
+  evaluatedCatalog: CompiledRailsCatalog | null;
   readonly positionsKm: Float64Array;
   readonly velocitiesKmS: Float64Array;
 }
@@ -184,7 +185,8 @@ allocation factories once.
 - [ ] **Step 4: Implement cached one-pass evaluation**
 
 At function entry validate finite time and both output lengths, then return
-immediately when `state.timeSec === timeSec`. Cite physics-spec.md section 2.
+immediately when `state.timeSec === timeSec && state.evaluatedCatalog === catalog`.
+Cite physics-spec.md section 2.
 For each index, write the root as zeros or copy the compiled orbital fields into
 the one scratch element object, set:
 

@@ -56,4 +56,3 @@ comets, and giant-planet moons rather than assuming the current rows apply.
   overfit test points, script trajectories, and undermine arbitrary-time rails.
 - **Replace rails with JPL interpolation.** Rejected for v1 because it changes
   ADR-001's data size, arbitrary-time, save determinism, and high-warp design.
-

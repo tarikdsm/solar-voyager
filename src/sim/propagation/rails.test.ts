@@ -280,6 +280,24 @@ describe('rails state evaluation — physics-spec.md §2', () => {
     expect(state.positionsKm[0]).toBe(0);
   });
 
+  it('recomputes when a different same-sized catalog is evaluated at the cached time', () => {
+    const firstCatalog = compileRailsCatalog(circularNestedBodies().slice(0, 2));
+    const secondBodies = circularNestedBodies().slice(0, 2);
+    secondBodies[1] = {
+      ...(secondBodies[1] as RailsBodyInput),
+      elements: circularOrbit(200),
+    };
+    const secondCatalog = compileRailsCatalog(secondBodies);
+    const state = createRailsState(firstCatalog);
+    const workspace = createRailsWorkspace();
+
+    evaluateRailsInto(state, firstCatalog, 0, workspace);
+    expect(state.positionsKm[3]).toBe(100);
+    evaluateRailsInto(state, secondCatalog, 0, workspace);
+
+    expect(state.positionsKm[3]).toBe(200);
+  });
+
   it('rejects non-finite time and mismatched output sizes before evaluation', () => {
     const catalog = compileRailsCatalog(circularNestedBodies());
     const workspace = createRailsWorkspace();
@@ -289,6 +307,7 @@ describe('rails state evaluation — physics-spec.md §2', () => {
 
     const wrongSize: RailsState = {
       timeSec: Number.NaN,
+      evaluatedCatalog: null,
       positionsKm: new Float64Array(1),
       velocitiesKmS: new Float64Array(1),
     };

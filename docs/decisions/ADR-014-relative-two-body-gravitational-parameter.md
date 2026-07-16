@@ -45,4 +45,3 @@ individual `muKm3S2` array remains unchanged for the n-body gravity field.
 - **Bake Horizons mean motion as another schema field.** Rejected because it is
   derivable from existing GM and semimajor-axis data, would require a schema
   migration, and could drift out of consistency with perifocal velocity.
-

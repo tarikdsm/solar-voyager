@@ -37,6 +37,7 @@ export interface CompiledRailsCatalog {
 /** Caller-owned packed heliocentric body states cached for one simulation time. */
 export interface RailsState {
   timeSec: number;
+  evaluatedCatalog: CompiledRailsCatalog | null;
   readonly positionsKm: Float64Array;
   readonly velocitiesKmS: Float64Array;
 }
@@ -170,6 +171,7 @@ export function createRailsState(catalog: CompiledRailsCatalog): RailsState {
   const componentCount = catalog.bodyCount * 3;
   return {
     timeSec: Number.NaN,
+    evaluatedCatalog: null,
     positionsKm: new Float64Array(componentCount),
     velocitiesKmS: new Float64Array(componentCount),
   };
@@ -204,7 +206,7 @@ export function evaluateRailsInto(
   if (!Number.isFinite(timeSec)) {
     throw new RangeError('rails evaluation time must be finite');
   }
-  if (state.timeSec === timeSec) {
+  if (state.timeSec === timeSec && state.evaluatedCatalog === catalog) {
     return state;
   }
 
@@ -258,5 +260,6 @@ export function evaluateRailsInto(
   }
 
   state.timeSec = timeSec;
+  state.evaluatedCatalog = catalog;
   return state;
 }

@@ -31,9 +31,10 @@ body GM and orbital fields are separate `Float64Array`s; parents are an
 index lookup outside the frame loop. This layout gives T0014 contiguous data
 and avoids fifty small state objects in every downstream subsystem.
 
-The state records `timeSec`. Re-evaluating the same state at the same time is a
-cache hit and returns immediately. A different output state or time performs a
-complete O(n) pass.
+The state records `timeSec` and the identity of the compiled catalog that
+produced it. Re-evaluating the same state with the same catalog at the same time
+is a cache hit and returns immediately. A different output state, catalog, or
+time performs a complete O(n) pass.
 
 ## Evaluation algorithm
 
