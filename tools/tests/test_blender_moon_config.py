@@ -98,6 +98,16 @@ class MoonConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "height sample"):
             module.normalized_relief_radius(1.01, 1737.4, 20.0)
 
+    def test_committed_detail_sources_name_generator_seed_and_rights(self):
+        sources_path = Path(__file__).parents[2] / "assets" / "models" / "moons" / "moon" / "SOURCES.md"
+        sources = sources_path.read_text(encoding="utf-8")
+        for filename in ("moon_detail_albedo.jpg", "moon_detail_normal.png"):
+            matching = [line for line in sources.splitlines() if line.startswith(f"- `{filename}`")]
+            self.assertEqual(len(matching), 1)
+            self.assertIn("tools/textures/prepareMoonMaps.mjs", matching[0])
+            self.assertIn("seed 301", matching[0])
+            self.assertIn("all rights reserved", matching[0])
+
 
 if __name__ == "__main__":
     unittest.main()

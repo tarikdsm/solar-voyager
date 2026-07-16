@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { detailHeightField, normalPixelsFromHeight } from './prepareMoonMaps.mjs';
+import {
+  detailHeightField,
+  mergeDerivedSources,
+  normalPixelsFromHeight,
+} from './prepareMoonMaps.mjs';
 
 function gradientEnergy(values, width, height) {
   let x = 0;
@@ -34,5 +38,21 @@ describe('Moon texture preparation', () => {
       expect(pixels[index + 1]).toBe(128);
       expect(pixels[index + 2]).toBe(255);
     }
+  });
+
+  it('publishes complete and idempotent provenance for every derived map', () => {
+    const first = mergeDerivedSources('# Texture sources — moon\n', 301);
+    const second = mergeDerivedSources(first, 301);
+    expect(second).toBe(first);
+    for (const filename of [
+      'moon_normal.png',
+      'moon_detail_albedo.jpg',
+      'moon_detail_normal.png',
+    ]) {
+      expect(first).toContain(filename);
+    }
+    expect(first).toContain('tools/textures/prepareMoonMaps.mjs');
+    expect(first).toContain('seed 301');
+    expect(first).toContain('all rights reserved');
   });
 });
