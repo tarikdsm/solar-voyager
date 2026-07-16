@@ -24,11 +24,16 @@ handoff_notes: |
   Acceptance evidence: focused tests cover an Earth surface view at 200 km,
   one-AU recomputation without accumulated error, non-finite/duplicate guards,
   renderer parameters, and a repository scan proving Math.fround appears only
-  in src/render/spaceScene.ts outside tests. Real-browser WebGL2 verification at
-  1280x720 rendered the rotating cube with a 24-bit depth buffer and zero
-  console errors or warnings. Final gates passed: lint, strict typecheck,
-  231 Vitest tests (3 skipped), format, build, budgets, 53 task schemas, and
-  diff check. Critical path is 8,362,185 bytes (7.97 MiB).
+  in src/render/spaceScene.ts outside tests. The CI render-depth regression uses
+  Earth-radius geometry at 200 km and 1 AU, checks foreground/background pixel
+  coverage, zero GL errors, and byte-identical consecutive frames. Its standard
+  depth mutation control loses every foreground pixel at both distances, while
+  the production logarithmic path preserves 840 and 6,916 foreground pixels.
+  Real-browser WebGL2 verification at 1280x720 also rendered the rotating cube
+  with a 24-bit depth buffer and zero console errors or warnings. Final gates
+  passed: lint, strict typecheck, 231 Vitest tests (3 skipped), render-depth
+  regression, format, build, budgets, 53 task schemas, and diff check. Critical
+  path is 8,362,185 bytes (7.97 MiB).
 
   bench:scaffold before/after on the same machine (120 warm-up / 600 sampled
   frames): both 16.7/16.7/16.8 ms median/p75/p99, zero console/page errors;
