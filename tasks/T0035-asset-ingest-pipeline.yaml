@@ -26,9 +26,14 @@ handoff_notes: |
   ETC1S/UASTC KTX2 with full mips, per-body byte gates, canonical manifest, and
   transactional publication. The required violating fixture reports sections 2,
   3, and 8 in one run. Real KTX-Software 4.4.2 verification produced Earth at
-  5,172,586 bytes and all 7 files were byte-identical across two complete runs.
+  5,980,631 bytes and all 9 files were byte-identical across two complete runs.
+  Review findings were addressed: runtime GLBs now require KHR_texture_basisu and
+  decode with material bindings; linear PBR maps stay linear; per-role tiers and
+  detail pairs are enforced; catalog/category/duplicate/deliverable identity is
+  validated; world/ancestor transforms enforce +Y. A typed manifest loader rejects
+  unsafe paths. Six procedural detail sources regenerated with identical hashes.
   Published 5 assets: Earth 32,256 tris, Pluto 3,968, Saturn 37,568, ship 6,174,
-  Sun 16,128. public/assets is 6.02 MiB; critical path is 5.47 MiB (< 8 MiB).
+  Sun 16,128. public/assets is 8.32 MiB; critical path is 6.24 MiB (< 8 MiB).
   Official KTX validation and Draco decode passed for every artifact. Final gates:
-  lint/typecheck passed; Vitest 204 passed / 3 skipped; Python 22 passed; format,
+  lint/typecheck passed; Vitest 211 passed / 3 skipped; Python 22 passed; format,
   build, 52-task schema, budgets, and diff check passed.
