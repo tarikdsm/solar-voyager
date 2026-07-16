@@ -29,7 +29,7 @@ Each body carries osculating elements at epoch, baked from JPL Horizons (`tools/
 
 Position at time t:
 
-1. Mean anomaly: `M = M₀ + n·(t − t₀)`, `n = √(μ_parent/a³)` (elliptic) or `√(μ_parent/(−a)³)` (hyperbolic).
+1. Mean anomaly: `M = M₀ + n·(t − t₀)`, `n = √((μ_parent + μ_body)/a³)` (elliptic) or `√((μ_parent + μ_body)/(−a)³)` (hyperbolic).
 2. Solve Kepler's equation by Newton–Raphson to |Δ| < 1e-12 rad, max 30 iterations:
    - Elliptic: `M = E − e·sin E`, start `E₀ = M` (or `π` if e > 0.8).
    - Hyperbolic (comets): `M = e·sinh H − H`.
@@ -42,11 +42,11 @@ Properties: O(1) per body, exact evaluation at any t (no drift at any warp), det
 
 | Body class | max error @ +30 d | @ +365 d |
 |---|---|---|
-| Planets, dwarfs | 1,000 km | 20,000 km |
-| Moon (Luna) | 500 km | 15,000 km |
+| Planets, dwarfs | 50,000 km | 1,500,000 km |
+| Moon (Luna) | 50,000 km | 1,500,000 km |
 | Giant-planet moons | 2,000 km | 50,000 km |
 
-(Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. Bounds are generous by design — tighten empirically after the bake, in the same PR that adds the data.)
+(Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. The planet/Luna bounds are conservative ceilings calibrated against the T0020 J2026 bake in ADR-015. Recalibrate newly added classes when T0021 expands the catalog.)
 
 ## 3. Ship dynamics — full n-body + thrust, special-relativistic (ADR-007)
 

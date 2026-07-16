@@ -44,10 +44,10 @@ describe('rails catalog compiler — physics-spec.md §2', () => {
     expect([...catalog.parentIndices]).toEqual([-1, 0, 1]);
     expect(catalog.muKm3S2).toBeInstanceOf(Float64Array);
     expect([...catalog.muKm3S2]).toEqual([1_000, 10, 1]);
-    expect([...catalog.parentMuKm3S2]).toEqual([0, 1_000, 10]);
+    expect([...catalog.orbitalMuKm3S2]).toEqual([0, 1_010, 11]);
     expect(catalog.semiMajorAxisKm[2]).toBe(10);
     expect(catalog.eccentricity[2]).toBe(0.01);
-    expect(catalog.meanMotionRadS[2]).toBeCloseTo(Math.sqrt(10 / 10 ** 3), 15);
+    expect(catalog.meanMotionRadS[2]).toBeCloseTo(Math.sqrt((10 + 1) / 10 ** 3), 15);
   });
 
   it.each([
@@ -197,10 +197,10 @@ describe('rails state evaluation — physics-spec.md §2', () => {
     expect(state.velocitiesKmS[1]).toBe(0);
     expect(state.velocitiesKmS[2]).toBe(0);
     expect(state.velocitiesKmS[3]).toBe(0);
-    expect(state.velocitiesKmS[4]).toBeCloseTo(Math.sqrt(10), 14);
+    expect(state.velocitiesKmS[4]).toBeCloseTo(Math.sqrt(10.1), 14);
     expect(state.velocitiesKmS[5]).toBe(0);
     expect(state.velocitiesKmS[6]).toBe(0);
-    expect(state.velocitiesKmS[7]).toBeCloseTo(Math.sqrt(10) + 1, 14);
+    expect(state.velocitiesKmS[7]).toBeCloseTo(Math.sqrt(10.1) + Math.sqrt(1.1), 14);
     expect(state.velocitiesKmS[8]).toBe(0);
   });
 
@@ -222,7 +222,7 @@ describe('rails state evaluation — physics-spec.md §2', () => {
     const expected = elementsToStateInto(
       createCartesianState(),
       expectedElements,
-      1_000,
+      1_010,
       createOrbitalConversionScratch(),
     );
 
@@ -256,7 +256,7 @@ describe('rails state evaluation — physics-spec.md §2', () => {
     const expected = elementsToStateInto(
       createCartesianState(),
       expectedElements,
-      1_000,
+      1_000.1,
       createOrbitalConversionScratch(),
     );
 

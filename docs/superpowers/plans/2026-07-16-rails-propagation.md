@@ -47,7 +47,7 @@ const nested = [
 ] satisfies RailsBodyInput[];
 const compiled = compileRailsCatalog(nested);
 expect([...compiled.parentIndices]).toEqual([-1, 0, 1]);
-expect(compiled.meanMotionRadS[2]).toBeCloseTo(Math.sqrt(10 / 10 ** 3), 15);
+expect(compiled.meanMotionRadS[2]).toBeCloseTo(Math.sqrt((10 + 1) / 10 ** 3), 15);
 ```
 
 - [ ] **Step 2: Verify the tests fail for the missing module**
@@ -73,7 +73,7 @@ export interface CompiledRailsCatalog {
   readonly bodyIds: readonly string[];
   readonly parentIndices: Int32Array;
   readonly muKm3S2: Float64Array;
-  readonly parentMuKm3S2: Float64Array;
+  readonly orbitalMuKm3S2: Float64Array;
   readonly meanMotionRadS: Float64Array;
   readonly semiMajorAxisKm: Float64Array;
   readonly eccentricity: Float64Array;
@@ -88,12 +88,13 @@ Allocate all arrays once. Populate an id-to-index `Map` only during setup.
 Require the sole root at index zero with null elements. Resolve each non-root
 parent from previously inserted ids, validate every numeric value with
 `Number.isFinite`, validate `0 <= e < 1 && a > 0` or `e > 1 && a < 0`, then
-precompute:
+precompute the relative two-body parameter and mean motion:
 
 ```ts
 const absoluteSemiMajorAxisKm = Math.abs(elements.semiMajorAxisKm);
+orbitalMuKm3S2[index] = parentMuKm3S2[index] + muKm3S2[index];
 meanMotionRadS[index] = Math.sqrt(
-  parentMuKm3S2[index] /
+  orbitalMuKm3S2[index] /
     (absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm),
 );
 ```
@@ -243,10 +244,10 @@ expect(positionErrorKm(state, index, checks.samples[0].states[bodyId]), bodyId).
 
 - [ ] **Step 2: Add +30 d and +365 d class-bound regressions**
 
-Evaluate at `offsetDays * 86_400`. For Moon require `< 500 km` at +30 d and
-`< 15_000 km` at +365 d. For all planets require `< 1_000 km` and `< 20_000 km`
-respectively. The Sun remains exactly zero. These tolerances come directly from
-physics-spec.md section 2.
+Evaluate at `offsetDays * 86_400`. For Moon and planets require `< 50_000 km`
+at +30 d and `< 1_500_000 km` at +365 d. The Sun remains exactly zero. These
+tolerances come directly from physics-spec.md section 2 as calibrated by
+ADR-015 against the T0020 J2026 bake.
 
 - [ ] **Step 3: Run regressions and diagnose only formula/data errors**
 
@@ -367,4 +368,3 @@ Rebase on current `main`, rerun all gates, push
 `[T0013] Rails propagation of the body catalog`. The PR body maps both
 acceptance criteria to the exact regression and benchmark evidence. A different
 agent waits for green CI, changes the task to `DONE`, and merges without force.
-

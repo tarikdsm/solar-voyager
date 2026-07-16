@@ -24,7 +24,7 @@ export interface CompiledRailsCatalog {
   readonly bodyIds: readonly string[];
   readonly parentIndices: Int32Array;
   readonly muKm3S2: Float64Array;
-  readonly parentMuKm3S2: Float64Array;
+  readonly orbitalMuKm3S2: Float64Array;
   readonly meanMotionRadS: Float64Array;
   readonly semiMajorAxisKm: Float64Array;
   readonly eccentricity: Float64Array;
@@ -76,7 +76,7 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
   const parentIndices = new Int32Array(bodyCount);
   parentIndices.fill(-1);
   const muKm3S2 = new Float64Array(bodyCount);
-  const parentMuKm3S2 = new Float64Array(bodyCount);
+  const orbitalMuKm3S2 = new Float64Array(bodyCount);
   const meanMotionRadS = new Float64Array(bodyCount);
   const semiMajorAxisKm = new Float64Array(bodyCount);
   const eccentricity = new Float64Array(bodyCount);
@@ -131,10 +131,11 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
         throw new RangeError(`parent index ${parentIndex} is outside the compiled catalog`);
       }
       const absoluteSemiMajorAxisKm = Math.abs(elements.semiMajorAxisKm);
+      const orbitalMu = parentMu + body.muKm3S2;
       parentIndices[index] = parentIndex;
-      parentMuKm3S2[index] = parentMu;
+      orbitalMuKm3S2[index] = orbitalMu;
       meanMotionRadS[index] = Math.sqrt(
-        parentMu / (absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm),
+        orbitalMu / (absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm),
       );
       semiMajorAxisKm[index] = elements.semiMajorAxisKm;
       eccentricity[index] = elements.eccentricity;
@@ -153,7 +154,7 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
     bodyIds,
     parentIndices,
     muKm3S2,
-    parentMuKm3S2,
+    orbitalMuKm3S2,
     meanMotionRadS,
     semiMajorAxisKm,
     eccentricity,
@@ -233,7 +234,7 @@ export function evaluateRailsInto(
     elementsToStateInto(
       workspace.relativeState,
       workspace.elements,
-      catalog.parentMuKm3S2[index] as number,
+      catalog.orbitalMuKm3S2[index] as number,
       workspace.conversion,
     );
 

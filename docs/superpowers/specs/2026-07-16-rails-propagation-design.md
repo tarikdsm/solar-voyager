@@ -42,7 +42,7 @@ ids, multiple/missing roots, missing orbital elements, non-finite inputs,
 invalid elliptic/hyperbolic element branches, and parents that are absent or
 not yet compiled. It precomputes each non-root body's parent GM and mean motion:
 
-`n = sqrt(muParent / |a|^3)`.
+`n = sqrt((muParent + muBody) / |a|^3)`.
 
 At evaluation time, one loop follows semantic catalog order:
 
@@ -83,4 +83,3 @@ physics-spec.md section 2. Therefore this task does not change
   batches, and requires median cost below 0.2 ms per full catalog evaluation.
 - Full lint, typecheck, test, format, build, task-schema, and budget gates run
   before review.
-
