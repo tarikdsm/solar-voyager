@@ -1,6 +1,7 @@
 # Golden Trajectory Harness Design
 
-**Task:** T0016  
+**Task:** T0016
+
 **Date:** 2026-07-16
 
 ## Goal
