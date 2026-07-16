@@ -19,6 +19,9 @@ describe('runtime asset manifest', () => {
     expect(manifest.assets.find((asset) => asset.id === 'earth')?.files).toContain(
       'models/earth.glb',
     );
+    expect(manifest.assets.find((asset) => asset.id === 'earth')?.files).toContain(
+      'textures/earth_albedo_tier2.ktx2',
+    );
   });
 
   it('rejects duplicate ids and unsafe runtime paths', () => {
