@@ -1,6 +1,6 @@
 id: T0015
 title: DP54 adaptive integrator
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0015-dp54-integrator
 depends_on: [T0010]
@@ -23,4 +23,4 @@ handoff_notes: |
   and drove fixes for non-finite derivative termination and an ambiguity between
   local operational tolerance and global convergence evidence. ADR-011 now defines
   the separate test-only verification profile; both profiles have explicit tests.
-  Re-run all mandatory gates and review the commits after 7b17dad.
+  Independent review approved 9168955 after all mandatory gates and CI passed.
