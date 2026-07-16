@@ -1,8 +1,8 @@
 id: T0023
 title: Rails accuracy regression suite
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0023-rails-regression
 depends_on: [T0013, T0021]
 milestone: M1
 spec: |
