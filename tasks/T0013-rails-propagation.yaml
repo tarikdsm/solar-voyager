@@ -1,6 +1,6 @@
 id: T0013
 title: Rails propagation of the body catalog
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0013-rails-propagation
 depends_on: [T0012, T0020]
@@ -12,4 +12,18 @@ spec: |
 acceptance:
   - Positions for planets + Moon at epoch match bodies.json baked vectors < 1 km
   - Per-frame evaluation of 50 bodies < 0.2 ms (bench test)
-handoff_notes: ""
+handoff_notes: |
+  Implemented a validated float64 SoA rails compiler and allocation-free,
+  catalog+time-cached one-pass evaluator with parent-relative chain composition,
+  signed-time elliptic/hyperbolic support, and caller-owned state/workspace.
+  ADR-014 corrects orbital GM to mu_parent + mu_body; ADR-015 records the
+  empirical limits of unperturbed rails against the J2026 Horizons checks.
+  Independent review found no remaining Critical/Important/Minor findings.
+  Accuracy reproduced independently: epoch max 0.000007 km; +30 d max
+  34,077.127561 km; +365 d max 1,159,878.881675 km. Accuracy tests fail closed
+  for bodies added after T0020 until their class is explicitly recalibrated.
+  The 50-body changing-time benchmark measured 0.011711-0.020339 ms locally and
+  0.012755-0.018253 ms independently, versus the required <0.2 ms median.
+  Verified: lint, typecheck, format, build, 162 Vitest tests, 12 Python tests,
+  task schema, asset budgets, and diff check all pass. Vite retains the existing
+  531.42 kB chunk advisory; critical path is 0.51 MiB / 8 MiB.
