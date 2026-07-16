@@ -1,6 +1,6 @@
 id: T0020
 title: bake_ephemerides script + initial bodies.json (planets + Moon)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0020-bake-ephemerides
 depends_on: [T0001]
@@ -28,3 +28,5 @@ handoff_notes: |
   Verified: lint, typecheck, format, build, 136 Vitest tests, 12 Python tests,
   task schema, and asset budgets all pass. Vite retains the existing 531.42 kB
   chunk-size warning; the enforced critical-path budget is 0.51 MiB / 8 MiB.
+  Independent merger review approved the final diff and GitHub CI check before
+  transitioning the task from REVIEW to DONE.
