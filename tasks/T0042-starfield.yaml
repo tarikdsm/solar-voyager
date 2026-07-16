@@ -1,6 +1,6 @@
 id: T0042
 title: Starfield renderer
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0042-starfield
 depends_on: [T0022, T0040]
@@ -10,4 +10,25 @@ spec: |
   camera-centered sphere; magnitude -> size/alpha; B-V color.
 acceptance:
   - Orion recognizable; stars stable at all warp/zoom levels
-handoff_notes: ""
+handoff_notes: |
+  Implemented the complete 9,096-entry catalog as one static THREE.Points draw.
+  The catalog Float32Array is reused through an InterleavedBuffer; magnitude
+  size/opacity arrays, geometry, material, and shader are setup-only. The object
+  remains at the camera-relative render origin, writes no depth, and has no
+  frame-loop update or allocation. B-V display RGB passes through unchanged.
+
+  Acceptance evidence (2026-07-16):
+  - npm run test:starfield passed in real Chromium with WebGL error 0 and one
+    draw call. Rigel, Bellatrix, Mintaka, Alnilam, Alnitak, Saiph, and
+    Betelgeuse were detected at CPU-projected catalog positions; the Orion belt
+    remained aligned. A hidden-object control produced zero lit pixels/calls.
+  - A warp translation to (8.4e12, -3.2e12, 1.7e13) km produced the exact same
+    framebuffer hash and Orion projections. Changing vertical FOV from 60 to
+    35 degrees changed framing while all seven stars remained detected.
+  - Production preview benchmark loaded the real hashed stars.bin with zero
+    console/page errors. Paired 1280x720 software-renderer p75 was 150.1 ms both
+    before and after; raw captures and limitations are in docs/bench/T0042-*.
+  - Full local gates passed: lint, typecheck, Prettier, 271 Vitest tests / 3
+    skipped, render-depth, starfield and visual-tier Chromium regressions, 49
+    Python tests, build, budgets, 53 task schemas, and git diff check.
+  - Critical path is 3,976,959 bytes (3.79 MiB), below the 8 MiB gate.
