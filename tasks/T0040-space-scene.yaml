@@ -1,8 +1,8 @@
 id: T0040
 title: Camera-relative SpaceScene + logarithmic depth
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0040-space-scene
 depends_on: [T0013, T0032]
 milestone: M2
 spec: |
