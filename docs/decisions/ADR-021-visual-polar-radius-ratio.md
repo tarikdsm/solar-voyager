@@ -15,8 +15,9 @@ second source of truth. Any catalog schema change is ADR-gated by ADR-013.
 Version 2 of the body catalog adds required `visual.polarRadiusRatio`, a finite
 number greater than zero and at most one. It is the visual polar radius divided
 by visual equatorial radius. Bodies intentionally rendered as spheres use 1.
-Known oblate planets use published equatorial and polar radii; Earth starts with
-the WGS84 ratio `6356.752314245 / 6378.137 = 0.996647189335`.
+Oblate planets use published equatorial and polar radii as their builders are
+introduced. Earth starts with the NASA Planetary Fact Sheet radii
+`6356.8 / 6378.1 = 0.996660447469`.
 
 This field affects authored/rendered shape only. `meanRadiusKm` retains its
 physics/navigation meaning and no orbital formula changes. The ephemeris baker

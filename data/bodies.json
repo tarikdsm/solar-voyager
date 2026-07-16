@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "epoch": {
     "name": "J2026",
     "jdTdb": 2461041.5
@@ -26,7 +26,8 @@
       "visual": {
         "albedoColor": "#fff4d6",
         "assetRef": null,
-        "proceduralSeed": 10
+        "proceduralSeed": 10,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -56,7 +57,8 @@
       "visual": {
         "albedoColor": "#aaa39a",
         "assetRef": null,
-        "proceduralSeed": 199
+        "proceduralSeed": 199,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -86,7 +88,8 @@
       "visual": {
         "albedoColor": "#d9b36c",
         "assetRef": null,
-        "proceduralSeed": 299
+        "proceduralSeed": 299,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -116,7 +119,8 @@
       "visual": {
         "albedoColor": "#4f78a8",
         "assetRef": null,
-        "proceduralSeed": 399
+        "proceduralSeed": 399,
+        "polarRadiusRatio": 0.9966604474686819
       }
     },
     {
@@ -146,7 +150,8 @@
       "visual": {
         "albedoColor": "#aaa8a3",
         "assetRef": null,
-        "proceduralSeed": 301
+        "proceduralSeed": 301,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -176,7 +181,8 @@
       "visual": {
         "albedoColor": "#b85c3b",
         "assetRef": null,
-        "proceduralSeed": 499
+        "proceduralSeed": 499,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -206,7 +212,8 @@
       "visual": {
         "albedoColor": "#8c8175",
         "assetRef": null,
-        "proceduralSeed": 401
+        "proceduralSeed": 401,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -236,7 +243,8 @@
       "visual": {
         "albedoColor": "#9b9185",
         "assetRef": null,
-        "proceduralSeed": 402
+        "proceduralSeed": 402,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -266,7 +274,8 @@
       "visual": {
         "albedoColor": "#c9a477",
         "assetRef": null,
-        "proceduralSeed": 599
+        "proceduralSeed": 599,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -296,7 +305,8 @@
       "visual": {
         "albedoColor": "#d8c35a",
         "assetRef": null,
-        "proceduralSeed": 501
+        "proceduralSeed": 501,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -326,7 +336,8 @@
       "visual": {
         "albedoColor": "#c7b89a",
         "assetRef": null,
-        "proceduralSeed": 502
+        "proceduralSeed": 502,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -356,7 +367,8 @@
       "visual": {
         "albedoColor": "#8f8170",
         "assetRef": null,
-        "proceduralSeed": 503
+        "proceduralSeed": 503,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -386,7 +398,8 @@
       "visual": {
         "albedoColor": "#69645f",
         "assetRef": null,
-        "proceduralSeed": 504
+        "proceduralSeed": 504,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -416,7 +429,8 @@
       "visual": {
         "albedoColor": "#d8c28e",
         "assetRef": null,
-        "proceduralSeed": 699
+        "proceduralSeed": 699,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -446,7 +460,8 @@
       "visual": {
         "albedoColor": "#bdbbb4",
         "assetRef": null,
-        "proceduralSeed": 601
+        "proceduralSeed": 601,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -476,7 +491,8 @@
       "visual": {
         "albedoColor": "#e5e6e3",
         "assetRef": null,
-        "proceduralSeed": 602
+        "proceduralSeed": 602,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -506,7 +522,8 @@
       "visual": {
         "albedoColor": "#c8c5bd",
         "assetRef": null,
-        "proceduralSeed": 603
+        "proceduralSeed": 603,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -536,7 +553,8 @@
       "visual": {
         "albedoColor": "#c6c4be",
         "assetRef": null,
-        "proceduralSeed": 604
+        "proceduralSeed": 604,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -566,7 +584,8 @@
       "visual": {
         "albedoColor": "#aaa9a4",
         "assetRef": null,
-        "proceduralSeed": 605
+        "proceduralSeed": 605,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -596,7 +615,8 @@
       "visual": {
         "albedoColor": "#c68d42",
         "assetRef": null,
-        "proceduralSeed": 606
+        "proceduralSeed": 606,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -626,7 +646,8 @@
       "visual": {
         "albedoColor": "#77736d",
         "assetRef": null,
-        "proceduralSeed": 608
+        "proceduralSeed": 608,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -656,7 +677,8 @@
       "visual": {
         "albedoColor": "#9ccbd3",
         "assetRef": null,
-        "proceduralSeed": 799
+        "proceduralSeed": 799,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -686,7 +708,8 @@
       "visual": {
         "albedoColor": "#a9a6a0",
         "assetRef": null,
-        "proceduralSeed": 705
+        "proceduralSeed": 705,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -716,7 +739,8 @@
       "visual": {
         "albedoColor": "#b8b6ae",
         "assetRef": null,
-        "proceduralSeed": 701
+        "proceduralSeed": 701,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -746,7 +770,8 @@
       "visual": {
         "albedoColor": "#77746f",
         "assetRef": null,
-        "proceduralSeed": 702
+        "proceduralSeed": 702,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -776,7 +801,8 @@
       "visual": {
         "albedoColor": "#a5a29b",
         "assetRef": null,
-        "proceduralSeed": 703
+        "proceduralSeed": 703,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -806,7 +832,8 @@
       "visual": {
         "albedoColor": "#8e8981",
         "assetRef": null,
-        "proceduralSeed": 704
+        "proceduralSeed": 704,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -836,7 +863,8 @@
       "visual": {
         "albedoColor": "#4169a9",
         "assetRef": null,
-        "proceduralSeed": 899
+        "proceduralSeed": 899,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -866,7 +894,8 @@
       "visual": {
         "albedoColor": "#b7aca3",
         "assetRef": null,
-        "proceduralSeed": 801
+        "proceduralSeed": 801,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -896,7 +925,8 @@
       "visual": {
         "albedoColor": "#b7a28c",
         "assetRef": null,
-        "proceduralSeed": 999
+        "proceduralSeed": 999,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -926,7 +956,8 @@
       "visual": {
         "albedoColor": "#8f8b87",
         "assetRef": null,
-        "proceduralSeed": 901
+        "proceduralSeed": 901,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -956,7 +987,8 @@
       "visual": {
         "albedoColor": "#77736d",
         "assetRef": null,
-        "proceduralSeed": 1
+        "proceduralSeed": 1,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -986,7 +1018,8 @@
       "visual": {
         "albedoColor": "#d8d4cd",
         "assetRef": null,
-        "proceduralSeed": 136199
+        "proceduralSeed": 136199,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1016,7 +1049,8 @@
       "visual": {
         "albedoColor": "#c5a58d",
         "assetRef": null,
-        "proceduralSeed": 136472
+        "proceduralSeed": 136472,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1046,7 +1080,8 @@
       "visual": {
         "albedoColor": "#d8d5cf",
         "assetRef": null,
-        "proceduralSeed": 136108
+        "proceduralSeed": 136108,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1076,7 +1111,8 @@
       "visual": {
         "albedoColor": "#9b9184",
         "assetRef": null,
-        "proceduralSeed": 4
+        "proceduralSeed": 4,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1106,7 +1142,8 @@
       "visual": {
         "albedoColor": "#85817b",
         "assetRef": null,
-        "proceduralSeed": 2
+        "proceduralSeed": 2,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1136,7 +1173,8 @@
       "visual": {
         "albedoColor": "#66625f",
         "assetRef": null,
-        "proceduralSeed": 10001
+        "proceduralSeed": 10001,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1166,7 +1204,8 @@
       "visual": {
         "albedoColor": "#9a7b68",
         "assetRef": null,
-        "proceduralSeed": 433
+        "proceduralSeed": 433,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1196,7 +1235,8 @@
       "visual": {
         "albedoColor": "#343230",
         "assetRef": null,
-        "proceduralSeed": 101955
+        "proceduralSeed": 101955,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1226,7 +1266,8 @@
       "visual": {
         "albedoColor": "#3d3935",
         "assetRef": null,
-        "proceduralSeed": 162173
+        "proceduralSeed": 162173,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1256,7 +1297,8 @@
       "visual": {
         "albedoColor": "#6f716d",
         "assetRef": null,
-        "proceduralSeed": 90000030
+        "proceduralSeed": 90000030,
+        "polarRadiusRatio": 1.0
       }
     },
     {
@@ -1286,7 +1328,8 @@
       "visual": {
         "albedoColor": "#4f4c47",
         "assetRef": null,
-        "proceduralSeed": 90000702
+        "proceduralSeed": 90000702,
+        "polarRadiusRatio": 1.0
       }
     }
   ]

@@ -33,6 +33,7 @@ class BodyDefinition:
     albedo_color: str
     procedural_seed: int
     horizons_id_type: Optional[str] = None
+    polar_radius_ratio: float = 1.0
 
 
 def _days(value: float) -> float:
@@ -44,13 +45,14 @@ def _hours(value: float) -> float:
 
 
 # Physical metadata: JPL Solar System Dynamics planetary satellite/physical
-# parameters and NASA planetary fact sheets. Query-derived orbital values never
-# come from this table.
+# parameters and NASA planetary fact sheets. Earth's visual polar/equatorial
+# ratio uses the NASA fact-sheet radii 6,356.8 km / 6,378.1 km. Query-derived
+# orbital values never come from this table.
 BODY_DEFINITIONS = (
     BodyDefinition("sun", "Sun", "star", 10, None, 132_712_440_041.9394, 695_700.0, _days(25.05), math.radians(7.25), 1.0, "stellar", "#fff4d6", 10),
     BodyDefinition("mercury", "Mercury", "planet", 199, "sun", 22_031.86855, 2_439.7, _days(58.646), math.radians(0.034), 0.142, "solid", "#aaa39a", 199),
     BodyDefinition("venus", "Venus", "planet", 299, "sun", 324_858.592, 6_051.8, _days(-243.025), math.radians(177.36), 0.689, "solid", "#d9b36c", 299),
-    BodyDefinition("earth", "Earth", "planet", 399, "sun", 398_600.435507, 6_371.0084, _days(0.99726968), math.radians(23.439281), 0.434, "solid", "#4f78a8", 399),
+    BodyDefinition("earth", "Earth", "planet", 399, "sun", 398_600.435507, 6_371.0084, _days(0.99726968), math.radians(23.439281), 0.434, "solid", "#4f78a8", 399, polar_radius_ratio=6356.8 / 6378.1),
     BodyDefinition("moon", "Moon", "moon", 301, "earth", 4_902.800118, 1_737.4, _days(27.321661), math.radians(6.68), 0.12, "solid", "#aaa8a3", 301),
     BodyDefinition("mars", "Mars", "planet", 499, "sun", 42_828.375214, 3_389.5, _days(1.02595675), math.radians(25.19), 0.17, "solid", "#b85c3b", 499),
     BodyDefinition("phobos", "Phobos", "moon", 401, "mars", 0.0007087, 11.08, _days(0.31891023), 0.0, 0.071, "solid", "#8c8175", 401),
@@ -177,11 +179,12 @@ def build_catalog(elements_by_id: Mapping[str, Mapping[str, float]]) -> Dict[str
                     "albedoColor": definition.albedo_color,
                     "assetRef": None,
                     "proceduralSeed": definition.procedural_seed,
+                    "polarRadiusRatio": definition.polar_radius_ratio,
                 },
             }
         )
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "epoch": {"name": "J2026", "jdTdb": EPOCH_JD_TDB},
         "frame": FRAME,
         "bodies": bodies,

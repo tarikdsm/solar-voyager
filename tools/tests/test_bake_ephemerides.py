@@ -85,7 +85,7 @@ def successful_query(definition, _factory, _cache):
 
 
 class BakeCoreTests(unittest.TestCase):
-    def test_defines_the_complete_parent_first_v1_catalog(self):
+    def test_defines_the_complete_parent_first_v2_catalog(self):
         self.assertEqual(bake.BODY_IDS, EXPECTED_BODY_IDS)
         self.assertEqual(
             Counter(definition.kind for definition in bake.BODY_DEFINITIONS),
@@ -185,6 +185,17 @@ class BakeCoreTests(unittest.TestCase):
         self.assertIsNone(sun["soiRadiusKm"])
         self.assertEqual(moon["parentId"], "earth")
         self.assertGreater(moon["soiRadiusKm"], 0)
+
+    def test_builds_schema_v2_with_explicit_visual_polar_radius_ratios(self):
+        catalog = bake.build_catalog(sample_elements())
+        earth = next(body for body in catalog["bodies"] if body["id"] == "earth")
+
+        self.assertEqual(catalog["schemaVersion"], 2)
+        self.assertAlmostEqual(earth["visual"]["polarRadiusRatio"], 6356.8 / 6378.1, 15)
+        for body in catalog["bodies"]:
+            ratio = body["visual"]["polarRadiusRatio"]
+            self.assertGreater(ratio, 0)
+            self.assertLessEqual(ratio, 1)
 
     def test_builds_three_complete_heliocentric_check_samples(self):
         vectors = {

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "epoch", "frame", "bodies"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "epoch": {
       "type": "object",
       "additionalProperties": false,
@@ -80,7 +80,7 @@
     "visual": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["albedoColor", "assetRef", "proceduralSeed"],
+      "required": ["albedoColor", "assetRef", "proceduralSeed", "polarRadiusRatio"],
       "properties": {
         "albedoColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "assetRef": { "type": ["string", "null"] },
@@ -88,7 +88,8 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295
-        }
+        },
+        "polarRadiusRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
       }
     },
     "body": {
