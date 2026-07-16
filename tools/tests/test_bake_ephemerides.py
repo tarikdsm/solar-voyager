@@ -1,0 +1,107 @@
+import importlib.util
+import math
+from pathlib import Path
+import unittest
+
+
+MODULE_PATH = Path(__file__).parents[1] / "bake_ephemerides.py"
+SPEC = importlib.util.spec_from_file_location("bake_ephemerides", MODULE_PATH)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError(f"Cannot load {MODULE_PATH}")
+bake = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(bake)
+
+
+def sample_elements():
+    return {
+        body_id: {
+            "semiMajorAxisKm": float(index + 1) * bake.AU_KM,
+            "eccentricity": 0.01,
+            "inclinationRad": 0.02,
+            "longitudeAscendingNodeRad": 0.03,
+            "argumentPeriapsisRad": 0.04,
+            "meanAnomalyRad": 0.05,
+        }
+        for index, body_id in enumerate(bake.BODY_IDS)
+        if body_id != "sun"
+    }
+
+
+class BakeCoreTests(unittest.TestCase):
+    def test_converts_horizons_elements_to_game_units(self):
+        elements = bake.elements_from_row(
+            {
+                "a": 2.0,
+                "e": 0.1,
+                "incl": 180.0,
+                "Omega": 90.0,
+                "w": 45.0,
+                "M": 270.0,
+            }
+        )
+
+        self.assertEqual(elements["semiMajorAxisKm"], 2 * bake.AU_KM)
+        self.assertEqual(elements["eccentricity"], 0.1)
+        self.assertAlmostEqual(elements["inclinationRad"], math.pi)
+        self.assertAlmostEqual(elements["longitudeAscendingNodeRad"], math.pi / 2)
+        self.assertAlmostEqual(elements["argumentPeriapsisRad"], math.pi / 4)
+        self.assertAlmostEqual(elements["meanAnomalyRad"], 3 * math.pi / 2)
+
+    def test_converts_horizons_vectors_to_game_units(self):
+        state = bake.state_from_row(
+            {"x": 1.0, "y": 2.0, "z": 3.0, "vx": 4.0, "vy": 5.0, "vz": 6.0}
+        )
+
+        self.assertEqual(
+            state["positionKm"], [bake.AU_KM, 2 * bake.AU_KM, 3 * bake.AU_KM]
+        )
+        self.assertEqual(state["velocityKmS"][0], 4 * bake.AU_KM / bake.DAY_SEC)
+        self.assertEqual(state["velocityKmS"][2], 6 * bake.AU_KM / bake.DAY_SEC)
+
+    def test_rejects_missing_or_non_finite_query_values(self):
+        with self.assertRaisesRegex(ValueError, "missing"):
+            bake.elements_from_row({"a": 1.0})
+        with self.assertRaisesRegex(ValueError, "finite"):
+            bake.state_from_row(
+                {"x": math.nan, "y": 0, "z": 0, "vx": 0, "vy": 0, "vz": 0}
+            )
+
+    def test_computes_sphere_of_influence_from_mu_ratio(self):
+        self.assertAlmostEqual(
+            bake.sphere_of_influence_km(100_000.0, 1.0, 1_000.0),
+            100_000.0 * (1.0 / 1_000.0) ** (2.0 / 5.0),
+        )
+
+    def test_builds_canonical_parent_order_and_nullable_sun_orbit(self):
+        catalog = bake.build_catalog(sample_elements())
+
+        self.assertEqual([body["id"] for body in catalog["bodies"]], bake.BODY_IDS)
+        sun = catalog["bodies"][0]
+        moon = next(body for body in catalog["bodies"] if body["id"] == "moon")
+        self.assertIsNone(sun["parentId"])
+        self.assertIsNone(sun["elements"])
+        self.assertIsNone(sun["soiRadiusKm"])
+        self.assertEqual(moon["parentId"], "earth")
+        self.assertGreater(moon["soiRadiusKm"], 0)
+
+    def test_builds_three_complete_heliocentric_check_samples(self):
+        vectors = {
+            body_id: [
+                {"positionKm": [float(sample), 0.0, 0.0], "velocityKmS": [0.0, 1.0, 0.0]}
+                for sample in range(3)
+            ]
+            for body_id in bake.BODY_IDS
+            if body_id != "sun"
+        }
+
+        checks = bake.build_checks(vectors)
+
+        self.assertEqual([sample["offsetDays"] for sample in checks["samples"]], [0, 30, 365])
+        for sample in checks["samples"]:
+            self.assertEqual(list(sample["states"]), bake.BODY_IDS)
+            self.assertEqual(sample["states"]["sun"]["positionKm"], [0.0, 0.0, 0.0])
+            self.assertEqual(sample["states"]["sun"]["velocityKmS"], [0.0, 0.0, 0.0])
+
+
+if __name__ == "__main__":
+    unittest.main()
