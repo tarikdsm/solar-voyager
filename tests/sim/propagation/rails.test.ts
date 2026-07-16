@@ -72,6 +72,32 @@ interface CheckSample {
   readonly states: Readonly<Record<string, CheckState>>;
 }
 
+interface AccuracyLimit {
+  readonly positionKm: number;
+  readonly velocityKmS: number;
+}
+
+type AccuracyClass = 'planet' | 'local' | 'giantMoon' | 'small';
+
+const ACCURACY_LIMITS: Readonly<Record<AccuracyClass, readonly [AccuracyLimit, AccuracyLimit]>> = {
+  planet: [
+    { positionKm: 38_000, velocityKmS: 0.042 },
+    { positionKm: 1_300_000, velocityKmS: 0.28 },
+  ],
+  local: [
+    { positionKm: 72_000, velocityKmS: 1.1 },
+    { positionKm: 900_000, velocityKmS: 2.1 },
+  ],
+  giantMoon: [
+    { positionKm: 210_000, velocityKmS: 17 },
+    { positionKm: 710_000, velocityKmS: 28 },
+  ],
+  small: [
+    { positionKm: 3_800, velocityKmS: 0.003 },
+    { positionKm: 710_000, velocityKmS: 0.053 },
+  ],
+};
+
 const inputs: RailsBodyInput[] = bodiesDocument.bodies.map((body) => ({
   id: body.id,
   parentId: body.parentId,
@@ -90,6 +116,15 @@ function positionErrorKm(state: RailsState, bodyIndex: number, expected: CheckSt
   );
 }
 
+function velocityErrorKmS(state: RailsState, bodyIndex: number, expected: CheckState): number {
+  const componentIndex = bodyIndex * 3;
+  return Math.hypot(
+    (state.velocitiesKmS[componentIndex] as number) - (expected.velocityKmS[0] as number),
+    (state.velocitiesKmS[componentIndex + 1] as number) - (expected.velocityKmS[1] as number),
+    (state.velocitiesKmS[componentIndex + 2] as number) - (expected.velocityKmS[2] as number),
+  );
+}
+
 function evaluateSample(sample: CheckSample): RailsState {
   return evaluateRailsInto(
     createRailsState(catalog),
@@ -99,26 +134,38 @@ function evaluateSample(sample: CheckSample): RailsState {
   );
 }
 
-function positionLimitKm(bodyId: string, sampleIndex: number): number {
-  if (bodyId === 'sun') {
-    return 0;
-  }
+function accuracyClassForBody(bodyId: string): AccuracyClass {
   if (bodyId === 'moon' || CALIBRATED_PLANET_IDS.has(bodyId)) {
-    return sampleIndex === 1 ? 50_000 : 1_500_000;
+    return 'planet';
   }
   if (CALIBRATED_DWARF_AND_LOCAL_MOON_IDS.has(bodyId)) {
-    return sampleIndex === 1 ? 100_000 : 1_500_000;
+    return 'local';
   }
   if (CALIBRATED_GIANT_MOON_IDS.has(bodyId)) {
-    return sampleIndex === 1 ? 250_000 : 1_000_000;
+    return 'giantMoon';
   }
   if (CALIBRATED_SMALL_BODY_IDS.has(bodyId)) {
-    return sampleIndex === 1 ? 10_000 : 750_000;
+    return 'small';
   }
   throw new Error(`rails accuracy bound has not been calibrated for ${bodyId}`);
 }
 
+function accuracyLimit(bodyId: string, sampleIndex: number): AccuracyLimit {
+  if (sampleIndex !== 1 && sampleIndex !== 2) {
+    throw new RangeError(`rails accuracy sample index must be 1 or 2, received ${sampleIndex}`);
+  }
+  if (bodyId === 'sun') {
+    return { positionKm: 0, velocityKmS: 0 };
+  }
+  const limits = ACCURACY_LIMITS[accuracyClassForBody(bodyId)];
+  return sampleIndex === 1 ? limits[0] : limits[1];
+}
+
 describe('rails vs JPL Horizons — physics-spec.md §2', () => {
+  it('pins the J2026, +30 day, and +365 day check epochs', () => {
+    expect(samples.map(({ offsetDays }) => offsetDays)).toEqual([0, 30, 365]);
+  });
+
   it('matches every baked body position within one kilometer at J2026', () => {
     const sample = samples[0] as CheckSample;
     const state = evaluateSample(sample);
@@ -135,23 +182,29 @@ describe('rails vs JPL Horizons — physics-spec.md §2', () => {
     ({ sampleIndex }) => {
       const sample = samples[sampleIndex] as CheckSample;
       const state = evaluateSample(sample);
-      const errorsKm = catalog.bodyIds.map((bodyId, bodyIndex) =>
-        positionErrorKm(state, bodyIndex, sample.states[bodyId] as CheckState),
-      );
       for (let bodyIndex = 0; bodyIndex < catalog.bodyCount; bodyIndex += 1) {
         const bodyId = catalog.bodyIds[bodyIndex] as string;
-        const errorKm = errorsKm[bodyIndex] as number;
-        const limitKm = positionLimitKm(bodyId, sampleIndex);
-        if (limitKm === 0) {
-          expect(errorKm, bodyId).toBe(0);
+        const expected = sample.states[bodyId] as CheckState;
+        const limit = accuracyLimit(bodyId, sampleIndex);
+        const positionError = positionErrorKm(state, bodyIndex, expected);
+        const velocityError = velocityErrorKmS(state, bodyIndex, expected);
+
+        if (bodyId === 'sun') {
+          expect(positionError, `${bodyId} position @ +${sample.offsetDays} d`).toBe(0);
+          expect(velocityError, `${bodyId} velocity @ +${sample.offsetDays} d`).toBe(0);
         } else {
-          expect(errorKm, bodyId).toBeLessThan(limitKm);
+          expect(positionError, `${bodyId} position @ +${sample.offsetDays} d`).toBeLessThan(
+            limit.positionKm,
+          );
+          expect(velocityError, `${bodyId} velocity @ +${sample.offsetDays} d`).toBeLessThan(
+            limit.velocityKmS,
+          );
         }
       }
     },
   );
 
   it('fails closed when a newly baked body has no calibrated accuracy bound', () => {
-    expect(() => positionLimitKm('newbody', 1)).toThrow(/has not been calibrated for newbody/u);
+    expect(() => accuracyLimit('newbody', 1)).toThrow(/has not been calibrated for newbody/u);
   });
 });
