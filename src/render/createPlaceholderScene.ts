@@ -1,32 +1,37 @@
-import {
-  AmbientLight,
-  BoxGeometry,
-  DirectionalLight,
-  Mesh,
-  MeshStandardMaterial,
-  PerspectiveCamera,
-  Scene,
-} from 'three';
+import { AmbientLight, BoxGeometry, DirectionalLight, Mesh, MeshStandardMaterial } from 'three';
+
+import type { ReadonlyVec3 } from '../core/vec3.js';
+import { CameraRelativeSpaceScene } from './spaceScene.js';
+
+const PLACEHOLDER_BODY_POSITION_KM: ReadonlyVec3 = {
+  x: 149_597_870.7,
+  y: 0,
+  z: 0,
+};
+
+const PLACEHOLDER_CAMERA_POSITION_KM: ReadonlyVec3 = {
+  x: 149_597_870.7,
+  y: 0,
+  z: 5,
+};
 
 export interface PlaceholderScene {
-  readonly scene: Scene;
-  readonly camera: PerspectiveCamera;
+  readonly spaceScene: CameraRelativeSpaceScene;
+  readonly scene: CameraRelativeSpaceScene['scene'];
+  readonly camera: CameraRelativeSpaceScene['camera'];
   readonly cube: Mesh<BoxGeometry, MeshStandardMaterial>;
+  readonly cameraPositionKm: ReadonlyVec3;
 }
 
 /** Creates the setup-only scene objects used by the initial scaffold. */
 export function createPlaceholderScene(): PlaceholderScene {
-  const scene = new Scene();
-  const camera = new PerspectiveCamera(75, 1, 0.1, 1_000);
-  camera.position.z = 5;
-  camera.matrixAutoUpdate = false;
-  camera.updateMatrix();
+  const spaceScene = new CameraRelativeSpaceScene();
+  const { scene, camera } = spaceScene;
 
   const geometry = new BoxGeometry(1, 1, 1);
   const material = new MeshStandardMaterial({ color: 0x2f80ed });
   const cube = new Mesh(geometry, material);
-  cube.matrixAutoUpdate = false;
-  cube.updateMatrix();
+  spaceScene.bindVisual(cube, PLACEHOLDER_BODY_POSITION_KM);
 
   const ambientLight = new AmbientLight(0xffffff, 1);
   ambientLight.matrixAutoUpdate = false;
@@ -36,7 +41,14 @@ export function createPlaceholderScene(): PlaceholderScene {
   directionalLight.matrixAutoUpdate = false;
   directionalLight.updateMatrix();
 
-  scene.add(cube, ambientLight, directionalLight);
+  scene.add(ambientLight, directionalLight);
+  spaceScene.updateCameraRelative(PLACEHOLDER_CAMERA_POSITION_KM);
 
-  return { scene, camera, cube };
+  return {
+    spaceScene,
+    scene,
+    camera,
+    cube,
+    cameraPositionKm: PLACEHOLDER_CAMERA_POSITION_KM,
+  };
 }

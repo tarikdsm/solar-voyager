@@ -26,7 +26,8 @@ describe('createPlaceholderScene', () => {
     expect(ambientLights).toHaveLength(1);
     expect(directionalLights).toHaveLength(1);
     expect(meshes[0]).toBe(cube);
-    expect(camera.position.z).not.toBe(0);
+    expect(camera.position.toArray()).toEqual([0, 0, 0]);
+    expect(cube.position.toArray()).toEqual([0, 0, -5]);
     expect(cube.geometry).toBeDefined();
     expect(cube.material).toBeInstanceOf(Material);
     expect(cube.matrixAutoUpdate).toBe(false);
