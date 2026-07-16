@@ -81,4 +81,3 @@
   finding with focused regression coverage and rerun all affected gates.
 - Let the independent merger record approval, mark T0042 DONE, require final
   green CI, and merge normally into `main`.
-

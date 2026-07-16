@@ -30,7 +30,11 @@ const vertexShader = /* glsl */ `
   void main() {
     vec4 viewPosition = modelViewMatrix * vec4(position * uRadiusKm, 1.0);
     vec4 clipPosition = projectionMatrix * viewPosition;
-    clipPosition.z = clipPosition.w;
+    #ifdef USE_REVERSED_DEPTH_BUFFER
+      clipPosition.z = 0.0;
+    #else
+      clipPosition.z = clipPosition.w;
+    #endif
     gl_Position = clipPosition;
 
     vPointSizePx = aSizeCssPx * uPixelRatio;

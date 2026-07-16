@@ -57,9 +57,12 @@ the object remains at the render origin and is deliberately not registered as
 a physical-body binding. It therefore has no translational parallax and needs
 no per-frame update, even across arbitrary heliocentric warp jumps.
 
-After projection, the vertex shader assigns `gl_Position.z = gl_Position.w`,
-placing stars on the far plane. The material uses a less-or-equal depth test so
-that cleared far-plane pixels pass, but disables depth writes. Opaque planets consequently occlude the background even though
+After projection, the vertex shader assigns `gl_Position.z = gl_Position.w`
+for normal/logarithmic depth and `gl_Position.z = 0` when Three.js defines
+`USE_REVERSED_DEPTH_BUFFER`, placing stars on the selected strategy's far
+plane. The material uses a less-or-equal logical depth test so that cleared
+far-plane pixels pass, but disables depth writes. Opaque planets consequently
+occlude the background even though
 their real camera-relative distance can exceed the nominal star-sphere radius.
 The starfield itself never hides later transparent effects by populating depth.
 
@@ -89,10 +92,11 @@ not substitute synthetic stars.
   disposal.
 - Epoch-world tests prove the real catalog is integrated before the only shader
   compile and remains separate from physical body bindings.
-- A browser regression points the camera at seven catalog-indexed Orion stars:
+- Browser regressions in both logarithmic and reversed-depth modes point the camera at seven catalog-indexed Orion stars:
   Rigel, Bellatrix, Mintaka, Alnilam, Alnitak, Saiph, and Betelgeuse. It verifies
-  luminous pixels at their CPU-projected locations and the three-star belt
-  alignment.
+  rendered peaks at their CPU-projected locations and the three-star belt
+  alignment from isolated observed peaks. An opaque foreground control must
+  remove Alnilam's pixels in both depth strategies.
 - The browser regression repeats after large synthetic heliocentric camera
   translations and at multiple fields of view. Equal pixels for translation
   and correct projected detections for zoom establish warp and zoom stability.

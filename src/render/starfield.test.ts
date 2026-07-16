@@ -76,6 +76,8 @@ describe('Starfield', () => {
     expect(material.uniforms.uRadiusKm?.value).toBe(STARFIELD_RADIUS_KM);
     expect(material.uniforms.uPixelRatio?.value).toBe(2);
     expect(material.vertexShader).toContain('position * uRadiusKm');
+    expect(material.vertexShader).toContain('#ifdef USE_REVERSED_DEPTH_BUFFER');
+    expect(material.vertexShader).toContain('clipPosition.z = 0.0');
     expect(material.vertexShader).toContain('clipPosition.z = clipPosition.w');
     expect(material.depthTest).toBe(true);
     expect(material.depthFunc).toBe(LessEqualDepth);

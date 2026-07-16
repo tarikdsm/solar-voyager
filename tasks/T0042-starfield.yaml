@@ -32,3 +32,17 @@ handoff_notes: |
     skipped, render-depth, starfield and visual-tier Chromium regressions, 49
     Python tests, build, budgets, 53 task schemas, and git diff check.
   - Critical path is 3,976,959 bytes (3.79 MiB), below the 8 MiB gate.
+
+  Independent-review remediation (2026-07-16):
+  - Far-plane placement now branches on Three.js USE_REVERSED_DEPTH_BUFFER:
+    z=0 for reversed depth and z=w for normal/logarithmic depth. The logical
+    LessEqualDepth function remains correctly remapped by Three.js.
+  - The Chromium regression now runs both logarithmic and actual reversed depth
+    (EXT_clip_control confirmed active). A real opaque foreground sphere fully
+    occludes Alnilam in both modes while the unoccluded field remains one draw.
+  - Each named Orion star is also rendered in an isolated draw-range control;
+    observed framebuffer peaks must land within 2 px of catalog projections.
+    Belt alignment is calculated from observed peaks rather than expected CPU
+    coordinates. Normal and reversed framebuffer hashes match exactly.
+  - Removed the trailing whitespace reported by independent review; focused
+    typecheck, starfield Chromium regression, and diff check pass.
