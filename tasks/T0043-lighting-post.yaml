@@ -1,6 +1,6 @@
 id: T0043
 title: Lighting, ACES tone mapping, bloom
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0043-lighting-post
 depends_on: [T0040]
