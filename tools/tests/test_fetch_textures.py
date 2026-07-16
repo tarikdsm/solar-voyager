@@ -110,6 +110,31 @@ class TextureFetchTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertTrue(first.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
 
+    def test_processing_failure_preserves_previous_body_directory(self):
+        source_bytes = b"pinned local source"
+        recipe = self.fetch.TextureRecipe.test("earth-albedo", output_name="earth_albedo.png")
+        recipe.sha256 = hashlib.sha256(source_bytes).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            body = root / "earth"
+            body.mkdir()
+            (body / "earth_albedo.png").write_bytes(b"previous texture")
+            (body / "SOURCES.md").write_text("previous attribution", encoding="utf-8")
+            source = root / "source.bin"
+            source.write_bytes(source_bytes)
+
+            def failing_processor(_source, destination, _recipe):
+                destination.write_bytes(b"partial new texture")
+                raise RuntimeError("processor failed")
+
+            with self.assertRaisesRegex(RuntimeError, "processor failed"):
+                self.fetch.execute((recipe,), root, source_override=source, processor=failing_processor)
+
+            self.assertEqual((body / "earth_albedo.png").read_bytes(), b"previous texture")
+            self.assertEqual((body / "SOURCES.md").read_text(encoding="utf-8"), "previous attribution")
+            self.assertFalse((root / ".earth.texture-stage").exists())
+            self.assertFalse((root / ".earth.texture-backup").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

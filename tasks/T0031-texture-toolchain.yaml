@@ -23,5 +23,7 @@ handoff_notes: |
   T0035 acceptance with KTX-Software 4.4 produced a 32,256-triangle Earth with
   seven runtime asset files; the complete runtime tree was 5,973,360 bytes
   (5.70 MiB), below the 20 MiB hero budget.
-  Gates: 214 Vitest passed (3 skipped), 35 Python passed, lint, typecheck,
+  Publication is transactional per body: staged PNG and SOURCES swap together,
+  with rollback coverage proving failures preserve the previous directory.
+  Gates: 214 Vitest passed (3 skipped), 36 Python passed, lint, typecheck,
   Prettier, Vite build, task schema, and asset budgets all pass.

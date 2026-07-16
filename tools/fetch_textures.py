@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +68,8 @@ class TextureRecipe:
             raise ValueError(f'Recipe "{self.id}" must pin a lowercase SHA-256')
         if self.width <= 0 or self.height <= 0 or self.width != self.height * 2:
             raise ValueError(f'Recipe "{self.id}" must target a positive 2:1 image')
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", self.body_id) is None:
+            raise ValueError(f'Recipe "{self.id}" body id must be a lowercase slug')
         return self
 
 
@@ -191,8 +194,8 @@ def process_image(source, destination, recipe, node_executable=None):
     return destination
 
 
-def write_sources(output_root, body_id, recipes):
-    destination = pathlib.Path(output_root).resolve() / body_id / "SOURCES.md"
+def write_sources(body_directory, body_id, recipes):
+    destination = pathlib.Path(body_directory).resolve() / "SOURCES.md"
     temporary = destination.with_name(f".{destination.name}.tmp")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with temporary.open("w", encoding="utf-8", newline="\n") as stream:
@@ -201,30 +204,67 @@ def write_sources(output_root, body_id, recipes):
     return destination
 
 
-def execute(recipes, output_root, source_override=None):
+def _publish_body(body_id, recipes, output_root, source_override, processor):
+    output_root = pathlib.Path(output_root).resolve()
+    body_directory = (output_root / body_id).resolve()
+    body_directory.relative_to(output_root)
+    staging = output_root / f".{body_id}.texture-stage"
+    backup = output_root / f".{body_id}.texture-backup"
+    for temporary_directory in (staging, backup):
+        if temporary_directory.exists():
+            shutil.rmtree(temporary_directory)
+    output_root.mkdir(parents=True, exist_ok=True)
+    if body_directory.exists():
+        shutil.copytree(body_directory, staging)
+    else:
+        staging.mkdir()
+
+    try:
+        for recipe in recipes:
+            destination = staging / recipe.output_name
+            raw_path = staging / f".{recipe.id}.source"
+            if source_override is None:
+                download_verified(recipe.source_url, raw_path, recipe.sha256)
+            else:
+                source = pathlib.Path(source_override).resolve()
+                actual = hashlib.sha256(source.read_bytes()).hexdigest()
+                if actual != recipe.sha256:
+                    raise ValueError(
+                        f"Texture SHA-256 mismatch: expected {recipe.sha256}, measured {actual}"
+                    )
+                shutil.copyfile(source, raw_path)
+            try:
+                processor(raw_path, destination, recipe)
+            finally:
+                raw_path.unlink(missing_ok=True)
+        write_sources(staging, body_id, recipes)
+
+        if body_directory.exists():
+            os.replace(body_directory, backup)
+        try:
+            os.replace(staging, body_directory)
+        except BaseException:
+            if backup.exists():
+                os.replace(backup, body_directory)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def execute(recipes, output_root, source_override=None, processor=process_image):
     if source_override is not None and len(recipes) != 1:
         raise ValueError("--source requires exactly one selected recipe")
     by_body = {}
     for recipe in recipes:
-        destination = output_path(output_root, recipe)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        raw_path = destination.with_name(f".{recipe.id}.source")
-        if source_override is None:
-            download_verified(recipe.source_url, raw_path, recipe.sha256)
-        else:
-            source = pathlib.Path(source_override).resolve()
-            actual = hashlib.sha256(source.read_bytes()).hexdigest()
-            if actual != recipe.sha256:
-                raise ValueError(f"Texture SHA-256 mismatch: expected {recipe.sha256}, measured {actual}")
-            shutil.copyfile(source, raw_path)
-        try:
-            process_image(raw_path, destination, recipe)
-        finally:
-            raw_path.unlink(missing_ok=True)
         by_body.setdefault(recipe.body_id, []).append(recipe)
-        print(f"Prepared {recipe.id}: {destination}")
     for body_id, body_recipes in sorted(by_body.items()):
-        print(f"Wrote attribution: {write_sources(output_root, body_id, body_recipes)}")
+        _publish_body(body_id, body_recipes, output_root, source_override, processor)
+        for recipe in body_recipes:
+            print(f"Prepared {recipe.id}: {output_path(output_root, recipe)}")
+        print(f"Wrote attribution: {pathlib.Path(output_root).resolve() / body_id / 'SOURCES.md'}")
 
 
 def parse_arguments(argv):
