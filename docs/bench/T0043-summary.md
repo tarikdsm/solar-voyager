@@ -18,9 +18,25 @@ worst case for the two additional full-screen passes and half-float traffic;
 the absolute timings are not the reference-GPU FPS gate described by
 `performance-spec.md` section 6. The production bloom extraction already uses
 the official half-resolution bright target, and lowering the complete scene
-resolution would violate current visual-fidelity expectations. Reference
-hardware measurement remains required before treating these numbers as a 60
-fps pass or failure.
+resolution would violate current visual-fidelity expectations. These software
+numbers alone do not decide the FPS gate; the hardware run below does.
+
+The reviewer-requested hardware run repeated the same 120+600-frame protocol
+at the required 1920×1080 resolution. The harness passed
+`--use-angle=default`, queried `WEBGL_debug_renderer_info`, and rejected known
+software-renderer names before accepting the capture. It selected Intel UHD
+Graphics through ANGLE D3D11, an integrated GPU older than the 2023+ reference
+class.
+
+| Revision/state     | GPU / resolution            |  Median |     p75 |     p99 |
+| ------------------ | --------------------------- | ------: | ------: | ------: |
+| `c559699`          | Intel UHD D3D11 / 1920×1080 | 16.7 ms | 16.7 ms | 16.8 ms |
+| T0043 working tree | Intel UHD D3D11 / 1920×1080 | 16.7 ms | 16.7 ms | 16.8 ms |
+
+Both paths sustained one 60 Hz refresh interval for all 600 measured frames;
+the reported one-decimal 16.7 ms is the rounded 16.67 ms VSync cadence, and the
+post chain produced no measurable frame-time regression even at p99. The
+hardware gate therefore passes on a conservative integrated-GPU target.
 
 The main JavaScript chunk changed from 630.21 kB (163.01 kB gzip) to 658.50 kB
 (169.10 kB gzip), adding the official Three.js post-processing modules. The

@@ -2,19 +2,18 @@ import {
   ACESFilmicToneMapping,
   HalfFloatType,
   Mesh,
-  MeshBasicMaterial,
-  PerspectiveCamera,
-  Scene,
-  SphereGeometry,
+  MeshStandardMaterial,
   WebGLRenderer,
 } from 'three';
 
 import bodiesDocument from '../../data/bodies.json';
+import { EARTH_NIGHT_EMISSIVE_INTENSITY } from '../../src/render/bodyVisualSystem.js';
 import { createEpochWorld } from '../../src/render/createEpochWorld.js';
 import { LightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
 
 const VIEWPORT_SIZE = 512;
 const EARTH_CAMERA_RADII = 3;
+const SUN_CAMERA_RADII = 20;
 const MODEL_FADE_START_MS = 1_000;
 const MODEL_FADE_END_MS = 1_300;
 
@@ -30,13 +29,21 @@ interface PipelineSnapshot {
 }
 
 interface LightingPostHarness {
-  renderEarthNight(): PipelineSnapshot & {
+  renderEarthNight(emissionEnabled: boolean): PipelineSnapshot & {
     readonly earthLoadState: string;
     readonly earthTier: number;
     readonly sphereOpacity: number;
     readonly modelOpacity: number;
   };
-  renderBloom(enabled: boolean): PipelineSnapshot;
+  renderProductionSun(
+    bloomEnabled: boolean,
+    glareEnabled: boolean,
+  ): PipelineSnapshot & {
+    readonly sunLoadState: string;
+    readonly sunTier: number;
+    readonly sphereOpacity: number;
+    readonly modelOpacity: number;
+  };
 }
 
 declare global {
@@ -83,21 +90,37 @@ const nightCameraPositionKm = {
   y: earthY + outwardY * cameraDistanceKm,
   z: earthZ + outwardZ * cameraDistanceKm,
 };
-world.spaceScene.camera.lookAt(-outwardX, -outwardY, -outwardZ);
-world.spaceScene.camera.updateMatrix();
 
-const bloomScene = new Scene();
-const bloomCamera = new PerspectiveCamera(60, 1, 0.1, 100);
-bloomCamera.position.z = 5;
-bloomCamera.updateMatrix();
-const bloomGeometry = new SphereGeometry(0.6, 64, 32);
-const bloomMaterial = new MeshBasicMaterial({ toneMapped: true });
-bloomMaterial.color.setRGB(8, 4, 1);
-const bloomDisc = new Mesh(bloomGeometry, bloomMaterial);
-bloomScene.add(bloomDisc);
-const bloomPipeline = new LightingPostPipeline(renderer, bloomScene, bloomCamera);
-bloomPipeline.resize(VIEWPORT_SIZE, VIEWPORT_SIZE, 1);
-bloomPipeline.warmUp();
+const sunIndex = bodiesDocument.bodies.findIndex((body) => body.id === 'sun');
+if (sunIndex < 0) throw new Error('Sun is missing from the lighting fixture catalog.');
+const sunDefinition = bodiesDocument.bodies[sunIndex];
+if (sunDefinition === undefined) throw new Error('Sun definition is sparse.');
+const sunOffset = sunIndex * 3;
+const sunX = world.positionsKm[sunOffset] ?? Number.NaN;
+const sunY = world.positionsKm[sunOffset + 1] ?? Number.NaN;
+const sunZ = world.positionsKm[sunOffset + 2] ?? Number.NaN;
+const sunCameraPositionKm = {
+  x: sunX + sunDefinition.meanRadiusKm * SUN_CAMERA_RADII,
+  y: sunY,
+  z: sunZ,
+};
+
+function setEarthEmissionEnabled(enabled: boolean): void {
+  let emissiveMaterialCount = 0;
+  world.spaceScene.scene.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (material instanceof MeshStandardMaterial && material.emissiveMap !== null) {
+        material.emissiveIntensity = enabled ? EARTH_NIGHT_EMISSIVE_INTENSITY : 0;
+        emissiveMaterialCount += 1;
+      }
+    }
+  });
+  if (emissiveMaterialCount === 0) {
+    throw new Error('Loaded Earth model has no emissive night-light material.');
+  }
+}
 
 function pipelineSnapshot(pipeline: LightingPostPipeline): PipelineSnapshot {
   const bloom = pipeline.bloomPass as unknown as {
@@ -116,7 +139,9 @@ function pipelineSnapshot(pipeline: LightingPostPipeline): PipelineSnapshot {
 }
 
 globalThis.__lightingPostHarness = {
-  renderEarthNight() {
+  renderEarthNight(emissionEnabled) {
+    world.spaceScene.camera.lookAt(-outwardX, -outwardY, -outwardZ);
+    world.spaceScene.camera.updateMatrix();
     world.visualSystem.update(
       nightCameraPositionKm,
       VIEWPORT_SIZE,
@@ -129,6 +154,7 @@ globalThis.__lightingPostHarness = {
       world.spaceScene.camera.fov * (Math.PI / 180),
       MODEL_FADE_END_MS,
     );
+    setEarthEmissionEnabled(emissionEnabled);
     world.lighting.update();
     world.spaceScene.updateCameraRelative(nightCameraPositionKm);
     earthPipeline.render();
@@ -140,9 +166,32 @@ globalThis.__lightingPostHarness = {
       modelOpacity: world.visualSystem.getOpacity('earth', 3),
     };
   },
-  renderBloom(enabled) {
-    bloomPipeline.setBloomEnabled(enabled);
-    bloomPipeline.render();
-    return pipelineSnapshot(bloomPipeline);
+  renderProductionSun(bloomEnabled, glareEnabled) {
+    world.spaceScene.camera.lookAt(-1, 0, 0);
+    world.spaceScene.camera.updateMatrix();
+    world.visualSystem.update(
+      sunCameraPositionKm,
+      VIEWPORT_SIZE,
+      world.spaceScene.camera.fov * (Math.PI / 180),
+      MODEL_FADE_START_MS + 1_000,
+    );
+    world.visualSystem.update(
+      sunCameraPositionKm,
+      VIEWPORT_SIZE,
+      world.spaceScene.camera.fov * (Math.PI / 180),
+      MODEL_FADE_END_MS + 1_000,
+    );
+    world.lighting.update();
+    world.spaceScene.updateCameraRelative(sunCameraPositionKm);
+    world.lighting.glare.visible = glareEnabled;
+    earthPipeline.setBloomEnabled(bloomEnabled);
+    earthPipeline.render();
+    return {
+      ...pipelineSnapshot(earthPipeline),
+      sunLoadState: world.visualSystem.getLoadState('sun'),
+      sunTier: world.visualSystem.getTier('sun'),
+      sphereOpacity: world.visualSystem.getOpacity('sun', 2),
+      modelOpacity: world.visualSystem.getOpacity('sun', 3),
+    };
   },
 };

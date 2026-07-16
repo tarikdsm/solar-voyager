@@ -63,7 +63,7 @@ Lambert material instead of an unlit basic material, so their terminator and
 night side respond to the same light. The Sun's sphere fallback is emissive.
 Tier-3 glTF materials remain authored PBR materials: Earth's committed
 `earth_emissive_night.ktx2` continues through its emissive map with minimum
-intensity 32 at the fixed ACES exposure, and the Sun's authored emissive
+intensity 4 at the fixed ACES exposure, and the Sun's authored emissive
 material is guaranteed a minimum intensity of 4 at load time.
 
 ## Solar glare
@@ -109,5 +109,5 @@ runtime code uses the already accepted Three.js dependency and official addons.
   console, or page errors.
 - Existing depth, starfield and visual-tier browser regressions plus all local
   gates must remain green. Paired 120+600-frame software benchmark reports are
-  committed, while reference-hardware FPS remains the authoritative acceptance
-  gate when that hardware is available.
+  committed. A second paired 1920×1080 run must reject software rasterizers and
+  sustain the 60 Hz cadence on an integrated GPU before acceptance.

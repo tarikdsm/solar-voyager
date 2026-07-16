@@ -54,7 +54,10 @@ receive NaN or infinity.
   diameters. Its alpha reaches zero at every edge, preventing square artifacts.
 - Night sides are genuinely dark; the global ambient floor is exactly 0.02 for
   playability. Earth keeps its authored night-light emissive map with minimum
-  intensity 32 at the fixed exposure so localized city lights remain visible.
+  intensity 4 at the fixed exposure so localized city lights remain visible.
+  The RGB cloud texture also supplies its green channel as the cloud shell's
+  alpha map and the transparent shell does not write depth, preserving the
+  surface and night lights below it.
 - Earth atmosphere: simple rim/fresnel shader in v1 (full scattering is a future task).
 
 ## 5. Starfield

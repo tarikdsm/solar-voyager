@@ -63,7 +63,7 @@
   photosphere clamp, bloom constants, glare extent, and pass order.
 - Capture paired `npm run bench:scaffold` reports from the T0043 base and head
   under identical 1280×720 software conditions; document p50/p75/p99, heap
-  endpoint caveats, bundle/draw implications, and lack of reference hardware.
+  endpoint caveats, bundle/draw implications, and a hardware-verified 1080p run.
 - Run lint, strict typecheck, Prettier, all Vitest and Python tests, production
   build, budgets, task schema, diff check, and every Chromium regression.
 - Move T0043 to REVIEW with evidence, push, open `[T0043] Lighting, ACES and

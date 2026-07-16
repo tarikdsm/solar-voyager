@@ -16,8 +16,9 @@ handoff_notes: >-
   Lambert sphere tiers, HDR Sun/glare and visible Earth night emission. Added
   the half-float RenderPass -> UnrealBloomPass -> OutputPass chain with ACES,
   warm-up and resize integration. Chromium regression proves the real Earth
-  night side is 99.95% dark with localized lights and that bloom is symmetric
-  with dark corners; all 282 unit tests, 49 tool tests, four browser suites,
-  build, budgets and schema checks pass. Paired software benchmark p75 is
-  150.0 ms before and 250.1 ms after; docs/bench/T0043-summary.md records that
-  reference-GPU verification remains required for the hardware FPS gate.
+  night disc is 81.0% dark while 12.9% has strong emission-only contrast; the
+  production Sun/glare has symmetric bloom and black corners. All 282 unit
+  tests, 49 tool tests, four browser suites, build, budgets and schema checks
+  pass. Paired 1920x1080 Intel UHD hardware runs sustain the identical 16.7 ms
+  VSync p75 and 16.8 ms p99 before/after; software results and caveats remain in
+  docs/bench/T0043-summary.md.

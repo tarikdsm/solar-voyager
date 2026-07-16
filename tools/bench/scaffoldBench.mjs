@@ -11,6 +11,7 @@ const HOST = '127.0.0.1';
 const PORT = 4174;
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
+const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),
@@ -25,6 +26,17 @@ function readOutputPath() {
   }
 
   return resolve(outputArgument);
+}
+
+function readPositiveIntegerFlag(flag, fallback) {
+  const flagIndex = process.argv.indexOf(flag);
+  if (flagIndex === -1) return fallback;
+  const rawValue = process.argv[flagIndex + 1];
+  const value = Number(rawValue);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${flag} must be followed by a positive integer.`);
+  }
+  return value;
 }
 
 function runBuild() {
@@ -191,11 +203,20 @@ function readGitSha() {
 }
 
 async function collectBenchmark(pageUrl) {
+  const viewportWidth = readPositiveIntegerFlag('--viewport-width', 1280);
+  const viewportHeight = readPositiveIntegerFlag('--viewport-height', 720);
   const browser = await chromium.launch({
     headless: true,
-    args: ['--enable-precise-memory-info'],
+    args: [
+      '--enable-precise-memory-info',
+      ...(REQUIRE_HARDWARE_GPU
+        ? ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=default']
+        : []),
+    ],
   });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const page = await browser.newPage({
+    viewport: { width: viewportWidth, height: viewportHeight },
+  });
   const consoleErrors = [];
   const pageErrors = [];
 
@@ -210,6 +231,27 @@ async function collectBenchmark(pageUrl) {
 
   try {
     await page.goto(pageUrl, { waitUntil: 'networkidle' });
+
+    const gpu = await page.locator('#space-canvas').evaluate((element) => {
+      if (!(element instanceof globalThis.HTMLCanvasElement)) {
+        throw new Error('Expected #space-canvas to be a canvas element.');
+      }
+      const context = element.getContext('webgl2');
+      const extension = context?.getExtension('WEBGL_debug_renderer_info');
+      return {
+        renderer:
+          context !== null && extension !== null
+            ? String(context.getParameter(extension.UNMASKED_RENDERER_WEBGL))
+            : 'unavailable',
+        vendor:
+          context !== null && extension !== null
+            ? String(context.getParameter(extension.UNMASKED_VENDOR_WEBGL))
+            : 'unavailable',
+      };
+    });
+    if (REQUIRE_HARDWARE_GPU && /SwiftShader|llvmpipe|Software|Basic Render/iu.test(gpu.renderer)) {
+      throw new Error(`Hardware benchmark selected a software renderer: ${gpu.renderer}`);
+    }
 
     const measurement = await page.evaluate(
       ({ sampleFrames, warmupFrames }) =>
@@ -286,6 +328,7 @@ async function collectBenchmark(pageUrl) {
       medianMs: roundMilliseconds(percentile(sortedFrameDeltasMs, 0.5)),
       p75Ms: roundMilliseconds(percentile(sortedFrameDeltasMs, 0.75)),
       p99Ms: roundMilliseconds(percentile(sortedFrameDeltasMs, 0.99)),
+      gpu,
       canvas,
       consoleErrors,
       pageErrors,

@@ -144,7 +144,17 @@ describe('BodyVisualSystem structure', () => {
       emissiveIntensity: 1,
       emissiveMap: new Texture(),
     });
-    const earthModel = loadedModel(earthMaterial);
+    const cloudsMaterial = new MeshStandardMaterial({
+      map: new Texture(),
+      transparent: true,
+    });
+    cloudsMaterial.name = 'mat_clouds';
+    const earthRoot = new Group();
+    earthRoot.add(new Mesh(undefined, earthMaterial), new Mesh(undefined, cloudsMaterial));
+    const earthModel: LoadedBodyModel = {
+      root: earthRoot,
+      materials: [earthMaterial, cloudsMaterial],
+    };
     const loader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
       loadSphereAlbedo: vi.fn(async () => null),
@@ -162,6 +172,8 @@ describe('BodyVisualSystem structure', () => {
 
     await vi.waitFor(() => expect(system.getLoadState('earth')).toBe('ready'));
     expect(earthMaterial.emissiveIntensity).toBe(EARTH_NIGHT_EMISSIVE_INTENSITY);
+    expect(cloudsMaterial.alphaMap).toBe(cloudsMaterial.map);
+    expect(cloudsMaterial.depthWrite).toBe(false);
   });
 });
 

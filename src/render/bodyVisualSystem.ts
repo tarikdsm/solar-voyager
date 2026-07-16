@@ -47,7 +47,7 @@ const LOAD_READY = 2;
 const LOAD_FAILED = 3;
 const HERO_IDS = new Set(['sun', 'earth', 'moon']);
 export const SUN_EMISSIVE_INTENSITY = 4;
-export const EARTH_NIGHT_EMISSIVE_INTENSITY = 32;
+export const EARTH_NIGHT_EMISSIVE_INTENSITY = 4;
 
 function loadStateName(state: number): BodyModelLoadState {
   switch (state) {
@@ -409,6 +409,16 @@ export class BodyVisualSystem {
           EARTH_NIGHT_EMISSIVE_INTENSITY,
           material.emissiveIntensity,
         );
+      }
+      if (
+        definition.id === 'earth' &&
+        material instanceof MeshStandardMaterial &&
+        material.name === 'mat_clouds' &&
+        material.map !== null
+      ) {
+        material.alphaMap = material.map;
+        material.depthWrite = false;
+        material.needsUpdate = true;
       }
       baseOpacities[materialIndex] = material.opacity;
       baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
