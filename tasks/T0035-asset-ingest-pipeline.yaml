@@ -1,6 +1,6 @@
 id: T0035
 title: Asset ingest pipeline (assets/ -> public/assets/)
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0035-asset-ingest-pipeline
 depends_on: [T0001]
@@ -19,4 +19,24 @@ acceptance:
   - A guide-violating fixture (wrong scale, missing SOURCES.md, embedded texture) fails with a message naming the violated guide section
   - Earth fixture round-trips within the 20 MB hero budget
   - Ingest is idempotent (re-run produces identical bytes)
-handoff_notes: ""
+handoff_notes: |
+  Added sorted source discovery, aggregated guide-section diagnostics, raw GLB
+  authoring checks, world-space primary-body scale/origin/+Y validation, texture
+  metadata and attribution checks, category triangle limits, Draco 14/10/12,
+  ETC1S/UASTC KTX2 with full mips, per-body byte gates, canonical manifest, and
+  transactional publication. The required violating fixture reports sections 2,
+  3, and 8 in one run. Real KTX-Software 4.4.2 verification produced Earth at
+  5,976,907 bytes and all 9 files were byte-identical across two complete runs.
+  Review findings were addressed: runtime GLBs now require KHR_texture_basisu and
+  decode with material bindings; linear PBR maps stay linear; per-role tiers and
+  detail pairs are enforced; catalog/category/duplicate/deliverable identity is
+  validated; world/ancestor transforms enforce +Y. A typed manifest loader rejects
+  unsafe paths. Six procedural detail sources regenerated with identical hashes.
+  Follow-up findings were also covered: authored external texture objects are
+  reused by explicit source-name markers with no retained bufferView, clouds are
+  verified sRGB/BT.709, and major/small moon tiers are enforced.
+  Published 5 assets: Earth 32,256 tris, Pluto 3,968, Saturn 37,568, ship 6,174,
+  Sun 16,128. public/assets is 8.31 MiB; critical path is 6.24 MiB (< 8 MiB).
+  Official KTX validation and Draco decode passed for every artifact. Final gates:
+  lint/typecheck passed; Vitest 214 passed / 3 skipped; Python 22 passed; format,
+  build, 52-task schema, budgets, and diff check passed.

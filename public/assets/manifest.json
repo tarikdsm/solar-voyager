@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "earth",
+      "category": "planet",
+      "triangles": 32256,
+      "files": [
+        "models/earth.glb",
+        "textures/earth_albedo.ktx2",
+        "textures/earth_clouds.ktx2",
+        "textures/earth_detail_albedo.ktx2",
+        "textures/earth_detail_normal.ktx2",
+        "textures/earth_emissive_night.ktx2",
+        "textures/earth_normal.ktx2"
+      ]
+    },
+    {
+      "id": "pluto",
+      "category": "dwarf",
+      "triangles": 3968,
+      "files": [
+        "models/pluto.glb",
+        "textures/pluto_albedo.ktx2",
+        "textures/pluto_detail_albedo.ktx2",
+        "textures/pluto_detail_normal.ktx2"
+      ]
+    },
+    {
+      "id": "saturn",
+      "category": "planet",
+      "triangles": 37568,
+      "files": [
+        "models/saturn.glb",
+        "textures/saturn_albedo.ktx2",
+        "textures/saturn_detail_albedo.ktx2",
+        "textures/saturn_detail_normal.ktx2",
+        "textures/saturn_rings.ktx2"
+      ]
+    },
+    {
+      "id": "ship",
+      "category": "ship",
+      "triangles": 6174,
+      "files": [
+        "models/ship.glb"
+      ]
+    },
+    {
+      "id": "sun",
+      "category": "sun",
+      "triangles": 16128,
+      "files": [
+        "models/sun.glb"
+      ]
+    }
+  ]
+}

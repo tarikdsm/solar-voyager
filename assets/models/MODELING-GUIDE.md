@@ -15,6 +15,10 @@ assets/models/<category>/<body-id>/
 
 Categories: `sun/ planets/ moons/ dwarfs/ asteroids/ comets/ ship/ rings/`. Body ids are the lowercase catalog ids from `data/bodies.json` (`earth`, `io`, `67p`). Hand-authored `.blend` sources go in `assets/blender/` (textures linked, never packed).
 
+`sun` and `ship` are singleton categories and keep `sun.glb` / `ship.glb`, textures,
+and `SOURCES.md` directly in their category directory. Other categories use the
+`<category>/<body-id>/` layout shown above.
+
 ## 2. File format
 
 - **glTF 2.0 Binary (`.glb`)** — the only accepted model format. Blender: File → Export → glTF 2.0, format "glTF Binary".
@@ -56,7 +60,15 @@ Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (q
 | **Detail maps** (tiling, close-range) | 1k tiling albedo-noise + 1k tiling normal, seamless | same set can be shared per surface class | – | see below |
 | Clouds (Earth) | 4k separate layer with alpha | – | – | rendered as a slightly larger shell |
 
+Source maps may be delivered above the runtime tier when licensing or authoring
+workflow requires it. Ingest deterministically downsamples hero cloud and emissive
+layers to 4096×2048; other maps must already fit their listed tier.
+
 **Detail maps are mandatory for tier-3 bodies**: a seamless 1k tiling normal+albedo-variation pair per surface class (rock, ice, gas banding, regolith), blended in by the shader below ~5 body-radii distance. This is what keeps a real-size planet crisp when the ship is close — resolution comes from tiling detail + macro normal map, not from impossible 100k textures. Deliver them in the body folder (or reference a shared set in `assets/models/_shared-detail/`).
+
+Current project-authored detail pairs can be regenerated with
+`node tools/generateDetailTextures.mjs`. Generated files still require explicit
+entries in each body's `SOURCES.md`.
 
 Rings (Saturn, Uranus, Jupiter's faint ring, Neptune's arcs): **1D radial strips stretched to 2048×64** — color+alpha (transmission) from real ring scans (solarsystemscope / NASA PDS derived). Alpha is optical depth; the shader uses it for both transparency and the planet's shadow on the ring.
 
