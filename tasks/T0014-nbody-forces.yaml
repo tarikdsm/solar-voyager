@@ -1,6 +1,6 @@
 id: T0014
 title: N-body gravity field evaluation
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0014-nbody-forces
 depends_on: [T0013]
@@ -12,4 +12,18 @@ spec: |
 acceptance:
   - Analytic check vs single-body two-body acceleration
   - Lagrange L1 Earth-Sun equilibrium: net acceleration ~0 in rotating-frame test
-handoff_notes: ""
+handoff_notes: |
+  Implemented the pure allocation-free Newtonian field over packed float64
+  body GM/position arrays, with per-component Kahan summation, caller-owned
+  output, empty-field/alias support, shape validation, and explicit NaN at the
+  unsoftened point-mass singularity. The API directly accepts T0013 rails arrays
+  and the first XYZ components of the seven-component relativistic ship state.
+  ADR-016 defines the analytic/L1 validation profile. Single-body inverse-square
+  relative error is <1e-14. The independently solved circular barycentric
+  Earth-Sun L1 is 1,490,350.165 km from Earth; production gravity plus the
+  test-only centrifugal term has normalized residual 1.440e-15 (<1e-10).
+  Independent review found no remaining Critical/Important/Minor findings and
+  confirmed zero valid-path allocations. Verified: lint, typecheck, format,
+  build, 170 Vitest tests, 12 Python tests, task schema, budgets, and base-to-HEAD
+  diff check all pass. Vite retains the existing 531.42 kB chunk advisory;
+  critical path is 0.51 MiB / 8 MiB.
