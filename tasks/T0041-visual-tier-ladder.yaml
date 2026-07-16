@@ -1,6 +1,6 @@
 id: T0041
 title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0041-visual-tier-ladder
 depends_on: [T0040]
@@ -12,4 +12,26 @@ spec: |
 acceptance:
   - Fly-in from 1 AU to LEO transitions tiers without popping (manual + smoke test)
   - Network panel shows no tier-2/3 fetches until approach
-handoff_notes: ""
+handoff_notes: |
+  Implemented the point/sphere/glTF ladder with 20% hysteresis, 250 ms
+  opacity-preserving crossfades, one batched Points draw object, shared sphere
+  geometry, cached local KTX2/Draco loaders, and compile-before-visible models.
+  The game/render split follows the canonical dependency direction: game owns
+  the pure J2026 epoch state; render owns scene and loader construction.
+
+  Acceptance evidence (2026-07-16):
+  - npm run test:visual-tiers passed repeatedly in real Chromium. Stable tier
+    sequence was [1,2,3,2,1]; every sample had opacitySum=1, lit pixels, and
+    WebGL error 0. Earth/Pluto models were each requested exactly once, and no
+    Pluto tier-2/model request occurred before its approach.
+  - Manual headed Playwright playtest loaded the sunward 400 km Earth view with
+    the real glTF and reported zero console errors and zero warnings.
+  - lint, typecheck, format, build, task schema, render-depth and budget gates
+    passed. Vitest: 264 passed / 3 skipped; Python tools: 49 passed.
+  - Critical path: 3,970,266 bytes (3.79 MiB), below the 8 MiB gate.
+  - Before/after 120+600-frame software-renderer evidence is in
+    docs/bench/T0041-{before,after}.json and T0041-summary.md. Absolute
+    headless p75 rose from 16.7 to 166.6 ms for the fullscreen 32k-triangle
+    Earth; this is retained honestly and is not the reference-GPU FPS gate per
+    performance-spec section 6. Heap endpoint sampling was non-monotonic across
+    repetitions (-412 KB then +319 KB), with no valid-frame allocations found.

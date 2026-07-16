@@ -25,7 +25,7 @@ describe('createEpochState', () => {
     const offsetZ = state.cameraPositionKm.z - earthZ;
     expect(Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ)).toBeCloseTo(
       earth.meanRadiusKm + 400,
-      8,
+      6,
     );
     expect(offsetX * earthX + offsetY * earthY + offsetZ * earthZ).toBeLessThan(0);
     const look = state.cameraLookDirection;

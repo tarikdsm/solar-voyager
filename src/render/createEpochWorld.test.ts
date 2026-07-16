@@ -1,12 +1,5 @@
 import bodiesDocument from '../../data/bodies.json';
-import {
-  BoxGeometry,
-  Mesh,
-  Points,
-  Vector3,
-  type Object3D,
-  type WebGLRenderer,
-} from 'three';
+import { BoxGeometry, Mesh, Points, Vector3, type Object3D, type WebGLRenderer } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
