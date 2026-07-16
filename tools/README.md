@@ -137,3 +137,12 @@ Validation diagnostics cite the actionable section of
 packages, KTX's deterministic test mode, one encoder thread, sorted discovery,
 canonical JSON, and transactional directory publication. A failed validation,
 encoder, or byte-budget check leaves the previous output untouched.
+
+The publisher attaches every emitted texture to its runtime GLB through required
+`KHR_texture_basisu` references. `npm run assets:verify` decodes Draco again and
+checks the Earth material bindings, KTX2 identifiers/mip counts, hero byte budget,
+and two-run hash equality. Regenerate project-authored seamless detail maps with:
+
+```powershell
+node tools/generateDetailTextures.mjs
+```

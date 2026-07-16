@@ -66,6 +66,10 @@ layers to 4096×2048; other maps must already fit their listed tier.
 
 **Detail maps are mandatory for tier-3 bodies**: a seamless 1k tiling normal+albedo-variation pair per surface class (rock, ice, gas banding, regolith), blended in by the shader below ~5 body-radii distance. This is what keeps a real-size planet crisp when the ship is close — resolution comes from tiling detail + macro normal map, not from impossible 100k textures. Deliver them in the body folder (or reference a shared set in `assets/models/_shared-detail/`).
 
+Current project-authored detail pairs can be regenerated with
+`node tools/generateDetailTextures.mjs`. Generated files still require explicit
+entries in each body's `SOURCES.md`.
+
 Rings (Saturn, Uranus, Jupiter's faint ring, Neptune's arcs): **1D radial strips stretched to 2048×64** — color+alpha (transmission) from real ring scans (solarsystemscope / NASA PDS derived). Alpha is optical depth; the shader uses it for both transparency and the planet's shadow on the ring.
 
 ## 6. Materials

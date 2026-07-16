@@ -24,6 +24,7 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 - Format: `.glb` (glTF-Binary), +Y up, apply modifiers, no lights/cameras/animations.
 - **No Draco at export** — ingest compresses (position quantization 14 bit, normal 10, texcoord 12).
 - Textures NOT embedded — referenced externally as JPEG/PNG; ingest encodes complete-mip KTX2 (ETC1S for color maps, UASTC for normal maps). Color output is tagged sRGB/BT.709; normals are linear. Hero cloud/emissive sources above 4k are downsampled to their 4096×2048 runtime tier.
+- Runtime GLBs require `KHR_texture_basisu` and point to the emitted external KTX2 files. Standard albedo, normal, emissive, metallic-roughness, occlusion, cloud, and ring slots are wired by the material/filename conventions; detail-map URIs are recorded in `mat_surface.extras.solarVoyagerTextures` for the close-range shader.
 
 ### Ingest commands
 
@@ -43,6 +44,14 @@ validates every selected source before writing, builds in a sibling staging tree
 and atomically replaces the destination only after compression and per-body budget
 checks pass. `manifest.json` contains sorted `id`, `category`, `triangles`, and
 runtime file lists without timestamps or machine paths.
+`src/render/assetManifest.ts` validates and loads this manifest at startup; unsafe
+paths, duplicate ids/files, unknown categories, and malformed entries are rejected.
+
+Color albedo/emissive/ring maps are sRGB. Normals, roughness, ORM, metallic, AO,
+occlusion, and cloud masks are tagged linear with no color primaries. The source
+validator enforces catalog id/category membership, unique flattened ids, approved
+deliverables, per-role resolution tiers, and the required 1k detail albedo/normal
+pair for planets, moons, and dwarfs.
 - Scale/orientation contract: MODELING-GUIDE §3 (body radius = 1.0 unit, pole +Y, prime meridian +X, ship in real meters).
 
 ## Texture sourcing (keep this credit table current)

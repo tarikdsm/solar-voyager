@@ -65,6 +65,10 @@ expected version family.
 Textures are staged as deterministic PNG input where the encoder requires it.
 Runtime GLBs reference the generated `.ktx2` files through
 `KHR_texture_basisu`; authored JPEG/PNG bytes are never copied to public output.
+Standard PBR slots are wired by filename and material conventions. Tiling detail
+maps remain externally referenced and are named in `mat_surface` extras for the
+engine's close-range shader. A startup-only render-layer loader validates the
+canonical manifest and rejects unsafe or duplicate paths.
 
 ## Publication and manifest
 
