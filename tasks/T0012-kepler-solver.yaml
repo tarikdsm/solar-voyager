@@ -1,6 +1,6 @@
 id: T0012
 title: Kepler solver (elliptic + hyperbolic) and elements <-> state vectors
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0012-kepler-solver
 depends_on: [T0010]
@@ -13,4 +13,28 @@ spec: |
 acceptance:
   - physics-spec 7.1 tolerances met across e in [0,0.99] and (1,5]
   - Round-trip elements<->state 1e-10 relative
-handoff_notes: ""
+handoff_notes: |
+  Implemented allocation-conscious elliptic/hyperbolic Newton solvers with
+  caller-owned convergence metadata, the §2 perifocal-to-inertial rotation,
+  and bidirectional osculating elements/state conversions. Canonical handling
+  covers circular-equatorial, circular-inclined, eccentric-equatorial, and
+  retrograde-equatorial degeneracies. TDD exposed and fixed divergence for
+  e=0.99 with negative mean anomaly by reducing elliptic M while preserving
+  complete turns. Near-parabolic hyperbolic residuals and derivatives use
+  cancellation-resistant forms; state conversion selects an energy- or
+  angular-momentum-based semi-major axis according to conditioning and
+  canonicalizes numerical periapsis. Inclination recovery uses atan2 to retain
+  near-equatorial inclinations. Review-driven regressions extend the stable
+  hyperbolic series through H^17 and use conditioned scalar invariants plus a
+  cancellation-resistant transverse velocity in the e-to-1 limit. The
+  hyperbolic starter selects the better linear/cubic asymptote for |M|<1,
+  retaining convergence down to |M|=1e-16. Near-parabolic factors use
+  (e-1)(e+1) and stable cosh(H)-1 forms instead of subtracting nearly equal
+  values. A 459-case
+  property grid covered e=[0,0.99], e=[1.000001,5], inclinations [0,pi],
+  M=[-10,10], and q=1000 km down to e=1+1e-12 with adjacent M values from
+  1e-10 through 1e-3, with worst state round-trip error 1.77e-11. Full
+  verification passed: lint, typecheck, 108 tests, build,
+  Prettier, task schema, asset budgets, and diff check. Independent review of
+  SHA 87317ba passed with no findings; its additional 336-case grid had worst
+  state round-trip error 9.18e-11.
