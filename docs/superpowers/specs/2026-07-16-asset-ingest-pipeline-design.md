@@ -31,6 +31,9 @@ enforces the category limit from guide section 4.
 Decoded positions are evaluated in scene/world space. Celestial bodies must be
 centered at the origin and have equatorial radius 1.0 within a documented
 floating-point tolerance; the root transform must preserve the glTF +Y-up frame.
+The primary body node is identified by the catalog id. Named adjunct geometry,
+including cloud shells and rings, contributes to triangle/byte budgets but not to
+the primary body's unit-radius measurement.
 That transform check is the mechanically verifiable part of the pole contract.
 Prime-meridian appearance and texture semantics cannot be derived reliably from
 mesh bytes and remain authoring checks in the guide. Rings and ships have their
@@ -51,7 +54,10 @@ developer machines do not depend on a system Draco binary.
 KTX-Software performs texture encoding through a small command adapter. Albedo,
 emissive, cloud, and other color maps use ETC1S; normal maps use UASTC. Every
 texture gets a complete mip chain. The adapter prefers the current `ktx create`
-interface and can use legacy `toktx` when explicitly configured. It records no
+interface. It explicitly assigns sRGB/BT.709 metadata to color maps and
+linear/no-primary metadata to normals, so authoring ICC profiles cannot change or
+block the result. Hero cloud and emissive layers are downsampled to the guide's 4k
+runtime tier while the 8k hero albedo and 4k normal remain unchanged. It records no
 timestamps and forces one worker for reproducibility. A missing or unsupported
 KTX executable fails before publication with an installation command and the
 expected version family.
@@ -96,4 +102,3 @@ The normal repository test suite uses a deterministic fake KTX adapter so CI can
 exercise orchestration without an undeclared native executable; a dedicated
 `assets:verify` command runs the real encoder acceptance path when KTX-Software
 is installed.
-

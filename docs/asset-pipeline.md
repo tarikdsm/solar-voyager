@@ -8,7 +8,7 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 
 - **Blender 4+** headless. This machine: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
 - Run: `blender --background --python tools/blender/build_all.py -- --only earth` (or `--all`) — builders write to `assets/models/`.
-- Ingest: `npm run assets:ingest` — validate (guide contract, SOURCES.md, budgets) → Draco → KTX2 (`toktx`) → `public/assets/`.
+- Ingest: `npm run assets:ingest` — validate (guide contract, SOURCES.md, budgets) → Draco → KTX2 (KTX-Software 4.4.x) → `public/assets/`.
 - **blender-mcp** (in `.mcp.json`, runs via `uvx blender-mcp`) for interactive sessions. Requires the blender-mcp addon installed and enabled in Blender's preferences (see the addon's README; one-time manual setup per machine).
 
 ## Script conventions
@@ -23,7 +23,26 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 
 - Format: `.glb` (glTF-Binary), +Y up, apply modifiers, no lights/cameras/animations.
 - **No Draco at export** — ingest compresses (position quantization 14 bit, normal 10, texcoord 12).
-- Textures NOT embedded — referenced externally as PNG; ingest encodes KTX2 (ETC1S for albedo/emissive, UASTC for normal maps).
+- Textures NOT embedded — referenced externally as JPEG/PNG; ingest encodes complete-mip KTX2 (ETC1S for color maps, UASTC for normal maps). Color output is tagged sRGB/BT.709; normals are linear. Hero cloud/emissive sources above 4k are downsampled to their 4096×2048 runtime tier.
+
+### Ingest commands
+
+Install KTX-Software 4.4.x and make `ktx` available on `PATH`, or set `KTX_BIN`
+to the executable. Node dependencies include the pinned Draco WASM encoder.
+
+```powershell
+npm install
+$env:KTX_BIN = 'C:\path\to\KTX-Software\bin\ktx.exe'
+npm run assets:ingest
+npm run assets:verify  # real Earth, budget, headers, two-run SHA-256 equality
+```
+
+For focused review output, use
+`npm run assets:ingest -- --only earth --output build/earth-review`. The command
+validates every selected source before writing, builds in a sibling staging tree,
+and atomically replaces the destination only after compression and per-body budget
+checks pass. `manifest.json` contains sorted `id`, `category`, `triangles`, and
+runtime file lists without timestamps or machine paths.
 - Scale/orientation contract: MODELING-GUIDE §3 (body radius = 1.0 unit, pole +Y, prime meridian +X, ship in real meters).
 
 ## Texture sourcing (keep this credit table current)

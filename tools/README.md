@@ -114,3 +114,26 @@ Publishing uses a same-directory temporary file and atomic replacement.
 
 Blender builders follow `docs/asset-pipeline.md`. Their Python scripts, not
 hand-edited exported GLBs, are the source of truth.
+
+## Runtime asset ingest
+
+`tools/assets/ingestCli.mjs` is the only supported publisher from
+`assets/models/` to `public/assets/`. Install Node dependencies and
+KTX-Software 4.4.x, then run:
+
+```powershell
+$env:KTX_BIN = 'C:\path\to\KTX-Software\bin\ktx.exe'
+npm run assets:ingest
+
+# Optional focused output
+npm run assets:ingest -- --only earth --output build/earth-review
+
+# Real Draco/KTX2 acceptance: headers, 20 MiB budget, two identical hash trees
+npm run assets:verify
+```
+
+Validation diagnostics cite the actionable section of
+`assets/models/MODELING-GUIDE.md`. Ingest uses pinned glTF-Transform and Draco
+packages, KTX's deterministic test mode, one encoder thread, sorted discovery,
+canonical JSON, and transactional directory publication. A failed validation,
+encoder, or byte-budget check leaves the previous output untouched.
