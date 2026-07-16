@@ -1,6 +1,6 @@
 id: T0020
 title: bake_ephemerides script + initial bodies.json (planets + Moon)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0020-bake-ephemerides
 depends_on: [T0001]
