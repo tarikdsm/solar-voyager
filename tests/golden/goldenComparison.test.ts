@@ -12,10 +12,10 @@ function fixture(): GoldenTrajectory {
     sampleIntervalSec: 86_400,
     integration: { profile: 'production-ship-dp54', maxAcceptedStepsPerSegment: 4_000 },
     parameters: { altitudeKm: 400 },
-    initialState: [1, 2, 3, 4, 5, 6, 0],
+    initialState: [0, 0, 0, 0, 0, 0, 0],
     samples: [
       {
-        timeSec: 86_400,
+        timeSec: 0,
         state: [0, 0, 0, 0, 0, 0, 0],
         acceptedSteps: 10,
         rejectedSteps: 1,
@@ -45,7 +45,7 @@ describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
     (state as number[])[4] = ((state as number[])[4] as number) + 2e-9;
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
-      /leo-30d.*timeSec=86400.*component=uy.*expected=0.*actual=2e-9.*drift=2e-9.*limit=1e-9/u,
+      /leo-30d.*timeSec=0.*component=uy.*expected=0.*actual=2e-9.*drift=2e-9.*limit=1e-9/u,
     );
   });
 
@@ -56,6 +56,26 @@ describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
       /leo-30d sample count mismatch: expected=1, actual=0/u,
+    );
+  });
+
+  it('rejects drift in recorded generation metadata', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    (actual.parameters as Record<string, number>).altitudeKm = 401;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d parameters mismatch: expected=.*400.*actual=.*401/u,
+    );
+  });
+
+  it('rejects a recorded initial state that disagrees with its first sample', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    actual.initialState[0] = 2;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d initialState drift.*component=rx.*expected=0.*actual=2/u,
     );
   });
 });

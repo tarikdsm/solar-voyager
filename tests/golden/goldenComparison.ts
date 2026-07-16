@@ -3,6 +3,67 @@ import type { GoldenTrajectory } from './goldenTrajectoryHarness.js';
 const COMPONENT_NAMES = ['rx', 'ry', 'rz', 'ux', 'uy', 'uz', 'tau'] as const;
 const COMPONENT_LIMITS = [1e-3, 1e-3, 1e-3, 1e-9, 1e-9, 1e-9, 1e-6] as const;
 
+function assertScalarMatches(
+  scenarioId: string,
+  label: string,
+  actual: number | string,
+  expected: number | string,
+): void {
+  if (actual !== expected) {
+    throw new Error(`${scenarioId} ${label} mismatch: expected=${expected}, actual=${actual}`);
+  }
+}
+
+function assertParametersMatch(actual: GoldenTrajectory, expected: GoldenTrajectory): void {
+  const actualKeys = Object.keys(actual.parameters).sort();
+  const expectedKeys = Object.keys(expected.parameters).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `${expected.scenarioId} parameter keys mismatch: expected=${JSON.stringify(expectedKeys)}, actual=${JSON.stringify(actualKeys)}`,
+    );
+  }
+  for (const key of expectedKeys) {
+    if (actual.parameters[key] !== expected.parameters[key]) {
+      throw new Error(
+        `${expected.scenarioId} parameters mismatch: expected=${JSON.stringify(expected.parameters)}, actual=${JSON.stringify(actual.parameters)}`,
+      );
+    }
+  }
+}
+
+function assertStateMatches(
+  scenarioId: string,
+  label: string,
+  actualState: readonly number[],
+  expectedState: readonly number[],
+): void {
+  if (actualState.length !== COMPONENT_NAMES.length) {
+    throw new Error(
+      `${scenarioId} ${label} width mismatch: expected=${COMPONENT_NAMES.length}, actual=${actualState.length}`,
+    );
+  }
+  for (let componentIndex = 0; componentIndex < COMPONENT_NAMES.length; componentIndex += 1) {
+    const expectedValue = expectedState[componentIndex];
+    const actualValue = actualState[componentIndex];
+    const component = COMPONENT_NAMES[componentIndex];
+    const limit = COMPONENT_LIMITS[componentIndex];
+    if (
+      expectedValue === undefined ||
+      actualValue === undefined ||
+      component === undefined ||
+      limit === undefined
+    ) {
+      throw new Error(`${scenarioId} ${label} missing component at index=${componentIndex}`);
+    }
+    const drift = Math.abs(actualValue - expectedValue);
+    if (!Number.isFinite(drift) || drift > limit) {
+      throw new Error(
+        `${scenarioId} ${label} drift: component=${component}, expected=${expectedValue}, actual=${actualValue}, drift=${drift}, limit=${limit}`,
+      );
+    }
+  }
+}
+
 /** Fails with component-level diagnostics on physics-spec.md §7.6 golden drift. */
 export function assertGoldenTrajectoryMatches(
   actual: GoldenTrajectory,
@@ -13,6 +74,39 @@ export function assertGoldenTrajectoryMatches(
       `golden scenario mismatch: expected=${expected.scenarioId}, actual=${actual.scenarioId}`,
     );
   }
+  assertScalarMatches(
+    expected.scenarioId,
+    'schemaVersion',
+    actual.schemaVersion,
+    expected.schemaVersion,
+  );
+  assertScalarMatches(expected.scenarioId, 'epoch', actual.epoch, expected.epoch);
+  assertScalarMatches(expected.scenarioId, 'durationSec', actual.durationSec, expected.durationSec);
+  assertScalarMatches(
+    expected.scenarioId,
+    'sampleIntervalSec',
+    actual.sampleIntervalSec,
+    expected.sampleIntervalSec,
+  );
+  assertScalarMatches(
+    expected.scenarioId,
+    'integration.profile',
+    actual.integration.profile,
+    expected.integration.profile,
+  );
+  assertScalarMatches(
+    expected.scenarioId,
+    'integration.maxAcceptedStepsPerSegment',
+    actual.integration.maxAcceptedStepsPerSegment,
+    expected.integration.maxAcceptedStepsPerSegment,
+  );
+  assertParametersMatch(actual, expected);
+  assertStateMatches(
+    expected.scenarioId,
+    'initialState',
+    actual.initialState,
+    expected.initialState,
+  );
   if (actual.samples.length !== expected.samples.length) {
     throw new Error(
       `${expected.scenarioId} sample count mismatch: expected=${expected.samples.length}, actual=${actual.samples.length}`,
