@@ -59,7 +59,11 @@ export function solveKeplerHyperbolicInto(
   meanAnomalyRad: number,
   eccentricity: number,
 ): KeplerSolution {
-  let anomalyRad = Math.asinh(meanAnomalyRad / eccentricity);
+  const absoluteMeanAnomalyRad = Math.abs(meanAnomalyRad);
+  let anomalyRad =
+    meanAnomalyRad === 0
+      ? 0
+      : Math.sign(meanAnomalyRad) * Math.log((2 * absoluteMeanAnomalyRad) / eccentricity + 1.8);
 
   output.converged = false;
   output.iterations = 0;

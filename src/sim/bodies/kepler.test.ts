@@ -45,6 +45,24 @@ describe('Kepler solvers — physics-spec.md §2 / §7.1', () => {
     }
   });
 
+  it('converges in the near-parabolic hyperbolic limit', () => {
+    const solution = createKeplerSolution();
+    const eccentricities = [1 + 1e-12, 1 + 1e-9, 1.000_001];
+    const meanAnomalies = [-0.001, -1e-6, -1e-9, 1e-9, 1e-6, 0.001];
+
+    for (const eccentricity of eccentricities) {
+      for (const meanAnomalyRad of meanAnomalies) {
+        solveKeplerHyperbolicInto(solution, meanAnomalyRad, eccentricity);
+        const residualRad =
+          eccentricity * Math.sinh(solution.anomalyRad) - solution.anomalyRad - meanAnomalyRad;
+
+        expect(solution.converged).toBe(true);
+        expect(solution.iterations).toBeLessThanOrEqual(30);
+        expect(Math.abs(residualRad)).toBeLessThan(RESIDUAL_LIMIT_RAD);
+      }
+    }
+  });
+
   it('reuses caller-owned result storage', () => {
     const solution = createKeplerSolution();
 
