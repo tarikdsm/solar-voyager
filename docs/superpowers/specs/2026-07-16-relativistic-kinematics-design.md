@@ -71,8 +71,8 @@ independent checks:
    matches the analytic velocity and proper-time solutions within `1e-9`
    relative error using DP54.
 2. A ten-period circular LEO coast propagated through the relativistic
-   derivative agrees with the pure Newtonian propagation within `1e-9`
-   relative position error.
+   derivative ends within `5e-8` relative position separation of the pure
+   Newtonian propagation, accounting for the physical phase drift in ADR-012.
 3. One coordinate year at constant Lorentz factor 2 integrates proper time to
    `t/2` within `1e-9` relative error.
 4. Conversion helpers preserve direction, produce exact relationships between

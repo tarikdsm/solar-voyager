@@ -198,13 +198,13 @@ Use Earth `mu = 398600.4418 km^3/s^2`, radius `6778.137 km`, and circular
 speed `sqrt(mu/r)`. Propagate one six-component Newtonian state and one
 seven-component relativistic state for ten analytic periods using identical
 gravity. Assert both reach the endpoint and relative final-position separation
-is below `1e-9`.
+is below `5e-8` as corrected by ADR-012.
 
 - [ ] **Step 4: Run the Newtonian-limit regression**
 
 Run: `npm test -- tests/sim/ship/relativity.test.ts -t "Newtonian limit"`
 
-Expected: PASS with relative separation below `1e-9`.
+Expected: PASS with relative separation below `5e-8`.
 
 - [ ] **Step 5: Add time-dilation and high-celerity stress regressions**
 

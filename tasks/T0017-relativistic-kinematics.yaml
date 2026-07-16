@@ -14,6 +14,6 @@ spec: |
   Pure module, shared by SimulationCore and the predictor worker.
 acceptance:
   - Hyperbolic-motion analytic test (physics-spec 7.8) to 1e-9 up to gamma = 10
-  - Newtonian-limit test (7.9), 10-orbit LEO coast agrees with pure Newtonian to 1e-9
+  - Newtonian-limit test (7.9), 10-orbit LEO final separation from pure Newtonian < 5e-8 relative (ADR-012)
   - Time-dilation test (7.11); |v| < c invariant under integrator stress
 handoff_notes: ""

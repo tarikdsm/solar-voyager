@@ -20,11 +20,7 @@ export type RelativisticAccelerationEvaluator = (
 ) => void;
 
 function dimensionlessCelerityMagnitude(ux: number, uy: number, uz: number): number {
-  return Math.hypot(
-    ux / SPEED_OF_LIGHT_KM_S,
-    uy / SPEED_OF_LIGHT_KM_S,
-    uz / SPEED_OF_LIGHT_KM_S,
-  );
+  return Math.hypot(ux / SPEED_OF_LIGHT_KM_S, uy / SPEED_OF_LIGHT_KM_S, uz / SPEED_OF_LIGHT_KM_S);
 }
 
 /** Returns gamma = sqrt(1 + |u|^2/c^2) for celerity components in km/s. */
