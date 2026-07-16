@@ -1,6 +1,6 @@
 // physics-spec.md §2 — Newton-Raphson Kepler solvers.
 
-const CONVERGENCE_LIMIT_RAD = 1e-12;
+const CONVERGENCE_LIMIT_RAD = 1e-14;
 const MAX_ITERATIONS = 30;
 
 function sinhMinusArgument(argumentRad: number): number {

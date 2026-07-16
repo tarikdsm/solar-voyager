@@ -90,7 +90,7 @@ export function elementsToStateInto(
     const eccentricAnomalyRad = scratch.keplerSolution.anomalyRad;
     const cosineAnomaly = Math.cos(eccentricAnomalyRad);
     const sineAnomaly = Math.sin(eccentricAnomalyRad);
-    const minorAxisFactor = Math.sqrt(1 - eccentricity * eccentricity);
+    const minorAxisFactor = Math.sqrt((1 - eccentricity) * (1 + eccentricity));
     const radiusKm = aKm * (1 - eccentricity * cosineAnomaly);
     const velocityFactor = Math.sqrt(parentMuKm3S2 * aKm) / radiusKm;
 
@@ -101,28 +101,31 @@ export function elementsToStateInto(
   } else {
     solveKeplerHyperbolicInto(scratch.keplerSolution, elements.meanAnomalyRad, eccentricity);
     const hyperbolicAnomalyRad = scratch.keplerSolution.anomalyRad;
-    const hyperbolicCosine = Math.cosh(hyperbolicAnomalyRad);
     const hyperbolicSine = Math.sinh(hyperbolicAnomalyRad);
-    const transverseFactor = Math.sqrt(eccentricity * eccentricity - 1);
-    const denominator = eccentricity * hyperbolicCosine - 1;
-    const cosineTrueAnomaly = (eccentricity - hyperbolicCosine) / denominator;
+    const hyperbolicCosine = Math.hypot(1, hyperbolicSine);
+    const hyperbolicCosineMinusOne = (hyperbolicSine * hyperbolicSine) / (hyperbolicCosine + 1);
+    const hyperbolicExcessSquared = (eccentricity - 1) * (eccentricity + 1);
+    const transverseFactor = Math.sqrt(hyperbolicExcessSquared);
+    const denominator = eccentricity - 1 + eccentricity * hyperbolicCosineMinusOne;
+    const cosineTrueAnomaly = (eccentricity - 1 - hyperbolicCosineMinusOne) / denominator;
     const sineTrueAnomaly = (transverseFactor * hyperbolicSine) / denominator;
-    const semilatusRectumKm = -aKm * (eccentricity * eccentricity - 1);
+    const semilatusRectumKm = -aKm * hyperbolicExcessSquared;
     const velocityFactor = Math.sqrt(parentMuKm3S2 / semilatusRectumKm);
 
     if (hyperbolicAnomalyRad === 0) {
       perifocalXKm = semilatusRectumKm / (1 + eccentricity);
       perifocalYKm = 0;
     } else {
-      perifocalXKm = aKm * (hyperbolicCosine - eccentricity);
-      perifocalYKm = -aKm * transverseFactor * hyperbolicSine;
+      const radiusKm = -aKm * denominator;
+      perifocalXKm = radiusKm * cosineTrueAnomaly;
+      perifocalYKm = radiusKm * sineTrueAnomaly;
     }
     perifocalVelocityXKmS = -velocityFactor * sineTrueAnomaly;
     perifocalVelocityYKmS =
       velocityFactor *
       (hyperbolicAnomalyRad === 0 || eccentricity - 1 > HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT
         ? eccentricity + cosineTrueAnomaly
-        : ((eccentricity * eccentricity - 1) * hyperbolicCosine) / denominator);
+        : (hyperbolicExcessSquared * hyperbolicCosine) / denominator);
   }
 
   const cosineNode = Math.cos(elements.longitudeAscendingNodeRad);
@@ -186,8 +189,10 @@ export function stateToElementsInto(
     ),
   );
   const conditionedEccentricity =
-    energyCondition > INVARIANT_ECCENTRICITY_CONDITION_LIMIT &&
-    Math.abs(measuredEccentricity - 1) <= NEAR_PARABOLIC_ECCENTRICITY_LIMIT
+    Math.abs(measuredEccentricity - 1) <= HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT &&
+    (energyCondition > ENERGY_CONDITION_LIMIT ||
+      (energyCondition > INVARIANT_ECCENTRICITY_CONDITION_LIMIT &&
+        Math.abs(measuredEccentricity - 1) <= NEAR_PARABOLIC_ECCENTRICITY_LIMIT))
       ? invariantEccentricity
       : measuredEccentricity;
   const circular = conditionedEccentricity <= NUMERICAL_DEGENERACY_LIMIT;
@@ -198,7 +203,7 @@ export function stateToElementsInto(
   let semiMajorAxisKm =
     energyCondition > ENERGY_CONDITION_LIMIT
       ? -parentMuKm3S2 / (2 * specificEnergyKm2S2)
-      : semilatusRectumKm / (1 - eccentricity * eccentricity);
+      : semilatusRectumKm / ((1 - eccentricity) * (1 + eccentricity));
   const inclinationRad = equatorial
     ? retrogradeEquatorial
       ? Math.PI
@@ -256,7 +261,7 @@ export function stateToElementsInto(
     } else {
       const denominator = 1 + eccentricity * Math.cos(normalizedTrueAnomalyRad);
       const sineEccentricAnomaly =
-        (Math.sqrt(1 - eccentricity * eccentricity) * Math.sin(normalizedTrueAnomalyRad)) /
+        (Math.sqrt((1 - eccentricity) * (1 + eccentricity)) * Math.sin(normalizedTrueAnomalyRad)) /
         denominator;
       const cosineEccentricAnomaly =
         (eccentricity + Math.cos(normalizedTrueAnomalyRad)) / denominator;
@@ -278,10 +283,14 @@ export function stateToElementsInto(
       const hyperbolicAnomalyRad = Math.asinh(hyperbolicSine);
       if (
         energyCondition <= ENERGY_CONDITION_LIMIT &&
-        eccentricity - 1 <= NEAR_PARABOLIC_ECCENTRICITY_LIMIT
+        eccentricity - 1 <= HYPERBOLIC_VELOCITY_CANCELLATION_LIMIT
       ) {
-        const hyperbolicCosine = Math.hypot(1, hyperbolicSine);
-        semiMajorAxisKm = -radiusKm / (eccentricity * hyperbolicCosine - 1);
+        const reconstructedHyperbolicSine = Math.sinh(hyperbolicAnomalyRad);
+        const hyperbolicCosine = Math.hypot(1, reconstructedHyperbolicSine);
+        const hyperbolicCosineMinusOne =
+          (reconstructedHyperbolicSine * reconstructedHyperbolicSine) / (hyperbolicCosine + 1);
+        const radialDenominator = eccentricity - 1 + eccentricity * hyperbolicCosineMinusOne;
+        semiMajorAxisKm = -radiusKm / radialDenominator;
       }
       meanAnomalyRad = hyperbolicMeanAnomalyRad(hyperbolicAnomalyRad, eccentricity);
     }

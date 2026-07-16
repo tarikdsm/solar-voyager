@@ -167,7 +167,7 @@ describe('orbital elements conversions — physics-spec.md §2 / §7.1', () => {
 
   it('round-trips the limiting hyperbolic domain around periapsis', () => {
     const eccentricity = 1 + 1e-12;
-    const meanAnomaliesRad = [-0.001, -1e-9, 1e-9, 0.001];
+    const meanAnomaliesRad = [-0.001, -1e-9, -1e-10, 1e-10, 1e-9, 0.001];
     const inclinationsRad = [0, 0.3, Math.PI];
 
     for (const inclinationRad of inclinationsRad) {
@@ -186,6 +186,25 @@ describe('orbital elements conversions — physics-spec.md §2 / §7.1', () => {
         expect(recovered.semiMajorAxisKm).toBeLessThan(0);
         expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
       }
+    }
+  });
+
+  it('round-trips adjacent near-parabolic mean anomalies', () => {
+    const eccentricity = 1 + 1e-9;
+    const meanAnomaliesRad = [-1e-6, -1e-10, 1e-10, 1e-6];
+
+    for (const meanAnomalyRad of meanAnomaliesRad) {
+      const elements: OrbitalElements = {
+        semiMajorAxisKm: -1_000 / (eccentricity - 1),
+        eccentricity,
+        inclinationRad: 0.3,
+        longitudeAscendingNodeRad: 2.2,
+        argumentPeriapsisRad: 0.9,
+        meanAnomalyRad,
+      };
+      const { state, rebuilt } = roundTripState(elements);
+
+      expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
     }
   });
 
