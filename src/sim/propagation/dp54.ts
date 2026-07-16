@@ -109,6 +109,19 @@ export function createDp54Result(): Dp54Result {
   };
 }
 
+/** Creates the physics-spec.md section 3.1 tolerance profile for (r, u, tau). */
+export function createShipDp54Tolerance(
+  initialStepSec = 1,
+  maxAcceptedSteps = 4_000,
+): Dp54Tolerance {
+  return {
+    absolute: new Float64Array([1e-6, 1e-6, 1e-6, 1e-9, 1e-9, 1e-9, 1e-6]),
+    relative: 1e-9,
+    initialStepSec,
+    maxAcceptedSteps,
+  };
+}
+
 function controllerFactor(normalizedError: number): number {
   if (normalizedError === 0) {
     return MAX_STEP_FACTOR;
@@ -184,8 +197,7 @@ export function propagate(
     for (let index = 0; index < dimension; index += 1) {
       workspace.stageState[index] =
         (outputState[index] as number) +
-        stepSec *
-          (A31 * (workspace.k1[index] as number) + A32 * (workspace.k2[index] as number));
+        stepSec * (A31 * (workspace.k1[index] as number) + A32 * (workspace.k2[index] as number));
     }
     derivative(timeSec + C3 * stepSec, workspace.stageState, workspace.k3);
 
@@ -281,6 +293,8 @@ export function propagate(
   result.nextStepSec = stepSec;
   result.reachedEnd = timeSec === endTimeSec;
   result.budgetExhausted =
-    !result.reachedEnd && !result.stepUnderflow && result.acceptedSteps >= tolerance.maxAcceptedSteps;
+    !result.reachedEnd &&
+    !result.stepUnderflow &&
+    result.acceptedSteps >= tolerance.maxAcceptedSteps;
   return result;
 }

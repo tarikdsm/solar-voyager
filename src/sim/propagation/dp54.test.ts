@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  createDp54Result,
-  createDp54Workspace,
-  propagate,
-  type Dp54Tolerance,
-} from './dp54.js';
+import { createDp54Result, createDp54Workspace, propagate, type Dp54Tolerance } from './dp54.js';
 
 const TEST_TOLERANCE: Dp54Tolerance = {
   absolute: new Float64Array([1e-12]),
