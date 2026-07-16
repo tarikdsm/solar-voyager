@@ -1,8 +1,8 @@
 id: T0032
 title: build_planet script + Earth asset
-status: BLOCKED
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0032-build-planet
 depends_on: [T0031]
 milestone: M1
 spec: |
@@ -19,3 +19,6 @@ handoff_notes: |
   not yet exist as a working ingest command, so no KTX2/runtime artifact or
   reproducibility/ingest acceptance evidence is available. Reconcile through the
   prerequisite tasks, then claim T0032 to audit, generalize, ingest, and verify.
+  T0030, T0031, and T0035 are now DONE; the prior blocking conditions are
+  resolved. Current MODELING-GUIDE hero tiers/budgets supersede the older sizes
+  embedded in this task summary and will be used for verification.
