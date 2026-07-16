@@ -19,4 +19,6 @@ handoff_notes: |
   Standalone dashboard created at docs/check_plan.html. It inventories every
   canonical task, preserves status/dependencies, and separates roadmap actions
   without dedicated tasks. Structural, coverage, formatting, and real-browser
-  desktop/mobile checks passed with zero console errors.
+  desktop/mobile checks passed with zero console errors. The dashboard is an
+  explicit post-integration snapshot: it renders T0094 as DONE while this task
+  file correctly remains REVIEW until merge.
