@@ -195,7 +195,8 @@ def write_sources(output_root, body_id, recipes):
     destination = pathlib.Path(output_root).resolve() / body_id / "SOURCES.md"
     temporary = destination.with_name(f".{destination.name}.tmp")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary.write_text(render_sources(body_id, recipes), encoding="utf-8", newline="\n")
+    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(render_sources(body_id, recipes))
     os.replace(temporary, destination)
     return destination
 
