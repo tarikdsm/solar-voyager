@@ -1,6 +1,6 @@
 id: T0042
 title: Starfield renderer
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0042-starfield
 depends_on: [T0022, T0040]
