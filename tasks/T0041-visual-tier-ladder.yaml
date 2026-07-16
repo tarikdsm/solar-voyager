@@ -1,6 +1,6 @@
 id: T0041
 title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0041-visual-tier-ladder
 depends_on: [T0040]
@@ -12,4 +12,57 @@ spec: |
 acceptance:
   - Fly-in from 1 AU to LEO transitions tiers without popping (manual + smoke test)
   - Network panel shows no tier-2/3 fetches until approach
-handoff_notes: ""
+handoff_notes: |
+  Implemented the point/sphere/glTF ladder with 20% hysteresis, 250 ms
+  opacity-preserving crossfades, one batched Points draw object, shared sphere
+  geometry, cached local KTX2/Draco loaders, and compile-before-visible models.
+  The game/render split follows the canonical dependency direction: game owns
+  the pure J2026 epoch state; render owns scene and loader construction.
+
+  Acceptance evidence (2026-07-16):
+  - npm run test:visual-tiers passed repeatedly in real Chromium. Stable tier
+    sequence was [1,2,3,2,1]; every sample had opacitySum=1, lit pixels, and
+    WebGL error 0. Earth/Pluto models were each requested exactly once, and no
+    Pluto tier-2/model request occurred before its approach.
+  - Manual headed Playwright playtest loaded the sunward 400 km Earth view with
+    the real glTF and reported zero console errors and zero warnings.
+  - lint, typecheck, format, build, task schema, render-depth and budget gates
+    passed. Vitest: 264 passed / 3 skipped; Python tools: 49 passed.
+  - Critical path: 3,973,295 bytes (3.79 MiB), below the 8 MiB gate.
+  - Before/after 120+600-frame software-renderer evidence is in
+    docs/bench/T0041-{before,after}.json and T0041-summary.md. Absolute
+    headless p75 rose from 16.7 to 166.6 ms for the fullscreen 32k-triangle
+    Earth; this is retained honestly and is not the reference-GPU FPS gate per
+    performance-spec section 6. Heap endpoint sampling was non-monotonic across
+    repetitions (-412 KB then +319 KB), with no valid-frame allocations found.
+
+  Independent-review remediation (2026-07-16, commit 1d9579d):
+  - Startup now selects the LEO tier before the first frame and snaps to the
+    loaded sphere while the lazy Earth glTF loads and compiles.
+  - Tier-1 keeps the true diameter attribute with only a one-pixel unresolved
+    hardware footprint; the artificial 1.5 px shader floor and 0.02 flux floor
+    were removed. The point receives its first fade step on the threshold frame.
+  - Lazy sphere albedos now crossfade from a separate catalog-color fallback to
+    a white textured material, avoiding both tint multiplication and readiness
+    pops without creating runtime resources.
+  - glTF materials restore original opacity, transparency, depth-write and
+    forceSinglePass state at full visibility; all static model matrices freeze
+    at load time.
+  - The Chromium harness isolates the target, proves a zero-pixel negative
+    control, and renders Pluto again after readiness. Sequence [1,2,3,2,1],
+    opacity sum 1, WebGL error 0, and single Earth/Pluto model requests pass.
+  - Full local gates pass: lint, typecheck, 267 Vitest tests / 3 skipped,
+    depth and visual Chromium regressions, 49 Python tests, build, budgets,
+    53 task schemas, Prettier and diff check. Headed 1280x720 LEO playtest
+    rendered the real Earth model with zero console errors/warnings.
+  - Fresh software benchmark on 1d9579d measured median/p75/p99
+    166.7/183.3/216.7 ms and +629,776 B; repeat was 166.7/183.3/200.0 ms and
+    +410,352 B. The measured regression is retained in docs/bench and remains
+    non-authoritative for hardware FPS per performance-spec section 6.
+
+  Independent re-review approved eb1e7bb0 with no Critical or Important
+  findings after reproducing the target-isolated Chromium sequence and remote
+  CI run 29537939474. Two non-blocking Minor follow-ups remain documented for
+  later render work: pass the post-resize drawing-buffer height into initial
+  tier selection for hidden Sun/Moon, and emit one diagnostic when lazy model
+  compilation fails while keeping the sphere fallback.

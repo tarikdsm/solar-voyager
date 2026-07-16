@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 
 import sharp from 'sharp';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ingestAssets } from './ingest.mjs';
 import { createGlb } from './testFixtures.mjs';
@@ -44,7 +44,20 @@ async function createSourceTree() {
     .jpeg()
     .toFile(join(vesta, 'vesta_albedo.jpg'));
   await writeFile(join(vesta, 'SOURCES.md'), '- vesta.glb — fixture — test\n- vesta_albedo.jpg — fixture — test\n');
-  return { modelsRoot, outputRoot: join(root, 'public', 'assets') };
+  const threeRoot = join(root, 'node_modules', 'three');
+  const codecFiles = {
+    'examples/jsm/libs/basis/basis_transcoder.js': 'basis-js',
+    'examples/jsm/libs/basis/basis_transcoder.wasm': 'basis-wasm',
+    'examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js': 'draco-js',
+    'examples/jsm/libs/draco/gltf/draco_decoder.wasm': 'draco-wasm',
+    LICENSE: 'three-license',
+  };
+  for (const [relativePath, contents] of Object.entries(codecFiles)) {
+    const target = join(threeRoot, ...relativePath.split('/'));
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, contents);
+  }
+  return { modelsRoot, outputRoot: join(root, 'public', 'assets'), threeRoot };
 }
 
 async function fakeEncode(input, output) {
@@ -55,9 +68,10 @@ async function fakeEncode(input, output) {
 describe('complete asset ingest', () => {
   it('publishes a canonical manifest and identical bytes on rerun', async () => {
     const paths = await createSourceTree();
-    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    const encoder = vi.fn(fakeEncode);
+    await ingestAssets({ ...paths, encodeTexture: encoder });
     const first = await hashTree(paths.outputRoot);
-    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    await ingestAssets({ ...paths, encodeTexture: encoder });
     const second = await hashTree(paths.outputRoot);
 
     expect(second).toEqual(first);
@@ -65,12 +79,28 @@ describe('complete asset ingest', () => {
     expect(manifest).toEqual({
       assets: [{
         category: 'asteroid',
-        files: ['models/vesta.glb', 'textures/vesta_albedo.ktx2'],
+        files: [
+          'models/vesta.glb',
+          'textures/vesta_albedo_tier2.ktx2',
+          'textures/vesta_albedo.ktx2',
+        ],
         id: 'vesta',
         triangles: 8,
       }],
       schemaVersion: 1,
     });
+    expect(Object.keys(first)).toEqual(expect.arrayContaining([
+      'codecs/THREE-LICENSE.txt',
+      'codecs/basis/basis_transcoder.js',
+      'codecs/basis/basis_transcoder.wasm',
+      'codecs/draco/draco_decoder.wasm',
+      'codecs/draco/draco_wasm_wrapper.js',
+    ]));
+    expect(encoder).toHaveBeenCalledWith(
+      expect.stringMatching(/vesta_albedo\.jpg$/),
+      expect.stringMatching(/vesta_albedo_tier2\.ktx2$/),
+      expect.objectContaining({ width: 1024, height: 512 }),
+    );
   });
 
   it('preserves the prior published tree when validation fails', async () => {

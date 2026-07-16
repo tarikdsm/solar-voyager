@@ -43,6 +43,7 @@ equirectangular surface maps, including per-loop seam and pole handling.
 - **No Draco at export** — ingest compresses (position quantization 14 bit, normal 10, texcoord 12).
 - Textures NOT embedded — referenced externally as JPEG/PNG; ingest encodes complete-mip KTX2 (ETC1S for color maps, UASTC for normal maps). Color output is tagged sRGB/BT.709; normals are linear. Hero cloud/emissive sources above 4k are downsampled to their 4096×2048 runtime tier.
 - Runtime GLBs require `KHR_texture_basisu` and point to the emitted external KTX2 files. Standard albedo, normal, emissive, metallic-roughness, occlusion, cloud, and ring slots are wired by the material/filename conventions; detail-map URIs are recorded in `mat_surface.extras.solarVoyagerTextures` for the close-range shader.
+- Every albedo also produces a standalone ETC1S sphere tier: 2048x1024 for planets and 1024x512 for moons, dwarfs, asteroids, and comets. These derivatives are listed explicitly in the runtime manifest. Ingest copies the pinned Three.js Basis and Draco decoders plus its license to `public/assets/codecs/`; runtime loading never depends on a codec CDN (ADR-023).
 
 ### Ingest commands
 
@@ -64,6 +65,10 @@ checks pass. `manifest.json` contains sorted `id`, `category`, `triangles`, and
 runtime file lists without timestamps or machine paths.
 `src/render/assetManifest.ts` validates and loads this manifest at startup; unsafe
 paths, duplicate ids/files, unknown categories, and malformed entries are rejected.
+`data/initial-path.json` separately declares the exact non-code files fetched
+before interaction. Full hero models and textures are intentionally absent and
+remain lazy; `npm run check:budgets` validates this list and enforces the 8 MiB
+critical-path gate.
 
 Color albedo/emissive/ring/cloud maps are sRGB. Normals, roughness, ORM, metallic,
 AO, and occlusion maps are tagged linear with no color primaries. The source

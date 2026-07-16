@@ -13,6 +13,8 @@ Thumbs.db
 tools/blender/__pycache__/
 __pycache__/
 .vite/
+.playwright-cli/
+output/
 .worktrees/
 tools/blender/_*
 tools/blender/*.bat

@@ -21,7 +21,7 @@ export function isLinearTexture(path) {
   return /(^|[_-])(normal|roughness|orm|metallic|ao|occlusion)([_.-]|$)/i.test(path);
 }
 
-export function buildKtxArguments(inputPath, outputPath, metadata) {
+export function buildKtxArguments(inputPath, outputPath, metadata, options = {}) {
   const normal = isNormalTexture(inputPath);
   const linear = isLinearTexture(inputPath);
   const usesFourKilopixelTier = /(^|[_-])(clouds?|emissive)([_.-]|$)/i.test(inputPath);
@@ -34,7 +34,9 @@ export function buildKtxArguments(inputPath, outputPath, metadata) {
     '--assign-tf', linear ? 'linear' : 'srgb',
     '--assign-primaries', linear ? 'none' : 'bt709',
   ];
-  if (usesFourKilopixelTier && (metadata.width ?? 0) > 4096) {
+  if (options.width !== undefined && options.height !== undefined) {
+    args.push('--width', String(options.width), '--height', String(options.height));
+  } else if (usesFourKilopixelTier && (metadata.width ?? 0) > 4096) {
     args.push('--width', '4096', '--height', '2048');
   }
   if (usesMoonStartupAlbedo) args.push('--qlevel', '90');
@@ -57,7 +59,13 @@ export async function encodeTexture(inputPath, outputPath, options = {}) {
   const metadata = options.metadata ?? await sharp(inputPath).metadata();
   const run = options.run ?? defaultRunner;
   try {
-    return await run(executable, buildKtxArguments(inputPath, outputPath, metadata));
+    return await run(
+      executable,
+      buildKtxArguments(inputPath, outputPath, metadata, {
+        ...(options.width !== undefined ? { width: options.width } : {}),
+        ...(options.height !== undefined ? { height: options.height } : {}),
+      }),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(

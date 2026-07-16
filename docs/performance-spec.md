@@ -74,6 +74,7 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 ### Workers & loading
 - KTX2 transcoding and Draco decode run in three's workers (default — do not disable); trajectory prediction on its own worker (architecture.md).
 - Decode images off-thread (`createImageBitmap`), fetch assets with `priority`/preload hints for the critical path; everything else lazy (rendering-spec §3).
+- `data/initial-path.json` is the reviewed source of truth for runtime files fetched before interaction. The budget checker validates and sums those canonical files once, then adds all built code and WASM conservatively (ADR-023).
 - Vite: code-split the map view and menus; no dependency > 50 KB gzip enters the bundle without an ADR (coding-standards).
 
 ### DOM / HUD

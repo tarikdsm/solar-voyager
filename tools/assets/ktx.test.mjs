@@ -41,6 +41,18 @@ describe('KTX2 encoding', () => {
     }
   });
 
+  it('honors an explicit deterministic output size for a sphere tier', () => {
+    const args = buildKtxArguments(
+      'earth_albedo.jpg',
+      'earth_albedo_tier2.ktx2',
+      { channels: 3, width: 8192, height: 4096 },
+      { width: 2048, height: 1024 },
+    );
+
+    expect(args.filter((argument) => argument === '--width')).toHaveLength(1);
+    expect(args).toEqual(expect.arrayContaining(['--width', '2048', '--height', '1024']));
+  });
+
   it('marks PBR data maps as linear rather than sRGB', () => {
     for (const name of ['earth_roughness.png', 'earth_orm.png', 'ship_metallic.jpg', 'rock_ao.png']) {
       const args = buildKtxArguments(name, `${name}.ktx2`, { channels: 3 });
@@ -66,5 +78,27 @@ describe('KTX2 encoding', () => {
     expect(run).toHaveBeenCalledWith('ktx-test', buildKtxArguments(
       'earth_albedo.jpg', 'earth_albedo.ktx2', { channels: 3 },
     ));
+  });
+
+  it('forwards an explicit sphere size through encodeTexture', async () => {
+    const run = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
+    const options = {
+      executable: 'ktx-test',
+      metadata: { channels: 3, width: 8192, height: 4096 },
+      run,
+      width: 2048,
+      height: 1024,
+    };
+    await encodeTexture('earth_albedo.jpg', 'earth_albedo_tier2.ktx2', options);
+
+    expect(run).toHaveBeenCalledWith(
+      'ktx-test',
+      buildKtxArguments(
+        'earth_albedo.jpg',
+        'earth_albedo_tier2.ktx2',
+        options.metadata,
+        { width: 2048, height: 1024 },
+      ),
+    );
   });
 });

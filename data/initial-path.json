@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    "data/stars.bin",
+    "public/assets/manifest.json",
+    "public/assets/textures/earth_albedo_tier2.ktx2",
+    "public/assets/textures/moon_albedo_tier2.ktx2"
+  ]
+}
