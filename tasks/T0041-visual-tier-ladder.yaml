@@ -1,6 +1,6 @@
 id: T0041
 title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0041-visual-tier-ladder
 depends_on: [T0040]
