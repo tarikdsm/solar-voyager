@@ -1,14 +1,20 @@
-import Ajv2020 from 'ajv/dist/2020.js';
+import AjvDraft2020 from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 
 import catalog from '../../data/bodies.json';
 import schema from '../../data/bodies.schema.json';
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
+const ajv = new AjvDraft2020({ allErrors: true, strict: true });
 const validate = ajv.compile(schema);
 
 function cloneCatalog(): typeof catalog {
   return structuredClone(catalog);
+}
+
+function firstBody(value: typeof catalog): (typeof catalog.bodies)[number] {
+  const body = value.bodies[0];
+  if (body === undefined) throw new Error('Body catalog fixture must not be empty');
+  return body;
 }
 
 describe('body catalog schema', () => {
@@ -18,7 +24,7 @@ describe('body catalog schema', () => {
 
   it.each([0, -0.1, 1.1])('rejects polarRadiusRatio=%s', (ratio) => {
     const invalid = cloneCatalog();
-    invalid.bodies[0]!.visual.polarRadiusRatio = ratio;
+    firstBody(invalid).visual.polarRadiusRatio = ratio;
 
     expect(validate(invalid)).toBe(false);
   });
@@ -27,7 +33,9 @@ describe('body catalog schema', () => {
     const invalid = cloneCatalog() as unknown as {
       bodies: Array<{ visual: { polarRadiusRatio?: number } }>;
     };
-    delete invalid.bodies[0]!.visual.polarRadiusRatio;
+    const body = invalid.bodies[0];
+    if (body === undefined) throw new Error('Body catalog fixture must not be empty');
+    delete body.visual.polarRadiusRatio;
 
     expect(validate(invalid)).toBe(false);
   });
