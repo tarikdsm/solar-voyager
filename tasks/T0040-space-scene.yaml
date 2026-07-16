@@ -1,6 +1,6 @@
 id: T0040
 title: Camera-relative SpaceScene + logarithmic depth
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0040-space-scene
 depends_on: [T0013, T0032]
@@ -38,3 +38,8 @@ handoff_notes: |
   bench:scaffold before/after on the same machine (120 warm-up / 600 sampled
   frames): both 16.7/16.7/16.8 ms median/p75/p99, zero console/page errors;
   heap delta changed from +847,768 bytes on main to -922,796 bytes on T0040.
+
+  Independent re-review approved e3acf2ce690ae42deecd45bdcf60e2472073bc2a
+  with no remaining findings after reproducing the Earth-scale WebGL regression,
+  mutation control, local gates, and successful PR CI. The reviewer made no
+  changes and did not merge; this DONE transition records that approval.
