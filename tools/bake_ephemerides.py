@@ -32,10 +32,15 @@ class BodyDefinition:
     surface_kind: str
     albedo_color: str
     procedural_seed: int
+    horizons_id_type: Optional[str] = None
 
 
 def _days(value: float) -> float:
     return value * DAY_SEC
+
+
+def _hours(value: float) -> float:
+    return value * 3_600.0
 
 
 # Physical metadata: JPL Solar System Dynamics planetary satellite/physical
@@ -48,10 +53,43 @@ BODY_DEFINITIONS = (
     BodyDefinition("earth", "Earth", "planet", 399, "sun", 398_600.435507, 6_371.0084, _days(0.99726968), math.radians(23.439281), 0.434, "solid", "#4f78a8", 399),
     BodyDefinition("moon", "Moon", "moon", 301, "earth", 4_902.800118, 1_737.4, _days(27.321661), math.radians(6.68), 0.12, "solid", "#aaa8a3", 301),
     BodyDefinition("mars", "Mars", "planet", 499, "sun", 42_828.375214, 3_389.5, _days(1.02595675), math.radians(25.19), 0.17, "solid", "#b85c3b", 499),
+    BodyDefinition("phobos", "Phobos", "moon", 401, "mars", 0.0007087, 11.08, _days(0.31891023), 0.0, 0.071, "solid", "#8c8175", 401),
+    BodyDefinition("deimos", "Deimos", "moon", 402, "mars", 0.0000962, 6.2, _days(1.26244), 0.0, 0.068, "solid", "#9b9185", 402),
     BodyDefinition("jupiter", "Jupiter", "planet", 599, "sun", 126_686_534.911, 69_911.0, _days(0.41354), math.radians(3.13), 0.538, "gas", "#c9a477", 599),
+    BodyDefinition("io", "Io", "moon", 501, "jupiter", 5_959.91547, 1_821.49, _days(1.769137786), 0.0, 0.63, "solid", "#d8c35a", 501),
+    BodyDefinition("europa", "Europa", "moon", 502, "jupiter", 3_202.71210, 1_560.80, _days(3.551181), 0.0, 0.67, "solid", "#c7b89a", 502),
+    BodyDefinition("ganymede", "Ganymede", "moon", 503, "jupiter", 9_887.83275, 2_631.20, _days(7.154553), 0.0, 0.43, "solid", "#8f8170", 503),
+    BodyDefinition("callisto", "Callisto", "moon", 504, "jupiter", 7_179.28340, 2_410.30, _days(16.689018), 0.0, 0.22, "solid", "#69645f", 504),
     BodyDefinition("saturn", "Saturn", "planet", 699, "sun", 37_931_207.8, 58_232.0, _days(0.44401), math.radians(26.73), 0.499, "gas", "#d8c28e", 699),
+    BodyDefinition("mimas", "Mimas", "moon", 601, "saturn", 2.50349, 198.20, _days(0.9424218), 0.0, 0.962, "solid", "#bdbbb4", 601),
+    BodyDefinition("enceladus", "Enceladus", "moon", 602, "saturn", 7.21037, 252.10, _days(1.370218), 0.0, 1.0, "solid", "#e5e6e3", 602),
+    BodyDefinition("tethys", "Tethys", "moon", 603, "saturn", 41.21353, 531.10, _days(1.887802), 0.0, 0.80, "solid", "#c8c5bd", 603),
+    BodyDefinition("dione", "Dione", "moon", 604, "saturn", 73.11607, 561.40, _days(2.736915), 0.0, 0.99, "solid", "#c6c4be", 604),
+    BodyDefinition("rhea", "Rhea", "moon", 605, "saturn", 153.94175, 763.50, _days(4.518212), 0.0, 0.949, "solid", "#aaa9a4", 605),
+    BodyDefinition("titan", "Titan", "moon", 606, "saturn", 8_978.13710, 2_574.76, _days(15.945421), 0.0, 0.22, "solid", "#c68d42", 606),
+    BodyDefinition("iapetus", "Iapetus", "moon", 608, "saturn", 120.51511, 734.30, _days(79.3215), 0.0, 0.05, "solid", "#77736d", 608),
     BodyDefinition("uranus", "Uranus", "planet", 799, "sun", 5_793_951.322, 25_362.0, _days(-0.71833), math.radians(97.77), 0.488, "gas", "#9ccbd3", 799),
+    BodyDefinition("miranda", "Miranda", "moon", 705, "uranus", 4.3, 235.8, _days(1.413479), 0.0, 0.32, "solid", "#a9a6a0", 705),
+    BodyDefinition("ariel", "Ariel", "moon", 701, "uranus", 83.5, 578.9, _days(2.520379), 0.0, 0.39, "solid", "#b8b6ae", 701),
+    BodyDefinition("umbriel", "Umbriel", "moon", 702, "uranus", 85.1, 584.7, _days(4.144177), 0.0, 0.21, "solid", "#77746f", 702),
+    BodyDefinition("titania", "Titania", "moon", 703, "uranus", 226.9, 788.9, _days(8.705872), 0.0, 0.27, "solid", "#a5a29b", 703),
+    BodyDefinition("oberon", "Oberon", "moon", 704, "uranus", 205.3, 761.4, _days(13.463239), 0.0, 0.23, "solid", "#8e8981", 704),
     BodyDefinition("neptune", "Neptune", "planet", 899, "sun", 6_835_099.5, 24_622.0, _days(0.67125), math.radians(28.32), 0.442, "gas", "#4169a9", 899),
+    BodyDefinition("triton", "Triton", "moon", 801, "neptune", 1_428.49546, 1_352.60, _days(-5.876854), 0.0, 0.76, "solid", "#b7aca3", 801),
+    BodyDefinition("pluto", "Pluto", "dwarf", 999, "sun", 869.3, 1_188.3, _days(-6.3872), math.radians(122.53), 0.3, "solid", "#b7a28c", 999),
+    BodyDefinition("charon", "Charon", "moon", 901, "pluto", 106.1, 606.0, _days(6.3872), 0.0, 0.38, "solid", "#8f8b87", 901),
+    BodyDefinition("ceres", "Ceres", "dwarf", 1, "sun", 62.6284, 469.7, _hours(9.074170), math.radians(4.0), 0.090, "solid", "#77736d", 1, "smallbody"),
+    BodyDefinition("eris", "Eris", "dwarf", 136_199, "sun", 1_107.9338, 1_200.0, _days(1.079), 0.0, 0.84, "solid", "#d8d4cd", 136_199, "smallbody"),
+    BodyDefinition("makemake", "Makemake", "dwarf", 136_472, "sun", 206.9033, 714.0, _days(0.937), 0.0, 0.81, "solid", "#c5a58d", 136_472, "smallbody"),
+    BodyDefinition("haumea", "Haumea", "dwarf", 136_108, "sun", 267.339, 715.0, _days(0.1631), 0.0, 0.72, "solid", "#d8d5cf", 136_108, "smallbody"),
+    BodyDefinition("vesta", "Vesta", "asteroid", 4, "sun", 17.2882844, 261.385, _hours(5.3421276322), math.radians(27.5), 0.4228, "solid", "#9b9184", 4, "smallbody"),
+    BodyDefinition("pallas", "Pallas", "asteroid", 2, "sun", 13.63, 256.5, _hours(7.8132214), math.radians(84.0), 0.155, "solid", "#85817b", 2, "smallbody"),
+    BodyDefinition("hygiea", "Hygiea", "asteroid", 10, "sun", 7.0, 203.56, _hours(13.828), 0.0, 0.0717, "solid", "#66625f", 10_001, "smallbody"),
+    BodyDefinition("eros", "Eros", "asteroid", 433, "sun", 4.463e-4, 8.42, _hours(5.27), 0.0, 0.25, "solid", "#9a7b68", 433, "smallbody"),
+    BodyDefinition("bennu", "Bennu", "asteroid", 101_955, "sun", 4.8904e-9, 0.24222, _hours(4.296061), math.radians(177.6), 0.044, "solid", "#343230", 101_955, "smallbody"),
+    BodyDefinition("ryugu", "Ryugu", "asteroid", 162_173, "sun", 3.00e-8, 0.448, _hours(7.63262), math.radians(171.6), 0.045, "solid", "#3d3935", 162_173, "smallbody"),
+    BodyDefinition("1p", "1P/Halley", "comet", 90_000_030, "sun", 1.47e-5, 5.5, _hours(52.8), 0.0, 0.04, "solid", "#6f716d", 90_000_030),
+    BodyDefinition("67p", "67P/Churyumov-Gerasimenko", "comet", 90_000_702, "sun", 6.622e-7, 1.7, _hours(12.76129), 0.0, 0.06, "solid", "#4f4c47", 90_000_702),
 )
 
 BODY_IDS = [definition.id for definition in BODY_DEFINITIONS]
@@ -74,6 +112,13 @@ def elements_from_row(row: Mapping[str, Any]) -> Dict[str, float]:
     a_au, eccentricity, inclination_deg, node_deg, periapsis_deg, mean_deg = _finite_values(
         row, ("a", "e", "incl", "Omega", "w", "M")
     )
+    if not (
+        (a_au > 0 and 0 <= eccentricity < 1)
+        or (a_au < 0 and eccentricity > 1)
+    ):
+        raise ValueError(
+            f"invalid Kepler branch: a={a_au} AU, eccentricity={eccentricity}"
+        )
     return {
         "semiMajorAxisKm": a_au * AU_KM,
         "eccentricity": eccentricity,
@@ -97,8 +142,10 @@ def state_from_row(row: Mapping[str, Any]) -> Dict[str, List[float]]:
 def sphere_of_influence_km(
     semi_major_axis_km: float, child_mu_km3_s2: float, parent_mu_km3_s2: float
 ) -> float:
-    """Compute a*(m/M)^(2/5); the GM ratio equals the mass ratio."""
-    return semi_major_axis_km * (child_mu_km3_s2 / parent_mu_km3_s2) ** (2.0 / 5.0)
+    """Compute |a|*(m/M)^(2/5); the GM ratio equals the mass ratio."""
+    return abs(semi_major_axis_km) * (
+        child_mu_km3_s2 / parent_mu_km3_s2
+    ) ** (2.0 / 5.0)
 
 
 def build_catalog(elements_by_id: Mapping[str, Mapping[str, float]]) -> Dict[str, Any]:
@@ -172,10 +219,13 @@ def query_body(
 
         horizons_factory = Horizons
 
-    element_center = "500@399" if definition.id == "moon" else "500@10"
+    parent = DEFINITION_BY_ID[definition.parent_id]
+    element_center = (
+        "500@10" if definition.parent_id == "sun" else f"500@{parent.horizons_id}"
+    )
     element_query = horizons_factory(
         id=str(definition.horizons_id),
-        id_type=None,
+        id_type=definition.horizons_id_type,
         location=element_center,
         epochs=EPOCH_JD_TDB,
     )
@@ -187,7 +237,7 @@ def query_body(
     vector_epochs = [EPOCH_JD_TDB + offset for offset in CHECK_OFFSETS_DAYS]
     vector_query = horizons_factory(
         id=str(definition.horizons_id),
-        id_type=None,
+        id_type=definition.horizons_id_type,
         location="500@10",
         epochs=vector_epochs,
     )

@@ -17,10 +17,43 @@ const BODY_IDS = [
   'earth',
   'moon',
   'mars',
+  'phobos',
+  'deimos',
   'jupiter',
+  'io',
+  'europa',
+  'ganymede',
+  'callisto',
   'saturn',
+  'mimas',
+  'enceladus',
+  'tethys',
+  'dione',
+  'rhea',
+  'titan',
+  'iapetus',
   'uranus',
+  'miranda',
+  'ariel',
+  'umbriel',
+  'titania',
+  'oberon',
   'neptune',
+  'triton',
+  'pluto',
+  'charon',
+  'ceres',
+  'eris',
+  'makemake',
+  'haumea',
+  'vesta',
+  'pallas',
+  'hygiea',
+  'eros',
+  'bennu',
+  'ryugu',
+  '1p',
+  '67p',
 ];
 
 function readJson(name: string): unknown {
@@ -32,6 +65,7 @@ const catalog = readJson('bodies.json') as {
   frame: string;
   bodies: Array<{
     id: string;
+    horizonsId: number;
     parentId: string | null;
     soiRadiusKm: number | null;
     muKm3S2: number;
@@ -160,6 +194,19 @@ describe('body catalog - physics-spec.md section 2', () => {
     expect(checks.frame).toBe(catalog.frame);
   });
 
+  it('keeps both pinned comet solutions on their real elliptic branches', () => {
+    for (const [bodyId, horizonsId] of [
+      ['1p', 90_000_030],
+      ['67p', 90_000_702],
+    ] as const) {
+      const comet = catalog.bodies.find((body) => body.id === bodyId);
+      expect(comet?.horizonsId).toBe(horizonsId);
+      expect(comet?.elements?.semiMajorAxisKm).toBeGreaterThan(0);
+      expect(comet?.elements?.eccentricity).toBeGreaterThanOrEqual(0);
+      expect(comet?.elements?.eccentricity).toBeLessThan(1);
+    }
+  });
+
   it('reconstructs epoch states within one kilometer of independent Horizons vectors', () => {
     const epochStates = checks.samples[0].states;
     const bodyById = new Map(catalog.bodies.map((body) => [body.id, body]));
@@ -172,7 +219,12 @@ describe('body catalog - physics-spec.md section 2', () => {
       }
       const parent = bodyById.get(body.parentId);
       expect(parent).toBeDefined();
-      elementsToStateInto(converted, body.elements, parent?.muKm3S2 as number, scratch);
+      elementsToStateInto(
+        converted,
+        body.elements,
+        (parent?.muKm3S2 as number) + body.muKm3S2,
+        scratch,
+      );
       const parentState = epochStates[body.parentId];
       const expected = epochStates[body.id];
       const positionErrorKm = Math.hypot(

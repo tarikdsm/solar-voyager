@@ -1,4 +1,5 @@
 import importlib.util
+from collections import Counter
 import math
 import os
 from pathlib import Path
@@ -13,6 +14,52 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Cannot load {MODULE_PATH}")
 bake = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(bake)
+
+EXPECTED_BODY_IDS = [
+    "sun",
+    "mercury",
+    "venus",
+    "earth",
+    "moon",
+    "mars",
+    "phobos",
+    "deimos",
+    "jupiter",
+    "io",
+    "europa",
+    "ganymede",
+    "callisto",
+    "saturn",
+    "mimas",
+    "enceladus",
+    "tethys",
+    "dione",
+    "rhea",
+    "titan",
+    "iapetus",
+    "uranus",
+    "miranda",
+    "ariel",
+    "umbriel",
+    "titania",
+    "oberon",
+    "neptune",
+    "triton",
+    "pluto",
+    "charon",
+    "ceres",
+    "eris",
+    "makemake",
+    "haumea",
+    "vesta",
+    "pallas",
+    "hygiea",
+    "eros",
+    "bennu",
+    "ryugu",
+    "1p",
+    "67p",
+]
 
 
 def sample_elements():
@@ -38,6 +85,36 @@ def successful_query(definition, _factory, _cache):
 
 
 class BakeCoreTests(unittest.TestCase):
+    def test_defines_the_complete_parent_first_v1_catalog(self):
+        self.assertEqual(bake.BODY_IDS, EXPECTED_BODY_IDS)
+        self.assertEqual(
+            Counter(definition.kind for definition in bake.BODY_DEFINITIONS),
+            Counter(
+                {"star": 1, "planet": 8, "dwarf": 5, "moon": 21, "asteroid": 6, "comet": 2}
+            ),
+        )
+
+        seen = set()
+        seeds = set()
+        for definition in bake.BODY_DEFINITIONS:
+            if definition.parent_id is not None:
+                self.assertIn(definition.parent_id, seen, definition.id)
+            self.assertTrue(math.isfinite(definition.mu_km3_s2) and definition.mu_km3_s2 > 0)
+            self.assertTrue(math.isfinite(definition.mean_radius_km) and definition.mean_radius_km > 0)
+            self.assertTrue(
+                math.isfinite(definition.sidereal_rotation_period_sec)
+                and definition.sidereal_rotation_period_sec != 0
+            )
+            self.assertTrue(math.isfinite(definition.axial_tilt_rad))
+            self.assertGreaterEqual(definition.geometric_albedo, 0)
+            self.assertLessEqual(definition.geometric_albedo, 1)
+            self.assertNotIn(definition.procedural_seed, seeds)
+            seen.add(definition.id)
+            seeds.add(definition.procedural_seed)
+
+        self.assertEqual(bake.DEFINITION_BY_ID["1p"].horizons_id, 90_000_030)
+        self.assertEqual(bake.DEFINITION_BY_ID["67p"].horizons_id, 90_000_702)
+
     def test_converts_horizons_elements_to_game_units(self):
         elements = bake.elements_from_row(
             {
@@ -75,10 +152,25 @@ class BakeCoreTests(unittest.TestCase):
             bake.state_from_row(
                 {"x": math.nan, "y": 0, "z": 0, "vx": 0, "vy": 0, "vz": 0}
             )
+        with self.assertRaisesRegex(ValueError, "invalid Kepler branch"):
+            bake.elements_from_row(
+                {
+                    "a": 1.0,
+                    "e": 1.1,
+                    "incl": 0,
+                    "Omega": 0,
+                    "w": 0,
+                    "M": 0,
+                }
+            )
 
     def test_computes_sphere_of_influence_from_mu_ratio(self):
         self.assertAlmostEqual(
             bake.sphere_of_influence_km(100_000.0, 1.0, 1_000.0),
+            100_000.0 * (1.0 / 1_000.0) ** (2.0 / 5.0),
+        )
+        self.assertAlmostEqual(
+            bake.sphere_of_influence_km(-100_000.0, 1.0, 1_000.0),
             100_000.0 * (1.0 / 1_000.0) ** (2.0 / 5.0),
         )
 
@@ -154,24 +246,35 @@ class BakeAdapterTests(unittest.TestCase):
     def setUp(self):
         FakeHorizons.calls = []
 
-    def test_queries_planets_from_sun_and_moon_elements_from_earth(self):
-        bake.query_body(bake.DEFINITION_BY_ID["earth"], FakeHorizons, cache=True)
-        earth_calls = list(FakeHorizons.calls)
-        FakeHorizons.calls = []
-        bake.query_body(bake.DEFINITION_BY_ID["moon"], FakeHorizons, cache=False)
-        moon_calls = list(FakeHorizons.calls)
+    def test_routes_parent_relative_and_small_body_queries_without_ambiguity(self):
+        cases = [
+            ("earth", "500@10", None, "399"),
+            ("moon", "500@399", None, "301"),
+            ("io", "500@599", None, "501"),
+            ("charon", "500@999", None, "901"),
+            ("ceres", "500@10", "smallbody", "1"),
+            ("1p", "500@10", None, "90000030"),
+            ("67p", "500@10", None, "90000702"),
+        ]
 
-        self.assertEqual(earth_calls[0][1]["location"], "500@10")
-        self.assertEqual(earth_calls[0][1]["epochs"], bake.EPOCH_JD_TDB)
-        self.assertEqual(earth_calls[1], ("elements", {"refplane": "ecliptic", "cache": True}))
-        self.assertEqual(earth_calls[2][1]["location"], "500@10")
-        self.assertEqual(
-            earth_calls[2][1]["epochs"],
-            [bake.EPOCH_JD_TDB + offset for offset in bake.CHECK_OFFSETS_DAYS],
-        )
-        self.assertEqual(moon_calls[0][1]["location"], "500@399")
-        self.assertEqual(moon_calls[1], ("elements", {"refplane": "ecliptic", "cache": False}))
-        self.assertEqual(moon_calls[2][1]["location"], "500@10")
+        for body_id, element_center, id_type, target_id in cases:
+            with self.subTest(body_id=body_id):
+                FakeHorizons.calls = []
+                bake.query_body(bake.DEFINITION_BY_ID[body_id], FakeHorizons, cache=False)
+                calls = list(FakeHorizons.calls)
+                self.assertEqual(calls[0][1]["id"], target_id)
+                self.assertEqual(calls[0][1]["id_type"], id_type)
+                self.assertEqual(calls[0][1]["location"], element_center)
+                self.assertEqual(calls[0][1]["epochs"], bake.EPOCH_JD_TDB)
+                self.assertEqual(
+                    calls[1], ("elements", {"refplane": "ecliptic", "cache": False})
+                )
+                self.assertEqual(calls[2][1]["location"], "500@10")
+                self.assertEqual(calls[2][1]["id_type"], id_type)
+                self.assertEqual(
+                    calls[2][1]["epochs"],
+                    [bake.EPOCH_JD_TDB + offset for offset in bake.CHECK_OFFSETS_DAYS],
+                )
 
     def test_query_failure_preserves_existing_output_bytes(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

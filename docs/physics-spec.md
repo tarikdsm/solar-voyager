@@ -32,7 +32,7 @@ Position at time t:
 1. Mean anomaly: `M = M₀ + n·(t − t₀)`, `n = √((μ_parent + μ_body)/a³)` (elliptic) or `√((μ_parent + μ_body)/(−a)³)` (hyperbolic).
 2. Solve Kepler's equation by Newton–Raphson to |Δ| < 1e-12 rad, max 30 iterations:
    - Elliptic: `M = E − e·sin E`, start `E₀ = M` (or `π` if e > 0.8).
-   - Hyperbolic (comets): `M = e·sinh H − H`.
+   - Hyperbolic objects: `M = e·sinh H − H` (body kind does not select the branch; the v1 comets are elliptic at J2026, ADR-018).
 3. True anomaly, radius → perifocal position/velocity → rotate by `Rz(Ω)·Rx(i)·Rz(ω)` into the parent frame.
 4. Moons: add parent's heliocentric state (evaluated recursively).
 
@@ -42,11 +42,12 @@ Properties: O(1) per body, exact evaluation at any t (no drift at any warp), det
 
 | Body class | max error @ +30 d | @ +365 d |
 |---|---|---|
-| Planets, dwarfs | 50,000 km | 1,500,000 km |
-| Moon (Luna) | 50,000 km | 1,500,000 km |
-| Giant-planet moons | 2,000 km | 50,000 km |
+| Planets and Moon (Luna) | 50,000 km | 1,500,000 km |
+| Dwarfs, Mars moons, Charon | 100,000 km | 1,500,000 km |
+| Giant-planet moons | 250,000 km | 1,000,000 km |
+| Asteroids and comets | 10,000 km | 750,000 km |
 
-(Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. The planet/Luna bounds are conservative ceilings calibrated against the T0020 J2026 bake in ADR-015. Recalibrate newly added classes when T0021 expands the catalog.)
+(Errors come from neglected mutual perturbations; resulting orbits remain physically plausible. The planet/Luna bounds were calibrated against the T0020 J2026 bake in ADR-015; the full-catalog classes use conservative T0021 ceilings from ADR-019. T0023 will tighten them with the dedicated complete regression.)
 
 ## 3. Ship dynamics — full n-body + thrust, special-relativistic (ADR-007)
 
