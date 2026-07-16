@@ -25,6 +25,12 @@ Add physics-spec.md section 7.12 with two validation requirements:
   from Earth and have normalized rotating-frame residual below `1e-10`:
   `|g_x + n²x| / max(|g_x|, |n²x|)`.
 
+The single-body threshold is roughly 45 binary64 epsilons, leaving room for the
+few multiply/square-root operations while still detecting a formula or unit
+change. The L1 implementation measures `1.44e-15`; the `1e-10` ceiling leaves
+five orders of magnitude for platform rounding and future catalog-constant
+updates while remaining a stringent cancellation test.
+
 The test obtains Sun/Earth GM and J2026 separation from the baked catalog,
 constructs exact barycentric coordinates, and solves the scalar L1 equation
 without calling production code. It then evaluates production gravity once at
@@ -55,4 +61,3 @@ integration through that singularity.
 - **Solve L1 with the production evaluator.** Rejected because the resulting
   test would be circular: it could find a root of the same incorrect function
   it was meant to verify.
-

@@ -84,4 +84,3 @@ is zero for a stationary rotating-frame test point.
   `core`/`sim` layering.
 - Full lint, typecheck, test, format, build, task-schema, and budget gates run
   before independent review.
-

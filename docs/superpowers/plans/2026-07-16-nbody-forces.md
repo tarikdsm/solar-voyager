@@ -226,4 +226,3 @@ Rebase onto current `main`, rerun all gates, push
 `[T0014] N-body gravity field evaluation`. The PR maps the analytic two-body and
 Earth-Sun L1 criteria to exact results. A different agent waits for green CI,
 changes the task to `DONE`, and merges without force.
-
