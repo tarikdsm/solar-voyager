@@ -1,8 +1,8 @@
 id: T0013
 title: Rails propagation of the body catalog
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0013-rails-propagation
 depends_on: [T0012, T0020]
 milestone: M1
 spec: |
