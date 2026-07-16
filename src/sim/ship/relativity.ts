@@ -12,6 +12,9 @@ export const STATE_UY = 4;
 export const STATE_UZ = 5;
 export const STATE_TAU = 6;
 
+// Direction normalization and Math.hypot can each consume a few ulps.
+const MAX_SUBLUMINAL_BETA = 1 - 8 * Number.EPSILON;
+
 /** Writes a gravity or proper-acceleration vector in km/s^2. */
 export type RelativisticAccelerationEvaluator = (
   timeSec: number,
@@ -21,6 +24,43 @@ export type RelativisticAccelerationEvaluator = (
 
 function dimensionlessCelerityMagnitude(ux: number, uy: number, uz: number): number {
   return Math.hypot(ux / SPEED_OF_LIGHT_KM_S, uy / SPEED_OF_LIGHT_KM_S, uz / SPEED_OF_LIGHT_KM_S);
+}
+
+function subluminalBetaFromCelerity(ux: number, uy: number, uz: number): number {
+  const dimensionlessCelerity = dimensionlessCelerityMagnitude(ux, uy, uz);
+  return Math.min(
+    dimensionlessCelerity / Math.hypot(1, dimensionlessCelerity),
+    MAX_SUBLUMINAL_BETA,
+  );
+}
+
+function writeCoordinateVelocity(
+  output: Float64Array,
+  outputX: number,
+  outputY: number,
+  outputZ: number,
+  ux: number,
+  uy: number,
+  uz: number,
+): number {
+  const dimensionlessUx = ux / SPEED_OF_LIGHT_KM_S;
+  const dimensionlessUy = uy / SPEED_OF_LIGHT_KM_S;
+  const dimensionlessUz = uz / SPEED_OF_LIGHT_KM_S;
+  const dimensionlessCelerity = Math.hypot(dimensionlessUx, dimensionlessUy, dimensionlessUz);
+  if (dimensionlessCelerity === 0) {
+    output[outputX] = ux;
+    output[outputY] = uy;
+    output[outputZ] = uz;
+    return 1;
+  }
+
+  const gamma = Math.hypot(1, dimensionlessCelerity);
+  const beta = Math.min(dimensionlessCelerity / gamma, MAX_SUBLUMINAL_BETA);
+  const coordinateSpeedKmSec = beta * SPEED_OF_LIGHT_KM_S;
+  output[outputX] = (dimensionlessUx / dimensionlessCelerity) * coordinateSpeedKmSec;
+  output[outputY] = (dimensionlessUy / dimensionlessCelerity) * coordinateSpeedKmSec;
+  output[outputZ] = (dimensionlessUz / dimensionlessCelerity) * coordinateSpeedKmSec;
+  return 1 / gamma;
 }
 
 /** Returns gamma = sqrt(1 + |u|^2/c^2) for celerity components in km/s. */
@@ -35,17 +75,13 @@ export function coordinateVelocityInto(
   uy: number,
   uz: number,
 ): Float64Array {
-  const inverseGamma = 1 / lorentzFactorFromCelerity(ux, uy, uz);
-  output[0] = ux * inverseGamma;
-  output[1] = uy * inverseGamma;
-  output[2] = uz * inverseGamma;
+  writeCoordinateVelocity(output, 0, 1, 2, ux, uy, uz);
   return output;
 }
 
 /** Returns |v|/c from celerity without constructing a velocity vector. */
 export function speedFractionOfLightFromCelerity(ux: number, uy: number, uz: number): number {
-  const dimensionlessCelerity = dimensionlessCelerityMagnitude(ux, uy, uz);
-  return dimensionlessCelerity / Math.hypot(1, dimensionlessCelerity);
+  return subluminalBetaFromCelerity(ux, uy, uz);
 }
 
 /** Writes p = m*u in kg km/s without allocating. */
@@ -91,14 +127,19 @@ export function createRelativisticDerivative(
     const ux = state[STATE_UX] as number;
     const uy = state[STATE_UY] as number;
     const uz = state[STATE_UZ] as number;
-    const inverseGamma = 1 / lorentzFactorFromCelerity(ux, uy, uz);
 
     gravity(timeSec, state, gravityOutput);
     properAcceleration(timeSec, state, properAccelerationOutput);
 
-    outputDerivative[STATE_RX] = ux * inverseGamma;
-    outputDerivative[STATE_RY] = uy * inverseGamma;
-    outputDerivative[STATE_RZ] = uz * inverseGamma;
+    const inverseGamma = writeCoordinateVelocity(
+      outputDerivative,
+      STATE_RX,
+      STATE_RY,
+      STATE_RZ,
+      ux,
+      uy,
+      uz,
+    );
     outputDerivative[STATE_UX] =
       (gravityOutput[0] as number) + (properAccelerationOutput[0] as number);
     outputDerivative[STATE_UY] =

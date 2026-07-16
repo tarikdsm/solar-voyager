@@ -56,6 +56,39 @@ describe('relativistic kinematics - physics-spec.md section 3 / section 6', () =
     );
   });
 
+  it('preserves a representable speed below light speed at extreme finite celerity', () => {
+    const targetGamma = 1e8;
+    const extremeCelerityKmSec = Math.sqrt(targetGamma ** 2 - 1) * SPEED_OF_LIGHT_KM_S;
+    const velocity = new Float64Array(3);
+
+    coordinateVelocityInto(velocity, extremeCelerityKmSec, 0, 0);
+
+    expect(Math.hypot(...velocity)).toBeLessThan(SPEED_OF_LIGHT_KM_S);
+    expect(speedFractionOfLightFromCelerity(extremeCelerityKmSec, 0, 0)).toBeLessThan(1);
+
+    coordinateVelocityInto(velocity, 1e300, -1e300, 1e300);
+    expect([...velocity].every(Number.isFinite)).toBe(true);
+    expect(Math.hypot(...velocity)).toBeLessThan(SPEED_OF_LIGHT_KM_S);
+
+    const state = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    const derivativeOutput = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    state[STATE_UX] = 1e300;
+    state[STATE_UY] = -1e300;
+    state[STATE_UZ] = 1e300;
+    createRelativisticDerivative(writeZeroAcceleration, writeZeroAcceleration)(
+      0,
+      state,
+      derivativeOutput,
+    );
+    expect(
+      Math.hypot(
+        derivativeOutput[STATE_RX] as number,
+        derivativeOutput[STATE_RY] as number,
+        derivativeOutput[STATE_RZ] as number,
+      ),
+    ).toBeLessThan(SPEED_OF_LIGHT_KM_S);
+  });
+
   it('calculates relativistic momentum from celerity', () => {
     const momentum = new Float64Array(3);
 
@@ -260,7 +293,9 @@ describe('relativistic kinematics - physics-spec.md section 3 / section 6', () =
 
     expect(newtonianResult.reachedEnd).toBe(true);
     expect(relativisticResult.reachedEnd).toBe(true);
-    expect(finalSeparationKm / orbitRadiusKm).toBeLessThan(5e-8);
+    const relativeFinalSeparation = finalSeparationKm / orbitRadiusKm;
+    expect(relativeFinalSeparation).toBeGreaterThan(4e-8);
+    expect(relativeFinalSeparation).toBeLessThan(5e-8);
   });
 
   it('integrates one year of proper time at gamma two', () => {
