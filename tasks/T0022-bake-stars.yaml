@@ -1,6 +1,6 @@
 id: T0022
 title: bake_stars script — Yale BSC to stars.bin
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0022-bake-stars
 depends_on: [T0001]
@@ -11,4 +11,12 @@ spec: |
 acceptance:
   - stars.bin < 300 KB, ~9k stars
   - Spot-check test: Sirius/Canopus positions and relative brightness correct
-handoff_notes: ""
+handoff_notes: |
+  Baked 9,096 coordinate-bearing CDS V/50 entries into a 254,688-byte raw
+  seven-Float32 catalog. Source SHA-256 is 3dc44b1e90be8fbe5bcc7656032560f51275f985c7e3f783c9028e1838ec7bed;
+  output SHA-256 is 91a8d2304001d3936a8dc69181c52af59c555d3fecd5546d0d2db9efa3f23cae
+  across two regenerations. Sirius/Canopus directions, magnitudes, and 1.977
+  relative-flux ratio are locked. The render loader validates once and exposes
+  the original interleaved buffer without copying. Verification: lint and
+  typecheck passed; Vitest 193 passed / 3 skipped; Python tools 22 passed;
+  format, build, 52-task schema, asset budgets, and diff check passed.
