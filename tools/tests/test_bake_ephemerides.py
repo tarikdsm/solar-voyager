@@ -236,6 +236,37 @@ class BakeAdapterTests(unittest.TestCase):
                 self.assertFalse(Path(f"{catalog_path}.bak").exists())
                 self.assertFalse(Path(f"{checks_path}.bak").exists())
 
+    def test_failed_rollback_preserves_recovery_backup(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_dir = Path(temporary_directory)
+            catalog_path = output_dir / "bodies.json"
+            checks_path = output_dir / "ephemerides-check.json"
+            catalog_backup = Path(f"{catalog_path}.bak")
+            checks_backup = Path(f"{checks_path}.bak")
+            catalog_path.write_bytes(b"catalog-before")
+            checks_path.write_bytes(b"checks-before")
+            real_replace = os.replace
+            publish_count = 0
+
+            def fail_publish_and_restore(source, destination):
+                nonlocal publish_count
+                if str(source).endswith(".tmp"):
+                    publish_count += 1
+                    if publish_count == 2:
+                        raise OSError("simulated second publish failure")
+                if Path(source) == catalog_backup:
+                    raise OSError("simulated catalog restore failure")
+                return real_replace(source, destination)
+
+            with mock.patch.object(bake.os, "replace", side_effect=fail_publish_and_restore):
+                with self.assertRaisesRegex(RuntimeError, "rollback failed.*bodies.json.bak"):
+                    bake.bake(output_dir, query_function=successful_query)
+
+            self.assertNotEqual(catalog_path.read_bytes(), b"catalog-before")
+            self.assertEqual(checks_path.read_bytes(), b"checks-before")
+            self.assertEqual(catalog_backup.read_bytes(), b"catalog-before")
+            self.assertFalse(checks_backup.exists())
+
     def test_atomic_json_writer_is_deterministic_and_cleans_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "output.json"

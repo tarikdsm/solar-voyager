@@ -239,6 +239,8 @@ def _publish_json_pair(
     temporary_paths = tuple(Path(f"{path}.tmp") for path in paths)
     backup_paths = tuple(Path(f"{path}.bak") for path in paths)
     existed = tuple(path.exists() for path in paths)
+    published = [False, False]
+    preserve_backup = [False, False]
 
     try:
         for temporary_path, document in zip(temporary_paths, documents):
@@ -246,18 +248,42 @@ def _publish_json_pair(
         for path, backup_path, path_existed in zip(paths, backup_paths, existed):
             if path_existed:
                 shutil.copyfile(path, backup_path)
-        for temporary_path, path in zip(temporary_paths, paths):
+        for index, (temporary_path, path) in enumerate(zip(temporary_paths, paths)):
             os.replace(temporary_path, path)
-    except Exception:
-        for path, backup_path, path_existed in zip(paths, backup_paths, existed):
-            if path_existed and backup_path.exists():
-                os.replace(backup_path, path)
-            elif not path_existed:
-                path.unlink(missing_ok=True)
+            published[index] = True
+    except Exception as publish_error:
+        rollback_failures = []
+        for index, (path, backup_path, path_existed) in enumerate(
+            zip(paths, backup_paths, existed)
+        ):
+            if not published[index]:
+                continue
+            try:
+                if path_existed:
+                    os.replace(backup_path, path)
+                else:
+                    path.unlink(missing_ok=True)
+            except Exception as rollback_error:
+                preserve_backup[index] = path_existed and backup_path.exists()
+                rollback_failures.append(f"{path}: {rollback_error}")
+        if rollback_failures:
+            recovery_paths = [
+                str(backup_paths[index])
+                for index, preserve in enumerate(preserve_backup)
+                if preserve
+            ]
+            raise RuntimeError(
+                "publication failed and rollback failed; "
+                f"recovery backups preserved at {', '.join(recovery_paths)}; "
+                f"rollback errors: {'; '.join(rollback_failures)}"
+            ) from publish_error
         raise
     finally:
-        for working_path in (*temporary_paths, *backup_paths):
+        for working_path in temporary_paths:
             working_path.unlink(missing_ok=True)
+        for index, backup_path in enumerate(backup_paths):
+            if not preserve_backup[index]:
+                backup_path.unlink(missing_ok=True)
 
 
 def _load_existing(output_dir: Path) -> Any:

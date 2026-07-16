@@ -40,6 +40,8 @@ Partial bakes require existing complete `bodies.json` and
 body before writing sibling temporary files. Each file replacement is atomic;
 if either replacement raises, backups restore both previous files. This is a
 process-level transaction, not a claim of cross-file crash atomicity.
+A backup is deliberately retained and named in the error if its restoration
+also fails, allowing manual recovery without losing the previous bytes.
 A query failure leaves the previous outputs unchanged.
 
 ### Frames, centers, and units

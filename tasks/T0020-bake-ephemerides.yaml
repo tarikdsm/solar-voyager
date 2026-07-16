@@ -25,6 +25,6 @@ handoff_notes: |
   5563F6063447F73986E285F274C7DE68F5B00C84B4C62FF836DE8B9139423336;
   ephemerides-check.json
   79155F4FBC1A1D35809BC4C376079F32540F10CCF7D5B9C8FE561ECF6006593C.
-  Verified: lint, typecheck, format, build, 136 Vitest tests, 11 Python tests,
+  Verified: lint, typecheck, format, build, 136 Vitest tests, 12 Python tests,
   task schema, and asset budgets all pass. Vite retains the existing 531.42 kB
   chunk-size warning; the enforced critical-path budget is 0.51 MiB / 8 MiB.
