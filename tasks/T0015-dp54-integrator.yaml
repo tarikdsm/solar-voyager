@@ -1,6 +1,6 @@
 id: T0015
 title: DP54 adaptive integrator
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0015-dp54-integrator
 depends_on: [T0010]
@@ -14,4 +14,10 @@ spec: |
 acceptance:
   - physics-spec 7.2 two-body tests pass (10 periods, <1e-3 km, drift <1e-9)
   - Step controller respects the 4000-substep budget interface
-handoff_notes: ""
+handoff_notes: |
+  Implemented a caller-owned, allocation-free generic DP54 propagator with the
+  published full-precision tableau, FSAL reuse, adaptive error control, horizon
+  clipping, step-underflow reporting, and the 4000-accepted-step budget interface.
+  Added the specified seven-component ship tolerance factory and regression tests
+  for circular and e=0.7 two-body orbits over ten periods. All 116 tests and every
+  mandatory gate pass. Review commits b2a80b7..25e0b3d.
