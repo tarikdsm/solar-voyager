@@ -1,6 +1,6 @@
 id: T0011
 title: core/time — SimClock, TDB seconds, warp ladder
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0011-core-time-simclock
 depends_on: [T0001]
@@ -18,4 +18,9 @@ handoff_notes: |
   the display mapping is documented as separate from orbital timescale math.
   TDD evidence: focused test failed while time.ts was absent, then passed 6/6.
   Full verification passed: lint, typecheck, 90 tests, build, Prettier, task
-  schema, asset budgets, and diff check. Requires independent review.
+  schema, asset budgets, and diff check. Independent review confirmed that the
+  UTC functions are a deterministic, display-only civil mapping rather than an
+  astronomical TDB-to-UTC conversion; orbital time remains float64 TDB seconds.
+  The exact frozen ladder, allocation-free clock advance, Date round-trips, and
+  formatting under UTC, Pacific/Honolulu, and Asia/Kolkata were verified. PR CI
+  run 29461311433 passed on dc2d1c74e8795721948a04a11eb03b4fe97820eb.
