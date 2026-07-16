@@ -217,6 +217,76 @@ async function collectBenchmark(pageUrl) {
   const page = await browser.newPage({
     viewport: { width: viewportWidth, height: viewportHeight },
   });
+  if (REQUIRE_HARDWARE_GPU) {
+    await page.addInitScript(() => {
+      const nativeRequestAnimationFrame = globalThis.requestAnimationFrame.bind(globalThis);
+      const pendingQueries = [];
+      const samplesNs = [];
+      let pendingIndex = 0;
+      let targetCallback;
+      let context;
+      let extension;
+      let initializationAttempted = false;
+
+      globalThis.__solarVoyagerGpuTiming = { error: null, samplesNs };
+
+      function initializeTimerQuery() {
+        if (initializationAttempted) return;
+        initializationAttempted = true;
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
+          globalThis.__solarVoyagerGpuTiming.error = 'Space canvas unavailable.';
+          return;
+        }
+        context = canvas.getContext('webgl2');
+        extension = context?.getExtension('EXT_disjoint_timer_query_webgl2');
+        if (context === null || extension === null) {
+          globalThis.__solarVoyagerGpuTiming.error = 'EXT_disjoint_timer_query_webgl2 unavailable.';
+        }
+      }
+
+      function collectAvailableQueries() {
+        while (pendingIndex < pendingQueries.length) {
+          const query = pendingQueries[pendingIndex];
+          if (!context.getQueryParameter(query, context.QUERY_RESULT_AVAILABLE)) return;
+          const disjoint = context.getParameter(extension.GPU_DISJOINT_EXT);
+          const elapsedNs = context.getQueryParameter(query, context.QUERY_RESULT);
+          context.deleteQuery(query);
+          pendingIndex += 1;
+          if (!disjoint) samplesNs.push(elapsedNs);
+        }
+      }
+
+      globalThis.requestAnimationFrame = (callback) => {
+        targetCallback ??= callback;
+        return nativeRequestAnimationFrame((timeMs) => {
+          if (callback !== targetCallback) {
+            callback(timeMs);
+            return;
+          }
+          initializeTimerQuery();
+          if (context === undefined || extension === undefined) {
+            callback(timeMs);
+            return;
+          }
+          collectAvailableQueries();
+          const query = context.createQuery();
+          if (query === null) {
+            globalThis.__solarVoyagerGpuTiming.error = 'Unable to create GPU timer query.';
+            callback(timeMs);
+            return;
+          }
+          context.beginQuery(extension.TIME_ELAPSED_EXT, query);
+          try {
+            callback(timeMs);
+          } finally {
+            context.endQuery(extension.TIME_ELAPSED_EXT);
+            pendingQueries.push(query);
+          }
+        });
+      };
+    });
+  }
   const consoleErrors = [];
   const pageErrors = [];
 
@@ -320,6 +390,24 @@ async function collectBenchmark(pageUrl) {
     });
 
     const sortedFrameDeltasMs = measurement.frameDeltasMs.toSorted((left, right) => left - right);
+    const gpuTiming = REQUIRE_HARDWARE_GPU
+      ? await page.evaluate(() => globalThis.__solarVoyagerGpuTiming)
+      : null;
+    if (gpuTiming?.error !== null && gpuTiming?.error !== undefined) {
+      throw new Error(`GPU timing failed: ${gpuTiming.error}`);
+    }
+    const sortedGpuRenderMs =
+      gpuTiming === null
+        ? []
+        : gpuTiming.samplesNs
+            .slice(-SAMPLE_FRAMES)
+            .map((elapsedNs) => elapsedNs / 1_000_000)
+            .toSorted((left, right) => left - right);
+    if (REQUIRE_HARDWARE_GPU && sortedGpuRenderMs.length < SAMPLE_FRAMES) {
+      throw new Error(
+        `GPU timing returned ${String(sortedGpuRenderMs.length)} samples; expected ${String(SAMPLE_FRAMES)}.`,
+      );
+    }
     const result = {
       timestamp: new Date().toISOString(),
       gitSha: readGitSha(),
@@ -333,6 +421,12 @@ async function collectBenchmark(pageUrl) {
       consoleErrors,
       pageErrors,
     };
+
+    if (sortedGpuRenderMs.length > 0) {
+      result.gpuRenderMedianMs = roundMilliseconds(percentile(sortedGpuRenderMs, 0.5));
+      result.gpuRenderP75Ms = roundMilliseconds(percentile(sortedGpuRenderMs, 0.75));
+      result.gpuRenderP99Ms = roundMilliseconds(percentile(sortedGpuRenderMs, 0.99));
+    }
 
     if (measurement.heapBeforeBytes !== null && measurement.heapAfterBytes !== null) {
       result.heapDeltaBytes = measurement.heapAfterBytes - measurement.heapBeforeBytes;

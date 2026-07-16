@@ -140,8 +140,14 @@ function bloomMetrics(offImage, onImage) {
 function assertPipeline(snapshot, label) {
   assert.equal(snapshot.glError, 0, `${label}: WebGL error ${snapshot.glError}`);
   assert.equal(snapshot.bufferType, snapshot.expectedBufferType, `${label}: composer is not half-float`);
-  assert.equal(snapshot.brightWidth, VIEWPORT_SIZE / 2, `${label}: bloom width is not half-resolution`);
-  assert.equal(snapshot.brightHeight, VIEWPORT_SIZE / 2, `${label}: bloom height is not half-resolution`);
+  assert.ok(
+    Math.abs(snapshot.brightWidth * 2 - snapshot.bufferWidth) <= 1,
+    `${label}: bloom width is not half the effective render width`,
+  );
+  assert.ok(
+    Math.abs(snapshot.brightHeight * 2 - snapshot.bufferHeight) <= 1,
+    `${label}: bloom height is not half the effective render height`,
+  );
   assert.deepEqual(snapshot.passNames, ['RenderPass', 'UnrealBloomPass', 'OutputPass']);
   assert.equal(snapshot.toneMapping, snapshot.expectedToneMapping, `${label}: ACES is not active`);
 }

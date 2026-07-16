@@ -28,15 +28,18 @@ software-renderer names before accepting the capture. It selected Intel UHD
 Graphics through ANGLE D3D11, an integrated GPU older than the 2023+ reference
 class.
 
-| Revision/state     | GPU / resolution            |  Median |     p75 |     p99 |
-| ------------------ | --------------------------- | ------: | ------: | ------: |
-| `c559699`          | Intel UHD D3D11 / 1920×1080 | 16.7 ms | 16.7 ms | 16.8 ms |
-| T0043 working tree | Intel UHD D3D11 / 1920×1080 | 16.7 ms | 16.7 ms | 16.8 ms |
+| Revision/state     | GPU / resolution            | rAF p75 | GPU render p50 | GPU render p75 | GPU render p99 |
+| ------------------ | --------------------------- | ------: | -------------: | -------------: | -------------: |
+| `c559699`          | Intel UHD D3D11 / 1920×1080 | 16.7 ms |      10.411 ms |      11.133 ms |      12.272 ms |
+| T0043 working tree | Intel UHD D3D11 / 1920×1080 | 16.7 ms |      11.706 ms |      12.071 ms |      13.260 ms |
 
 Both paths sustained one 60 Hz refresh interval for all 600 measured frames;
-the reported one-decimal 16.7 ms is the rounded 16.67 ms VSync cadence, and the
-post chain produced no measurable frame-time regression even at p99. The
-hardware gate therefore passes on a conservative integrated-GPU target.
+the reported one-decimal 16.7 ms is the rounded 16.67 ms VSync cadence. GPU
+queries attribute a 0.938 ms p75 increase to T0043. This Intel UHD 0x9A60 is an
+older Tiger Lake-class integrated GPU, not the specified 2023+ reference: even
+the pre-T0043 baseline exceeds the 10 ms render split on it. The result proves
+the complete post chain sustains 60 Hz on a conservative device, but it does
+not by itself certify the 10 ms split on the unavailable reference machine.
 
 The main JavaScript chunk changed from 630.21 kB (163.01 kB gzip) to 658.50 kB
 (169.10 kB gzip), adding the official Three.js post-processing modules. The

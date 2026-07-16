@@ -19,6 +19,8 @@ const MODEL_FADE_END_MS = 1_300;
 
 interface PipelineSnapshot {
   readonly bufferType: number;
+  readonly bufferWidth: number;
+  readonly bufferHeight: number;
   readonly expectedBufferType: number;
   readonly brightWidth: number;
   readonly brightHeight: number;
@@ -128,6 +130,8 @@ function pipelineSnapshot(pipeline: LightingPostPipeline): PipelineSnapshot {
   };
   return {
     bufferType: pipeline.composer.readBuffer.texture.type,
+    bufferWidth: pipeline.composer.readBuffer.width,
+    bufferHeight: pipeline.composer.readBuffer.height,
     expectedBufferType: HalfFloatType,
     brightWidth: bloom.renderTargetBright.width,
     brightHeight: bloom.renderTargetBright.height,

@@ -29,8 +29,16 @@ export interface UnrealBloomPassPort extends PostPassPort {
 
 export interface PostComposerPort {
   readonly passes: PostPassPort[];
-  readonly readBuffer: { readonly texture: { readonly type: number } };
-  readonly writeBuffer: { readonly texture: { readonly type: number } };
+  readonly readBuffer: {
+    readonly width: number;
+    readonly height: number;
+    readonly texture: { readonly type: number };
+  };
+  readonly writeBuffer: {
+    readonly width: number;
+    readonly height: number;
+    readonly texture: { readonly type: number };
+  };
   addPass(pass: PostPassPort): void;
   setPixelRatio(pixelRatio: number): void;
   setSize(width: number, height: number): void;

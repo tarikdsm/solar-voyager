@@ -19,6 +19,8 @@ handoff_notes: >-
   night disc is 81.0% dark while 12.9% has strong emission-only contrast; the
   production Sun/glare has symmetric bloom and black corners. All 282 unit
   tests, 49 tool tests, four browser suites, build, budgets and schema checks
-  pass. Paired 1920x1080 Intel UHD hardware runs sustain the identical 16.7 ms
-  VSync p75 and 16.8 ms p99 before/after; software results and caveats remain in
-  docs/bench/T0043-summary.md.
+  pass. Paired 1920x1080 Intel UHD hardware runs sustain identical 16.7 ms VSync
+  p75; timer queries measure GPU render p75 11.133 -> 12.071 ms. This older
+  integrated GPU exceeds the 10 ms split even at baseline, so exact 2023+
+  reference-hardware certification remains unavailable; full evidence and
+  caveats are in docs/bench/T0043-summary.md.

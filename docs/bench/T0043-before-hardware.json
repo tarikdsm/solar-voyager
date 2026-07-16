@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-16T23:36:05.372Z",
+  "timestamp": "2026-07-16T23:52:11.904Z",
   "gitSha": "c5596998cd3dc47e1ca0c9d7004e4c79bdc7ea6f",
   "warmupFrames": 120,
   "sampleFrames": 600,
@@ -18,5 +18,8 @@
   },
   "consoleErrors": [],
   "pageErrors": [],
-  "heapDeltaBytes": 2736792
+  "gpuRenderMedianMs": 10.411,
+  "gpuRenderP75Ms": 11.133,
+  "gpuRenderP99Ms": 12.272,
+  "heapDeltaBytes": 2814416
 }

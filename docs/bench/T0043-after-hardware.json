@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-07-16T23:35:43.858Z",
-  "gitSha": "338fc9db2ab6e16a359d018591531937b67cda36",
-  "workingTree": "T0043 review fixes before delivery commit",
+  "timestamp": "2026-07-16T23:51:49.711Z",
+  "gitSha": "62a59336379e9fcba95f245f6a5408c89ee4fba5",
+  "workingTree": "T0043 GPU-timing review fixes before delivery commit",
   "warmupFrames": 120,
   "sampleFrames": 600,
   "medianMs": 16.7,
@@ -19,5 +19,8 @@
   },
   "consoleErrors": [],
   "pageErrors": [],
-  "heapDeltaBytes": -558890
+  "gpuRenderMedianMs": 11.706,
+  "gpuRenderP75Ms": 12.071,
+  "gpuRenderP99Ms": 13.26,
+  "heapDeltaBytes": 154842
 }

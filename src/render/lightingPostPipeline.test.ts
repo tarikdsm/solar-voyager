@@ -48,8 +48,8 @@ function createFixture(): Fixture {
   const passes: PostPassPort[] = [];
   const composer: PostComposerPort = {
     passes,
-    readBuffer: { texture: { type: HalfFloatType } },
-    writeBuffer: { texture: { type: HalfFloatType } },
+    readBuffer: { width: 1, height: 1, texture: { type: HalfFloatType } },
+    writeBuffer: { width: 1, height: 1, texture: { type: HalfFloatType } },
     addPass: vi.fn((candidate: PostPassPort) => passes.push(candidate)),
     setPixelRatio: vi.fn(),
     setSize: vi.fn(),
@@ -113,7 +113,7 @@ describe('LightingPostPipeline', () => {
 
     pipeline.resize(640, 360, 1);
     expect(fixture.composer.setPixelRatio).toHaveBeenCalledOnce();
-    expect(fixture.composer.setPixelRatio).toHaveBeenCalledWith(1);
+    expect(fixture.composer.setPixelRatio).toHaveBeenLastCalledWith(1);
     expect(fixture.composer.setSize).toHaveBeenLastCalledWith(640, 360);
 
     pipeline.setBloomEnabled(false);
