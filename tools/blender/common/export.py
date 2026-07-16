@@ -4,6 +4,7 @@ import pathlib
 
 import bpy
 
+from .glb import canonicalize_triangle_indices
 from .scene import select_only
 
 
@@ -24,5 +25,5 @@ def export_glb(objects, output_path, active=None):
     )
     if "FINISHED" not in result or not output_path.is_file():
         raise RuntimeError(f"Blender failed to export {output_path}: {result}")
+    canonicalize_triangle_indices(output_path)
     return output_path
-

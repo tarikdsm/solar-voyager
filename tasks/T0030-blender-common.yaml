@@ -20,6 +20,9 @@ handoff_notes: |
   JSON manifests. Added deterministic build selection through build_all.py and
   migrated the Sun builder. `npm run test:blender` creates a disposable Sun,
   validates the authored GLB, and proves T0035 ingest emits a Draco runtime GLB.
+  The smoke runs Blender twice and requires byte-identical authored GLBs; export
+  canonicalizes Blender's process-dependent triangle ordering. Quad spheres use
+  seam-safe longitude/latitude UVs compatible with 2:1 equirectangular maps.
   Verified with Blender 5.1.2: 16,128 triangles and radius 1.000000171.
-  Gates: 214 Vitest passed (3 skipped), 29 Python passed, lint, typecheck,
+  Gates: 214 Vitest passed (3 skipped), 30 Python passed, lint, typecheck,
   Prettier, Vite build, task schema, asset budgets, and Blender smoke all pass.

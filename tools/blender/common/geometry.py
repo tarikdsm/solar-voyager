@@ -1,5 +1,7 @@
 """Normalized body geometry constructors."""
 
+import math
+
 import bpy
 
 
@@ -8,6 +10,29 @@ def _finish_body_object(obj, name):
     obj.location = (0.0, 0.0, 0.0)
     for polygon in obj.data.polygons:
         polygon.use_smooth = True
+    return obj
+
+
+def _apply_equirectangular_uv(obj):
+    while obj.data.uv_layers:
+        obj.data.uv_layers.remove(obj.data.uv_layers[0])
+    uv_layer = obj.data.uv_layers.new(name="equirectangular")
+    for polygon in obj.data.polygons:
+        loop_records = []
+        for loop_index in polygon.loop_indices:
+            position = obj.data.vertices[obj.data.loops[loop_index].vertex_index].co.normalized()
+            u = (0.5 + math.atan2(position.z, position.x) / (2.0 * math.pi)) % 1.0
+            v = 0.5 + math.asin(max(-1.0, min(1.0, position.y))) / math.pi
+            loop_records.append([loop_index, u, v, math.hypot(position.x, position.z)])
+        values = [record[1] for record in loop_records if record[3] > 1e-9]
+        if values and max(values) - min(values) > 0.5:
+            for record in loop_records:
+                if record[1] < 0.5:
+                    record[1] += 1.0
+            values = [record[1] for record in loop_records if record[3] > 1e-9]
+        pole_u = sum(values) / len(values) if values else 0.5
+        for loop_index, u, v, horizontal_radius in loop_records:
+            uv_layer.data[loop_index].uv = (pole_u if horizontal_radius <= 1e-9 else u, v)
     return obj
 
 
@@ -38,8 +63,4 @@ def create_quad_sphere(name, subdivisions=5, radius=1.0):
     for vertex in obj.data.vertices:
         vertex.co.normalize()
         vertex.co *= radius
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=1.15192, island_margin=0.02)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    return _finish_body_object(obj, name)
+    return _apply_equirectangular_uv(_finish_body_object(obj, name))

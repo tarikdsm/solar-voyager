@@ -1,8 +1,11 @@
 """Build the disposable headless acceptance sphere for T0030."""
 
 import argparse
+import math
 import pathlib
 import sys
+
+import bpy
 
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
@@ -14,6 +17,7 @@ from common import (  # noqa: E402
     body_by_id,
     build_manifest,
     create_pbr_material,
+    create_quad_sphere,
     create_uv_sphere,
     export_glb,
     print_manifest,
@@ -31,6 +35,28 @@ def parse_arguments(argv):
     return parser.parse_args(arguments_after_separator(argv))
 
 
+def validate_quad_sphere_uv(obj):
+    uv_layer = obj.data.uv_layers.active
+    if uv_layer is None:
+        raise RuntimeError("Quad sphere has no UV layer")
+    for polygon in obj.data.polygons:
+        polygon_u = []
+        for loop_index in polygon.loop_indices:
+            position = obj.data.vertices[obj.data.loops[loop_index].vertex_index].co.normalized()
+            uv = uv_layer.data[loop_index].uv
+            expected_v = 0.5 + math.asin(max(-1.0, min(1.0, position.y))) / math.pi
+            if abs(uv.y - expected_v) > 1e-6:
+                raise RuntimeError("Quad sphere V coordinate is not latitude mapped")
+            if math.hypot(position.x, position.z) > 1e-9:
+                expected_u = (0.5 + math.atan2(position.z, position.x) / (2.0 * math.pi)) % 1.0
+                wrapped_error = min(abs(uv.x - expected_u), abs(uv.x - expected_u - 1.0))
+                if wrapped_error > 1e-6:
+                    raise RuntimeError("Quad sphere U coordinate is not longitude mapped")
+            polygon_u.append(uv.x)
+        if max(polygon_u) - min(polygon_u) > 0.5 + 1e-6:
+            raise RuntimeError("Quad sphere polygon crosses the equirectangular seam")
+
+
 def main(argv=None):
     arguments = parse_arguments(sys.argv if argv is None else argv)
     body = body_by_id("sun")
@@ -44,6 +70,9 @@ def main(argv=None):
     )
 
     reset_scene()
+    quad_sphere = create_quad_sphere("quad-sphere-contract", subdivisions=3)
+    validate_quad_sphere_uv(quad_sphere)
+    bpy.data.objects.remove(quad_sphere, do_unlink=True)
     sphere = create_uv_sphere("sun", segments=128, rings=64)
     material = create_pbr_material(
         "mat_surface",

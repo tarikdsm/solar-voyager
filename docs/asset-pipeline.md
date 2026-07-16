@@ -29,6 +29,10 @@ identity, and stable JSON manifests. Builders use those helpers instead of
 copying export settings. `build_all.py` discovers implemented `build_<id>.py`
 scripts whose ids exist in the catalog; pass exactly one of `--all` or one or more
 `--only <id>` flags. Execution order is stable by id.
+The strict exporter canonicalizes triangle order after Blender writes the GLB,
+removing process-dependent index ordering while preserving triangle winding.
+Quad spheres receive longitude/latitude UVs compatible with the required 2:1
+equirectangular surface maps, including per-loop seam and pole handling.
 
 ## glTF export settings
 

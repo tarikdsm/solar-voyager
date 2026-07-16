@@ -1,6 +1,7 @@
 """Run Blender headless and prove its authored GLB passes the runtime ingest."""
 
 import json
+import hashlib
 import os
 import pathlib
 import shutil
@@ -12,6 +13,7 @@ import sys
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
 BUILD_ROOT = REPOSITORY_ROOT / "build" / "blender-smoke"
 AUTHORED_ROOT = BUILD_ROOT / "assets" / "models"
+AUTHORED_REPEAT_ROOT = BUILD_ROOT / "assets-repeat" / "models"
 PUBLISHED_ROOT = BUILD_ROOT / "public" / "assets"
 KNOWN_WINDOWS_BLENDER = pathlib.Path(
     r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
@@ -80,10 +82,8 @@ def validate_authored_glb(path):
         raise RuntimeError("Authored GLB must contain exactly the sun mesh node")
 
 
-def main():
-    reset_build_root()
-    blender = find_blender()
-    builder_output = run_checked(
+def run_builder(blender, output_root):
+    return run_checked(
         (
             blender,
             "--background",
@@ -91,14 +91,30 @@ def main():
             REPOSITORY_ROOT / "tools" / "blender" / "build_test_sphere.py",
             "--",
             "--output-root",
-            AUTHORED_ROOT,
+            output_root,
         )
     )
+
+
+def sha256(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def main():
+    reset_build_root()
+    blender = find_blender()
+    builder_output = run_builder(blender, AUTHORED_ROOT)
     if "=== ASSET MANIFEST ===" not in builder_output:
         raise RuntimeError("Blender builder did not print its asset manifest")
 
     authored_glb = AUTHORED_ROOT / "sun" / "sun.glb"
     validate_authored_glb(authored_glb)
+    repeated_output = run_builder(blender, AUTHORED_REPEAT_ROOT)
+    if "=== ASSET MANIFEST ===" not in repeated_output:
+        raise RuntimeError("Repeated Blender builder did not print its asset manifest")
+    repeated_glb = AUTHORED_REPEAT_ROOT / "sun" / "sun.glb"
+    if sha256(authored_glb) != sha256(repeated_glb):
+        raise RuntimeError("Two identical Blender builds emitted different GLB bytes")
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if npm is None:
         raise FileNotFoundError("npm not found on PATH")
