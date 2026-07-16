@@ -4,7 +4,7 @@
 
 - Product page: https://genesis-horizon.solarsystemscope.com/textures/
 - Exact download: https://genesis-horizon.solarsystemscope.com/textures/download/8k_earth_daymap.jpg
-- License: CC BY 4.0
+- License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 - Pinned source SHA-256: `88ab060b6e7d241cfc590c69f528fab2b3247b738d40124cb590999a6fe44abc`
 - Processing: decoded, converted to metadata-free RGB PNG, and normalized to 8192×4096.
 - Output: `earth_albedo.png` (albedo)

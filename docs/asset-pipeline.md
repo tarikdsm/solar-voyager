@@ -83,7 +83,7 @@ pair for planets, moons, and dwarfs.
 | Sun | Solar System Scope / NASA SDO composite | 4k emissive |
 | Detail maps (close range) | authored/procedural, per surface class | 1k tiling pairs (MODELING-GUIDE §5) |
 
-**Licenses:** Solar System Scope textures are **CC BY 4.0** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
+**Licenses:** Solar System Scope textures are **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
 
 The reproducible Earth albedo recipe uses Solar System Scope's official
 `8k_earth_daymap.jpg`, pins source SHA-256

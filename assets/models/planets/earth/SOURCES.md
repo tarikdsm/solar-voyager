@@ -1,6 +1,6 @@
 # Sources — earth
 
-All maps: **Solar System Scope textures** (https://www.solarsystemscope.com/textures/) — **CC BY 4.0** (attribution required; based on NASA elevation and imagery data). Downloaded 2026-07-15; originals kept in `assets/textures-src/earth/`.
+All maps: **Solar System Scope textures** (https://www.solarsystemscope.com/textures/) — **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** (attribution required; based on NASA elevation and imagery data). Downloaded 2026-07-15; originals kept in `assets/textures-src/earth/`.
 
 - `earth_albedo.jpg` — 8k_earth_daymap.jpg — CC BY 4.0 — source download and checksum are reproducible through the `earth-albedo` recipe in `tools/fetch_textures.py`; this authoring copy retains JPEG format
 - `earth_emissive_night.jpg` — 8k_earth_nightmap.jpg — CC BY 4.0 — unmodified copy
