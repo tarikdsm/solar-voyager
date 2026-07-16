@@ -1,6 +1,6 @@
 id: T0040
 title: Camera-relative SpaceScene + logarithmic depth
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0040-space-scene
 depends_on: [T0013, T0032]
