@@ -15,4 +15,5 @@ acceptance:
 handoff_notes: >-
   Added three J2026 30-day full-field coast baselines, component-level metadata/state
   comparison, ADR-017/spec limits, and guarded explicit regeneration. Independent review
-  resolved metadata-validation P2; 181 Vitest and 12 Python tests plus all CI gates pass.
+  resolved metadata-validation P2 and calibrated LEO on Linux; 182 Vitest and 12 Python
+  tests plus all CI gates pass.
