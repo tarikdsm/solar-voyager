@@ -9,6 +9,8 @@
         "models/earth.glb",
         "textures/earth_albedo.ktx2",
         "textures/earth_clouds.ktx2",
+        "textures/earth_detail_albedo.ktx2",
+        "textures/earth_detail_normal.ktx2",
         "textures/earth_emissive_night.ktx2",
         "textures/earth_normal.ktx2"
       ]
@@ -19,7 +21,9 @@
       "triangles": 3968,
       "files": [
         "models/pluto.glb",
-        "textures/pluto_albedo.ktx2"
+        "textures/pluto_albedo.ktx2",
+        "textures/pluto_detail_albedo.ktx2",
+        "textures/pluto_detail_normal.ktx2"
       ]
     },
     {
@@ -29,6 +33,8 @@
       "files": [
         "models/saturn.glb",
         "textures/saturn_albedo.ktx2",
+        "textures/saturn_detail_albedo.ktx2",
+        "textures/saturn_detail_normal.ktx2",
         "textures/saturn_rings.ktx2"
       ]
     },
