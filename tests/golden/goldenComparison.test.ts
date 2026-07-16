@@ -28,9 +28,11 @@ describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
   it('accepts component drift exactly at the specified limits', () => {
     const expected = fixture();
     const actual = structuredClone(expected);
-    (actual.samples[0]?.state as number[])[0] += 1e-3;
-    (actual.samples[0]?.state as number[])[3] += 1e-9;
-    (actual.samples[0]?.state as number[])[6] += 1e-6;
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[0] = ((state as number[])[0] as number) + 1e-3;
+    (state as number[])[3] = ((state as number[])[3] as number) + 1e-9;
+    (state as number[])[6] = ((state as number[])[6] as number) + 1e-6;
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).not.toThrow();
   });
@@ -38,7 +40,9 @@ describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
   it('reports complete component diagnostics when drift exceeds tolerance', () => {
     const expected = fixture();
     const actual = structuredClone(expected);
-    (actual.samples[0]?.state as number[])[4] += 2e-9;
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[4] = ((state as number[])[4] as number) + 2e-9;
 
     expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
       /leo-30d.*timeSec=86400.*component=uy.*expected=0.*actual=2e-9.*drift=2e-9.*limit=1e-9/u,
