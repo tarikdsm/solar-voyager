@@ -1,6 +1,6 @@
 id: T0014
 title: N-body gravity field evaluation
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0014-nbody-forces
 depends_on: [T0013]
