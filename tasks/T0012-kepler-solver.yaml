@@ -20,7 +20,9 @@ handoff_notes: |
   covers circular-equatorial, circular-inclined, and eccentric-equatorial
   degeneracies. TDD exposed and fixed divergence for e=0.99 with negative mean
   anomaly by reducing elliptic M while preserving complete turns. Focused tests
-  cover residual <1e-12 across e=[0,0.99] and e=(1,5], conversion boundaries,
-  hyperbolic states, and §7.1 round trips <1e-10. Full verification passed:
-  lint, typecheck, 100 tests, build, Prettier, task schema, asset budgets, and
-  diff check. Requires independent review before DONE.
+  cover residual <1e-12 across e=[0,0.99] and e=(1,5], including e→1+;
+  conversion boundaries, hyperbolic states, and §7.1 round trips <1e-10. A
+  second RED/GREEN cycle replaced the unstable near-parabolic hyperbolic guess
+  after reproducing NaN divergence. Full verification passed: lint, typecheck,
+  101 tests, build, Prettier, task schema, asset budgets, and diff check.
+  Requires independent review before DONE.
