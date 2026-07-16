@@ -1,6 +1,6 @@
 id: T0041
 title: Visual tier ladder (sprite / sphere / glTF) with lazy loading
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0041-visual-tier-ladder
 depends_on: [T0040]
@@ -59,3 +59,10 @@ handoff_notes: |
     166.7/183.3/216.7 ms and +629,776 B; repeat was 166.7/183.3/200.0 ms and
     +410,352 B. The measured regression is retained in docs/bench and remains
     non-authoritative for hardware FPS per performance-spec section 6.
+
+  Independent re-review approved eb1e7bb0 with no Critical or Important
+  findings after reproducing the target-isolated Chromium sequence and remote
+  CI run 29537939474. Two non-blocking Minor follow-ups remain documented for
+  later render work: pass the post-resize drawing-buffer height into initial
+  tier selection for hidden Sun/Moon, and emit one diagnostic when lazy model
+  compilation fails while keeping the sphere fallback.
