@@ -11,7 +11,7 @@ orbits complete well inside the 4,000 accepted-step budget.
 
 The implemented full-precision DP54 tableau nevertheless accumulates more global
 phase and invariant error over ten periods than the independent §7.2 limits permit.
-The measured position error is approximately 4 mm for the circular case and 33 mm
+The measured position error is approximately 4.3 m for the circular case and 33 m
 for the `e = 0.7` case, while energy and angular-momentum drift are of order `1e-8`.
 Local error tolerance and accumulated global trajectory error are different
 contracts, so one numeric profile cannot honestly be presented as proving both.
