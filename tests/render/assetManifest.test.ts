@@ -10,6 +10,7 @@ describe('runtime asset manifest', () => {
     const manifest = parseAssetManifest(source);
     expect(manifest.assets.map((asset) => asset.id)).toEqual([
       'earth',
+      'moon',
       'pluto',
       'saturn',
       'ship',

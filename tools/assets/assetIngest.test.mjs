@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 
 import { discoverAssets, validateAssetDirectory } from './assetIngest.mjs';
+import { triangleLimitFor } from './config.mjs';
 import { createGlb } from './testFixtures.mjs';
 
 const temporaryDirectories = [];
@@ -109,6 +110,35 @@ describe('asset ingest validation', () => {
     const diagnostics = result.findings.join('\n');
     expect(diagnostics).toContain('albedo must be 4096×2048');
     expect(diagnostics).toContain('major-moon normal map is required');
+  });
+
+  it('accepts the startup Moon 4k/2k plus 1k detail tier', async () => {
+    const directory = await createAssetDirectory('moon');
+    await writeFile(join(directory, 'moon.glb'), createGlb());
+    const textures = [
+      ['moon_albedo.jpg', 4096, 2048, 'jpeg'],
+      ['moon_normal.png', 2048, 1024, 'png'],
+      ['moon_detail_albedo.jpg', 1024, 1024, 'jpeg'],
+      ['moon_detail_normal.png', 1024, 1024, 'png'],
+    ];
+    for (const [name, width, height, format] of textures) {
+      await sharp({ create: { width, height, channels: 3, background: '#8080ff' } })
+        .toFormat(format)
+        .toFile(join(directory, name));
+    }
+    await writeFile(
+      join(directory, 'SOURCES.md'),
+      ['- moon.glb — fixture', ...textures.map(([name]) => `- ${name} — fixture`), ''].join('\n'),
+    );
+
+    const result = await validateAssetDirectory(directory, { category: 'moons', id: 'moon' });
+    expect(result.findings).toEqual([]);
+  });
+
+  it('allows major-moon meshes without raising ordinary moon limits', () => {
+    expect(triangleLimitFor('moons', 'moon')).toBe(50_000);
+    expect(triangleLimitFor('moons', 'io')).toBe(50_000);
+    expect(triangleLimitFor('moons', 'phobos')).toBe(15_000);
   });
 
   it('rejects unknown categories, invalid catalog ids, and duplicate flattened ids', async () => {

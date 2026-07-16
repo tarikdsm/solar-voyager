@@ -77,13 +77,13 @@ pair for planets, moons, and dwarfs.
 | Body | Source | Tier |
 |---|---|---|
 | Earth | Solar System Scope (CC BY 4.0) / NASA Blue Marble / NASA SVS | **8k** albedo + 4k normal + 4k night lights + 4k clouds |
-| Moon | Solar System Scope / USGS Astrogeology / LRO | **8k** + 4k normal |
+| Moon | NASA SVS CGI Moon Kit (LROC color + LOLA elevation) | **4k** albedo + 2k macro normal + 1k detail pair (ADR-022) |
 | Mars | Solar System Scope / USGS Astrogeology / Viking-MGS | **8k** + 4k normal |
 | Mercury, Venus | Solar System Scope / USGS / NASA (MESSENGER, Magellan) | 4k |
 | Jupiter, Saturn, Uranus, Neptune | Solar System Scope / NASA JPL mosaics | 4k (+ 2048×64 radial ring strips) |
 | Galileans, Titan, major moons | USGS Astrogeology / Solar System Scope | 4k (Galileans/Titan), 2k others |
 | Dwarf planets | NASA (New Horizons, Dawn) or procedural | 1k–2k |
-| Sun | Solar System Scope / NASA SDO composite | 4k emissive |
+| Sun | Procedural emissive fallback (ADR-010); NASA SDO is an optional later tier | no startup texture |
 | Detail maps (close range) | authored/procedural, per surface class | 1k tiling pairs (MODELING-GUIDE §5) |
 
 **Licenses:** Solar System Scope textures are **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
@@ -94,6 +94,11 @@ The reproducible Earth albedo recipe uses Solar System Scope's official
 records format normalization as a modification required by CC BY 4.0. Run
 `npm run textures:fetch`; exact URLs and required credit are generated into the
 source workspace `SOURCES.md`.
+
+The Moon recipes pin NASA SVS's 8k LROC color TIFF and LOLA elevation TIFF.
+They prepare a 4096×2048 albedo and a filtered 2048×1024 authoring height field;
+`tools/textures/prepareMoonMaps.mjs` derives the macro normal and seeded 1k
+regolith detail pair. The raw TIFF downloads are verified but not committed.
 
 Source textures: prefer documenting download+processing in `tools/fetch_textures.py` (re-runnable by any agent); hand-downloaded files may be committed under `assets/textures-src/<body-id>/` when no stable scripted source exists. Only ingest-produced KTX2 goes in `public/assets/textures/`.
 

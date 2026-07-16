@@ -10,6 +10,7 @@ import {
   NORMALIZED_RADIUS_TOLERANCE,
   ORIGIN_TOLERANCE,
   guideReference,
+  triangleLimitFor,
 } from './config.mjs';
 import { measureDocument, readGlbDocument, readGlbJson } from './glb.mjs';
 
@@ -107,7 +108,12 @@ function validateTextureTier(textures, identity, findings) {
     findings.push(finding(`${identity.id}.glb`, 5, `${identity.id}_albedo texture is required`));
   }
 
-  if (HERO_IDS.has(identity.id)) {
+  if (identity.id === 'moon') {
+    if (albedo !== undefined) validateDimensions(albedo, 4096, 2048, findings);
+    const normal = byRole.get('normal');
+    if (normal === undefined) findings.push(finding(`${identity.id}.glb`, 5, 'Moon normal map is required'));
+    else validateDimensions(normal, 2048, 1024, findings);
+  } else if (HERO_IDS.has(identity.id)) {
     if (albedo !== undefined) validateDimensions(albedo, 8192, 4096, findings);
     const normal = byRole.get('normal');
     if (normal === undefined) findings.push(finding(`${identity.id}.glb`, 5, 'hero normal map is required'));
@@ -217,12 +223,13 @@ export async function validateAssetDirectory(directory, identity) {
       );
     }
   }
-  if (measurement.triangles > config.triangleLimit) {
+  const triangleLimit = triangleLimitFor(identity.category, identity.id);
+  if (measurement.triangles > triangleLimit) {
     findings.push(
       finding(
         glbFile,
         4,
-        `${measurement.triangles.toLocaleString('en-US')} triangles exceed the ${config.triangleLimit.toLocaleString('en-US')} limit`,
+        `${measurement.triangles.toLocaleString('en-US')} triangles exceed the ${triangleLimit.toLocaleString('en-US')} limit`,
       ),
     );
   }

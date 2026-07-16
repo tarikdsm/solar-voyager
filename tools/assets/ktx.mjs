@@ -25,6 +25,7 @@ export function buildKtxArguments(inputPath, outputPath, metadata) {
   const normal = isNormalTexture(inputPath);
   const linear = isLinearTexture(inputPath);
   const usesFourKilopixelTier = /(^|[_-])(clouds?|emissive)([_.-]|$)/i.test(inputPath);
+  const usesMoonStartupAlbedo = /(^|[/\\])moon_albedo\.(jpe?g|png)$/i.test(inputPath);
   const args = [
     'create',
     '--format', textureFormat(metadata.channels ?? 4, linear),
@@ -36,6 +37,7 @@ export function buildKtxArguments(inputPath, outputPath, metadata) {
   if (usesFourKilopixelTier && (metadata.width ?? 0) > 4096) {
     args.push('--width', '4096', '--height', '2048');
   }
+  if (usesMoonStartupAlbedo) args.push('--qlevel', '90');
   if (normal) {
     args.push(
       '--normal-mode', '--normalize', '--uastc-rdo', '--uastc-rdo-l', '0.5',

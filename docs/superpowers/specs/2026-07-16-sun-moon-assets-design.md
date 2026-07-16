@@ -82,3 +82,18 @@ two clean Blender builds, and two clean focused ingests and compares complete
 tree hashes. A headless Blender render is visually inspected before ingest.
 Finally, the full test/lint/typecheck/build suite, asset validation, manifest
 validation, and the exact critical-path byte measurement must pass.
+
+## Acceptance measurement
+
+The final Moon runtime payload is 1,827,065 bytes: 33,024-byte Draco GLB,
+1,104,138-byte albedo, 528,356-byte macro normal, 75,625-byte detail albedo,
+and 85,922-byte detail normal. Two clean focused ingests emitted identical
+hashes. The final production budget measurement is 8,361,095 bytes (7.97 MiB),
+27,513 bytes below the strict 8 MiB critical-path limit. The complete published
+asset tree is 10,535,954 bytes.
+
+The accepted Blender preview uses the LROC albedo, LOLA geometry and macro
+normal, controlled limb relief, no visible seam, and no strong quantization
+contours. BlenderMCP reports that its server cannot run in background mode on
+this machine, so the same Blender 5.1 installation produced the reproducible
+headless review render through `render_moon_preview.py` before ingest.

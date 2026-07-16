@@ -16,6 +16,18 @@
       ]
     },
     {
+      "id": "moon",
+      "category": "moon",
+      "triangles": 16128,
+      "files": [
+        "models/moon.glb",
+        "textures/moon_albedo.ktx2",
+        "textures/moon_detail_albedo.ktx2",
+        "textures/moon_detail_normal.ktx2",
+        "textures/moon_normal.ktx2"
+      ]
+    },
+    {
       "id": "pluto",
       "category": "dwarf",
       "triangles": 3968,

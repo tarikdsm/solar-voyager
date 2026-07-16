@@ -1,0 +1,176 @@
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+
+import sharp from 'sharp';
+
+function randomGenerator(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 0x1_0000_0000;
+  };
+}
+
+function toroidalDelta(value, center, size) {
+  const absolute = Math.abs(value - center);
+  return Math.min(absolute, size - absolute);
+}
+
+export function detailHeightField(size, seed) {
+  if (!Number.isInteger(size) || size < 8 || !Number.isInteger(seed)) {
+    throw new Error('detail size and seed must be integers');
+  }
+  const random = randomGenerator(seed);
+  const values = new Float32Array(size * size);
+  const frequencies = [[1, 2], [2, 1], [3, 5], [5, 3], [4, 7], [7, 4], [1, 9], [9, 1]];
+  const phases = frequencies.map(() => random() * Math.PI * 2);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      let value = 0;
+      for (let wave = 0; wave < frequencies.length; wave += 1) {
+        const [frequencyX, frequencyY] = frequencies[wave];
+        value += Math.sin(
+          Math.PI * 2 * (frequencyX * x + frequencyY * y) / size + phases[wave],
+        ) / (1 + Math.hypot(frequencyX, frequencyY));
+      }
+      values[y * size + x] = value * 0.18;
+    }
+  }
+
+  const craterCount = Math.max(18, Math.round(size * size / 190));
+  for (let crater = 0; crater < craterCount; crater += 1) {
+    const centerX = random() * size;
+    const centerY = random() * size;
+    const radius = 1.2 + random() ** 2 * size * 0.055;
+    const amplitude = 0.18 + random() * 0.35;
+    const reach = Math.ceil(radius * 1.35);
+    for (let offsetY = -reach; offsetY <= reach; offsetY += 1) {
+      const y = (Math.floor(centerY) + offsetY + size) % size;
+      for (let offsetX = -reach; offsetX <= reach; offsetX += 1) {
+        const x = (Math.floor(centerX) + offsetX + size) % size;
+        const distance = Math.hypot(
+          toroidalDelta(x, centerX, size),
+          toroidalDelta(y, centerY, size),
+        ) / radius;
+        if (distance > 1.35) continue;
+        const bowl = -Math.exp(-distance * distance * 4.2);
+        const rimOffset = (distance - 0.88) / 0.16;
+        const rim = 0.62 * Math.exp(-(rimOffset ** 2));
+        values[y * size + x] += amplitude * (bowl + rim);
+      }
+    }
+  }
+
+  let mean = 0;
+  for (const value of values) mean += value;
+  mean /= values.length;
+  let maximum = 0;
+  for (const value of values) maximum = Math.max(maximum, Math.abs(value - mean));
+  for (let index = 0; index < values.length; index += 1) {
+    values[index] = (values[index] - mean) / Math.max(maximum, Number.EPSILON);
+  }
+  return values;
+}
+
+export function normalPixelsFromHeight(values, width, height, strength, options = {}) {
+  if (values.length !== width * height || !Number.isFinite(strength) || strength < 0) {
+    throw new Error('height field dimensions and strength are invalid');
+  }
+  const { quantize = 1, wrapY = true } = options;
+  const pixels = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    const aboveY = wrapY ? (y - 1 + height) % height : Math.max(0, y - 1);
+    const belowY = wrapY ? (y + 1) % height : Math.min(height - 1, y + 1);
+    for (let x = 0; x < width; x += 1) {
+      const left = values[y * width + (x - 1 + width) % width];
+      const right = values[y * width + (x + 1) % width];
+      const above = values[aboveY * width + x];
+      const below = values[belowY * width + x];
+      const slopeX = (right - left) * strength;
+      const slopeY = (below - above) * strength;
+      const inverseLength = 1 / Math.hypot(slopeX, slopeY, 1);
+      const components = [-slopeX * inverseLength, slopeY * inverseLength, inverseLength];
+      const output = (y * width + x) * 3;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const encoded = Math.round((components[channel] * 0.5 + 0.5) * 255);
+        pixels[output + channel] = Math.min(255, Math.round(encoded / quantize) * quantize);
+      }
+    }
+  }
+  return pixels;
+}
+
+function repeatRgbTile(tile, tileSize, outputSize) {
+  const output = Buffer.alloc(outputSize * outputSize * 3);
+  for (let y = 0; y < outputSize; y += 1) {
+    for (let x = 0; x < outputSize; x += 1) {
+      const source = ((y % tileSize) * tileSize + (x % tileSize)) * 3;
+      const destination = (y * outputSize + x) * 3;
+      tile.copy(output, destination, source, source + 3);
+    }
+  }
+  return output;
+}
+
+export async function prepareMoonMaps(input, outputRoot, seed = 301) {
+  const destination = resolve(outputRoot);
+  await mkdir(destination, { recursive: true });
+  const { data, info } = await sharp(resolve(input), { failOn: 'error' })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (info.width !== 2048 || info.height !== 1024 || info.channels !== 1) {
+    throw new Error(`Moon height input must be 2048x1024 grayscale; measured ${info.width}x${info.height}`);
+  }
+  const heightValues = Float32Array.from(data, (value) => value / 255);
+  const macroNormal = normalPixelsFromHeight(heightValues, info.width, info.height, 1.8, {
+    quantize: 4,
+    wrapY: false,
+  });
+  await sharp(macroNormal, { raw: { width: info.width, height: info.height, channels: 3 } })
+    .png({ adaptiveFiltering: false, compressionLevel: 9, palette: false })
+    .toFile(resolve(destination, 'moon_normal.png'));
+
+  const tileSize = 256;
+  const detailSize = 1024;
+  const detailHeight = detailHeightField(tileSize, seed);
+  const detailNormalTile = normalPixelsFromHeight(detailHeight, tileSize, tileSize, 4.5);
+  const detailAlbedoTile = Buffer.alloc(tileSize * tileSize * 3);
+  for (let index = 0; index < detailHeight.length; index += 1) {
+    const luminance = Math.max(92, Math.min(154, Math.round(124 + detailHeight[index] * 18)));
+    detailAlbedoTile.fill(luminance, index * 3, index * 3 + 3);
+  }
+  const detailNormal = repeatRgbTile(detailNormalTile, tileSize, detailSize);
+  const detailAlbedo = repeatRgbTile(detailAlbedoTile, tileSize, detailSize);
+  await sharp(detailNormal, { raw: { width: detailSize, height: detailSize, channels: 3 } })
+    .png({ adaptiveFiltering: false, compressionLevel: 9, palette: false })
+    .toFile(resolve(destination, 'moon_detail_normal.png'));
+  await sharp(detailAlbedo, { raw: { width: detailSize, height: detailSize, channels: 3 } })
+    .jpeg({ chromaSubsampling: '4:4:4', mozjpeg: false, quality: 82 })
+    .toFile(resolve(destination, 'moon_detail_albedo.jpg'));
+}
+
+async function main() {
+  const { values } = parseArgs({
+    options: {
+      input: { type: 'string' },
+      'output-root': { type: 'string' },
+      seed: { type: 'string', default: '301' },
+    },
+    strict: true,
+  });
+  if (values.input === undefined || values['output-root'] === undefined) {
+    throw new Error('--input and --output-root are required');
+  }
+  const seed = Number.parseInt(values.seed, 10);
+  if (!Number.isInteger(seed)) throw new Error('--seed must be an integer');
+  await prepareMoonMaps(values.input, values['output-root'], seed);
+}
+
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  await main();
+}
