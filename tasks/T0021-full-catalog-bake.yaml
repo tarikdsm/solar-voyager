@@ -1,6 +1,6 @@
 id: T0021
 title: Full ~50-body catalog bake
-status: CLAIMED
+status: IN_PROGRESS
 agent: "chatgpt"
 branch: "task/T0021-full-catalog-bake"
 depends_on: [T0020]
