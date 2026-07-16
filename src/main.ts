@@ -20,7 +20,7 @@ if (!(appElement instanceof HTMLElement)) {
 const canvas = canvasElement;
 const appRoot = appElement;
 const renderer = createRenderer(canvas);
-const { scene, camera, cube } = createPlaceholderScene();
+const { scene, camera, cube, spaceScene, cameraPositionKm } = createPlaceholderScene();
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 
 function resizeRenderer(): void {
@@ -40,7 +40,7 @@ function resizeRenderer(): void {
 function renderFrame(): void {
   cube.rotation.x += 0.01;
   cube.rotation.y += 0.01;
-  cube.updateMatrix();
+  spaceScene.updateCameraRelative(cameraPositionKm);
   renderer.render(scene, camera);
   requestAnimationFrame(renderFrame);
 }
