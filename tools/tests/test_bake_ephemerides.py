@@ -1,6 +1,7 @@
 import importlib.util
 import math
 from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -101,6 +102,80 @@ class BakeCoreTests(unittest.TestCase):
             self.assertEqual(list(sample["states"]), bake.BODY_IDS)
             self.assertEqual(sample["states"]["sun"]["positionKm"], [0.0, 0.0, 0.0])
             self.assertEqual(sample["states"]["sun"]["velocityKmS"], [0.0, 0.0, 0.0])
+
+
+class FakeHorizons:
+    calls = []
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.calls.append(("init", kwargs))
+
+    def elements(self, **kwargs):
+        self.calls.append(("elements", kwargs))
+        return [{"a": 1, "e": 0.1, "incl": 2, "Omega": 3, "w": 4, "M": 5}]
+
+    def vectors(self, **kwargs):
+        self.calls.append(("vectors", kwargs))
+        return [
+            {"x": index, "y": 0, "z": 0, "vx": 0, "vy": 1, "vz": 0}
+            for index in range(3)
+        ]
+
+
+class BakeAdapterTests(unittest.TestCase):
+    def setUp(self):
+        FakeHorizons.calls = []
+
+    def test_queries_planets_from_sun_and_moon_elements_from_earth(self):
+        bake.query_body(bake.DEFINITION_BY_ID["earth"], FakeHorizons, cache=True)
+        earth_calls = list(FakeHorizons.calls)
+        FakeHorizons.calls = []
+        bake.query_body(bake.DEFINITION_BY_ID["moon"], FakeHorizons, cache=False)
+        moon_calls = list(FakeHorizons.calls)
+
+        self.assertEqual(earth_calls[0][1]["location"], "500@10")
+        self.assertEqual(earth_calls[0][1]["epochs"], bake.EPOCH_JD_TDB)
+        self.assertEqual(earth_calls[1], ("elements", {"refplane": "ecliptic", "cache": True}))
+        self.assertEqual(earth_calls[2][1]["location"], "500@10")
+        self.assertEqual(
+            earth_calls[2][1]["epochs"],
+            [bake.EPOCH_JD_TDB + offset for offset in bake.CHECK_OFFSETS_DAYS],
+        )
+        self.assertEqual(moon_calls[0][1]["location"], "500@399")
+        self.assertEqual(moon_calls[1], ("elements", {"refplane": "ecliptic", "cache": False}))
+        self.assertEqual(moon_calls[2][1]["location"], "500@10")
+
+    def test_query_failure_preserves_existing_output_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_dir = Path(temporary_directory)
+            catalog_path = output_dir / "bodies.json"
+            checks_path = output_dir / "ephemerides-check.json"
+            catalog_path.write_bytes(b"catalog-before")
+            checks_path.write_bytes(b"checks-before")
+
+            def failing_query(definition, _factory, _cache):
+                if definition.id == "venus":
+                    raise RuntimeError("service unavailable")
+                return sample_elements()[definition.id], [
+                    {"positionKm": [0.0, 0.0, 0.0], "velocityKmS": [0.0, 0.0, 0.0]}
+                    for _ in bake.CHECK_OFFSETS_DAYS
+                ]
+
+            with self.assertRaisesRegex(RuntimeError, "venus"):
+                bake.bake(output_dir, query_function=failing_query)
+
+            self.assertEqual(catalog_path.read_bytes(), b"catalog-before")
+            self.assertEqual(checks_path.read_bytes(), b"checks-before")
+
+    def test_atomic_json_writer_is_deterministic_and_cleans_temporary_file(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "output.json"
+
+            bake.atomic_write_json(path, {"b": 2, "a": 1})
+
+            self.assertEqual(path.read_text(encoding="utf-8"), '{\n  "b": 2,\n  "a": 1\n}\n')
+            self.assertFalse(path.with_suffix(".json.tmp").exists())
 
 
 if __name__ == "__main__":

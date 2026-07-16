@@ -1,7 +1,11 @@
 """Bake the Solar Voyager J2026 body catalog from JPL Horizons data."""
 
+import argparse
 from dataclasses import dataclass
+import json
 import math
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 
@@ -54,7 +58,8 @@ DEFINITION_BY_ID = {definition.id: definition for definition in BODY_DEFINITIONS
 
 
 def _finite_values(row: Mapping[str, Any], keys: Sequence[str]) -> List[float]:
-    missing = [key for key in keys if key not in row]
+    available_keys = getattr(row, "colnames", row)
+    missing = [key for key in keys if key not in available_keys]
     if missing:
         raise ValueError(f"missing Horizons columns: {', '.join(missing)}")
     values = [float(row[key]) for key in keys]
@@ -155,3 +160,158 @@ def build_checks(vectors_by_id: Mapping[str, Sequence[Mapping[str, List[float]]]
             }
         )
     return {"schemaVersion": 1, "frame": FRAME, "samples": samples}
+
+
+def query_body(
+    definition: BodyDefinition, horizons_factory: Any = None, cache: bool = True
+) -> Any:
+    """Query one body's epoch elements and three heliocentric check vectors."""
+    if horizons_factory is None:
+        from astroquery.jplhorizons import Horizons
+
+        horizons_factory = Horizons
+
+    element_center = "500@399" if definition.id == "moon" else "500@10"
+    element_query = horizons_factory(
+        id=str(definition.horizons_id),
+        id_type=None,
+        location=element_center,
+        epochs=EPOCH_JD_TDB,
+    )
+    element_rows = element_query.elements(refplane="ecliptic", cache=cache)
+    if len(element_rows) != 1:
+        raise ValueError(f"expected one element row, received {len(element_rows)}")
+
+    vector_epochs = [EPOCH_JD_TDB + offset for offset in CHECK_OFFSETS_DAYS]
+    vector_query = horizons_factory(
+        id=str(definition.horizons_id),
+        id_type=None,
+        location="500@10",
+        epochs=vector_epochs,
+    )
+    vector_rows = vector_query.vectors(refplane="ecliptic", cache=cache)
+    if len(vector_rows) != len(CHECK_OFFSETS_DAYS):
+        raise ValueError(
+            f"expected {len(CHECK_OFFSETS_DAYS)} vector rows, received {len(vector_rows)}"
+        )
+    return elements_from_row(element_rows[0]), [state_from_row(row) for row in vector_rows]
+
+
+def _serialized_json(document: Mapping[str, Any]) -> str:
+    return json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+
+
+def atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
+    """Write deterministic JSON to a sibling temporary file, then replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = Path(f"{path}.tmp")
+    try:
+        temporary_path.write_text(_serialized_json(document), encoding="utf-8", newline="\n")
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _load_existing(output_dir: Path) -> Any:
+    catalog_path = output_dir / "bodies.json"
+    checks_path = output_dir / "ephemerides-check.json"
+    if not catalog_path.exists() or not checks_path.exists():
+        raise ValueError("partial bake requires existing bodies.json and ephemerides-check.json")
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    checks = json.loads(checks_path.read_text(encoding="utf-8"))
+    elements_by_id = {
+        body["id"]: body["elements"]
+        for body in catalog["bodies"]
+        if body["id"] != "sun"
+    }
+    vectors_by_id = {
+        body_id: [sample["states"][body_id] for sample in checks["samples"]]
+        for body_id in BODY_IDS
+        if body_id != "sun"
+    }
+    return elements_by_id, vectors_by_id
+
+
+def bake(
+    output_dir: Path,
+    selected_ids: Optional[Sequence[str]] = None,
+    cache: bool = True,
+    query_function: Any = query_body,
+    horizons_factory: Any = None,
+) -> Any:
+    """Query all selected bodies, then atomically publish both documents."""
+    output_dir = Path(output_dir)
+    query_ids = [body_id for body_id in (selected_ids or BODY_IDS) if body_id != "sun"]
+    full_bake = selected_ids is None or set(selected_ids) == set(BODY_IDS)
+    if full_bake:
+        elements_by_id: Dict[str, Any] = {}
+        vectors_by_id: Dict[str, Any] = {}
+    else:
+        elements_by_id, vectors_by_id = _load_existing(output_dir)
+
+    for body_id in query_ids:
+        if body_id not in DEFINITION_BY_ID:
+            raise ValueError(f"unknown body id: {body_id}")
+        definition = DEFINITION_BY_ID[body_id]
+        try:
+            elements, vectors = query_function(definition, horizons_factory, cache)
+        except Exception as error:
+            raise RuntimeError(f"{body_id} Horizons query failed: {error}") from error
+        elements_by_id[body_id] = elements
+        vectors_by_id[body_id] = vectors
+
+    catalog = build_catalog(elements_by_id)
+    checks = build_checks(vectors_by_id)
+    catalog_path = output_dir / "bodies.json"
+    checks_path = output_dir / "ephemerides-check.json"
+    catalog_temporary = Path(f"{catalog_path}.tmp")
+    checks_temporary = Path(f"{checks_path}.tmp")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        catalog_temporary.write_text(
+            _serialized_json(catalog), encoding="utf-8", newline="\n"
+        )
+        checks_temporary.write_text(_serialized_json(checks), encoding="utf-8", newline="\n")
+        os.replace(catalog_temporary, catalog_path)
+        os.replace(checks_temporary, checks_path)
+    finally:
+        catalog_temporary.unlink(missing_ok=True)
+        checks_temporary.unlink(missing_ok=True)
+    return catalog, checks
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--only",
+        action="append",
+        choices=BODY_IDS,
+        dest="selected_ids",
+        help="replace one body in existing outputs; repeat for multiple bodies",
+    )
+    parser.add_argument("--no-cache", action="store_true", help="bypass Astroquery cache")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "data",
+        help="directory for bodies.json and ephemerides-check.json",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    catalog, checks = bake(
+        args.output_dir,
+        selected_ids=args.selected_ids,
+        cache=not args.no_cache,
+    )
+    print(
+        f"Baked {len(catalog['bodies'])} bodies and {len(checks['samples'])} check epochs "
+        f"to {args.output_dir}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
