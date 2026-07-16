@@ -1,4 +1,4 @@
-import { Object3D } from 'three';
+import { BufferGeometry, Float32BufferAttribute, Object3D, Points, PointsMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { CameraRelativeSpaceScene, SPACE_FAR_KM, SPACE_NEAR_KM } from './spaceScene.js';
@@ -68,5 +68,85 @@ describe('CameraRelativeSpaceScene', () => {
     expect(() => spaceScene.updateCameraRelative({ x: Number.NaN, y: 0, z: 0 })).toThrow(
       'camera position',
     );
+  });
+
+  it('binds packed roots at component offsets and recomputes after a camera round-trip', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const first = new Object3D();
+    const second = new Object3D();
+    const positionsKm = new Float64Array([
+      AU_KM + 10.25,
+      -42_000_000.5,
+      7_500_000.125,
+      AU_KM - 20.5,
+      -41_999_990.25,
+      7_499_970.75,
+    ]);
+    const cameraPositionKm = { x: AU_KM, y: -42_000_000, z: 7_500_000 };
+
+    spaceScene.bindPackedVisual(first, positionsKm, 0);
+    spaceScene.bindPackedVisual(second, positionsKm, 3);
+    spaceScene.updateCameraRelative(cameraPositionKm);
+    const firstPosition = first.position.toArray();
+
+    expect(firstPosition).toEqual([Math.fround(10.25), Math.fround(-0.5), Math.fround(0.125)]);
+    expect(second.position.toArray()).toEqual([
+      Math.fround(-20.5),
+      Math.fround(9.75),
+      Math.fround(-29.25),
+    ]);
+
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    spaceScene.updateCameraRelative(cameraPositionKm);
+    expect(first.position.toArray()).toEqual(firstPosition);
+  });
+
+  it('updates one packed point attribute in place and marks it dirty', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const positionsKm = new Float64Array([AU_KM + 10.25, -1, 2, AU_KM - 20.5, 3, -4]);
+    const target = new Float32Array(positionsKm.length);
+    const attribute = new Float32BufferAttribute(target, 3);
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', attribute);
+    const points = new Points(geometry, new PointsMaterial());
+    const originalAttribute = geometry.getAttribute('position');
+    const originalArray = attribute.array;
+    const originalVersion = attribute.version;
+
+    spaceScene.bindPackedPointPositions(points, positionsKm);
+    spaceScene.updateCameraRelative({ x: AU_KM, y: 0, z: 0 });
+
+    expect(geometry.getAttribute('position')).toBe(originalAttribute);
+    expect(geometry.getAttribute('position').array).toBe(originalArray);
+    expect(Array.from(attribute.array)).toEqual([
+      Math.fround(10.25),
+      -1,
+      2,
+      Math.fround(-20.5),
+      3,
+      -4,
+    ]);
+    expect(attribute.version).toBe(originalVersion + 1);
+    expect(points.matrixAutoUpdate).toBe(false);
+  });
+
+  it('rejects malformed packed bindings without adding partial scene state', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const visual = new Object3D();
+    const valid = new Float64Array([1, 2, 3]);
+
+    expect(() => spaceScene.bindPackedVisual(visual, valid, -1)).toThrow(RangeError);
+    expect(() => spaceScene.bindPackedVisual(visual, valid, 1)).toThrow(RangeError);
+    expect(() => spaceScene.bindPackedVisual(visual, new Float64Array([1, 2]), 0)).toThrow(
+      RangeError,
+    );
+
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(6), 3));
+    const points = new Points(geometry, new PointsMaterial());
+    expect(() => spaceScene.bindPackedPointPositions(points, valid)).toThrow(RangeError);
+
+    spaceScene.bindPackedVisual(visual, valid, 0);
+    expect(() => spaceScene.bindPackedVisual(visual, valid, 0)).toThrow('already bound');
   });
 });

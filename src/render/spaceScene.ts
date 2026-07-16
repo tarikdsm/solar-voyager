@@ -1,5 +1,5 @@
 import type { ReadonlyVec3 } from '../core/vec3.js';
-import { PerspectiveCamera, Scene, type Object3D } from 'three';
+import { BufferAttribute, PerspectiveCamera, Scene, type Object3D, type Points } from 'three';
 
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
@@ -14,6 +14,17 @@ function assertFinitePosition(label: string, positionKm: ReadonlyVec3): void {
   }
 }
 
+function assertPackedPositions(positionsKm: Float64Array): void {
+  if (positionsKm.length === 0 || positionsKm.length % 3 !== 0) {
+    throw new RangeError('Packed positions must contain one or more xyz triples.');
+  }
+  for (let index = 0; index < positionsKm.length; index += 1) {
+    if (!Number.isFinite(positionsKm[index])) {
+      throw new RangeError('Packed positions must contain finite kilometre coordinates.');
+    }
+  }
+}
+
 /**
  * Owns the single float64-to-render-coordinate boundary for space visuals.
  * Physics positions remain in caller-owned objects and are never accumulated
@@ -25,6 +36,11 @@ export class CameraRelativeSpaceScene {
 
   private readonly visuals: Object3D[] = [];
   private readonly positionsKm: ReadonlyVec3[] = [];
+  private readonly packedVisuals: Object3D[] = [];
+  private readonly packedVisualPositionsKm: Float64Array[] = [];
+  private readonly packedVisualOffsets: number[] = [];
+  private readonly packedPointPositionsKm: Float64Array[] = [];
+  private readonly packedPointAttributes: BufferAttribute[] = [];
   private readonly boundVisuals = new Set<Object3D>();
 
   constructor() {
@@ -36,16 +52,45 @@ export class CameraRelativeSpaceScene {
   /** Binds a setup-time visual to a caller-owned float64 physics position. */
   bindVisual(visual: Object3D, positionKm: ReadonlyVec3): void {
     assertFinitePosition('visual position', positionKm);
-
-    if (this.boundVisuals.has(visual)) {
-      throw new Error('Visual is already bound to this space scene.');
-    }
-
-    this.boundVisuals.add(visual);
+    this.claimVisual(visual);
     this.visuals.push(visual);
     this.positionsKm.push(positionKm);
-    visual.matrixAutoUpdate = false;
-    this.scene.add(visual);
+  }
+
+  /** Binds one visual root to an xyz triple in a caller-owned packed array. */
+  bindPackedVisual(visual: Object3D, positionsKm: Float64Array, componentOffset: number): void {
+    assertPackedPositions(positionsKm);
+    if (
+      !Number.isInteger(componentOffset) ||
+      componentOffset < 0 ||
+      componentOffset % 3 !== 0 ||
+      componentOffset + 2 >= positionsKm.length
+    ) {
+      throw new RangeError('Packed visual offset must address one complete xyz triple.');
+    }
+
+    this.claimVisual(visual);
+    this.packedVisuals.push(visual);
+    this.packedVisualPositionsKm.push(positionsKm);
+    this.packedVisualOffsets.push(componentOffset);
+  }
+
+  /** Binds a Points position attribute to all xyz triples in one packed array. */
+  bindPackedPointPositions(points: Points, positionsKm: Float64Array): void {
+    assertPackedPositions(positionsKm);
+    const attribute = points.geometry.getAttribute('position');
+    if (
+      !(attribute instanceof BufferAttribute) ||
+      !(attribute.array instanceof Float32Array) ||
+      attribute.itemSize !== 3 ||
+      attribute.array.length !== positionsKm.length
+    ) {
+      throw new RangeError('Points require a same-length float32 xyz position attribute.');
+    }
+
+    this.claimVisual(points);
+    this.packedPointPositionsKm.push(positionsKm);
+    this.packedPointAttributes.push(attribute);
   }
 
   /** Recomputes render coordinates from float64 inputs without frame allocations. */
@@ -69,5 +114,63 @@ export class CameraRelativeSpaceScene {
       );
       visual.updateMatrix();
     }
+
+    for (let index = 0; index < this.packedVisuals.length; index += 1) {
+      const visual = this.packedVisuals[index];
+      const positionsKm = this.packedVisualPositionsKm[index];
+      const offset = this.packedVisualOffsets[index];
+      if (visual === undefined || positionsKm === undefined || offset === undefined) {
+        throw new Error('Packed visual binding arrays are out of sync.');
+      }
+
+      const x = positionsKm[offset] ?? Number.NaN;
+      const y = positionsKm[offset + 1] ?? Number.NaN;
+      const z = positionsKm[offset + 2] ?? Number.NaN;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+        throw new RangeError('Packed visual position must contain finite coordinates.');
+      }
+      visual.position.set(
+        Math.fround(x - cameraPositionKm.x),
+        Math.fround(y - cameraPositionKm.y),
+        Math.fround(z - cameraPositionKm.z),
+      );
+      visual.updateMatrix();
+    }
+
+    for (
+      let bindingIndex = 0;
+      bindingIndex < this.packedPointAttributes.length;
+      bindingIndex += 1
+    ) {
+      const positionsKm = this.packedPointPositionsKm[bindingIndex];
+      const attribute = this.packedPointAttributes[bindingIndex];
+      if (positionsKm === undefined || attribute === undefined) {
+        throw new Error('Packed point binding arrays are out of sync.');
+      }
+      const target = attribute.array as Float32Array;
+      for (let component = 0; component < positionsKm.length; component += 3) {
+        const x = positionsKm[component] ?? Number.NaN;
+        const y = positionsKm[component + 1] ?? Number.NaN;
+        const z = positionsKm[component + 2] ?? Number.NaN;
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+          throw new RangeError('Packed point positions must contain finite coordinates.');
+        }
+        target[component] = Math.fround(x - cameraPositionKm.x);
+        target[component + 1] = Math.fround(y - cameraPositionKm.y);
+        target[component + 2] = Math.fround(z - cameraPositionKm.z);
+      }
+      attribute.needsUpdate = true;
+    }
+  }
+
+  private claimVisual(visual: Object3D): void {
+    if (this.boundVisuals.has(visual)) {
+      throw new Error('Visual is already bound to this space scene.');
+    }
+
+    this.boundVisuals.add(visual);
+    visual.matrixAutoUpdate = false;
+    visual.updateMatrix();
+    this.scene.add(visual);
   }
 }
