@@ -1,4 +1,12 @@
-import type { OrbitalElements } from '../bodies/orbitalElements.js';
+import {
+  createCartesianState,
+  createOrbitalConversionScratch,
+  createOrbitalElements,
+  elementsToStateInto,
+  type CartesianState,
+  type OrbitalConversionScratch,
+  type OrbitalElements,
+} from '../bodies/orbitalElements.js';
 
 // physics-spec.md §2 — analytic Keplerian rails in parent-first catalog order.
 
@@ -26,6 +34,20 @@ export interface CompiledRailsCatalog {
   readonly meanAnomalyAtEpochRad: Float64Array;
 }
 
+/** Caller-owned packed heliocentric body states cached for one simulation time. */
+export interface RailsState {
+  timeSec: number;
+  readonly positionsKm: Float64Array;
+  readonly velocitiesKmS: Float64Array;
+}
+
+/** Reusable scratch storage for allocation-free rails evaluation. */
+export interface RailsWorkspace {
+  readonly elements: OrbitalElements;
+  readonly relativeState: CartesianState;
+  readonly conversion: OrbitalConversionScratch;
+}
+
 function elementsAreFinite(elements: Readonly<OrbitalElements>): boolean {
   return (
     Number.isFinite(elements.semiMajorAxisKm) &&
@@ -40,16 +62,11 @@ function elementsAreFinite(elements: Readonly<OrbitalElements>): boolean {
 function elementsUseValidBranch(elements: Readonly<OrbitalElements>): boolean {
   const aKm = elements.semiMajorAxisKm;
   const eccentricity = elements.eccentricity;
-  return (
-    (aKm > 0 && eccentricity >= 0 && eccentricity < 1) ||
-    (aKm < 0 && eccentricity > 1)
-  );
+  return (aKm > 0 && eccentricity >= 0 && eccentricity < 1) || (aKm < 0 && eccentricity > 1);
 }
 
 /** Validates and compiles setup-time catalog objects into float64 hot-path arrays. */
-export function compileRailsCatalog(
-  bodies: ReadonlyArray<RailsBodyInput>,
-): CompiledRailsCatalog {
+export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): CompiledRailsCatalog {
   const bodyCount = bodies.length;
   if (bodyCount === 0) {
     throw new RangeError('rails catalog must contain at least one body');
@@ -117,8 +134,7 @@ export function compileRailsCatalog(
       parentIndices[index] = parentIndex;
       parentMuKm3S2[index] = parentMu;
       meanMotionRadS[index] = Math.sqrt(
-        parentMu /
-          (absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm),
+        parentMu / (absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm * absoluteSemiMajorAxisKm),
       );
       semiMajorAxisKm[index] = elements.semiMajorAxisKm;
       eccentricity[index] = elements.eccentricity;
@@ -146,4 +162,100 @@ export function compileRailsCatalog(
     argumentPeriapsisRad,
     meanAnomalyAtEpochRad,
   };
+}
+
+/** Allocates packed output arrays once for a compiled body catalog. */
+export function createRailsState(catalog: CompiledRailsCatalog): RailsState {
+  const componentCount = catalog.bodyCount * 3;
+  return {
+    timeSec: Number.NaN,
+    positionsKm: new Float64Array(componentCount),
+    velocitiesKmS: new Float64Array(componentCount),
+  };
+}
+
+/** Allocates the single scratch set reused by every body and frame evaluation. */
+export function createRailsWorkspace(): RailsWorkspace {
+  return {
+    elements: createOrbitalElements(),
+    relativeState: createCartesianState(),
+    conversion: createOrbitalConversionScratch(),
+  };
+}
+
+/**
+ * Evaluates all heliocentric body states at J2026-relative `timeSec` without allocating.
+ * Parent-relative rails are accumulated in one parent-first pass (physics-spec.md §2).
+ */
+export function evaluateRailsInto(
+  state: RailsState,
+  catalog: CompiledRailsCatalog,
+  timeSec: number,
+  workspace: RailsWorkspace,
+): RailsState {
+  const expectedComponentCount = catalog.bodyCount * 3;
+  if (
+    state.positionsKm.length !== expectedComponentCount ||
+    state.velocitiesKmS.length !== expectedComponentCount
+  ) {
+    throw new RangeError(`rails state arrays must contain ${expectedComponentCount} components`);
+  }
+  if (!Number.isFinite(timeSec)) {
+    throw new RangeError('rails evaluation time must be finite');
+  }
+  if (state.timeSec === timeSec) {
+    return state;
+  }
+
+  for (let index = 0; index < catalog.bodyCount; index += 1) {
+    const componentIndex = index * 3;
+    const parentIndex = catalog.parentIndices[index] as number;
+    if (parentIndex < 0) {
+      state.positionsKm[componentIndex] = 0;
+      state.positionsKm[componentIndex + 1] = 0;
+      state.positionsKm[componentIndex + 2] = 0;
+      state.velocitiesKmS[componentIndex] = 0;
+      state.velocitiesKmS[componentIndex + 1] = 0;
+      state.velocitiesKmS[componentIndex + 2] = 0;
+      continue;
+    }
+
+    workspace.elements.semiMajorAxisKm = catalog.semiMajorAxisKm[index] as number;
+    workspace.elements.eccentricity = catalog.eccentricity[index] as number;
+    workspace.elements.inclinationRad = catalog.inclinationRad[index] as number;
+    workspace.elements.longitudeAscendingNodeRad = catalog.longitudeAscendingNodeRad[
+      index
+    ] as number;
+    workspace.elements.argumentPeriapsisRad = catalog.argumentPeriapsisRad[index] as number;
+    workspace.elements.meanAnomalyRad =
+      (catalog.meanAnomalyAtEpochRad[index] as number) +
+      (catalog.meanMotionRadS[index] as number) * timeSec;
+    elementsToStateInto(
+      workspace.relativeState,
+      workspace.elements,
+      catalog.parentMuKm3S2[index] as number,
+      workspace.conversion,
+    );
+
+    const parentComponentIndex = parentIndex * 3;
+    state.positionsKm[componentIndex] =
+      workspace.relativeState.positionKm.x + (state.positionsKm[parentComponentIndex] as number);
+    state.positionsKm[componentIndex + 1] =
+      workspace.relativeState.positionKm.y +
+      (state.positionsKm[parentComponentIndex + 1] as number);
+    state.positionsKm[componentIndex + 2] =
+      workspace.relativeState.positionKm.z +
+      (state.positionsKm[parentComponentIndex + 2] as number);
+    state.velocitiesKmS[componentIndex] =
+      workspace.relativeState.velocityKmS.x + (state.velocitiesKmS[parentComponentIndex] as number);
+    state.velocitiesKmS[componentIndex + 1] =
+      workspace.relativeState.velocityKmS.y +
+      (state.velocitiesKmS[parentComponentIndex + 1] as number);
+    state.velocitiesKmS[componentIndex + 2] =
+      workspace.relativeState.velocityKmS.z +
+      (state.velocitiesKmS[parentComponentIndex + 2] as number);
+  }
+
+  state.timeSec = timeSec;
+  return state;
 }
