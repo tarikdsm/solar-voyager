@@ -1,8 +1,8 @@
 id: T0042
 title: Starfield renderer
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0042-starfield
 depends_on: [T0022, T0040]
 milestone: M2
 spec: |
