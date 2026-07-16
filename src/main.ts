@@ -1,6 +1,6 @@
 import { render } from 'preact';
 
-import { createPlaceholderScene } from './render/createPlaceholderScene.js';
+import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import './style.css';
@@ -20,10 +20,11 @@ if (!(appElement instanceof HTMLElement)) {
 const canvas = canvasElement;
 const appRoot = appElement;
 const renderer = createRenderer(canvas);
-const { scene, camera, cube, spaceScene, cameraPositionKm } = createPlaceholderScene();
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
+let world: EpochWorld | null = null;
 
 function resizeRenderer(): void {
+  if (world === null) return;
   const clientWidth = canvas.clientWidth;
   const clientHeight = canvas.clientHeight;
   const pixelRatio = renderer.getPixelRatio();
@@ -32,32 +33,33 @@ function resizeRenderer(): void {
 
   if (canvas.width !== drawingBufferWidth || canvas.height !== drawingBufferHeight) {
     renderer.setSize(clientWidth, clientHeight, false);
-    camera.aspect = clientWidth / clientHeight;
-    camera.updateProjectionMatrix();
+    world.spaceScene.camera.aspect = clientWidth / clientHeight;
+    world.spaceScene.camera.updateProjectionMatrix();
   }
 }
 
-function renderFrame(): void {
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.01;
+function renderFrame(nowMs: number): void {
+  if (world === null) return;
+  const { spaceScene, visualSystem, cameraPositionKm } = world;
+  visualSystem.update(
+    cameraPositionKm,
+    canvas.height,
+    spaceScene.camera.fov * (Math.PI / 180),
+    nowMs,
+  );
   spaceScene.updateCameraRelative(cameraPositionKm);
-  renderer.render(scene, camera);
+  renderer.render(spaceScene.scene, spaceScene.camera);
   requestAnimationFrame(renderFrame);
 }
 
-function handleCompileSuccess(): void {
-  requestAnimationFrame(renderFrame);
-}
-
-function handleCompileFailure(cause: unknown): never {
-  throw new Error('Solar Voyager failed to compile startup shaders.', { cause });
-}
-
-function startApplication(): void {
+async function startApplication(): Promise<void> {
   render(App(), appRoot);
+  world = await createEpochWorld(renderer);
   resizeRenderer();
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
-  void renderer.compileAsync(scene, camera).then(handleCompileSuccess, handleCompileFailure);
+  requestAnimationFrame(renderFrame);
 }
 
-startApplication();
+void startApplication().catch((cause: unknown) => {
+  throw new Error('Solar Voyager failed to initialize the epoch world.', { cause });
+});
