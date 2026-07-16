@@ -1,8 +1,8 @@
 id: T0094
 title: Publish standalone development check plan
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0094-development-check-plan
 depends_on: []
 milestone: M6
 spec: |
