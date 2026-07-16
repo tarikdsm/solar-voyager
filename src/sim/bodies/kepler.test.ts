@@ -47,8 +47,8 @@ describe('Kepler solvers — physics-spec.md §2 / §7.1', () => {
 
   it('converges in the near-parabolic hyperbolic limit', () => {
     const solution = createKeplerSolution();
-    const eccentricities = [1 + 1e-12, 1 + 1e-9, 1.000_001];
-    const meanAnomalies = [-0.001, -1e-6, -1e-9, 1e-9, 1e-6, 0.001];
+    const eccentricities = [1 + 1e-14, 1 + 1e-12, 1 + 1e-9, 1.000_001];
+    const meanAnomalies = [-0.001, -1e-6, -1e-9, -1e-15, 1e-15, 1e-9, 1e-6, 0.001];
 
     for (const eccentricity of eccentricities) {
       for (const meanAnomalyRad of meanAnomalies) {

@@ -3,6 +3,34 @@
 const CONVERGENCE_LIMIT_RAD = 1e-12;
 const MAX_ITERATIONS = 30;
 
+function sinhMinusArgument(argumentRad: number): number {
+  if (Math.abs(argumentRad) >= 1) {
+    return Math.sinh(argumentRad) - argumentRad;
+  }
+
+  const squared = argumentRad * argumentRad;
+  return (
+    argumentRad *
+    squared *
+    (1 / 6 +
+      squared *
+        (1 / 120 +
+          squared *
+            (1 / 5_040 +
+              squared * (1 / 362_880 + squared * (1 / 39_916_800 + squared / 6_227_020_800)))))
+  );
+}
+
+function hyperbolicResidual(
+  anomalyRad: number,
+  meanAnomalyRad: number,
+  eccentricity: number,
+): number {
+  return (
+    (eccentricity - 1) * anomalyRad + eccentricity * sinhMinusArgument(anomalyRad) - meanAnomalyRad
+  );
+}
+
 /** Caller-owned output from a Kepler solve. */
 export interface KeplerSolution {
   anomalyRad: number;
@@ -69,16 +97,17 @@ export function solveKeplerHyperbolicInto(
   output.iterations = 0;
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration += 1) {
-    const residualRad = eccentricity * Math.sinh(anomalyRad) - anomalyRad - meanAnomalyRad;
-    const derivative = eccentricity * Math.cosh(anomalyRad) - 1;
+    const residualRad = hyperbolicResidual(anomalyRad, meanAnomalyRad, eccentricity);
+    const halfHyperbolicSine = Math.sinh(anomalyRad / 2);
+    const derivative =
+      eccentricity - 1 + 2 * eccentricity * halfHyperbolicSine * halfHyperbolicSine;
     const deltaRad = residualRad / derivative;
     anomalyRad -= deltaRad;
 
     output.iterations = iteration;
     if (
       Math.abs(deltaRad) < CONVERGENCE_LIMIT_RAD &&
-      Math.abs(eccentricity * Math.sinh(anomalyRad) - anomalyRad - meanAnomalyRad) <
-        CONVERGENCE_LIMIT_RAD
+      Math.abs(hyperbolicResidual(anomalyRad, meanAnomalyRad, eccentricity)) < CONVERGENCE_LIMIT_RAD
     ) {
       output.converged = true;
       break;

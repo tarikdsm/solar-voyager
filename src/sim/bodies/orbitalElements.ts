@@ -9,6 +9,7 @@ import {
 // physics-spec.md §2 / §7.1 — osculating elements and Cartesian state vectors.
 
 const NUMERICAL_DEGENERACY_LIMIT = 64 * Number.EPSILON;
+const ENERGY_CONDITION_LIMIT = Math.cbrt(Number.EPSILON);
 const FULL_TURN_RAD = 2 * Math.PI;
 
 /** Classical osculating elements using the units and frame conventions from §1/§2. */
@@ -56,11 +57,11 @@ export function createOrbitalConversionScratch(): OrbitalConversionScratch {
 
 function normalizeAngle(angleRad: number): number {
   const normalized = angleRad % FULL_TURN_RAD;
-  return normalized < 0 ? normalized + FULL_TURN_RAD : normalized;
-}
-
-function clampUnit(value: number): number {
-  return Math.max(-1, Math.min(1, value));
+  if (normalized === 0) {
+    return 0;
+  }
+  const positive = normalized < 0 ? normalized + FULL_TURN_RAD : normalized;
+  return positive === FULL_TURN_RAD ? 0 : positive;
 }
 
 /**
@@ -100,12 +101,20 @@ export function elementsToStateInto(
     const hyperbolicSine = Math.sinh(hyperbolicAnomalyRad);
     const transverseFactor = Math.sqrt(eccentricity * eccentricity - 1);
     const denominator = eccentricity * hyperbolicCosine - 1;
-    const velocityFactor = Math.sqrt(parentMuKm3S2 / -aKm) / denominator;
+    const cosineTrueAnomaly = (eccentricity - hyperbolicCosine) / denominator;
+    const sineTrueAnomaly = (transverseFactor * hyperbolicSine) / denominator;
+    const semilatusRectumKm = -aKm * (eccentricity * eccentricity - 1);
+    const velocityFactor = Math.sqrt(parentMuKm3S2 / semilatusRectumKm);
 
-    perifocalXKm = aKm * (hyperbolicCosine - eccentricity);
-    perifocalYKm = -aKm * transverseFactor * hyperbolicSine;
-    perifocalVelocityXKmS = -velocityFactor * hyperbolicSine;
-    perifocalVelocityYKmS = velocityFactor * transverseFactor * hyperbolicCosine;
+    if (hyperbolicAnomalyRad === 0) {
+      perifocalXKm = semilatusRectumKm / (1 + eccentricity);
+      perifocalYKm = 0;
+    } else {
+      perifocalXKm = aKm * (hyperbolicCosine - eccentricity);
+      perifocalYKm = -aKm * transverseFactor * hyperbolicSine;
+    }
+    perifocalVelocityXKmS = -velocityFactor * sineTrueAnomaly;
+    perifocalVelocityYKmS = velocityFactor * (eccentricity + cosineTrueAnomaly);
   }
 
   const cosineNode = Math.cos(elements.longitudeAscendingNodeRad);
@@ -159,10 +168,21 @@ export function stateToElementsInto(
   const measuredEccentricity = Math.hypot(eccentricityX, eccentricityY, eccentricityZ);
   const circular = measuredEccentricity <= NUMERICAL_DEGENERACY_LIMIT;
   const equatorial = nodeMagnitude / angularMomentumKm2S <= NUMERICAL_DEGENERACY_LIMIT;
+  const retrogradeEquatorial = equatorial && hz < 0;
   const eccentricity = circular ? 0 : measuredEccentricity;
+  const semilatusRectumKm = (angularMomentumKm2S * angularMomentumKm2S) / parentMuKm3S2;
   const specificEnergyKm2S2 = velocitySquaredKm2S2 / 2 - parentMuKm3S2 / radiusKm;
-  const semiMajorAxisKm = -parentMuKm3S2 / (2 * specificEnergyKm2S2);
-  const inclinationRad = equatorial ? 0 : Math.acos(clampUnit(hz / angularMomentumKm2S));
+  const energyCondition =
+    Math.abs(specificEnergyKm2S2) / (velocitySquaredKm2S2 / 2 + parentMuKm3S2 / radiusKm);
+  const semiMajorAxisKm =
+    energyCondition > ENERGY_CONDITION_LIMIT
+      ? -parentMuKm3S2 / (2 * specificEnergyKm2S2)
+      : semilatusRectumKm / (1 - eccentricity * eccentricity);
+  const inclinationRad = equatorial
+    ? retrogradeEquatorial
+      ? Math.PI
+      : 0
+    : Math.atan2(nodeMagnitude, hz);
   const longitudeAscendingNodeRad = equatorial ? 0 : normalizeAngle(Math.atan2(nodeY, nodeX));
 
   let argumentPeriapsisRad = 0;
@@ -170,7 +190,10 @@ export function stateToElementsInto(
 
   if (!circular) {
     if (equatorial) {
-      argumentPeriapsisRad = normalizeAngle(Math.atan2(eccentricityY, eccentricityX));
+      const periapsisLongitudeRad = Math.atan2(eccentricityY, eccentricityX);
+      argumentPeriapsisRad = normalizeAngle(
+        retrogradeEquatorial ? -periapsisLongitudeRad : periapsisLongitudeRad,
+      );
     } else {
       const crossX = nodeY * eccentricityZ;
       const crossY = -nodeX * eccentricityZ;
@@ -200,7 +223,8 @@ export function stateToElementsInto(
     const cosineArgumentLatitude = (nodeX * rx + nodeY * ry) / (nodeMagnitude * radiusKm);
     trueAnomalyRad = Math.atan2(sineArgumentLatitude, cosineArgumentLatitude);
   } else {
-    trueAnomalyRad = Math.atan2(ry, rx);
+    const longitudeRad = Math.atan2(ry, rx);
+    trueAnomalyRad = retrogradeEquatorial ? -longitudeRad : longitudeRad;
   }
 
   let meanAnomalyRad: number;
@@ -223,11 +247,16 @@ export function stateToElementsInto(
       );
     }
   } else {
-    const denominator = 1 + eccentricity * Math.cos(trueAnomalyRad);
-    const hyperbolicSine =
-      (Math.sqrt(eccentricity * eccentricity - 1) * Math.sin(trueAnomalyRad)) / denominator;
-    const hyperbolicAnomalyRad = Math.asinh(hyperbolicSine);
-    meanAnomalyRad = eccentricity * hyperbolicSine - hyperbolicAnomalyRad;
+    const radialDotKm2S = rx * vx + ry * vy + rz * vz;
+    const speedKmS = Math.sqrt(velocitySquaredKm2S2);
+    if (Math.abs(radialDotKm2S) <= NUMERICAL_DEGENERACY_LIMIT * radiusKm * speedKmS) {
+      meanAnomalyRad = 0;
+    } else {
+      const hyperbolicSine =
+        radialDotKm2S / (eccentricity * Math.sqrt(parentMuKm3S2 * -semiMajorAxisKm));
+      const hyperbolicAnomalyRad = Math.asinh(hyperbolicSine);
+      meanAnomalyRad = eccentricity * hyperbolicSine - hyperbolicAnomalyRad;
+    }
   }
 
   output.semiMajorAxisKm = semiMajorAxisKm;

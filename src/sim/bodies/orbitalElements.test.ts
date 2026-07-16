@@ -110,6 +110,53 @@ describe('orbital elements conversions — physics-spec.md §2 / §7.1', () => {
     );
   });
 
+  it('round-trips a near-parabolic hyperbolic state without anomaly amplification', () => {
+    const elements: OrbitalElements = {
+      semiMajorAxisKm: -20_000,
+      eccentricity: 1.000_001,
+      inclinationRad: 0.3,
+      longitudeAscendingNodeRad: 0.4,
+      argumentPeriapsisRad: 0.7,
+      meanAnomalyRad: 10,
+    };
+
+    const { state, recovered, rebuilt } = roundTripState(elements);
+
+    expect(Math.abs(recovered.meanAnomalyRad - elements.meanAnomalyRad)).toBeLessThan(
+      ROUND_TRIP_RELATIVE_LIMIT,
+    );
+    expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
+  });
+
+  it('preserves near-parabolic hyperbolic energy at and near periapsis', () => {
+    const cases: OrbitalElements[] = [
+      {
+        semiMajorAxisKm: -1e9,
+        eccentricity: 1.000_001,
+        inclinationRad: 0.3,
+        longitudeAscendingNodeRad: 2.2,
+        argumentPeriapsisRad: 0.9,
+        meanAnomalyRad: -1e-9,
+      },
+      {
+        semiMajorAxisKm: -1e12,
+        eccentricity: 1 + 1e-9,
+        inclinationRad: 0.3,
+        longitudeAscendingNodeRad: 2.2,
+        argumentPeriapsisRad: 0.9,
+        meanAnomalyRad: 0,
+      },
+    ];
+
+    for (const elements of cases) {
+      const { state, recovered, rebuilt } = roundTripState(elements);
+
+      expect(recovered.eccentricity).toBeGreaterThan(1);
+      expect(recovered.semiMajorAxisKm).toBeLessThan(0);
+      expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
+    }
+  });
+
   it('round-trips states at the specified eccentricity range boundaries', () => {
     const boundaryCases: OrbitalElements[] = [
       {
@@ -182,6 +229,43 @@ describe('orbital elements conversions — physics-spec.md §2 / §7.1', () => {
 
     const { state, recovered, rebuilt } = roundTripState(elements);
 
+    expect(recovered.longitudeAscendingNodeRad).toBe(0);
+    expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
+  });
+
+  it('preserves a near-equatorial inclination without acos cancellation', () => {
+    const elements: OrbitalElements = {
+      semiMajorAxisKm: 16_000,
+      eccentricity: 0.2,
+      inclinationRad: 1e-8,
+      longitudeAscendingNodeRad: 0,
+      argumentPeriapsisRad: 0.7,
+      meanAnomalyRad: 10,
+    };
+
+    const { state, recovered, rebuilt } = roundTripState(elements);
+
+    expect(Math.abs(recovered.inclinationRad - elements.inclinationRad)).toBeLessThan(
+      ROUND_TRIP_RELATIVE_LIMIT,
+    );
+    expect(recovered.longitudeAscendingNodeRad).toBeGreaterThanOrEqual(0);
+    expect(recovered.longitudeAscendingNodeRad).toBeLessThan(2 * Math.PI);
+    expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
+  });
+
+  it('canonicalizes a retrograde equatorial orbit without flipping it prograde', () => {
+    const elements: OrbitalElements = {
+      semiMajorAxisKm: 14_000,
+      eccentricity: 0.2,
+      inclinationRad: Math.PI,
+      longitudeAscendingNodeRad: 1.1,
+      argumentPeriapsisRad: 0.4,
+      meanAnomalyRad: 2,
+    };
+
+    const { state, recovered, rebuilt } = roundTripState(elements);
+
+    expect(recovered.inclinationRad).toBe(Math.PI);
     expect(recovered.longitudeAscendingNodeRad).toBe(0);
     expect(stateRelativeError(rebuilt, state)).toBeLessThan(ROUND_TRIP_RELATIVE_LIMIT);
   });
