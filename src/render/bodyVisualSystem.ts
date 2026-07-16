@@ -1,0 +1,419 @@
+import {
+  IcosahedronGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  type Material,
+  type Object3D,
+  type Texture,
+} from 'three';
+
+import type { ReadonlyVec3 } from '../core/vec3.js';
+import type { LoadedBodyModel } from './bodyAssetLoader.js';
+import type { RuntimeAssetCategory } from './assetManifest.js';
+import { BodyPointCloud } from './bodyPointCloud.js';
+import { CameraRelativeSpaceScene } from './spaceScene.js';
+import {
+  apparentMagnitude,
+  projectedDiameterPx,
+  selectVisualTier,
+  type VisualTier,
+} from './visualTier.js';
+
+export interface BodyVisualDefinition {
+  readonly id: string;
+  readonly category: RuntimeAssetCategory;
+  readonly meanRadiusKm: number;
+  readonly geometricAlbedo: number;
+  readonly albedoColor: number;
+}
+
+export interface BodyVisualAssetLoader {
+  preloadHeroSpheres(): Promise<void>;
+  loadSphereAlbedo(id: string, category: RuntimeAssetCategory): Promise<Texture | null>;
+  loadModel(id: string): Promise<LoadedBodyModel | null>;
+}
+
+export type BodyModelCompiler = (root: Object3D) => Promise<void>;
+export type BodyModelLoadState = 'idle' | 'loading' | 'ready' | 'failed';
+
+const FADE_DURATION_MS = 250;
+const LOAD_IDLE = 0;
+const LOAD_LOADING = 1;
+const LOAD_READY = 2;
+const LOAD_FAILED = 3;
+const HERO_IDS = new Set(['sun', 'earth', 'moon']);
+
+function loadStateName(state: number): BodyModelLoadState {
+  switch (state) {
+    case LOAD_IDLE:
+      return 'idle';
+    case LOAD_LOADING:
+      return 'loading';
+    case LOAD_READY:
+      return 'ready';
+    case LOAD_FAILED:
+      return 'failed';
+    default:
+      throw new Error('Unknown body model load state.');
+  }
+}
+
+/** Owns setup-time body visuals and an allocation-free normal frame update. */
+export class BodyVisualSystem {
+  readonly pointCloud: BodyPointCloud;
+
+  private readonly idToIndex = new Map<string, number>();
+  private readonly sphereMeshes: Mesh<IcosahedronGeometry, MeshBasicMaterial>[] = [];
+  private readonly sphereMaterials: MeshBasicMaterial[] = [];
+  private readonly sphereLoadStates: Uint8Array;
+  private readonly modelLoadStates: Uint8Array;
+  private readonly modelRoots: Array<Object3D | null>;
+  private readonly modelMaterials: Array<Material[] | null>;
+  private readonly modelBaseOpacities: Array<Float32Array | null>;
+  private readonly modelBaseDepthWrites: Array<Uint8Array | null>;
+  private readonly selectedTiers: Uint8Array;
+  private readonly displayTargetTiers: Uint8Array;
+  private readonly fadeActive: Uint8Array;
+  private readonly fadeStartMs: Float64Array;
+  private readonly pointOpacities: Float32Array;
+  private readonly sphereOpacities: Float32Array;
+  private readonly modelOpacities: Float32Array;
+  private readonly fadePointStarts: Float32Array;
+  private readonly fadeSphereStarts: Float32Array;
+  private readonly fadeModelStarts: Float32Array;
+  private readonly sunIndex: number;
+
+  constructor(
+    private readonly spaceScene: CameraRelativeSpaceScene,
+    private readonly definitions: readonly BodyVisualDefinition[],
+    private readonly positionsKm: Float64Array,
+    private readonly assetLoader: BodyVisualAssetLoader,
+    private readonly compileModel: BodyModelCompiler,
+  ) {
+    if (definitions.length === 0 || positionsKm.length !== definitions.length * 3) {
+      throw new RangeError('Body definitions and packed positions must have matching counts.');
+    }
+
+    const count = definitions.length;
+    const colors = new Uint32Array(count);
+    let foundSunIndex = -1;
+    for (let index = 0; index < count; index += 1) {
+      const definition = definitions[index];
+      if (definition === undefined) throw new Error('Body definition array is sparse.');
+      if (this.idToIndex.has(definition.id)) {
+        throw new Error(`Duplicate body visual id "${definition.id}".`);
+      }
+      if (!Number.isFinite(definition.meanRadiusKm) || definition.meanRadiusKm <= 0) {
+        throw new RangeError(`Body "${definition.id}" must have a positive finite radius.`);
+      }
+      if (!Number.isFinite(definition.geometricAlbedo) || definition.geometricAlbedo < 0) {
+        throw new RangeError(`Body "${definition.id}" must have a finite nonnegative albedo.`);
+      }
+      this.idToIndex.set(definition.id, index);
+      colors[index] = definition.albedoColor;
+      if (definition.id === 'sun') foundSunIndex = index;
+    }
+    if (foundSunIndex < 0) throw new Error('Body visuals require a catalogued Sun.');
+    this.sunIndex = foundSunIndex;
+
+    this.sphereLoadStates = new Uint8Array(count);
+    this.modelLoadStates = new Uint8Array(count);
+    this.modelRoots = new Array<Object3D | null>(count).fill(null);
+    this.modelMaterials = new Array<Material[] | null>(count).fill(null);
+    this.modelBaseOpacities = new Array<Float32Array | null>(count).fill(null);
+    this.modelBaseDepthWrites = new Array<Uint8Array | null>(count).fill(null);
+    this.selectedTiers = new Uint8Array(count);
+    this.selectedTiers.fill(1);
+    this.displayTargetTiers = new Uint8Array(count);
+    this.displayTargetTiers.fill(1);
+    this.fadeActive = new Uint8Array(count);
+    this.fadeStartMs = new Float64Array(count);
+    this.pointOpacities = new Float32Array(count);
+    this.pointOpacities.fill(1);
+    this.sphereOpacities = new Float32Array(count);
+    this.modelOpacities = new Float32Array(count);
+    this.fadePointStarts = new Float32Array(count);
+    this.fadeSphereStarts = new Float32Array(count);
+    this.fadeModelStarts = new Float32Array(count);
+
+    this.pointCloud = new BodyPointCloud(colors);
+    this.spaceScene.bindPackedPointPositions(this.pointCloud.points, positionsKm);
+
+    const sphereGeometry = new IcosahedronGeometry(1, 2);
+    for (let index = 0; index < count; index += 1) {
+      const definition = definitions[index];
+      if (definition === undefined) throw new Error('Body definition array is sparse.');
+      const material = new MeshBasicMaterial({
+        color: definition.albedoColor,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const sphere = new Mesh(sphereGeometry, material);
+      sphere.scale.setScalar(definition.meanRadiusKm);
+      sphere.visible = true;
+      this.sphereMaterials.push(material);
+      this.sphereMeshes.push(sphere);
+      this.spaceScene.bindPackedVisual(sphere, positionsKm, index * 3);
+    }
+  }
+
+  async initializeEager(): Promise<void> {
+    await this.assetLoader.preloadHeroSpheres();
+    for (let index = 0; index < this.definitions.length; index += 1) {
+      const definition = this.definitions[index];
+      if (definition !== undefined && HERO_IDS.has(definition.id)) {
+        await this.loadSphereNow(index);
+      }
+    }
+  }
+
+  update(
+    cameraPositionKm: ReadonlyVec3,
+    viewportHeightPx: number,
+    verticalFovRad: number,
+    nowMs: number,
+  ): void {
+    if (!Number.isFinite(nowMs)) throw new RangeError('nowMs must be finite.');
+
+    for (let index = 0; index < this.definitions.length; index += 1) {
+      this.advanceFade(index, nowMs);
+      const definition = this.definitions[index];
+      const offset = index * 3;
+      const x = this.positionsKm[offset] ?? Number.NaN;
+      const y = this.positionsKm[offset + 1] ?? Number.NaN;
+      const z = this.positionsKm[offset + 2] ?? Number.NaN;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+        throw new RangeError('Packed body positions must remain finite.');
+      }
+      if (definition === undefined) throw new Error('Body definition array is sparse.');
+
+      const deltaX = x - cameraPositionKm.x;
+      const deltaY = y - cameraPositionKm.y;
+      const deltaZ = z - cameraPositionKm.z;
+      const distanceKm = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+      const diameterPx = projectedDiameterPx(
+        definition.meanRadiusKm,
+        distanceKm,
+        viewportHeightPx,
+        verticalFovRad,
+      );
+      const selectedTier = selectVisualTier(this.selectedTiers[index] as VisualTier, diameterPx);
+      this.selectedTiers[index] = selectedTier;
+
+      if (selectedTier >= 2 && this.sphereLoadStates[index] === LOAD_IDLE) {
+        this.beginSphereLoad(index);
+      }
+      if (selectedTier === 3 && this.modelLoadStates[index] === LOAD_IDLE) {
+        this.beginModelLoad(index);
+      }
+
+      const effectiveTier =
+        selectedTier === 1
+          ? 1
+          : selectedTier === 3 && this.modelLoadStates[index] === LOAD_READY
+            ? 3
+            : 2;
+      if (this.displayTargetTiers[index] !== effectiveTier) {
+        this.beginFade(index, effectiveTier, nowMs);
+      }
+
+      const magnitude = apparentMagnitude(
+        index,
+        this.sunIndex,
+        definition.meanRadiusKm,
+        definition.geometricAlbedo,
+        this.positionsKm,
+        cameraPositionKm,
+      );
+      const intensity = Math.min(8, Math.max(0.02, Math.pow(10, -0.4 * (magnitude - 6))));
+      this.pointCloud.writeAppearance(
+        index,
+        diameterPx,
+        this.pointOpacities[index] ?? 0,
+        intensity,
+      );
+      this.applyNearOpacity(index);
+    }
+    this.pointCloud.commitAppearance();
+  }
+
+  getTier(id: string): VisualTier {
+    return this.selectedTiers[this.indexForId(id)] as VisualTier;
+  }
+
+  getLoadState(id: string): BodyModelLoadState {
+    return loadStateName(this.modelLoadStates[this.indexForId(id)] ?? -1);
+  }
+
+  getOpacity(id: string, tier: VisualTier): number {
+    const index = this.indexForId(id);
+    if (tier === 1) return this.pointOpacities[index] ?? 0;
+    if (tier === 2) return this.sphereOpacities[index] ?? 0;
+    return this.modelOpacities[index] ?? 0;
+  }
+
+  getOpacitySum(id: string): number {
+    const index = this.indexForId(id);
+    return (
+      (this.pointOpacities[index] ?? 0) +
+      (this.sphereOpacities[index] ?? 0) +
+      (this.modelOpacities[index] ?? 0)
+    );
+  }
+
+  private indexForId(id: string): number {
+    const index = this.idToIndex.get(id);
+    if (index === undefined) throw new Error(`Unknown body visual id "${id}".`);
+    return index;
+  }
+
+  private beginSphereLoad(index: number): void {
+    this.sphereLoadStates[index] = LOAD_LOADING;
+    const definition = this.definitions[index];
+    if (definition === undefined) throw new Error('Body definition array is sparse.');
+    void this.assetLoader
+      .loadSphereAlbedo(definition.id, definition.category)
+      .then((texture) => this.finishSphereLoad(index, texture))
+      .catch(() => {
+        this.sphereLoadStates[index] = LOAD_FAILED;
+      });
+  }
+
+  private async loadSphereNow(index: number): Promise<void> {
+    if (this.sphereLoadStates[index] !== LOAD_IDLE) return;
+    this.sphereLoadStates[index] = LOAD_LOADING;
+    const definition = this.definitions[index];
+    if (definition === undefined) throw new Error('Body definition array is sparse.');
+    try {
+      const texture = await this.assetLoader.loadSphereAlbedo(definition.id, definition.category);
+      this.finishSphereLoad(index, texture);
+    } catch {
+      this.sphereLoadStates[index] = LOAD_FAILED;
+    }
+  }
+
+  private finishSphereLoad(index: number, texture: Texture | null): void {
+    if (texture === null) {
+      this.sphereLoadStates[index] = LOAD_FAILED;
+      return;
+    }
+    const material = this.sphereMaterials[index];
+    if (material === undefined) throw new Error('Sphere material array is out of sync.');
+    material.map = texture;
+    material.needsUpdate = true;
+    this.sphereLoadStates[index] = LOAD_READY;
+  }
+
+  private beginModelLoad(index: number): void {
+    this.modelLoadStates[index] = LOAD_LOADING;
+    const definition = this.definitions[index];
+    if (definition === undefined) throw new Error('Body definition array is sparse.');
+    void this.assetLoader
+      .loadModel(definition.id)
+      .then((model) => this.prepareModel(index, model))
+      .catch(() => {
+        this.modelLoadStates[index] = LOAD_FAILED;
+      });
+  }
+
+  private async prepareModel(index: number, model: LoadedBodyModel | null): Promise<void> {
+    if (model === null) {
+      this.modelLoadStates[index] = LOAD_FAILED;
+      return;
+    }
+    const definition = this.definitions[index];
+    if (definition === undefined) throw new Error('Body definition array is sparse.');
+    const baseOpacities = new Float32Array(model.materials.length);
+    const baseDepthWrites = new Uint8Array(model.materials.length);
+    for (let materialIndex = 0; materialIndex < model.materials.length; materialIndex += 1) {
+      const material = model.materials[materialIndex];
+      if (material === undefined) throw new Error('Loaded model material array is sparse.');
+      baseOpacities[materialIndex] = material.opacity;
+      baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
+      material.transparent = true;
+      material.opacity = 0;
+      material.depthWrite = false;
+    }
+    model.root.scale.setScalar(definition.meanRadiusKm);
+    model.root.visible = true;
+    this.modelRoots[index] = model.root;
+    this.modelMaterials[index] = model.materials;
+    this.modelBaseOpacities[index] = baseOpacities;
+    this.modelBaseDepthWrites[index] = baseDepthWrites;
+    this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
+
+    try {
+      await this.compileModel(model.root);
+      this.modelLoadStates[index] = LOAD_READY;
+    } catch {
+      model.root.visible = false;
+      this.modelLoadStates[index] = LOAD_FAILED;
+    }
+  }
+
+  private beginFade(index: number, targetTier: VisualTier, nowMs: number): void {
+    this.fadePointStarts[index] = this.pointOpacities[index] ?? 0;
+    this.fadeSphereStarts[index] = this.sphereOpacities[index] ?? 0;
+    this.fadeModelStarts[index] = this.modelOpacities[index] ?? 0;
+    this.fadeStartMs[index] = nowMs;
+    this.fadeActive[index] = 1;
+    this.displayTargetTiers[index] = targetTier;
+  }
+
+  private advanceFade(index: number, nowMs: number): void {
+    if (this.fadeActive[index] === 0) return;
+    const progress = Math.min(
+      1,
+      Math.max(0, (nowMs - (this.fadeStartMs[index] ?? 0)) / FADE_DURATION_MS),
+    );
+    const targetTier = this.displayTargetTiers[index];
+    const pointTarget = targetTier === 1 ? 1 : 0;
+    const sphereTarget = targetTier === 2 ? 1 : 0;
+    const modelTarget = targetTier === 3 ? 1 : 0;
+    const pointStart = this.fadePointStarts[index] ?? 0;
+    const sphereStart = this.fadeSphereStarts[index] ?? 0;
+    const modelStart = this.fadeModelStarts[index] ?? 0;
+    this.pointOpacities[index] = pointStart + (pointTarget - pointStart) * progress;
+    this.sphereOpacities[index] = sphereStart + (sphereTarget - sphereStart) * progress;
+    this.modelOpacities[index] = modelStart + (modelTarget - modelStart) * progress;
+    if (progress >= 1) this.fadeActive[index] = 0;
+  }
+
+  private applyNearOpacity(index: number): void {
+    const sphere = this.sphereMeshes[index];
+    const sphereMaterial = this.sphereMaterials[index];
+    if (sphere === undefined || sphereMaterial === undefined) {
+      throw new Error('Sphere visual arrays are out of sync.');
+    }
+    const sphereOpacity = this.sphereOpacities[index] ?? 0;
+    sphere.visible = sphereOpacity > 0;
+    sphereMaterial.opacity = sphereOpacity;
+    sphereMaterial.depthWrite = sphereOpacity >= 1;
+
+    const root = this.modelRoots[index];
+    const materials = this.modelMaterials[index];
+    const baseOpacities = this.modelBaseOpacities[index];
+    const baseDepthWrites = this.modelBaseDepthWrites[index];
+    if (
+      root === null ||
+      root === undefined ||
+      materials === null ||
+      materials === undefined ||
+      baseOpacities === null ||
+      baseOpacities === undefined ||
+      baseDepthWrites === null ||
+      baseDepthWrites === undefined
+    ) {
+      return;
+    }
+    const modelOpacity = this.modelOpacities[index] ?? 0;
+    root.visible = modelOpacity > 0;
+    for (let materialIndex = 0; materialIndex < materials.length; materialIndex += 1) {
+      const material = materials[materialIndex];
+      if (material === undefined) throw new Error('Loaded model material array is sparse.');
+      material.opacity = (baseOpacities[materialIndex] ?? 1) * modelOpacity;
+      material.depthWrite = modelOpacity >= 1 && baseDepthWrites[materialIndex] === 1;
+    }
+  }
+}
