@@ -1,8 +1,8 @@
 id: T0035
 title: Asset ingest pipeline (assets/ -> public/assets/)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0035-asset-ingest-pipeline
 depends_on: [T0001]
 milestone: M1
 spec: |
