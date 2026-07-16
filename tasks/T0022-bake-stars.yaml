@@ -1,6 +1,6 @@
 id: T0022
 title: bake_stars script — Yale BSC to stars.bin
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0022-bake-stars
 depends_on: [T0001]
