@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest';
+
+import { assertGoldenTrajectoryMatches } from './goldenComparison.js';
+import type { GoldenTrajectory } from './goldenTrajectoryHarness.js';
+
+function fixture(): GoldenTrajectory {
+  return {
+    schemaVersion: 1,
+    scenarioId: 'leo-30d',
+    epoch: 'J2026',
+    durationSec: 2_592_000,
+    sampleIntervalSec: 86_400,
+    integration: { profile: 'production-ship-dp54', maxAcceptedStepsPerSegment: 4_000 },
+    parameters: { altitudeKm: 400 },
+    initialState: [0, 0, 0, 0, 0, 0, 0],
+    samples: [
+      {
+        timeSec: 0,
+        state: [0, 0, 0, 0, 0, 0, 0],
+        acceptedSteps: 10,
+        rejectedSteps: 1,
+      },
+    ],
+  };
+}
+
+describe('golden trajectory comparison - physics-spec.md section 7.6', () => {
+  it('accepts LEO component drift exactly at its cross-runtime limits', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[0] = ((state as number[])[0] as number) + 2e-2;
+    (state as number[])[3] = ((state as number[])[3] as number) + 2e-5;
+    (state as number[])[6] = ((state as number[])[6] as number) + 1e-6;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).not.toThrow();
+  });
+
+  it('reports complete component diagnostics when drift exceeds tolerance', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[4] = ((state as number[])[4] as number) + 3e-5;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d.*timeSec=0.*component=uy.*expected=0.*actual=0\.00003.*drift=0\.00003.*limit=0\.00002/u,
+    );
+  });
+
+  it('keeps the strict celerity limit outside LEO', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    (expected as { scenarioId: string }).scenarioId = 'earth-mars-transfer-30d';
+    (actual as { scenarioId: string }).scenarioId = 'earth-mars-transfer-30d';
+    const state = actual.samples[0]?.state;
+    expect(state).toBeDefined();
+    (state as number[])[3] = 2e-9;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(/limit=1e-9/u);
+  });
+
+  it('rejects missing samples before comparing components', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    actual.samples.length = 0;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d sample count mismatch: expected=1, actual=0/u,
+    );
+  });
+
+  it('rejects drift in recorded generation metadata', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    (actual.parameters as Record<string, number>).altitudeKm = 401;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d parameters mismatch: expected=.*400.*actual=.*401/u,
+    );
+  });
+
+  it('rejects a recorded initial state that disagrees with its first sample', () => {
+    const expected = fixture();
+    const actual = structuredClone(expected);
+    actual.initialState[0] = 2;
+
+    expect(() => assertGoldenTrajectoryMatches(actual, expected)).toThrow(
+      /leo-30d initialState drift.*component=rx.*expected=0.*actual=2/u,
+    );
+  });
+});
