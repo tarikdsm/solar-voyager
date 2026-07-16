@@ -22,6 +22,45 @@ const CALIBRATED_PLANET_IDS = new Set([
   'uranus',
   'neptune',
 ]);
+const CALIBRATED_DWARF_AND_LOCAL_MOON_IDS = new Set([
+  'phobos',
+  'deimos',
+  'pluto',
+  'charon',
+  'ceres',
+  'eris',
+  'makemake',
+  'haumea',
+]);
+const CALIBRATED_GIANT_MOON_IDS = new Set([
+  'io',
+  'europa',
+  'ganymede',
+  'callisto',
+  'mimas',
+  'enceladus',
+  'tethys',
+  'dione',
+  'rhea',
+  'titan',
+  'iapetus',
+  'miranda',
+  'ariel',
+  'umbriel',
+  'titania',
+  'oberon',
+  'triton',
+]);
+const CALIBRATED_SMALL_BODY_IDS = new Set([
+  'vesta',
+  'pallas',
+  'hygiea',
+  'eros',
+  'bennu',
+  'ryugu',
+  '1p',
+  '67p',
+]);
 
 interface CheckState {
   readonly positionKm: readonly number[];
@@ -67,6 +106,15 @@ function positionLimitKm(bodyId: string, sampleIndex: number): number {
   if (bodyId === 'moon' || CALIBRATED_PLANET_IDS.has(bodyId)) {
     return sampleIndex === 1 ? 50_000 : 1_500_000;
   }
+  if (CALIBRATED_DWARF_AND_LOCAL_MOON_IDS.has(bodyId)) {
+    return sampleIndex === 1 ? 100_000 : 1_500_000;
+  }
+  if (CALIBRATED_GIANT_MOON_IDS.has(bodyId)) {
+    return sampleIndex === 1 ? 250_000 : 1_000_000;
+  }
+  if (CALIBRATED_SMALL_BODY_IDS.has(bodyId)) {
+    return sampleIndex === 1 ? 10_000 : 750_000;
+  }
   throw new Error(`rails accuracy bound has not been calibrated for ${bodyId}`);
 }
 
@@ -104,7 +152,6 @@ describe('rails vs JPL Horizons — physics-spec.md §2', () => {
   );
 
   it('fails closed when a newly baked body has no calibrated accuracy bound', () => {
-    expect(() => positionLimitKm('io', 1)).toThrow(/has not been calibrated for io/u);
-    expect(() => positionLimitKm('67p', 2)).toThrow(/has not been calibrated for 67p/u);
+    expect(() => positionLimitKm('newbody', 1)).toThrow(/has not been calibrated for newbody/u);
   });
 });
