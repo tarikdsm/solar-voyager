@@ -1,6 +1,6 @@
 id: T0010
 title: core/vec3 float64 math + constants
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0010-core-vec3-constants
 depends_on: [T0001]
@@ -19,4 +19,9 @@ handoff_notes: |
   TDD evidence: the focused tests first failed because both modules were absent,
   then passed 12/12 after implementation. Full verification passed: lint,
   typecheck, 84 tests, build, Prettier, task schema, asset budgets, and diff check.
-  Requires independent review before DONE.
+  Independent re-review approved the implementation at commit
+  cdee457c92b72a387ff099e6aabab42d865ad73b after confirming exact normalization
+  invariants, spec traceability, complete public API documentation, alias safety,
+  finite zero normalization, and dependency-free core sources. All local gates
+  passed with 84/84 tests; corrective CI run 29460848518 passed. The reviewer
+  marked DONE in a dedicated commit and required its final CI to pass before merge.
