@@ -1,6 +1,6 @@
 id: T0094
 title: Publish standalone development check plan
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0094-development-check-plan
 depends_on: []
