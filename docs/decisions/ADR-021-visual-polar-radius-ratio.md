@@ -1,6 +1,6 @@
 # ADR-021: Catalogued visual polar-radius ratio
 
-**Status:** proposed (2026-07-16)
+**Status:** accepted (2026-07-16)
 
 ## Context
 

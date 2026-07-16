@@ -19,7 +19,7 @@ python -m pip install -r tools/requirements-ephemerides.txt
 ### Commands
 
 ```powershell
-# Full 43-body v1 bake, using Astroquery's response cache
+# Full 43-body v2 bake, using Astroquery's response cache
 python tools/bake_ephemerides.py
 
 # Force fresh Horizons requests
@@ -120,6 +120,9 @@ Build every implemented catalog asset, or a deterministic selected subset:
 ```powershell
 & blender --background --python tools/blender/build_all.py -- --all
 & blender --background --python tools/blender/build_all.py -- --only sun --only earth
+
+# Direct category-level planet build (catalog shape + texture contract)
+& blender --background --python tools/blender/build_planet.py -- --id earth
 
 # Disposable Blender -> authored GLB -> runtime ingest acceptance
 npm run test:blender
