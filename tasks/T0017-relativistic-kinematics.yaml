@@ -1,6 +1,6 @@
 id: T0017
 title: Relativistic kinematics module (celerity, gamma, proper time)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0017-relativistic-kinematics
 depends_on: [T0010]
@@ -16,4 +16,15 @@ acceptance:
   - Hyperbolic-motion analytic test (physics-spec 7.8) to 1e-9 up to gamma = 10
   - Newtonian-limit test (7.9), 10-orbit LEO final separation from pure Newtonian < 5e-8 relative (ADR-012)
   - Time-dilation test (7.11); |v| < c invariant under integrator stress
-handoff_notes: ""
+handoff_notes: |
+  Implemented src/sim/ship/relativity.ts with robust celerity/gamma/velocity,
+  momentum, kinetic-energy, and allocation-free DP54 derivative helpers.
+  Regression coverage: analytic hyperbolic motion through gamma=10, one year
+  at gamma=2, subluminal float64 behavior through gamma=1e8 and extreme finite
+  3D celerity, and ten-period LEO Newtonian-limit separation (4e-8..5e-8).
+  ADR-012 documents why the original 1e-9 Newtonian bound was physically
+  impossible under ADR-007 and records the corrected 5e-8 ceiling.
+  Independent review found no critical issues; its two important findings
+  (float64 v==c rounding and missing lower phase-drift bound) were fixed.
+  Verified 2026-07-16: lint, typecheck, 128 tests, build, format, task schema,
+  and asset budgets all pass. Build retains the pre-existing >500 kB chunk warning.
