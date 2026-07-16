@@ -60,8 +60,8 @@ significant digits. The Sun remains exact. Every catalog id must belong to a
 calibrated class, so catalog growth fails CI until this table and the regression are
 updated. Errors come from neglected mutual perturbations; resulting orbits remain
 physically plausible. ADR-015 records the original planet/Luna calibration and
-ADR-019 records the provisional full-catalog ceilings superseded by this T0023
-calibration.
+ADR-019 records the provisional full-catalog ceilings superseded by the calibrated
+position-and-velocity contract in ADR-020.
 
 ## 3. Ship dynamics — full n-body + thrust, special-relativistic (ADR-007)
 

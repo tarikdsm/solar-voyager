@@ -22,13 +22,22 @@
 ### Task 1: Publish the calibrated accuracy contract
 
 **Files:**
+- Create: `docs/decisions/ADR-020-calibrated-full-catalog-rails-accuracy.md`
 - Modify: `docs/physics-spec.md` section 2
 
 **Interfaces:**
 - Consumes: J2026 rails and Horizons vectors already pinned by T0021.
 - Produces: normative position/velocity limits consumed by the regression test.
 
-- [ ] **Step 1: Replace the provisional table with measured position values**
+- [ ] **Step 1: Record the calibration decision**
+
+Create ADR-020 documenting why ADR-019's provisional position ceilings are being
+superseded, why velocity is now covered, the four retained body classes, the
+`ceil-to-two-significant-digits(1.10 * measured maximum)` rule, exact-Sun and
+fail-closed behavior, consequences, and the rejected global/per-body/position-only
+alternatives.
+
+- [ ] **Step 2: Replace the provisional table with measured position values**
 
 Use a `measured / limit` table with these exact values:
 
@@ -41,7 +50,7 @@ Use a `measured / limit` table with these exact values:
 | Asteroids and comets | 3,428.256 / 3,800 km | 645,327.779 / 710,000 km |
 ```
 
-- [ ] **Step 2: Add the measured velocity table**
+- [ ] **Step 3: Add the measured velocity table**
 
 ```markdown
 | Body class | velocity @ +30 d (measured / limit) | velocity @ +365 d (measured / limit) |
@@ -54,7 +63,7 @@ Use a `measured / limit` table with these exact values:
 
 Immediately below the tables, state that limits are `ceil-to-two-significant-digits(1.10 * measured maximum)`, that the Sun remains exact, and that catalog growth must add a calibrated class before passing CI. Replace the ADR-019 provisional wording with a reference to this T0023 calibration while retaining ADR-019 as historical context.
 
-- [ ] **Step 3: Validate and commit the contract**
+- [ ] **Step 4: Validate and commit the contract**
 
 Run:
 
@@ -68,7 +77,7 @@ Expected: both commands exit 0.
 Commit:
 
 ```powershell
-git add docs/physics-spec.md
+git add docs/decisions/ADR-020-calibrated-full-catalog-rails-accuracy.md docs/physics-spec.md
 git commit -m "docs(physics): [T0023] calibrate rails accuracy bounds"
 ```
 

@@ -65,7 +65,8 @@ unknown body ids fail rather than being skipped.
 
 ## Documentation
 
+ADR-020 records the calibration policy and the decision to add velocity coverage.
 `docs/physics-spec.md` section 2 will replace ADR-019's provisional ceilings with
 the measured maxima and calibrated regression limits for position and velocity.
-No ADR is required because no formula, schema, command, or snapshot interface is
-changing; this task calibrates an already specified regression contract.
+The ADR is required by the repository rule covering every physics-spec change,
+even though no propagation formula, schema, command, or snapshot interface changes.
