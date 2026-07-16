@@ -32,7 +32,7 @@ SIRIUS_LINE = (
 class StarParserTests(unittest.TestCase):
     def assert_tuple_almost_equal(self, actual, expected):
         self.assertEqual(len(actual), len(expected))
-        for actual_value, expected_value in zip(actual, expected, strict=True):
+        for actual_value, expected_value in zip(actual, expected):
             self.assertAlmostEqual(actual_value, expected_value, places=12)
 
     def test_parses_canopus_and_sirius_catalog_fields(self):
