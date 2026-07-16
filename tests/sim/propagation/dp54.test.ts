@@ -5,6 +5,8 @@ import {
   createDp54Workspace,
   createShipDp54Tolerance,
   propagate,
+  type Dp54Result,
+  type Dp54Tolerance,
 } from '../../../src/sim/propagation/dp54.js';
 
 const MU_KM3_S2 = 398_600.4418;
@@ -40,7 +42,27 @@ function angularMomentumMagnitude(state: Float64Array): number {
   return Math.hypot(y * vz - z * vy, z * vx - x * vz, x * vy - y * vx);
 }
 
-function expectTenPeriodOrbit(semimajorAxisKm: number, eccentricity: number): void {
+interface OrbitMetrics {
+  result: Dp54Result;
+  positionErrorKm: number;
+  energyDrift: number;
+  angularMomentumDrift: number;
+}
+
+function createTwoBodyVerificationTolerance(): Dp54Tolerance {
+  return {
+    absolute: new Float64Array([2e-8, 2e-8, 2e-8, 2e-11, 2e-11, 2e-11]),
+    relative: 2e-11,
+    initialStepSec: 1,
+    maxAcceptedSteps: 4_000,
+  };
+}
+
+function runTenPeriodOrbit(
+  semimajorAxisKm: number,
+  eccentricity: number,
+  tolerance: Dp54Tolerance,
+): OrbitMetrics {
   const periapsisKm = semimajorAxisKm * (1 - eccentricity);
   const periapsisSpeedKmSec = Math.sqrt(
     (MU_KM3_S2 * (1 + eccentricity)) / (semimajorAxisKm * (1 - eccentricity)),
@@ -56,26 +78,33 @@ function expectTenPeriodOrbit(semimajorAxisKm: number, eccentricity: number): vo
     0,
     10 * periodSec,
     twoBodyDerivative,
-    {
-      absolute: new Float64Array([2e-8, 2e-8, 2e-8, 2e-11, 2e-11, 2e-11]),
-      relative: 2e-11,
-      initialStepSec: 1,
-      maxAcceptedSteps: 4_000,
-    },
+    tolerance,
     createDp54Workspace(6),
     result,
   );
 
-  const positionErrorKm = Math.hypot(
-    (output[0] as number) - (initial[0] as number),
-    (output[1] as number) - (initial[1] as number),
-    (output[2] as number) - (initial[2] as number),
+  return {
+    result,
+    positionErrorKm: Math.hypot(
+      (output[0] as number) - (initial[0] as number),
+      (output[1] as number) - (initial[1] as number),
+      (output[2] as number) - (initial[2] as number),
+    ),
+    energyDrift:
+      Math.abs(specificEnergy(output) - specificEnergy(initial)) /
+      Math.abs(specificEnergy(initial)),
+    angularMomentumDrift:
+      Math.abs(angularMomentumMagnitude(output) - angularMomentumMagnitude(initial)) /
+      angularMomentumMagnitude(initial),
+  };
+}
+
+function expectTenPeriodOrbit(semimajorAxisKm: number, eccentricity: number): void {
+  const { result, positionErrorKm, energyDrift, angularMomentumDrift } = runTenPeriodOrbit(
+    semimajorAxisKm,
+    eccentricity,
+    createTwoBodyVerificationTolerance(),
   );
-  const energyDrift =
-    Math.abs(specificEnergy(output) - specificEnergy(initial)) / Math.abs(specificEnergy(initial));
-  const angularMomentumDrift =
-    Math.abs(angularMomentumMagnitude(output) - angularMomentumMagnitude(initial)) /
-    angularMomentumMagnitude(initial);
 
   expect(
     result.reachedEnd,
@@ -95,6 +124,22 @@ describe('dp54 - physics-spec.md section 3.1 / section 7.2', () => {
     expect(tolerance.relative).toBe(1e-9);
     expect(tolerance.initialStepSec).toBe(1);
     expect(tolerance.maxAcceptedSteps).toBe(4_000);
+  });
+
+  it('covers ten periods within budget using the operational ship profile', () => {
+    for (const [semimajorAxisKm, eccentricity] of [
+      [7_000, 0],
+      [20_000, 0.7],
+    ]) {
+      const { result } = runTenPeriodOrbit(
+        semimajorAxisKm as number,
+        eccentricity as number,
+        createShipDp54Tolerance(),
+      );
+
+      expect(result.reachedEnd).toBe(true);
+      expect(result.acceptedSteps).toBeLessThanOrEqual(4_000);
+    }
   });
 
   it('holds circular-orbit position and invariants for ten periods', () => {

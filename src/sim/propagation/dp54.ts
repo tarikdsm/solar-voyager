@@ -62,6 +62,7 @@ export interface Dp54Result {
   reachedEnd: boolean;
   budgetExhausted: boolean;
   stepUnderflow: boolean;
+  nonFiniteError: boolean;
 }
 
 /** Caller-owned stage storage reused by every propagation. */
@@ -106,6 +107,7 @@ export function createDp54Result(): Dp54Result {
     reachedEnd: false,
     budgetExhausted: false,
     stepUnderflow: false,
+    nonFiniteError: false,
   };
 }
 
@@ -157,6 +159,7 @@ export function propagate(
   result.reachedEnd = startTimeSec === endTimeSec;
   result.budgetExhausted = false;
   result.stepUnderflow = false;
+  result.nonFiniteError = false;
 
   if (result.reachedEnd) {
     return result;
@@ -260,13 +263,17 @@ export function propagate(
       workspace.fourthOrderState[index] = fourthOrderValue;
 
       const currentMagnitude = Math.abs(outputState[index] as number);
-      const candidateMagnitude = Math.abs(workspace.fifthOrderState[index] as number);
       const errorScale =
-        (tolerance.absolute[index] as number) +
-        tolerance.relative * Math.max(currentMagnitude, candidateMagnitude);
+        (tolerance.absolute[index] as number) + tolerance.relative * currentMagnitude;
       const componentError =
         Math.abs((workspace.fifthOrderState[index] as number) - fourthOrderValue) / errorScale;
       normalizedError = Math.max(normalizedError, componentError);
+    }
+
+    if (!Number.isFinite(normalizedError)) {
+      result.rejectedSteps += 1;
+      result.nonFiniteError = true;
+      break;
     }
 
     const factor = controllerFactor(normalizedError);

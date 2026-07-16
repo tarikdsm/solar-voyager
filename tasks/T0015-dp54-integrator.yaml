@@ -19,5 +19,8 @@ handoff_notes: |
   published full-precision tableau, FSAL reuse, adaptive error control, horizon
   clipping, step-underflow reporting, and the 4000-accepted-step budget interface.
   Added the specified seven-component ship tolerance factory and regression tests
-  for circular and e=0.7 two-body orbits over ten periods. All 116 tests and every
-  mandatory gate pass. Review commits b2a80b7..25e0b3d.
+  for circular and e=0.7 two-body orbits over ten periods. Independent review found
+  and drove fixes for non-finite derivative termination and an ambiguity between
+  local operational tolerance and global convergence evidence. ADR-011 now defines
+  the separate test-only verification profile; both profiles have explicit tests.
+  Re-run all mandatory gates and review the commits after 7b17dad.

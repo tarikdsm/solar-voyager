@@ -137,4 +137,27 @@ describe('dp54 — physics-spec.md §3.1 / §3.2', () => {
     expect(result.reachedEnd).toBe(true);
     expect(Math.abs((output[0] as number) / Math.exp(50) - 1)).toBeLessThan(1e-9);
   });
+
+  it('terminates and reports a non-finite derivative', () => {
+    const output = new Float64Array(1);
+    const result = createDp54Result();
+
+    propagate(
+      output,
+      new Float64Array([1]),
+      0,
+      1,
+      (_timeSec, _state, derivative) => {
+        derivative[0] = Number.NaN;
+      },
+      TEST_TOLERANCE,
+      createDp54Workspace(1),
+      result,
+    );
+
+    expect(result.reachedEnd).toBe(false);
+    expect(result.acceptedSteps).toBe(0);
+    expect(result.rejectedSteps).toBe(1);
+    expect(result.nonFiniteError).toBe(true);
+  });
 });
