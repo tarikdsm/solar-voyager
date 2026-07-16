@@ -1,6 +1,6 @@
 id: T0032
 title: build_planet script + Earth asset
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0032-build-planet
 depends_on: [T0031]
@@ -12,13 +12,16 @@ acceptance:
   - Earth glb+ktx2 committed, manifest within budgets
   - Re-running the script reproduces the artifact
 handoff_notes: |
-  Earth source asset was committed directly to main in d0996d7: build_earth.py,
-  earth.glb, 8k source textures, processed maps, and SOURCES.md. The model is not
-  task-complete: T0030 and T0031 are still TODO, the builder is Earth-specific
-  rather than the parameterized build_planet script in the spec, and T0035 does
-  not yet exist as a working ingest command, so no KTX2/runtime artifact or
-  reproducibility/ingest acceptance evidence is available. Reconcile through the
-  prerequisite tasks, then claim T0032 to audit, generalize, ingest, and verify.
-  T0030, T0031, and T0035 are now DONE; the prior blocking conditions are
-  resolved. Current MODELING-GUIDE hero tiers/budgets supersede the older sizes
-  embedded in this task summary and will be used for verification.
+  Review evidence (2026-07-16): build_planet.py now resolves Earth through the
+  schema-v2 catalog and pure planet_config layer; build_earth.py is only a
+  build_all compatibility delegate. ADR-021 records visual.polarRadiusRatio,
+  with Earth at 6356.8/6378.1. Two clean Blender 5.1 builds produced identical
+  eight-file authoring trees (Earth GLB SHA-256
+  342e578f625483f1831c09430c6e63d4b959f037efd27f45649be676c5c2f0cc),
+  32,256 triangles, equatorial radius 1, and the catalogued polar ratio. The
+  official assets:verify gate reported 5,971,636 bytes and nine byte-identical
+  runtime files, below the current 20 MiB hero budget. npm test (219 passed),
+  test:tools (42 passed), lint, typecheck, format:check, build, check:tasks,
+  check:budgets, and test:blender all passed. Review the schema migration,
+  float32 ellipsoid-normal canonicalization, authoring texture replacement, and
+  generated Earth runtime GLB/albedo KTX2.
