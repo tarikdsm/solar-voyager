@@ -128,6 +128,27 @@ npm run test:blender
 The acceptance command writes only below `build/blender-smoke/`. It locates
 Blender via `BLENDER_PATH`, `PATH`, or the documented Blender 5.1 Windows path.
 
+## Licensed texture fetch
+
+`fetch_textures.py` downloads only catalogued HTTPS sources, rejects bytes that
+do not match the pinned SHA-256, normalizes them to metadata-free RGB PNG with
+the pinned Sharp dependency, and writes complete attribution beside the output.
+KTX2 remains the responsibility of asset ingest.
+
+```powershell
+# Fetch every implemented recipe into assets/textures-src/
+npm run textures:fetch
+
+# Focused/offline reproduction from already verified source bytes
+python tools/fetch_textures.py --only earth-albedo `
+  --source assets/textures-src/earth/8k_earth_daymap.jpg `
+  --output-root build/texture-review
+```
+
+The initial `earth-albedo` recipe resolves the official Solar System Scope 8k
+Earth Day Map to 8192×4096. Recipe URLs, license, required credit, processing,
+and source checksum are recorded in the generated `SOURCES.md`.
+
 ## Runtime asset ingest
 
 `tools/assets/ingestCli.mjs` is the only supported publisher from
