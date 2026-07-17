@@ -19,12 +19,14 @@ handoff_notes: >-
   Implemented manifest-schema-v2 detail descriptors, deterministic ingest,
   lazy KTX2 detail loading, distance-faded two-octave albedo/normal shading,
   closest-range procedural modulation, independent Earth clouds, and a
-  precompiled Fresnel atmosphere. Browser regression: 11.78% LEO detail-energy
-  gain, 0.286 repeat peak (<0.35), byte-identical far captures, 61 atmosphere
-  limb pixels, and stable 27 programs through first frame. All local gates pass
-  (423 Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
-  and Earth assets:verify with 15 byte-identical files). Native 1920x1080 Intel
-  UHD proxy measured GPU p75 10.861 -> 14.397 ms; this older Tiger Lake GPU
-  already misses the 10 ms baseline target, so docs/bench/T0082-summary.md
-  preserves the result and explicitly leaves reference-2023+ certification to
-  suitable hardware.
+  precompiled Fresnel atmosphere. First independent review reported 0 Critical,
+  4 Important, and 2 Minor; all were addressed. The production regression now
+  uses a circular surface ROI, both autocorrelation axes, and quadrant metrics:
+  4.22% total detail-energy gain, >=1.95% in every quadrant, horizontal/vertical
+  repeat prominences 0.0496/0.0054, mean luminance delta -0.0248, byte-identical
+  far captures, 61 atmosphere limb pixels, and stable 27 programs through first
+  frame. RTX 3070 native 1920x1080 GPU p75 is 2.544 ms (<10 ms) at 60 fps on
+  exact implementation/harness SHA a9324e5; paired main was 3.508 ms, with DVFS
+  noise disclosed in docs/bench/T0082-summary.md. All local gates pass (425
+  Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
+  full-range diff check, and Earth assets:verify with 15 byte-identical files).
