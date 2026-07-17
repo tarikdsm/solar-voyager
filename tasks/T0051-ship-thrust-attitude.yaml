@@ -1,6 +1,6 @@
 id: T0051
 title: Ship state, thrust, attitude modes
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0051-ship-thrust-attitude
 depends_on: [T0050]
@@ -15,4 +15,13 @@ acceptance:
   - Prograde hold tracks velocity direction through an orbit (test)
   - Coordinate acceleration falls as 1/gamma^3 parallel to motion (test at gamma=2)
   - Thrust changes trigger predictor invalidation event
-handoff_notes: ""
+handoff_notes: |
+  ADR-025 and physics-spec section 3 now define [x,y,z,w] attitude, local +X
+  thrust axis, 1 g default proper acceleration, orbital hold frames, exact
+  constant-rate manual rotation, photon-drive outputs, and invalidation events.
+  Prograde hold stays tangent through a quarter orbit; the propagated gamma=2
+  regression recovers alpha/gamma^3. Changed active thrust commands invalidate
+  exactly once. Full local CI passed: format, lint, typecheck, 334 TS tests
+  (3 skipped), six browser regressions, 49 Python tests, build, schema, and
+  budgets. Active-thrust full-catalog benchmark averaged 0.0760 ms/step, reused
+  exactly two snapshots, and retained no heap growth.
