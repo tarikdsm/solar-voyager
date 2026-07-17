@@ -140,7 +140,7 @@ describe('complete asset ingest', () => {
     expect(manifest.assets[0].surfaceDetail).toEqual({
       albedo: 'textures/pluto_detail_albedo.ktx2',
       normal: 'textures/pluto_detail_normal.ktx2',
-      tilesPerEquator: 192,
+      tilesPerEquator: 12,
       seed: 999,
     });
   });

@@ -33,7 +33,7 @@
 
 **Interfaces:**
 - Produces: `RuntimeSurfaceDetail { albedo, normal, tilesPerEquator, seed }` and optional `RuntimeAssetEntry.surfaceDetail`.
-- Produces: `SURFACE_DETAIL_CONFIG[id]` for Earth `{512,399}`, Moon `{256,301}`, Pluto `{192,999}`, and Saturn `{512,699}`.
+- Produces: `SURFACE_DETAIL_CONFIG[id]` for Earth `{32,399}`, Moon `{16,301}`, Pluto `{12,999}`, and Saturn `{32,699}`.
 - Consumes: the existing sorted runtime `files` array and validated 1k detail roles.
 
 - [ ] **Step 1: Write failing manifest parser tests**
@@ -114,7 +114,7 @@ Add `createDetailedSourceTree()` with a `dwarfs/pluto` fixture containing a vali
 surfaceDetail: {
   albedo: 'textures/pluto_detail_albedo.ktx2',
   normal: 'textures/pluto_detail_normal.ktx2',
-  tilesPerEquator: 192,
+  tilesPerEquator: 12,
   seed: 999,
 },
 schemaVersion: 2,
@@ -128,10 +128,10 @@ Add to `tools/assets/config.mjs`:
 
 ```js
 export const SURFACE_DETAIL_CONFIG = Object.freeze({
-  earth: Object.freeze({ tilesPerEquator: 512, seed: 399 }),
-  moon: Object.freeze({ tilesPerEquator: 256, seed: 301 }),
-  pluto: Object.freeze({ tilesPerEquator: 192, seed: 999 }),
-  saturn: Object.freeze({ tilesPerEquator: 512, seed: 699 }),
+  earth: Object.freeze({ tilesPerEquator: 32, seed: 399 }),
+  moon: Object.freeze({ tilesPerEquator: 16, seed: 301 }),
+  pluto: Object.freeze({ tilesPerEquator: 12, seed: 999 }),
+  saturn: Object.freeze({ tilesPerEquator: 32, seed: 699 }),
 });
 ```
 

@@ -18,7 +18,13 @@ const CODE_EXTENSIONS = new Set(['.css', '.html', '.js', '.mjs', '.wasm']);
 const CRITICAL_ASSET_PATTERN = /(^|[/_.-])(sun|earth|moon|stars?)(?=$|[/_.-])/i;
 const LARGE_MODEL_CATEGORIES = new Set(['planet', 'sun', 'major-moon']);
 const SMALL_MODEL_CATEGORIES = new Set(['asteroid', 'comet']);
-const MANIFEST_ASSET_FIELDS = new Set(['id', 'category', 'triangles', 'files']);
+const MANIFEST_ASSET_FIELDS = new Set([
+  'id',
+  'category',
+  'triangles',
+  'files',
+  'surfaceDetail',
+]);
 
 export const BUDGET_LIMITS = Object.freeze({
   repoBytes: 300 * MIB,

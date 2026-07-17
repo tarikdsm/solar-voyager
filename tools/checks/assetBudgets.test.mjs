@@ -333,6 +333,32 @@ describe('asset manifest validation', () => {
     });
   });
 
+  it('accepts the schema-v2 optional surface-detail descriptor', async () => {
+    await withRepository(async (root) => {
+      await writeManifest(root, {
+        assets: [
+          {
+            id: 'earth',
+            category: 'planet',
+            triangles: 1,
+            files: [
+              'textures/earth_detail_albedo.ktx2',
+              'textures/earth_detail_normal.ktx2',
+            ],
+            surfaceDetail: {
+              albedo: 'textures/earth_detail_albedo.ktx2',
+              normal: 'textures/earth_detail_normal.ktx2',
+              tilesPerEquator: 512,
+              seed: 399,
+            },
+          },
+        ],
+      });
+
+      expect(await findingsFor(root)).toEqual([]);
+    });
+  });
+
   it.each([
     ['planet', 50_000],
     ['sun', 50_000],

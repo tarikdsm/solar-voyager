@@ -14,7 +14,13 @@
         "textures/earth_detail_normal.ktx2",
         "textures/earth_emissive_night.ktx2",
         "textures/earth_normal.ktx2"
-      ]
+      ],
+      "surfaceDetail": {
+        "albedo": "textures/earth_detail_albedo.ktx2",
+        "normal": "textures/earth_detail_normal.ktx2",
+        "tilesPerEquator": 32,
+        "seed": 399
+      }
     },
     {
       "id": "moon",
@@ -27,7 +33,13 @@
         "textures/moon_detail_albedo.ktx2",
         "textures/moon_detail_normal.ktx2",
         "textures/moon_normal.ktx2"
-      ]
+      ],
+      "surfaceDetail": {
+        "albedo": "textures/moon_detail_albedo.ktx2",
+        "normal": "textures/moon_detail_normal.ktx2",
+        "tilesPerEquator": 16,
+        "seed": 301
+      }
     },
     {
       "id": "pluto",
@@ -39,7 +51,13 @@
         "textures/pluto_albedo.ktx2",
         "textures/pluto_detail_albedo.ktx2",
         "textures/pluto_detail_normal.ktx2"
-      ]
+      ],
+      "surfaceDetail": {
+        "albedo": "textures/pluto_detail_albedo.ktx2",
+        "normal": "textures/pluto_detail_normal.ktx2",
+        "tilesPerEquator": 12,
+        "seed": 999
+      }
     },
     {
       "id": "saturn",
@@ -52,7 +70,13 @@
         "textures/saturn_detail_albedo.ktx2",
         "textures/saturn_detail_normal.ktx2",
         "textures/saturn_rings.ktx2"
-      ]
+      ],
+      "surfaceDetail": {
+        "albedo": "textures/saturn_detail_albedo.ktx2",
+        "normal": "textures/saturn_detail_normal.ktx2",
+        "tilesPerEquator": 32,
+        "seed": 699
+      }
     },
     {
       "id": "ship",
