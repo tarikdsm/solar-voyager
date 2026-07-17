@@ -1,21 +1,9 @@
-import {
-  AdditiveBlending,
-  AmbientLight,
-  DataTexture,
-  DirectionalLight,
-  Sprite,
-  SpriteMaterial,
-} from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { AmbientLight, DirectionalLight } from 'three';
+import { describe, expect, it } from 'vitest';
 
 import { AU_KM } from '../core/constants.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
-import {
-  AMBIENT_LIGHT_INTENSITY,
-  GLARE_TEXTURE_SIZE,
-  SUN_GLARE_DIAMETER_IN_RADII,
-  SolarLighting,
-} from './solarLighting.js';
+import { AMBIENT_LIGHT_INTENSITY, SolarLighting } from './solarLighting.js';
 
 const SUN_RADIUS_KM = 695_700;
 
@@ -31,16 +19,13 @@ function createFixture(): {
 }
 
 describe('SolarLighting', () => {
-  it('owns one inverse-square solar light, the ambient floor, and a static glare', () => {
+  it('owns one inverse-square solar light and the ambient floor without visual effects', () => {
     const { lighting, spaceScene } = createFixture();
     const ambientLights = spaceScene.scene.children.filter(
       (child): child is AmbientLight => child instanceof AmbientLight,
     );
     const directionalLights = spaceScene.scene.children.filter(
       (child): child is DirectionalLight => child instanceof DirectionalLight,
-    );
-    const sprites = spaceScene.scene.children.filter(
-      (child): child is Sprite => child instanceof Sprite,
     );
 
     expect(ambientLights).toEqual([lighting.ambientLight]);
@@ -52,20 +37,7 @@ describe('SolarLighting', () => {
     expect(lighting.directionalLight.target.matrixAutoUpdate).toBe(false);
     expect(lighting.directionalLight.target.parent).toBe(spaceScene.scene);
 
-    expect(sprites).toEqual([lighting.glare]);
-    expect(lighting.glare.name).toBe('sun-glare');
-    expect(lighting.glare.scale.toArray()).toEqual([
-      SUN_RADIUS_KM * SUN_GLARE_DIAMETER_IN_RADII,
-      SUN_RADIUS_KM * SUN_GLARE_DIAMETER_IN_RADII,
-      1,
-    ]);
-    expect(lighting.glare.matrixAutoUpdate).toBe(false);
-    expect(lighting.glare.frustumCulled).toBe(true);
-    expect(lighting.glare.material).toBeInstanceOf(SpriteMaterial);
-    expect(lighting.glare.material.blending).toBe(AdditiveBlending);
-    expect(lighting.glare.material.depthTest).toBe(true);
-    expect(lighting.glare.material.depthWrite).toBe(false);
-    expect(lighting.glare.material.toneMapped).toBe(true);
+    expect(spaceScene.scene.getObjectByName('sun-glare')).toBeUndefined();
   });
 
   it('updates in place at 2 AU and remains finite at coincident Sun focus', () => {
@@ -106,45 +78,14 @@ describe('SolarLighting', () => {
     expect(() => lighting.setFocusPositionOffset(-3)).toThrow(/offset/iu);
   });
 
-  it('creates a radial texture with transparent edges and an opaque centre', () => {
-    const { lighting } = createFixture();
-    const texture = lighting.glare.material.map;
-
-    expect(texture).toBeInstanceOf(DataTexture);
-    const image = texture?.image as {
-      readonly data: unknown;
-      readonly height: number;
-      readonly width: number;
-    };
-    expect(image.width).toBe(GLARE_TEXTURE_SIZE);
-    expect(image.height).toBe(GLARE_TEXTURE_SIZE);
-    const data = image.data;
-    expect(data).toBeInstanceOf(Uint8Array);
-    if (!(data instanceof Uint8Array)) throw new Error('Expected glare byte texture.');
-    const alphaAt = (x: number, y: number): number =>
-      data[(y * GLARE_TEXTURE_SIZE + x) * 4 + 3] ?? -1;
-    expect(alphaAt(0, 0)).toBe(0);
-    expect(alphaAt(GLARE_TEXTURE_SIZE - 1, 0)).toBe(0);
-    expect(alphaAt(0, GLARE_TEXTURE_SIZE - 1)).toBe(0);
-    expect(alphaAt(GLARE_TEXTURE_SIZE - 1, GLARE_TEXTURE_SIZE - 1)).toBe(0);
-    expect(alphaAt(GLARE_TEXTURE_SIZE / 2, GLARE_TEXTURE_SIZE / 2)).toBeGreaterThan(250);
-  });
-
-  it('disposes owned GPU resources and removes its scene objects', () => {
+  it('removes its scene lights on disposal', () => {
     const { lighting, spaceScene } = createFixture();
-    const texture = lighting.glare.material.map;
-    if (texture === null) throw new Error('Expected glare texture.');
-    const textureDispose = vi.spyOn(texture, 'dispose');
-    const materialDispose = vi.spyOn(lighting.glare.material, 'dispose');
 
     lighting.dispose();
 
-    expect(textureDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
     expect(lighting.ambientLight.parent).toBeNull();
     expect(lighting.directionalLight.parent).toBeNull();
     expect(lighting.directionalLight.target.parent).toBeNull();
-    expect(lighting.glare.parent).toBeNull();
-    expect(spaceScene.scene.children).not.toContain(lighting.glare);
+    expect(spaceScene.scene.getObjectByName('sun-glare')).toBeUndefined();
   });
 });

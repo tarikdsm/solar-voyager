@@ -39,6 +39,7 @@ export class CameraRelativeSpaceScene {
   private readonly packedVisuals: Object3D[] = [];
   private readonly packedVisualPositionsKm: Float64Array[] = [];
   private readonly packedVisualOffsets: number[] = [];
+  private readonly packedPointVisuals: Points[] = [];
   private readonly packedPointPositionsKm: Float64Array[] = [];
   private readonly packedPointAttributes: BufferAttribute[] = [];
   private readonly boundVisuals = new Set<Object3D>();
@@ -89,8 +90,34 @@ export class CameraRelativeSpaceScene {
     }
 
     this.claimVisual(points);
+    this.packedPointVisuals.push(points);
     this.packedPointPositionsKm.push(positionsKm);
     this.packedPointAttributes.push(attribute);
+  }
+
+  /** Releases one setup-time binding and removes its visual from the scene. */
+  unbindVisual(visual: Object3D): boolean {
+    if (!this.boundVisuals.delete(visual)) return false;
+
+    const visualIndex = this.visuals.indexOf(visual);
+    if (visualIndex >= 0) {
+      this.visuals.splice(visualIndex, 1);
+      this.positionsKm.splice(visualIndex, 1);
+    }
+    const packedVisualIndex = this.packedVisuals.indexOf(visual);
+    if (packedVisualIndex >= 0) {
+      this.packedVisuals.splice(packedVisualIndex, 1);
+      this.packedVisualPositionsKm.splice(packedVisualIndex, 1);
+      this.packedVisualOffsets.splice(packedVisualIndex, 1);
+    }
+    const packedPointIndex = this.packedPointVisuals.indexOf(visual as Points);
+    if (packedPointIndex >= 0) {
+      this.packedPointVisuals.splice(packedPointIndex, 1);
+      this.packedPointPositionsKm.splice(packedPointIndex, 1);
+      this.packedPointAttributes.splice(packedPointIndex, 1);
+    }
+    this.scene.remove(visual);
+    return true;
   }
 
   /** Recomputes render coordinates from float64 inputs without frame allocations. */

@@ -53,6 +53,9 @@ jobs:
       - name: Surface detail regression
         run: npm run test:surface-detail
 
+      - name: Procedural Sun regression
+        run: npm run test:procedural-sun
+
       - name: Camera controls regression
         run: npm run test:camera-controls
 

@@ -16,6 +16,7 @@ export interface EpochBodyDefinition {
   readonly meanRadiusKm: number;
   readonly geometricAlbedo: number;
   readonly albedoColor: string;
+  readonly proceduralSeed: number;
 }
 
 export interface EpochState {
@@ -42,6 +43,7 @@ export function createEpochState(): EpochState {
       meanRadiusKm: body.meanRadiusKm,
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: body.visual.albedoColor,
+      proceduralSeed: body.visual.proceduralSeed,
     });
     if (body.id === 'earth') earthIndex = index;
   }

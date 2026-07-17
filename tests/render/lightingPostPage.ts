@@ -209,7 +209,7 @@ globalThis.__lightingPostHarness = {
     );
     world.lighting.update();
     world.spaceScene.updateCameraRelative(sunCameraPositionKm);
-    world.lighting.glare.visible = glareEnabled;
+    world.proceduralSun.billboard.visible = glareEnabled;
     earthPipeline.setBloomEnabled(bloomEnabled);
     earthPipeline.render();
     return {

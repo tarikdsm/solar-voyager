@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-07-17T14:27:45.005Z",
+  "gitSha": "7c4ba83e658353a2281159e15c085e6a2dd22cbd",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 16.7,
+  "p75Ms": 16.7,
+  "p99Ms": 16.8,
+  "gpu": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Laptop GPU (0x000024DD) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (NVIDIA)"
+  },
+  "canvas": {
+    "backingHeight": 1080,
+    "backingWidth": 1920,
+    "cssHeight": 1080,
+    "cssWidth": 1920
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 16.7,
+    "p75Ms": 16.7,
+    "p99Ms": 16.8,
+    "snapshot": {
+      "averageFps": 60.00300015000745,
+      "context": {
+        "contextFlavor": "webgl2",
+        "depthStrategy": "reversed",
+        "effectiveContextAttributes": {
+          "alpha": false,
+          "antialias": false,
+          "depth": true,
+          "desynchronized": true,
+          "failIfMajorPerformanceCaveat": true,
+          "powerPreference": "high-performance",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false
+        },
+        "gpuTimerQueryAvailable": true,
+        "rendererName": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Laptop GPU (0x000024DD) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "softwareRasterizer": false,
+        "usedPerformanceCaveatFallback": false,
+        "warningRequired": false
+      },
+      "drawCalls": 23,
+      "frameCount": 714,
+      "frameMs": 16.700000000000728,
+      "frameSampleCount": 120,
+      "geometries": 8,
+      "gpuMs": 2.449696,
+      "lines": 0,
+      "p75FrameMs": 16.700000000000728,
+      "p99FrameMs": 16.799999999999272,
+      "points": 9139,
+      "programs": 35,
+      "renderMs": 0.7000000029802322,
+      "simMs": 0,
+      "textures": 24,
+      "triangles": 65091,
+      "uiMs": 0
+    }
+  },
+  "gpuRenderMedianMs": 2.399,
+  "gpuRenderP75Ms": 2.545,
+  "gpuRenderP99Ms": 4.585,
+  "heapDeltaBytes": 143628
+}

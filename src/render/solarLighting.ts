@@ -1,25 +1,9 @@
-import {
-  AdditiveBlending,
-  AmbientLight,
-  DataTexture,
-  DirectionalLight,
-  LinearFilter,
-  RGBAFormat,
-  Sprite,
-  SpriteMaterial,
-} from 'three';
+import { AmbientLight, DirectionalLight } from 'three';
 
 import { AU_KM } from '../core/constants.js';
 import type { CameraRelativeSpaceScene } from './spaceScene.js';
 
 export const AMBIENT_LIGHT_INTENSITY = 0.02;
-export const GLARE_TEXTURE_SIZE = 64;
-export const SUN_GLARE_DIAMETER_IN_RADII = 8;
-
-const SUN_GLARE_OPACITY = 0.25;
-const SUN_GLARE_RED = 8;
-const SUN_GLARE_GREEN = 4;
-const SUN_GLARE_BLUE = 2;
 
 function assertPackedPositions(positionsKm: Float64Array): void {
   if (positionsKm.length === 0 || positionsKm.length % 3 !== 0) {
@@ -43,36 +27,10 @@ function assertPositionOffset(positionsKm: Float64Array, componentOffset: number
   }
 }
 
-function createGlareTexture(): DataTexture {
-  const data = new Uint8Array(GLARE_TEXTURE_SIZE * GLARE_TEXTURE_SIZE * 4);
-  const radiusPx = GLARE_TEXTURE_SIZE / 2 - 1;
-  for (let y = 0; y < GLARE_TEXTURE_SIZE; y += 1) {
-    const normalizedY = (y - GLARE_TEXTURE_SIZE / 2) / radiusPx;
-    for (let x = 0; x < GLARE_TEXTURE_SIZE; x += 1) {
-      const normalizedX = (x - GLARE_TEXTURE_SIZE / 2) / radiusPx;
-      const radius = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
-      const falloff = Math.max(0, 1 - radius);
-      const offset = (y * GLARE_TEXTURE_SIZE + x) * 4;
-      data[offset] = 255;
-      data[offset + 1] = 255;
-      data[offset + 2] = 255;
-      data[offset + 3] = Math.round(255 * falloff * falloff * falloff);
-    }
-  }
-  const texture = new DataTexture(data, GLARE_TEXTURE_SIZE, GLARE_TEXTURE_SIZE, RGBAFormat);
-  texture.name = 'sun-glare-radial';
-  texture.magFilter = LinearFilter;
-  texture.minFilter = LinearFilter;
-  texture.generateMipmaps = false;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-/** Owns the one-light solar model and its setup-time HDR glare billboard. */
+/** Owns the allocation-free ambient and inverse-square directional solar lights. */
 export class SolarLighting {
   readonly ambientLight = new AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
   readonly directionalLight = new DirectionalLight(0xffffff, Math.PI);
-  readonly glare: Sprite;
 
   private focusPositionOffset: number;
 
@@ -101,23 +59,6 @@ export class SolarLighting {
       this.directionalLight,
       this.directionalLight.target,
     );
-
-    const glareTexture = createGlareTexture();
-    const glareMaterial = new SpriteMaterial({
-      map: glareTexture,
-      transparent: true,
-      opacity: SUN_GLARE_OPACITY,
-      blending: AdditiveBlending,
-      depthTest: true,
-      depthWrite: false,
-      toneMapped: true,
-    });
-    glareMaterial.color.setRGB(SUN_GLARE_RED, SUN_GLARE_GREEN, SUN_GLARE_BLUE);
-    this.glare = new Sprite(glareMaterial);
-    this.glare.name = 'sun-glare';
-    const glareDiameterKm = solarRadiusKm * SUN_GLARE_DIAMETER_IN_RADII;
-    this.glare.scale.set(glareDiameterKm, glareDiameterKm, 1);
-    this.spaceScene.bindPackedVisual(this.glare, positionsKm, sunPositionOffset);
 
     this.update();
   }
@@ -162,9 +103,6 @@ export class SolarLighting {
       this.ambientLight,
       this.directionalLight,
       this.directionalLight.target,
-      this.glare,
     );
-    this.glare.material.map?.dispose();
-    this.glare.material.dispose();
   }
 }

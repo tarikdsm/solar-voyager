@@ -1,6 +1,6 @@
 id: T0084
 title: Procedural Sun shader (granulation, limb darkening, prominences)
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0084-procedural-sun
 depends_on: [T0043]
@@ -17,7 +17,31 @@ acceptance:
   - Shader cost within render budget at 1080p; low-octave rung measurably cheaper
   - No visible tiling/banding artifacts; limb darkening matches reference photos
 handoff_notes: |
-  Static fallback Sun geometry was committed directly to main in 8d482f5 via
-  build_sun.py. It does not implement this task's procedural runtime shader,
-  animation, prominence, governor rung, screenshot set, or performance evidence.
-  Treat it only as the optional fallback described by ADR-010.
+  Review head implements seeded object-space domain-warped fBm, the quadratic
+  limb profile, simulation-time animation, one bounded corona/prominence
+  billboard, 4/2/1 octave quality rungs, precompilation, and authored fallback.
+  WebGL metrics: programs 10 -> 23 -> 23, GL errors 0, isolated post-ACES
+  limb/center 0.9051, inner-disc/center 0.9887,
+  animated fraction 0.4323, repetition peaks H/V 0.0073/0.0267, 73,750 warm
+  off-disc pixels, and centered Mercury/Earth/Neptune ROI lit pixels 313/52/109
+  over surrounding background means 0.103/0.099/0.127. Original
+  close, animated, fallback, and distance screenshots were reviewed with no
+  seam, grid, square billboard edge, or distance failure.
+  Exact 1920x1080 quality SHA 84a3469: RTX full/minimum p75 6.164/4.785 ms
+  (minimum 22.37% cheaper) and Intel UHD full/minimum 21.859/15.064 ms
+  (31.08% cheaper), 360 samples per rung. Adjacent RTX production pair
+  7c4ba83/84a3469: 60.003/60.003 fps, GPU p75 2.545/2.722 ms, draws 23/23,
+  triangles 65,091/65,091, programs 35/38, textures 24/24, zero browser
+  errors. Older Intel proxy pair: 56.697/57.601 fps and GPU p75
+  14.376/14.063 ms; its baseline already fails the absolute contract and the
+  result is retained as a failure disclosure. RTX is stronger and Intel older
+  than the literal reference class; both limitations are explicit in the summary.
+  First independent review at b254853 reported C0/I4/M1. SHA 84a3469 resolves
+  the visual gates with an isolated disc/central solar ROI, adds the regression
+  to CI, removes the camera-relative binding during disposal, and records both
+  adapters. Rereview is required before DONE.
+  Final gates: 448 Vitest passed + 3 skipped, 50 Python passed, ten browser
+  regressions passed, build/budgets/task schema passed, and assets:verify found
+  15 byte-identical files using KTX-Software 4.4.2.
+  Independent final review on exact head 729fa14 approved with Critical 0,
+  Important 0, Minor 0; exact-head CI passed including Procedural Sun regression.
