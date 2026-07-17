@@ -31,7 +31,7 @@ and `SOURCES.md` directly in their category directory. Other categories use the
 |---|---|
 | Any celestial body | **Mesh radius = exactly 1.0 Blender unit** (equatorial). The engine multiplies by the real `radiusKm` from `bodies.json`. Oblateness (Jupiter/Saturn): model the true polar/equatorial ratio (e.g., Saturn polar radius 0.902 units). |
 | Rings | Same normalized frame as the parent planet: **1.0 unit = parent equatorial radius**; ring inner/outer radii at true ratios (e.g., Saturn D-ring inner ≈ 1.11, F-ring ≈ 2.32). |
-| Ship | **1 Blender unit = 1 meter, real dimensions** (the ship exists at real scale next to real planets; engine converts m → km). |
+| Ship | **1 Blender unit = 1 meter, real dimensions** (the ship exists at real scale next to real planets; engine converts m → km). The nose and drive axis point along local **+X** (ADR-025). |
 
 Orientation: **north pole along +Y** (after glTF's +Y-up export), prime meridian facing **+X**. Axial tilt is applied by the engine — author the body "upright". Pivot/origin at the body's center.
 
@@ -43,7 +43,7 @@ Orientation: **north pole along +Y** (after glTF's +Y-up export), prime meridian
 | Dwarfs, small moons | UV sphere 64×32 | ≤ 15k tris |
 | Asteroids/comets | Displaced icosphere (seeded noise + craters) or decimated real shape model (Eros, Bennu, 67P have published meshes) | ≤ 5k tris |
 | Rings | Flat annulus, 128+ radial segments, **double-sided material** | ≤ 5k tris |
-| Ship | Hard-surface model, PBR, named node `engine_nozzle` (renderer attaches the plume there) | ≤ 30k tris |
+| Ship | Hard-surface model, PBR, named nodes `hull_tip` (+X orientation marker) and `engine_nozzle` (renderer attaches the plume there) | ≤ 30k tris |
 
 Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (quad sphere solves this — check with a checker texture).
 

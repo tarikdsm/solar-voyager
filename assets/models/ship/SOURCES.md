@@ -8,4 +8,4 @@
 
 ## Authoring contract
 
-One Blender unit equals one metre. Length: 26.12 m; nose toward glTF −Z (three.js forward); `engine_nozzle` is the plume attachment node. Applied geometry: 5,538 triangles (budget ≤30,000).
+One Blender unit equals one metre. Length: 26.12 m; nose and drive axis point toward local +X per ADR-025; `engine_nozzle` is the plume attachment node. Applied geometry: 5,538 triangles (budget ≤30,000).

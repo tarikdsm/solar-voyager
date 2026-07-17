@@ -25,7 +25,7 @@ The double underscore separates an exact glTF material name from the standard te
 
 - One Blender unit equals one metre.
 - The ship is approximately 26 m long and remains centered around the approved origin.
-- The Blender longitudinal axis is +Y toward the nose; Blender's glTF export yields the existing three.js-facing orientation.
+- Primitives are assembled along Blender +Y, then the complete scene is deterministically rotated before export so the authored glTF nose and drive axis point along local +X as required by ADR-025.
 - `engine_nozzle` remains a separate open mesh node, is named exactly for the renderer attachment contract, and exposes the recessed emissive engine disc.
 - Export contains only selected mesh objects: no camera, light, or animation.
 - Applied geometry stays below 30,000 triangles; the target is close to the approved 6,174-triangle source.
@@ -40,7 +40,7 @@ Maps are generated from fixed mathematical patterns without randomness, timestam
 
 1. Unit tests prove material-scoped bindings target the named material and reject a missing target.
 2. Headless Blender builds the ship twice into disposable directories; SHA-256 hashes of the GLB and maps must match.
-3. Source validation proves the authored GLB contract, the `engine_nozzle` node, triangle budget, texture declarations, and attribution.
+3. Source validation proves the authored GLB contract, the local +X `hull_tip` to `engine_nozzle` axis, triangle budget, texture declarations, and attribution.
 4. Focused ingest proves all four KTX2 files are present and total ship bytes remain below 8 MiB.
 5. Full ingest regenerates `public/assets/` so the committed manifest and runtime files are canonical.
 6. Blender renders a review image from the regenerated source, and the game asset is smoke-tested without console errors.

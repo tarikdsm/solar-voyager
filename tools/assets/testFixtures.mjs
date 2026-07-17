@@ -8,6 +8,7 @@ export function createGlb({
   externalImageUri,
   materialName,
   materialNames,
+  namedNodes,
   nodeName,
   parentMatrix,
   radius = 1,
@@ -33,11 +34,14 @@ export function createGlb({
       indices: 1,
       material: index,
     }));
-  const json = {
-    asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }],
-    nodes: parentMatrix === undefined
+  const nodes = namedNodes === undefined
+    ? parentMatrix === undefined
       ? [{ mesh: 0, ...(nodeName === undefined ? {} : { name: nodeName }), ...(rootMatrix === undefined ? {} : { matrix: rootMatrix }) }]
-      : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }],
+      : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }]
+    : namedNodes.map(({ name, translation }) => ({ mesh: 0, name, translation }));
+  const json = {
+    asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: namedNodes === undefined ? [0] : nodes.map((_, index) => index) }],
+    nodes,
     meshes: [{ primitives }],
     ...(names.length === 0 ? {} : {
       materials: names.map((name, index) => ({

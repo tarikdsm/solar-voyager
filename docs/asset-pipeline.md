@@ -125,7 +125,7 @@ Source textures: prefer documenting download+processing in `tools/fetch_textures
 
 ## The ship
 
-`build_ship.py`: original design, ~30k tris, PBR materials (albedo/metal-rough/normal/emissive for engine glow), separate node for the engine nozzle (renderer attaches plume). Modeled once, iterated via MCP sessions, always back-ported to script.
+`build_ship.py`: original design, ~30k tris, PBR materials (albedo/metal-rough/normal/emissive for engine glow), local +X nose/drive axis (ADR-025), and separate `hull_tip` orientation plus `engine_nozzle` plume-attachment nodes. Modeled once, iterated via MCP sessions, always back-ported to script.
 
 ## Budgets (CI-gated, `npm run check:budgets`)
 

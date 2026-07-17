@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Work only on claimed task T0034 and branch `task/T0034-build-ship`.
-- One Blender unit is one metre for the ship; `engine_nozzle` is an exact node name.
+- One Blender unit is one metre for the ship; the nose/drive axis points along local +X and `engine_nozzle` is an exact node name.
 - The authored model must contain no embedded images, cameras, lights, animations, or Draco data.
 - Applied geometry must stay at or below 30,000 triangles.
 - Ship GLB plus runtime KTX2 maps must stay below 8 MiB.
@@ -85,7 +85,7 @@ Expected: non-zero exit with the builder's missing ship geometry invariant.
 
 - [ ] **Step 3: Recreate the approved mesh hierarchy**
 
-Add focused primitive helpers for cones/cylinders, UV spheres, torus, and bevelled boxes. Recreate the reference dimensions and transforms for `hull_main`, `hull_nose`, `hull_tip`, `engine_skirt`, `engine_nozzle`, `engine_glow_disc`, `drive_ring`, four pylons, two radiators, canopy, eight RCS blocks, antenna mast, and dish. Apply smooth shading and modifiers before strict selected export. Keep `engine_nozzle` as its own exported mesh object.
+Add focused primitive helpers for cones/cylinders, UV spheres, torus, and bevelled boxes. Recreate the reference dimensions and transforms for `hull_main`, `hull_nose`, `hull_tip`, `engine_skirt`, `engine_nozzle`, `engine_glow_disc`, `drive_ring`, four pylons, two radiators, canopy, eight RCS blocks, antenna mast, and dish. Rotate the complete authored scene so the final glTF nose points along local +X, apply smooth shading and modifiers before strict selected export, and keep `engine_nozzle` as its own exported mesh object.
 
 - [ ] **Step 4: Generate and wire deterministic PBR maps**
 
@@ -125,7 +125,7 @@ Run the Blender command twice with `--output-root build/T0034-repro-a` and `buil
 
 - [ ] **Step 2: Validate the authored asset and node contract**
 
-Use `validateAssetDirectory()` for `assets/models/ship` with `{ category: 'ship', id: 'ship' }`; expected: no findings and triangles ≤30,000. Parse GLB JSON and assert an exported node is named exactly `engine_nozzle`.
+Use `validateAssetDirectory()` for `assets/models/ship` with `{ category: 'ship', id: 'ship' }`; expected: no findings and triangles ≤30,000. Assert the `hull_tip - engine_nozzle` axis aligns to local +X and the nozzle node name is exact.
 
 - [ ] **Step 3: Run focused runtime ingest**
 

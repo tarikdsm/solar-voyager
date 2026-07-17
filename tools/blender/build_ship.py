@@ -7,7 +7,7 @@ import pathlib
 import sys
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
@@ -423,12 +423,19 @@ def _build_geometry(materials):
     return tuple(objects)
 
 
+def _orient_nose_to_positive_x(objects):
+    rotation = Matrix.Rotation(math.radians(-90.0), 4, "Z")
+    for obj in objects:
+        obj.matrix_world = rotation @ obj.matrix_world
+    bpy.context.view_layer.update()
+
+
 def _ship_length(objects):
-    y_values = []
+    x_values = []
     for obj in objects:
         for corner in obj.bound_box:
-            y_values.append((obj.matrix_world @ Vector(corner)).y)
-    return max(y_values) - min(y_values)
+            x_values.append((obj.matrix_world @ Vector(corner)).x)
+    return max(x_values) - min(x_values)
 
 
 def _write_sources(output_dir, triangles):
@@ -443,7 +450,7 @@ def _write_sources(output_dir, triangles):
         "",
         "## Authoring contract",
         "",
-        f"One Blender unit equals one metre. Length: {EXPECTED_LENGTH_METERS:.2f} m; nose toward glTF −Z (three.js forward); `engine_nozzle` is the plume attachment node. Applied geometry: {triangles:,} triangles (budget ≤30,000).",
+        f"One Blender unit equals one metre. Length: {EXPECTED_LENGTH_METERS:.2f} m; nose and drive axis point toward local +X per ADR-025; `engine_nozzle` is the plume attachment node. Applied geometry: {triangles:,} triangles (budget ≤30,000).",
         "",
     ]
     (output_dir / "SOURCES.md").write_text(
@@ -458,6 +465,7 @@ def build(output_root):
     reset_scene()
     texture_paths = _publish_textures(output_dir)
     objects = _build_geometry(_materials(output_dir))
+    _orient_nose_to_positive_x(objects)
     nozzle = next(
         (obj for obj in objects if obj.name == EXPECTED_NOZZLE_NAME), None
     )
@@ -465,6 +473,10 @@ def build(output_root):
         raise RuntimeError(f'Missing required node "{EXPECTED_NOZZLE_NAME}"')
     if len(nozzle.data.polygons) != 64:
         raise RuntimeError("engine_nozzle must remain open for the recessed glow disc")
+    tip = next(obj for obj in objects if obj.name == "hull_tip")
+    nose_axis = tip.matrix_world.translation - nozzle.matrix_world.translation
+    if nose_axis.length <= 1e-6 or nose_axis.x / nose_axis.length < 0.999:
+        raise RuntimeError("Ship nose must align with local +X per ADR-025")
 
     glb_path = export_glb(objects, output_dir / "ship.glb", active=objects[0])
     manifest = build_manifest("ship", "ship", objects, glb_path, texture_paths)
