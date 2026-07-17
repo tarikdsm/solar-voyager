@@ -1,8 +1,8 @@
 id: T0082
 title: Close-range surface detail shading (detail maps + procedural noise)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0082-close-range-surface-detail
 depends_on: [T0041, T0043]
 milestone: M2
 spec: |
