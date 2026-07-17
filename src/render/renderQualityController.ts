@@ -1,0 +1,87 @@
+import type { WebGLRenderer } from 'three';
+
+import type {
+  AntiAliasingQuality,
+  BloomQuality,
+  RenderQualityApplicationPort,
+  RenderQualityProfile,
+  TextureQualityCap,
+} from './perfGovernor.js';
+import type { ProceduralSunQuality } from './proceduralSunState.js';
+
+export interface QualityPostPipelinePort {
+  setAntiAliasing(quality: AntiAliasingQuality): void;
+  setBloomQuality(quality: BloomQuality): void;
+}
+
+export interface QualityStarfieldPort {
+  setCountCap(countCap: number): void;
+  setPixelRatio(pixelRatio: number): void;
+}
+
+export interface QualityProceduralPort {
+  setQuality(quality: ProceduralSunQuality): void;
+}
+
+export interface QualityAssetLoaderPort {
+  setTextureTierCap(cap: TextureQualityCap): void;
+}
+
+export interface QualityVisualSystemPort {
+  setModelThresholdScale(scale: number): void;
+}
+
+export interface RenderQualityControllerOptions {
+  readonly assetLoader: QualityAssetLoaderPort;
+  readonly pipeline: QualityPostPipelinePort;
+  readonly postProcessingAvailable: boolean;
+  readonly proceduralSun: QualityProceduralPort;
+  readonly renderer: WebGLRenderer;
+  readonly resize: () => void;
+  readonly starfield: QualityStarfieldPort;
+  readonly visualSystem: QualityVisualSystemPort;
+}
+
+/** Applies rare governor changes to setup-owned render resources. */
+export class RenderQualityController implements RenderQualityApplicationPort {
+  private readonly assetLoader: QualityAssetLoaderPort;
+  private readonly basePixelRatio: number;
+  private readonly pipeline: QualityPostPipelinePort;
+  private readonly postProcessingAvailable: boolean;
+  private readonly proceduralSun: QualityProceduralPort;
+  private readonly renderer: WebGLRenderer;
+  private readonly resize: () => void;
+  private readonly starfield: QualityStarfieldPort;
+  private readonly visualSystem: QualityVisualSystemPort;
+  private appliedRung = -1;
+
+  constructor(options: RenderQualityControllerOptions) {
+    this.assetLoader = options.assetLoader;
+    this.pipeline = options.pipeline;
+    this.postProcessingAvailable = options.postProcessingAvailable;
+    this.proceduralSun = options.proceduralSun;
+    this.renderer = options.renderer;
+    this.resize = options.resize;
+    this.starfield = options.starfield;
+    this.visualSystem = options.visualSystem;
+    this.basePixelRatio = options.renderer.getPixelRatio();
+    if (!Number.isFinite(this.basePixelRatio) || this.basePixelRatio <= 0) {
+      throw new RangeError('Startup renderer pixel ratio must be positive and finite.');
+    }
+  }
+
+  apply(profile: RenderQualityProfile): void {
+    if (profile.rung === this.appliedRung) return;
+    const effectivePixelRatio = this.basePixelRatio * profile.renderScale;
+    this.renderer.setPixelRatio(effectivePixelRatio);
+    this.pipeline.setBloomQuality(this.postProcessingAvailable ? profile.bloom : 'off');
+    this.pipeline.setAntiAliasing(this.postProcessingAvailable ? profile.antiAliasing : 'off');
+    this.starfield.setPixelRatio(effectivePixelRatio);
+    this.starfield.setCountCap(profile.starCountCap);
+    this.proceduralSun.setQuality(profile.proceduralQuality);
+    this.assetLoader.setTextureTierCap(profile.textureCap);
+    this.visualSystem.setModelThresholdScale(profile.modelThresholdScale);
+    this.appliedRung = profile.rung;
+    this.resize();
+  }
+}

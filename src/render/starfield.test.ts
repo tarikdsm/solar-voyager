@@ -89,6 +89,12 @@ describe('Starfield', () => {
     expect(material.uniforms.uPixelRatio?.value).toBe(1.5);
     expect(() => starfield.setPixelRatio(0)).toThrow(/pixel ratio/iu);
     expect(() => starfield.setPixelRatio(Number.NaN)).toThrow(/pixel ratio/iu);
+
+    starfield.setCountCap(2);
+    expect(starfield.points.geometry.drawRange.count).toBe(2);
+    starfield.setCountCap(9_000);
+    expect(starfield.points.geometry.drawRange.count).toBe(3);
+    expect(() => starfield.setCountCap(0)).toThrow(/count cap/iu);
   });
 
   it('disposes its setup resources deterministically', () => {

@@ -44,6 +44,7 @@ function createTelemetry(frameTimesChronological: readonly number[]): PerfPanelT
       p99FrameMs: 20,
       points: 8_000,
       programs: 5,
+      qualityActionCount: 0,
       renderMs: 6.5,
       simMs: 1.25,
       textures: 4,

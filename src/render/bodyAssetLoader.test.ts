@@ -175,6 +175,56 @@ describe('BodyAssetLoader', () => {
     expect(normal.anisotropy).toBe(4);
   });
 
+  it('selects a capped texture variant only for the next uncached lazy load', async () => {
+    const earthRoot = new Group();
+    const moonRoot = new Group();
+    const loadTexture = vi.fn(async (url: string) => {
+      void url;
+      return new Texture();
+    });
+    const detail = (id: string): RuntimeSurfaceDetail => ({
+      albedo: `textures/${id}_detail_albedo.ktx2`,
+      normal: `textures/${id}_detail_normal.ktx2`,
+      tilesPerEquator: 32,
+      seed: 1,
+    });
+    const earthDetail = detail('earth');
+    const moonDetail = detail('moon');
+    const variantFiles = (value: RuntimeSurfaceDetail) => [
+      value.albedo,
+      value.normal,
+      value.albedo.replace('.ktx2', '_2k.ktx2'),
+      value.normal.replace('.ktx2', '_2k.ktx2'),
+      value.albedo.replace('.ktx2', '_1k.ktx2'),
+      value.normal.replace('.ktx2', '_1k.ktx2'),
+    ];
+    const loader = new BodyAssetLoader(
+      renderer,
+      manifest(
+        entry('earth', 'planet', ['models/earth.glb', ...variantFiles(earthDetail)], earthDetail),
+        entry('moon', 'moon', ['models/moon.glb', ...variantFiles(moonDetail)], moonDetail),
+      ),
+      async () => ({
+        loadTexture,
+        loadModel: async (url) => (url.includes('earth') ? earthRoot : moonRoot),
+      }),
+      '/',
+    );
+
+    loader.setTextureTierCap('2k');
+    await loader.loadModel('earth');
+    loader.setTextureTierCap('1k');
+    await loader.loadModel('earth');
+    await loader.loadModel('moon');
+
+    expect(loadTexture.mock.calls.map(([url]) => url)).toEqual([
+      '/assets/textures/earth_detail_albedo_2k.ktx2',
+      '/assets/textures/earth_detail_normal_2k.ktx2',
+      '/assets/textures/moon_detail_albedo_1k.ktx2',
+      '/assets/textures/moon_detail_normal_1k.ktx2',
+    ]);
+  });
+
   it('keeps a loaded model when its optional detail pair fails and never retries', async () => {
     const root = new Group();
     const loadTexture = vi.fn(async (url: string) => {

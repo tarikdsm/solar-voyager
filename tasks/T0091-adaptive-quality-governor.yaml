@@ -1,6 +1,6 @@
 id: T0091
 title: Adaptive quality governor (60 fps floor)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0091-adaptive-quality-governor
 depends_on: [T0045, T0043]
@@ -16,4 +16,9 @@ acceptance:
   - Synthetic GPU load test: governor recovers 60 fps within 3 rungs without oscillating
   - Manual lock disables all governor actions
   - Each rung's visual effect documented with screenshots in the PR
-handoff_notes: ""
+handoff_notes: >-
+  Implemented the 15-rung p75 governor, manual locks, telemetry/HUD reporting,
+  allocation-free quality application, post/AA/star/procedural/texture/model controls,
+  and browser evidence in docs/bench/T0091-summary.md. Verified 503 unit tests,
+  all browser regressions, build/type/lint/format, 50 tool tests, budgets/task schema,
+  and a real-browser Auto/High/Medium/Low playtest with zero console errors.

@@ -86,9 +86,11 @@ function assertPixelRatio(pixelRatio: number): void {
 /** Setup-only ownership boundary for the complete static star catalog draw. */
 export class Starfield {
   readonly points: Points<BufferGeometry, ShaderMaterial>;
+  private readonly starCount: number;
 
   constructor(catalog: StarCatalog, pixelRatio: number) {
     assertPixelRatio(pixelRatio);
+    this.starCount = catalog.starCount;
 
     const catalogBuffer = new InterleavedBuffer(catalog.data, STAR_STRIDE_FLOATS);
     const sizes = new Float32Array(catalog.starCount);
@@ -134,6 +136,13 @@ export class Starfield {
     assertPixelRatio(pixelRatio);
     const uniform = this.points.material.uniforms.uPixelRatio;
     if (uniform !== undefined) uniform.value = pixelRatio;
+  }
+
+  setCountCap(countCap: number): void {
+    if (!Number.isInteger(countCap) || countCap <= 0) {
+      throw new RangeError(`starfield count cap must be a positive integer: ${countCap}`);
+    }
+    this.points.geometry.setDrawRange(0, Math.min(this.starCount, countCap));
   }
 
   dispose(): void {

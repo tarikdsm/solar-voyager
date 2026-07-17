@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Adaptive quality governor regression</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #020617;
+        color: #e0f2fe;
+        font-family: ui-monospace, monospace;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 640px 260px;
+        width: 900px;
+        height: 360px;
+      }
+      canvas {
+        width: 640px;
+        height: 360px;
+      }
+      aside {
+        box-sizing: border-box;
+        padding: 20px;
+        border-left: 1px solid rgb(125 211 252 / 30%);
+        background: linear-gradient(145deg, #020617, #082f49);
+      }
+      h1 {
+        margin: 0 0 18px;
+        color: #7dd3fc;
+        font-size: 15px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px 12px;
+        margin: 0;
+        font-size: 12px;
+      }
+      dt {
+        color: #7dd3fc;
+      }
+      dd {
+        margin: 0;
+        text-align: right;
+      }
+      #quality-action {
+        margin-top: 20px;
+        color: #fde68a;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="quality-canvas" width="640" height="360"></canvas>
+      <aside>
+        <h1 id="quality-title">Quality rung</h1>
+        <dl id="quality-values"></dl>
+        <p id="quality-action"></p>
+      </aside>
+    </main>
+    <script type="module" src="./perfGovernorPage.ts"></script>
+  </body>
+</html>

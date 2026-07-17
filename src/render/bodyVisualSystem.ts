@@ -20,6 +20,7 @@ import {
 } from './earthSurfaceLayers.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 import type { ProceduralSunMaterialPort } from './proceduralSun.js';
+import type { TextureQualityCap } from './perfGovernor.js';
 import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
 import {
   apparentMagnitude,
@@ -40,6 +41,7 @@ export interface BodyVisualAssetLoader {
   preloadHeroSpheres(): Promise<void>;
   loadSphereAlbedo(id: string, category: RuntimeAssetCategory): Promise<Texture | null>;
   loadModel(id: string): Promise<LoadedBodyModel | null>;
+  setTextureTierCap?(cap: TextureQualityCap): void;
 }
 
 export type BodyModelCompiler = (root: Object3D) => Promise<void>;
@@ -104,6 +106,7 @@ export class BodyVisualSystem {
   private readonly fadeSphereStarts: Float32Array;
   private readonly fadeModelStarts: Float32Array;
   private readonly sunIndex: number;
+  private modelThresholdScale = 1;
 
   constructor(
     private readonly spaceScene: CameraRelativeSpaceScene,
@@ -284,7 +287,11 @@ export class BodyVisualSystem {
         viewportHeightPx,
         verticalFovRad,
       );
-      const selectedTier = selectVisualTier(this.selectedTiers[index] as VisualTier, diameterPx);
+      const selectedTier = selectVisualTier(
+        this.selectedTiers[index] as VisualTier,
+        diameterPx,
+        this.modelThresholdScale,
+      );
       this.selectedTiers[index] = selectedTier;
 
       if (selectedTier >= 2 && this.sphereLoadStates[index] === LOAD_IDLE) {
@@ -326,6 +333,17 @@ export class BodyVisualSystem {
 
   getTier(id: string): VisualTier {
     return this.selectedTiers[this.indexForId(id)] as VisualTier;
+  }
+
+  setModelThresholdScale(scale: number): void {
+    if (!Number.isFinite(scale) || scale < 1) {
+      throw new RangeError('Model threshold scale must be finite and at least one.');
+    }
+    this.modelThresholdScale = scale;
+  }
+
+  setTextureTierCap(cap: TextureQualityCap): void {
+    this.assetLoader.setTextureTierCap?.(cap);
   }
 
   getLoadState(id: string): BodyModelLoadState {
