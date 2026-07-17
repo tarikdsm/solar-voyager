@@ -2,7 +2,6 @@ import type { SimulationCore } from '../sim/simulation.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
 import {
   createSaveEnvelope,
-  parseSaveEnvelope,
   type SaveEnvelopeV2,
   type SaveRepository,
   serializeSaveEnvelope,
@@ -36,6 +35,7 @@ export interface GameSessionControllerOptions {
 export class GameSessionController {
   private currentSimulation: SimulationCore;
   private currentSettings: GameSettingsV1;
+  private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
@@ -49,7 +49,9 @@ export class GameSessionController {
     this.createSimulation = options.createSimulation;
     this.onSimulationReplaced = options.onSimulationReplaced ?? null;
     this.onSettingsChanged = options.onSettingsChanged ?? null;
-    this.currentSettings = this.settingsRepository.load().settings;
+    const settingsResult = this.settingsRepository.load();
+    this.currentSettings = settingsResult.settings;
+    this.settingsInitializationWarning = settingsResult.ok ? null : settingsResult.error;
   }
 
   get simulation(): SimulationCore {
@@ -58,6 +60,10 @@ export class GameSessionController {
 
   get settings(): GameSettingsV1 {
     return this.currentSettings;
+  }
+
+  get initializationWarning(): string | null {
+    return this.settingsInitializationWarning;
   }
 
   saveLocal(): SessionActionResult {
@@ -97,7 +103,7 @@ export class GameSessionController {
   importJson(json: string): SessionActionResult {
     let envelope: SaveEnvelopeV2;
     try {
-      envelope = parseSaveEnvelope(json, this.currentSimulation.snapshot.bodyIds);
+      envelope = this.saveRepository.parse(json, this.currentSimulation.snapshot.bodyIds);
     } catch (error: unknown) {
       return { ok: false, message: 'Imported session is invalid', detail: describeError(error) };
     }

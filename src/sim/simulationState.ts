@@ -6,9 +6,17 @@ import {
 } from './simulationSnapshot.js';
 import {
   createBurnLog,
+  DEFAULT_BURN_LOG_CAPACITY,
   SIMULATION_STATE_DIMENSION,
+  STATE_ENERGY_J,
+  STATE_PROPER_DELTA_V_MS,
+  STATE_PROPER_DELTA_V_VECTOR_X_MS,
+  STATE_PROPER_DELTA_V_VECTOR_Y_MS,
+  STATE_PROPER_DELTA_V_VECTOR_Z_MS,
+  type ActiveBurnPersistentState,
   type BurnLogPersistentState,
 } from './ship/ledger.js';
+import { STATE_TAU } from './ship/relativity.js';
 
 /** Setup-time state needed to reconstruct a SimulationCore exactly. */
 export interface SimulationPersistentState {
@@ -68,6 +76,72 @@ function isWarpClampReason(value: number): value is WarpClampReasonType {
   );
 }
 
+function nearlyEqual(left: number, right: number): boolean {
+  return Math.abs(left - right) <= 1e-10 * Math.max(1, Math.abs(left), Math.abs(right));
+}
+
+function dot(left: Float64Array, right: Float64Array): number {
+  return (
+    (left[0] as number) * (right[0] as number) +
+    (left[1] as number) * (right[1] as number) +
+    (left[2] as number) * (right[2] as number)
+  );
+}
+
+function validateActiveBurnConsistency(
+  simTimeSec: number,
+  state: Float64Array,
+  active: ActiveBurnPersistentState,
+): void {
+  const entry = active.entry;
+  if (
+    !nearlyEqual(entry.endTimeSec, simTimeSec) ||
+    !nearlyEqual(entry.endProperTimeSec, state[STATE_TAU] as number)
+  ) {
+    throw new RangeError('persistent active burn endpoint must match simulation time');
+  }
+  const energySpentJ = (state[STATE_ENERGY_J] as number) - active.startEnergyJ;
+  const properDeltaVMS = (state[STATE_PROPER_DELTA_V_MS] as number) - active.startProperDeltaVMS;
+  if (
+    entry.energySpentJ < 0 ||
+    entry.properDeltaVMS < 0 ||
+    !nearlyEqual(entry.energySpentJ, energySpentJ) ||
+    !nearlyEqual(entry.properDeltaVMS, properDeltaVMS)
+  ) {
+    throw new RangeError('persistent active burn ledger must match simulation totals');
+  }
+  const bases = [active.progradeBasis, active.normalBasis, active.radialBasis];
+  for (let index = 0; index < bases.length; index += 1) {
+    const basis = bases[index];
+    if (basis === undefined || !nearlyEqual(dot(basis, basis), 1)) {
+      throw new RangeError('persistent active burn must use a normalized orbital frame');
+    }
+  }
+  if (
+    !nearlyEqual(dot(active.progradeBasis, active.normalBasis), 0) ||
+    !nearlyEqual(dot(active.normalBasis, active.radialBasis), 0)
+  ) {
+    throw new RangeError('persistent active burn must use a normalized orbital frame');
+  }
+  const currentVector = new Float64Array([
+    state[STATE_PROPER_DELTA_V_VECTOR_X_MS] as number,
+    state[STATE_PROPER_DELTA_V_VECTOR_Y_MS] as number,
+    state[STATE_PROPER_DELTA_V_VECTOR_Z_MS] as number,
+  ]);
+  const deltaVector = new Float64Array([
+    (currentVector[0] as number) - (active.startVectorMS[0] as number),
+    (currentVector[1] as number) - (active.startVectorMS[1] as number),
+    (currentVector[2] as number) - (active.startVectorMS[2] as number),
+  ]);
+  if (
+    !nearlyEqual(entry.progradeDeltaVMS, dot(deltaVector, active.progradeBasis)) ||
+    !nearlyEqual(entry.normalDeltaVMS, dot(deltaVector, active.normalBasis)) ||
+    !nearlyEqual(entry.radialDeltaVMS, dot(deltaVector, active.radialBasis))
+  ) {
+    throw new RangeError('persistent active burn components must match simulation totals');
+  }
+}
+
 /** Validates untrusted setup data and returns an ownership-safe deep copy. */
 export function copyAndValidateSimulationPersistentState(
   source: SimulationPersistentState,
@@ -111,6 +185,12 @@ export function copyAndValidateSimulationPersistentState(
   if (!Number.isFinite(source.initialKineticEnergyJ)) {
     throw new RangeError('persistent kinetic-energy baseline must be finite');
   }
+  if (source.burnLog.capacity !== DEFAULT_BURN_LOG_CAPACITY) {
+    throw new RangeError(`persistent burn log capacity must be ${DEFAULT_BURN_LOG_CAPACITY}`);
+  }
+  if (source.burnLog.entries.length > DEFAULT_BURN_LOG_CAPACITY) {
+    throw new RangeError('persistent burn log entries exceed capacity');
+  }
   const burnLog = createBurnLog(source.burnLog.capacity, source.burnLog).persistence.exportState();
   for (let index = 0; index < burnLog.entries.length; index += 1) {
     const bodyId = burnLog.entries[index]?.dominantBodyId;
@@ -121,6 +201,13 @@ export function copyAndValidateSimulationPersistentState(
   const activeBodyId = burnLog.active?.entry.dominantBodyId;
   if (activeBodyId !== null && activeBodyId !== undefined && !bodyIds.includes(activeBodyId)) {
     throw new RangeError('persistent active burn log body must exist in the simulation catalog');
+  }
+  const activeBurn = burnLog.active;
+  if (source.throttle > 0 !== (activeBurn !== null)) {
+    throw new RangeError('persistent throttle and active burn must agree');
+  }
+  if (activeBurn !== null) {
+    validateActiveBurnConsistency(source.simTimeSec, state, activeBurn);
   }
   return {
     simTimeSec: source.simTimeSec,

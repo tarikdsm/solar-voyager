@@ -159,4 +159,25 @@ describe('KeyboardCommandMapper', () => {
     expect(target.keyDown('KeyR').prevented).toBe(false);
     expect(replacement.state.throttle).toBe(0);
   });
+
+  it('preserves restored rotation rates until a real keyboard transition', () => {
+    const target = new FakeKeyboardTarget();
+    const { mapper } = createMapper(target);
+    const replacement = createCommandController(['earth']);
+    replacement.commands.rotate(0.1, 0.2, 0.3);
+
+    mapper.updateCommands(replacement.commands, () => ({
+      requestedWarp: replacement.state.requestedWarp,
+      throttle: replacement.state.throttle,
+    }));
+    mapper.update();
+    expect([...replacement.state.rotationRatesRadS]).toEqual([0.1, 0.2, 0.3]);
+
+    target.keyDown('KeyW');
+    mapper.update();
+    expect([...replacement.state.rotationRatesRadS]).toEqual([ROTATION_RATE_RAD_S, 0, 0]);
+    target.keyUp('KeyW');
+    mapper.update();
+    expect([...replacement.state.rotationRatesRadS]).toEqual([0, 0, 0]);
+  });
 });

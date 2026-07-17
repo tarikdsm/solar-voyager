@@ -16,6 +16,7 @@ import {
 } from './SessionSettingsPanel.js';
 
 class FakeSession implements SessionSettingsPort {
+  initializationWarning: string | null = null;
   settings: GameSettingsV1 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   loadResult: SessionActionResult = { ok: true, message: 'Session loaded' };

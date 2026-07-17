@@ -57,7 +57,7 @@ const browserStorage: KeyValueStorage = {
 };
 const session = new GameSessionController({
   initialSimulation,
-  saveRepository: new SaveRepository(browserStorage),
+  saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
   onSimulationReplaced: (replacement) => {

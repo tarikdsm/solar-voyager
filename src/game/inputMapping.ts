@@ -65,6 +65,7 @@ export class KeyboardCommandMapper {
   private yawRight = 0;
   private rollLeft = 0;
   private rollRight = 0;
+  private axesDirty = false;
 
   private readonly handleKeyDown = (event: KeyboardInputEvent): void => {
     if (
@@ -127,11 +128,13 @@ export class KeyboardCommandMapper {
 
   /** Updates continuous axes once per frame without allocating. */
   update(): void {
+    if (!this.axesDirty) return;
     this.commands.rotate(
       (this.pitchUp - this.pitchDown) * ROTATION_RATE_RAD_S,
       (this.yawRight - this.yawLeft) * ROTATION_RATE_RAD_S,
       (this.rollRight - this.rollLeft) * ROTATION_RATE_RAD_S,
     );
+    this.axesDirty = false;
   }
 
   updateBindings(bindings: InputBindings): void {
@@ -143,7 +146,6 @@ export class KeyboardCommandMapper {
     this.releaseHeldAxes();
     this.commands = commands;
     this.snapshotProvider = snapshotProvider;
-    this.commands.rotate(0, 0, 0);
   }
 
   dispose(): void {
@@ -158,21 +160,27 @@ export class KeyboardCommandMapper {
     switch (action) {
       case 'pitchUp':
         this.pitchUp = value;
+        this.axesDirty = true;
         return true;
       case 'pitchDown':
         this.pitchDown = value;
+        this.axesDirty = true;
         return true;
       case 'yawLeft':
         this.yawLeft = value;
+        this.axesDirty = true;
         return true;
       case 'yawRight':
         this.yawRight = value;
+        this.axesDirty = true;
         return true;
       case 'rollLeft':
         this.rollLeft = value;
+        this.axesDirty = true;
         return true;
       case 'rollRight':
         this.rollRight = value;
+        this.axesDirty = true;
         return true;
       default:
         return false;
@@ -187,6 +195,7 @@ export class KeyboardCommandMapper {
     this.rollLeft = 0;
     this.rollRight = 0;
     this.commands.rotate(0, 0, 0);
+    this.axesDirty = false;
   }
 
   private stepWarp(currentWarp: WarpFactor, direction: -1 | 1): void {

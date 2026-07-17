@@ -13,7 +13,10 @@ import {
   type BurnLogEntry,
   type BurnLogPersistentState,
 } from '../sim/ship/ledger.js';
-import { RELATIVISTIC_STATE_DIMENSION } from '../sim/ship/relativity.js';
+import {
+  RELATIVISTIC_STATE_DIMENSION,
+  relativisticKineticEnergyJ,
+} from '../sim/ship/relativity.js';
 import { parseGameSettings, type GameSettingsV1, type KeyValueStorage } from './settings.js';
 
 export const CURRENT_SAVE_VERSION = 2;
@@ -197,8 +200,13 @@ function parseBurnLog(value: unknown, path: string): BurnLogPersistentState {
   const record = requireRecord(value, path);
   requireExactKeys(record, ['capacity', 'entries', 'active'], path);
   const capacity = requireInteger(record.capacity, `${path}.capacity`);
-  if (capacity <= 0) throw new RangeError(`${path}.capacity must be positive`);
+  if (capacity !== DEFAULT_BURN_LOG_CAPACITY) {
+    throw new RangeError(`${path} burn log capacity must be ${DEFAULT_BURN_LOG_CAPACITY}`);
+  }
   if (!Array.isArray(record.entries)) throw new RangeError(`${path}.entries must be an array`);
+  if (record.entries.length > capacity) {
+    throw new RangeError(`${path} entries exceed capacity`);
+  }
   const entries: BurnLogEntry[] = [];
   for (let index = 0; index < record.entries.length; index += 1) {
     entries.push(parseBurnEntry(record.entries[index], `${path}.entries[${index}]`));
@@ -276,7 +284,11 @@ function parseV2(value: Record<string, unknown>, bodyIds: readonly string[]): Sa
   };
 }
 
-function migrateV1(value: Record<string, unknown>, bodyIds: readonly string[]): SaveEnvelopeV2 {
+function migrateV1(
+  value: Record<string, unknown>,
+  bodyIds: readonly string[],
+  shipMassKg: number,
+): SaveEnvelopeV2 {
   requireExactKeys(
     value,
     ['version', 'simTimeSec', 'phase', 'shipState', 'ledger', 'burnLog', 'settings'],
@@ -314,7 +326,12 @@ function migrateV1(value: Record<string, unknown>, bodyIds: readonly string[]): 
       effectiveWarp: 1,
       warpClampReason: WarpClampReason.NONE,
       targetBodyId: null,
-      initialKineticEnergyJ: 0,
+      initialKineticEnergyJ: relativisticKineticEnergyJ(
+        shipState[3] as number,
+        shipState[4] as number,
+        shipState[5] as number,
+        shipMassKg,
+      ),
       burnLog: { capacity: DEFAULT_BURN_LOG_CAPACITY, entries, active: null },
     },
     parseGameSettings(value.settings),
@@ -384,7 +401,11 @@ export function serializeSaveEnvelope(envelope: SaveEnvelopeV2): string {
 }
 
 /** Parses, migrates, and validates an imported or stored save document. */
-export function parseSaveEnvelope(text: string, bodyIds: readonly string[]): SaveEnvelopeV2 {
+export function parseSaveEnvelope(
+  text: string,
+  bodyIds: readonly string[],
+  shipMassKg: number,
+): SaveEnvelopeV2 {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
@@ -393,7 +414,12 @@ export function parseSaveEnvelope(text: string, bodyIds: readonly string[]): Sav
     throw new RangeError(`Unable to parse save JSON: ${message}`);
   }
   const record = requireRecord(parsed, 'save');
-  if (record.version === 1) return migrateV1(record, bodyIds);
+  if (record.version === 1) {
+    if (!Number.isFinite(shipMassKg) || shipMassKg <= 0) {
+      throw new RangeError('v1 save migration requires a positive finite ship mass');
+    }
+    return migrateV1(record, bodyIds, shipMassKg);
+  }
   if (record.version === 2) return parseV2(record, bodyIds);
   throw new RangeError('save version is not supported');
 }
@@ -404,7 +430,18 @@ function describeError(error: unknown): string {
 
 /** Owns the canonical browser save slot through a localStorage-compatible port. */
 export class SaveRepository {
-  constructor(private readonly storage: KeyValueStorage) {}
+  constructor(
+    private readonly storage: KeyValueStorage,
+    private readonly shipMassKg: number,
+  ) {
+    if (!Number.isFinite(shipMassKg) || shipMassKg <= 0) {
+      throw new RangeError('save repository ship mass must be positive and finite');
+    }
+  }
+
+  parse(text: string, bodyIds: readonly string[]): SaveEnvelopeV2 {
+    return parseSaveEnvelope(text, bodyIds, this.shipMassKg);
+  }
 
   load(bodyIds: readonly string[]): SaveLoadResult {
     let text: string | null;
@@ -419,7 +456,7 @@ export class SaveRepository {
     }
     if (text === null) return { ok: false, reason: 'not-found' };
     try {
-      return { ok: true, envelope: parseSaveEnvelope(text, bodyIds) };
+      return { ok: true, envelope: this.parse(text, bodyIds) };
     } catch (error: unknown) {
       return { ok: false, reason: 'invalid', error: describeError(error) };
     }

@@ -9,6 +9,7 @@ import {
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
+  readonly initializationWarning: string | null;
   readonly settings: GameSettingsV1;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
@@ -122,7 +123,11 @@ export function SessionSettingsPanel({
 }: SessionSettingsPanelProps) {
   const model = useMemo(() => createSessionSettingsModel(session, files), [session, files]);
   const [settings, setSettings] = useState(session.settings);
-  const [status, setStatus] = useState<PanelActionResult | null>(null);
+  const [status, setStatus] = useState<PanelActionResult | null>(
+    session.initializationWarning === null
+      ? null
+      : { ok: false, message: session.initializationWarning },
+  );
   const [capturingAction, setCapturingAction] = useState<InputAction | null>(null);
 
   const publish = (result: PanelActionResult): void => {

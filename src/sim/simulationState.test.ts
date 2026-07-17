@@ -47,6 +47,24 @@ describe('simulation persistent state', () => {
     ).toThrow(/burn log body/u);
   });
 
+  it('requires throttle and active-burn continuation state to agree', () => {
+    const controller = createBurnLog();
+    const x = new Float64Array([1, 0, 0]);
+    const y = new Float64Array([0, 1, 0]);
+    const z = new Float64Array([0, 0, 1]);
+    controller.recorder.begin(12, 0, 0, 0, 0, 0, 0, 'earth', x, y, z, 1);
+
+    expect(() =>
+      copyAndValidateSimulationPersistentState(
+        { ...validState(), burnLog: controller.persistence.exportState() },
+        ['earth'],
+      ),
+    ).toThrow(/throttle and active burn/u);
+    expect(() =>
+      copyAndValidateSimulationPersistentState({ ...validState(), throttle: 0.1 }, ['earth']),
+    ).toThrow(/throttle and active burn/u);
+  });
+
   it('returns deep copies that cannot mutate the source state', () => {
     const source = validState();
     const copy = copyAndValidateSimulationPersistentState(source, ['earth']);

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SimulationCore } from '../sim/simulation.js';
+import type { Commands } from '../sim/simulationSnapshot.js';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './createNewGameSimulation.js';
+import { KeyboardCommandMapper, type KeyboardInputTarget } from './inputMapping.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from './saveLoad.js';
 import { GameSessionController } from './sessionController.js';
 import {
@@ -18,8 +20,10 @@ const SHIP_MASS_KG = 10_000;
 
 class MemoryStorage implements KeyValueStorage {
   readonly values = new Map<string, string>();
+  getError: unknown = null;
 
   getItem(key: string): string | null {
+    if (this.getError !== null) throw this.getError;
     return this.values.get(key) ?? null;
   }
 
@@ -52,7 +56,7 @@ function createController(
   return new GameSessionController({
     createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
     initialSimulation: simulation,
-    saveRepository: new SaveRepository(storage),
+    saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
     settingsRepository: new SettingsRepository(storage),
   });
 }
@@ -76,6 +80,40 @@ describe('GameSessionController', () => {
     expect(copySessionState(controller.simulation)).toEqual(before);
   });
 
+  it('preserves restored manual rotation through the production input-frame order', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+    const sessionCommands: Commands = {
+      rotate: (pitch, yaw, roll) => controller.simulation.commands.rotate(pitch, yaw, roll),
+      setAttitudeMode: (mode) => controller.simulation.commands.setAttitudeMode(mode),
+      setTarget: (bodyId) => controller.simulation.commands.setTarget(bodyId),
+      setThrottle: (fraction) => controller.simulation.commands.setThrottle(fraction),
+      setWarp: (warp) => controller.simulation.commands.setWarp(warp),
+    };
+    const keyboardTarget: KeyboardInputTarget = {
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    const mapper = new KeyboardCommandMapper(
+      keyboardTarget,
+      sessionCommands,
+      () => controller.simulation.snapshot,
+      controller.settings.inputBindings,
+    );
+    controller.simulation.commands.rotate(0.1, 0.2, 0.3);
+    expect(controller.saveLocal()).toMatchObject({ ok: true });
+    controller.simulation.commands.rotate(0, 0, 0);
+
+    expect(controller.loadLocal()).toMatchObject({ ok: true });
+    mapper.update();
+    controller.simulation.step(1 / 60);
+
+    expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([
+      0.1, 0.2, 0.3,
+    ]);
+    mapper.dispose();
+  });
+
   it('keeps the live session and settings unchanged if replacement construction fails', () => {
     const storage = new MemoryStorage();
     const source = createController(storage);
@@ -86,7 +124,7 @@ describe('GameSessionController', () => {
         throw new Error('factory failed');
       },
       initialSimulation: live,
-      saveRepository: new SaveRepository(storage),
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
       settingsRepository: new SettingsRepository(storage),
     });
     const settingsBefore = controller.settings;
@@ -141,5 +179,15 @@ describe('GameSessionController', () => {
       ok: false,
       message: 'Saved session is invalid',
     });
+  });
+
+  it('exposes an initialization warning when stored settings cannot be read', () => {
+    const storage = new MemoryStorage();
+    storage.getError = new Error('denied');
+
+    const controller = createController(storage);
+
+    expect(controller.settings).toBe(DEFAULT_GAME_SETTINGS);
+    expect(controller.initializationWarning).toMatch(/unable to read settings.*denied/iu);
   });
 });
