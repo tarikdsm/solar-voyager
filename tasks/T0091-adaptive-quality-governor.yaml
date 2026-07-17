@@ -1,8 +1,8 @@
 id: T0091
 title: Adaptive quality governor (60 fps floor)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0091-adaptive-quality-governor
 depends_on: [T0045, T0043]
 milestone: M3
 spec: |
