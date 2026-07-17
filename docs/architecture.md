@@ -80,8 +80,10 @@ future:  MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D) 
 
 ## State & persistence
 
-- Save = `{version, simTimeSec, phase, shipState, ledger, burnLog, settings}` in localStorage, plus JSON file export/import. Rails bodies need no saving — they are a function of time.
-- Versioned envelope with per-version migration functions.
+- The canonical save slot is `solar-voyager.save.v2` in `localStorage`; the same document is available through JSON export/import. Settings also have an independent `solar-voyager.settings.v1` slot so quality and input preferences survive without requiring a game save.
+- Save v2 = `{version: 2, phase: "space", simulation, settings}`. `simulation` contains the float64 ship/ledger state, simulation time, attitude, throttle, rotation rates, requested/effective warp, clamp reason, navigation target, kinetic-energy baseline and complete burn-log continuation state. `settings` contains the quality governor lock (`auto | low | medium | high`) and the rebindable `KeyboardEvent.code` map.
+- Imported and stored documents are treated as untrusted: parsers reject unknown/missing fields and non-finite or inconsistent simulation values before construction. Loading is atomic — validation and creation of a fresh `SimulationCore` complete before the live session reference and input command target are replaced.
+- Version migrations are explicit (`v1 -> v2` is covered by a committed fixture). Rails bodies are never serialized because their positions and velocities are deterministically derived from `simTimeSec`.
 
 ## Expansion hooks (do not remove)
 

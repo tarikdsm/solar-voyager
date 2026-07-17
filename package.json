@@ -20,6 +20,7 @@
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
+    "test:session-settings": "node tools/tests/sessionSettingsRegression.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",
     "lint": "eslint .",
