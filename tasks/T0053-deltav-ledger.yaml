@@ -1,6 +1,6 @@
 id: T0053
 title: Energy ledger (photon drive, Wh) + burn log
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0053-deltav-ledger
 depends_on: [T0051]
