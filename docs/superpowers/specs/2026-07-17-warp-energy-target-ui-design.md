@@ -24,6 +24,13 @@ delta-v, and kinetic-energy change. The shared SI formatter remains the only
 source of Wh/W prefix policy. Signed kinetic change has a UI wrapper because the
 shared nonnegative formatter intentionally rejects negative values.
 
+The panel also distinguishes the complete session from one burn. Four primitive
+snapshot fields expose whether a burn summary exists, whether it is active, and
+that burn's energy and proper delta-v. `SimulationCore` selects the active burn
+when present, otherwise the latest completed burn. No-burn state renders
+explicitly. This `SimSnapshot` extension is governed by ADR-028; UI must not read
+`SimulationCore.burnLog` directly.
+
 ## Target panel
 
 A native select writes through `Commands.setTarget`. The panel computes current
@@ -38,3 +45,16 @@ prediction is authoritative.
 The existing dual clock remains driven by coordinate time and ship proper time.
 Tests publish a gamma > 1.1 snapshot with deliberately divergent values and
 assert both leaf strings and the gamma readout independently.
+
+## Responsive and review invariants
+
+The fixed desktop composition is used only when both viewport dimensions can
+hold its panels without collision. Widths at or below 900 px, and heights at or
+below 700 px, use one vertically scrollable stack. The overlay accepts pointer
+input in that mode so wheel and touch scrolling work from non-control regions.
+Regression viewports include 721, 800, and 850 px widths and assert zero panel
+intersections plus successful activation of every warp button.
+
+The integration-budget status names the reason explicitly as well as the
+effective sustainable tier. Signed kinetic-energy formatting promotes rounded
+999.5-unit boundaries to the next SI prefix for both signs.
