@@ -256,22 +256,35 @@ describe('SimulationCore', () => {
   });
 
   it('publishes the highest completed checkpoint when the shared budget is exhausted', () => {
+    const tolerance = verificationTolerance(7);
+    tolerance.initialStepSec = 0.01;
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
       shipMassKg: SHIP_MASS_KG,
-      integrationTolerance: verificationTolerance(2),
+      integrationTolerance: tolerance,
+    });
+    const checkpointCore = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      shipMassKg: SHIP_MASS_KG,
+      integrationTolerance: tolerance,
     });
     core.commands.setThrottle(0.4);
     core.commands.setWarp(10);
+    checkpointCore.commands.setThrottle(0.4);
+    checkpointCore.commands.setWarp(5);
 
     const snapshot = core.step(1);
+    const checkpointSnapshot = checkpointCore.step(1);
 
     expect(snapshot.requestedWarp).toBe(10);
     expect(snapshot.effectiveWarp).toBe(5);
     expect(snapshot.simTimeSec).toBe(5);
     expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
+    expect(snapshot.shipState).toEqual(checkpointSnapshot.shipState);
     expect(snapshot.energySpentJ).toBeCloseTo(snapshot.powerDrawW * 5, 0);
+    expect(snapshot.energySpentJ).toBeCloseTo(checkpointSnapshot.energySpentJ, 0);
     expect(snapshot.properDeltaVMS).toBeGreaterThan(0);
   });
 
