@@ -40,6 +40,6 @@ handoff_notes: |
   the visual gates with an isolated disc/central solar ROI, adds the regression
   to CI, removes the camera-relative binding during disposal, and records both
   adapters. Rereview is required before DONE.
-  Final gates: 447 Vitest passed + 3 skipped, 50 Python passed, ten browser
+  Final gates: 448 Vitest passed + 3 skipped, 50 Python passed, ten browser
   regressions passed, build/budgets/task schema passed, and assets:verify found
   15 byte-identical files using KTX-Software 4.4.2.
