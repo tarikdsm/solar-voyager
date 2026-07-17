@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-07-16T23:16:25.128Z",
+  "gitSha": "3a5995d0a8773ef486078b20c34d5ecc8301ea53",
+  "workingTree": "T0043 implementation before delivery commit",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 250,
+  "p75Ms": 250.1,
+  "p99Ms": 283.3,
+  "canvas": {
+    "backingHeight": 720,
+    "backingWidth": 1280,
+    "cssHeight": 720,
+    "cssWidth": 1280
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "heapDeltaBytes": 909371
+}

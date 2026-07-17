@@ -1,4 +1,4 @@
-import { AmbientLight, DirectionalLight, type WebGLRenderer } from 'three';
+import type { WebGLRenderer } from 'three';
 
 import type { ReadonlyVec3 } from '../core/vec3.js';
 import { createEpochState } from '../game/createEpochState.js';
@@ -12,6 +12,7 @@ import {
   type BodyVisualDefinition,
 } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { SolarLighting } from './solarLighting.js';
 import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
@@ -22,6 +23,7 @@ export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
   readonly starfield: Starfield;
+  readonly lighting: SolarLighting;
   readonly osculatingConic: OsculatingConicOverlay;
   readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
@@ -64,6 +66,9 @@ export async function createEpochWorld(
   const epochState = createEpochState();
   const definitions: BodyVisualDefinition[] = [];
   const cameraTargets: CameraFocusTarget[] = [];
+  let sunIndex = -1;
+  let earthIndex = -1;
+  let solarRadiusKm = 0;
   for (let index = 0; index < epochState.bodies.length; index += 1) {
     const body = epochState.bodies[index];
     if (body === undefined) throw new Error('Epoch body array is sparse.');
@@ -74,11 +79,19 @@ export async function createEpochWorld(
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: parseAlbedoColor(body.albedoColor),
     });
+    if (body.id === 'sun') {
+      sunIndex = index;
+      solarRadiusKm = body.meanRadiusKm;
+    }
+    if (body.id === 'earth') earthIndex = index;
     cameraTargets.push({
       id: body.id,
       positionOffset: index * 3,
       meanRadiusKm: body.meanRadiusKm,
     });
+  }
+  if (sunIndex < 0 || earthIndex < 0 || solarRadiusKm <= 0) {
+    throw new Error('Epoch lighting requires catalogued Sun and Earth definitions.');
   }
 
   const cameraController = new OrbitCameraController({
@@ -97,18 +110,13 @@ export async function createEpochWorld(
   );
   spaceScene.camera.updateMatrix();
 
-  const ambientLight = new AmbientLight(0xffffff, 0.02);
-  ambientLight.matrixAutoUpdate = false;
-  ambientLight.updateMatrix();
-  const directionalLight = new DirectionalLight(0xffffff, 2);
-  directionalLight.position.set(
-    -epochState.cameraLookDirection.x,
-    -epochState.cameraLookDirection.y,
-    -epochState.cameraLookDirection.z,
+  const lighting = new SolarLighting(
+    spaceScene,
+    epochState.positionsKm,
+    sunIndex * 3,
+    earthIndex * 3,
+    solarRadiusKm,
   );
-  directionalLight.matrixAutoUpdate = false;
-  directionalLight.updateMatrix();
-  spaceScene.scene.add(ambientLight, directionalLight);
 
   const starCatalog = options.starCatalog ?? (await loadStarCatalog(starCatalogUrl));
   const starfield = new Starfield(starCatalog, renderer.getPixelRatio());
@@ -146,6 +154,7 @@ export async function createEpochWorld(
     spaceScene,
     visualSystem,
     starfield,
+    lighting,
     osculatingConic,
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,

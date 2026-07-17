@@ -1,6 +1,6 @@
 id: T0043
 title: Lighting, ACES tone mapping, bloom
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0043-lighting-post
 depends_on: [T0040]
@@ -13,8 +13,17 @@ acceptance:
   - Frame budget respected on reference hardware
 handoff_notes: >-
   Resumed by explicit maintainer approval on 2026-07-17. For the unavailable
-  2023+ reference GPU, acceptance uses the measured conservative proxy: native
-  1920x1080 on an older Intel UHD sustains 60 Hz while T0043 adds only 0.938 ms
-  GPU render p75 (11.133 ms baseline, 12.071 ms feature). PR #26 remains
-  visually accepted; rebase it onto current main, rerun gates, and obtain a
-  final independent review before merge.
+  2023+ reference GPU, acceptance uses the measured conservative proxy: the
+  original paired run on an older Intel UHD sustained 60 Hz while T0043 added
+  only 0.938 ms GPU p75. After current-main integration, a fresh native
+  1920x1080 run sustained 60.003 fps with GPU p75 11.140 ms, 22 correctly
+  accumulated draw calls, 48,963 triangles, negative endpoint heap delta, and
+  zero browser errors. The integration also makes lighting follow camera focus,
+  bypasses the half-float composer only on explicit software fallback, and
+  shares one preallocated 600-sample GPU timing ring between telemetry and the benchmark. Visual
+  acceptance remains 81.0% dark Earth pixels, 12.9% localized night-light
+  emission, and clean Sun bloom. Full evidence is in docs/bench/T0043-summary.md;
+  full local gates passed with 399 Vitest and 50 Python tests. Independent
+  re-review of exact head 28d0d96 approved with Critical 0, Important 0, Minor
+  0 after the direct software fallback warm-up regression proved program count
+  stable at 8 -> 8 on the first gameplay frame; exact-head CI passed.

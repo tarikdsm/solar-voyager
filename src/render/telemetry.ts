@@ -3,6 +3,7 @@ import type { WebGLRenderer } from 'three';
 import type { RendererContextReport } from './createRenderer.js';
 
 const FRAME_WINDOW_SIZE = 120;
+const GPU_TIME_WINDOW_SIZE = 600;
 const SNAPSHOT_INTERVAL_MS = 250;
 const GPU_QUERY_SLOT_COUNT = 4;
 const GPU_QUERY_FREE = 0;
@@ -42,6 +43,7 @@ export interface RenderTelemetrySnapshot {
 /** Single allocation-free source of renderer performance truth. */
 export class RenderTelemetry {
   readonly frameTimesMs = new Float64Array(FRAME_WINDOW_SIZE);
+  readonly gpuTimesMs = new Float64Array(GPU_TIME_WINDOW_SIZE);
   readonly snapshot: RenderTelemetrySnapshot;
 
   private readonly percentileScratchMs = new Float64Array(FRAME_WINDOW_SIZE);
@@ -61,9 +63,12 @@ export class RenderTelemetry {
   private nextSnapshotTimestampMs = 0;
   private activeGpuQueryIndex = -1;
   private nextGpuQueryIndex = 0;
+  private gpuTimeWriteIndex = 0;
+  private gpuSampleCount = 0;
 
   constructor(renderer: WebGLRenderer, contextReport: RendererContextReport) {
     this.renderer = renderer;
+    this.renderer.info.autoReset = false;
     this.context = renderer.getContext() as WebGL2RenderingContext;
     this.timerExtension = contextReport.gpuTimerQueryAvailable
       ? (this.context.getExtension(
@@ -111,8 +116,13 @@ export class RenderTelemetry {
     return false;
   }
 
+  get gpuTimeSampleCount(): number {
+    return this.gpuSampleCount;
+  }
+
   /** Begins a frame and returns the clamped game delta in seconds. */
   beginFrame(frameTimestampMs: number): number {
+    this.renderer.info.reset();
     this.pollGpuQueries();
     if (this.previousFrameTimestampMs < 0) {
       this.pendingFrameMs = 0;
@@ -168,6 +178,13 @@ export class RenderTelemetry {
     return this.frameTimesMs[index] ?? Number.NaN;
   }
 
+  getGpuTimeByAge(age: number): number {
+    if (!Number.isInteger(age) || age < 0 || age >= this.gpuSampleCount) return Number.NaN;
+    const index =
+      (this.gpuTimeWriteIndex - 1 - age + GPU_TIME_WINDOW_SIZE * 2) % GPU_TIME_WINDOW_SIZE;
+    return this.gpuTimesMs[index] ?? Number.NaN;
+  }
+
   dispose(): void {
     if (this.activeGpuQueryIndex >= 0 && this.timerExtension !== null) {
       this.context.endQuery(this.timerExtension.TIME_ELAPSED_EXT);
@@ -213,7 +230,11 @@ export class RenderTelemetry {
           this.context.QUERY_RESULT,
         ) as number;
         if (Number.isFinite(elapsedNanoseconds) && elapsedNanoseconds >= 0) {
-          this.snapshot.gpuMs = elapsedNanoseconds / 1_000_000;
+          const elapsedMilliseconds = elapsedNanoseconds / 1_000_000;
+          this.snapshot.gpuMs = elapsedMilliseconds;
+          this.gpuTimesMs[this.gpuTimeWriteIndex] = elapsedMilliseconds;
+          this.gpuTimeWriteIndex = (this.gpuTimeWriteIndex + 1) % GPU_TIME_WINDOW_SIZE;
+          this.gpuSampleCount = Math.min(GPU_TIME_WINDOW_SIZE, this.gpuSampleCount + 1);
         }
       }
       this.gpuQueryStates[index] = GPU_QUERY_FREE;

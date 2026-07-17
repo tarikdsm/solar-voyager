@@ -1,9 +1,17 @@
-import { Group, Mesh, MeshBasicMaterial, Texture, type Material } from 'three';
+import {
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshLambertMaterial,
+  MeshStandardMaterial,
+  Texture,
+  type Material,
+} from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LoadedBodyModel } from './bodyAssetLoader.js';
 import type { BodyVisualAssetLoader, BodyVisualDefinition } from './bodyVisualSystem.js';
-import { BodyVisualSystem } from './bodyVisualSystem.js';
+import { BodyVisualSystem, EARTH_NIGHT_EMISSIVE_INTENSITY } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 
 const AU_KM = 149_597_870.7;
@@ -64,8 +72,20 @@ describe('BodyVisualSystem structure', () => {
     expect(points).toHaveLength(1);
     expect(spheres).toHaveLength(4);
     expect(spheres.every((sphere) => sphere.geometry === spheres[0]?.geometry)).toBe(true);
+    expect(spheres.every((sphere) => sphere.material instanceof MeshLambertMaterial)).toBe(true);
     expect(spheres.map((sphere) => sphere.scale.x)).toEqual([10, 10, 1, 1]);
     expect(spheres.every((sphere) => sphere.visible)).toBe(true);
+    const sunFallback = spaceScene.scene.getObjectByName('sun-sphere-fallback') as Mesh<
+      never,
+      MeshLambertMaterial
+    >;
+    const earthFallback = spaceScene.scene.getObjectByName('earth-sphere-fallback') as Mesh<
+      never,
+      MeshLambertMaterial
+    >;
+    expect(sunFallback.material.emissive.getHex()).toBe(0xffdd88);
+    expect(sunFallback.material.emissiveIntensity).toBeGreaterThan(1);
+    expect(earthFallback.material.emissive.getHex()).toBe(0x000000);
     expect(spaceScene.scene.children).toHaveLength(5);
   });
 
@@ -90,6 +110,70 @@ describe('BodyVisualSystem structure', () => {
     expect(loader.preloadHeroSpheres).toHaveBeenCalledOnce();
     expect(loadSphereAlbedo).toHaveBeenCalledTimes(2);
     expect(loader.loadModel).not.toHaveBeenCalled();
+  });
+
+  it('raises an authored Sun model above the HDR bloom threshold', async () => {
+    const sunMaterial = new MeshStandardMaterial({
+      emissive: 0xffaa55,
+      emissiveIntensity: 0.5,
+    });
+    const sunModel = loadedModel(sunMaterial);
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) => (id === 'sun' ? sunModel : null)),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      loader,
+      vi.fn(async () => undefined),
+    );
+
+    system.update({ x: 11, y: 0, z: 0 }, 1_000, 1, 0);
+
+    await vi.waitFor(() => expect(system.getLoadState('sun')).toBe('ready'));
+    expect(sunMaterial.emissiveIntensity).toBeGreaterThan(1);
+    expect(sunMaterial.emissive.getHex()).toBe(0xffaa55);
+  });
+
+  it('exposes authored Earth night lights at the ACES gameplay exposure', async () => {
+    const earthMaterial = new MeshStandardMaterial({
+      emissive: 0xffffff,
+      emissiveIntensity: 1,
+      emissiveMap: new Texture(),
+    });
+    const cloudsMaterial = new MeshStandardMaterial({
+      map: new Texture(),
+      transparent: true,
+    });
+    cloudsMaterial.name = 'mat_clouds';
+    const earthRoot = new Group();
+    earthRoot.add(new Mesh(undefined, earthMaterial), new Mesh(undefined, cloudsMaterial));
+    const earthModel: LoadedBodyModel = {
+      root: earthRoot,
+      materials: [earthMaterial, cloudsMaterial],
+    };
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) => (id === 'earth' ? earthModel : null)),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      loader,
+      vi.fn(async () => undefined),
+    );
+
+    system.update(cameraAtEarthDistance(5), 1_000, 1, 0);
+
+    await vi.waitFor(() => expect(system.getLoadState('earth')).toBe('ready'));
+    expect(earthMaterial.emissiveIntensity).toBe(EARTH_NIGHT_EMISSIVE_INTENSITY);
+    expect(cloudsMaterial.alphaMap).toBe(cloudsMaterial.map);
+    expect(cloudsMaterial.depthWrite).toBe(false);
   });
 });
 

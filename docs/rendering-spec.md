@@ -38,10 +38,26 @@ receive NaN or infinity.
 
 ## 4. Lighting & post
 
-- **One directional light**, direction Sun→camera-focus, intensity ∝ 1/d² normalized at 1 AU.
-- HDR pipeline: half-float render target, **ACES filmic tone mapping**, UnrealBloomPass (solar disc, engine glow).
+- **One directional light**, positioned in the focus-to-Sun direction and aimed
+  at the origin so the rays travel Sun-to-focus. For focus distance `dKm`, its
+  intensity is `π × (AU_KM / max(dKm, solarRadiusKm))²`; therefore a normal-facing
+  Lambertian surface reproduces its base colour at 1 AU and the Sun-focused
+  case remains finite at the photosphere.
+- The one HDR chain is `RenderPass → UnrealBloomPass → OutputPass` over
+  half-float composer buffers. The renderer uses **ACES filmic tone mapping**
+  at exposure 1.0; `OutputPass` performs tone mapping and output conversion
+  once, at the end. Bloom uses threshold 1.0, strength 0.15, radius 0.35, and
+  the official half-resolution bright target.
 - Sun rendered **procedurally** (ADR-010, task T0084): animated convective granulation, limb darkening, prominence arcs + billboard glare — the static emissive texture is only a fallback. Gas giants animate their real base maps with procedural band flow (T0085). Policy for all procedural shading (tiers, bake-at-load rule, governor octave rung): ADR-010.
-- Night sides genuinely dark; global ambient floor 0.02 for playability.
+- Until T0084, the fallback Sun material has minimum emissive intensity 4 and
+  one additive, depth-tested 64×64 radial glare sprite spans four solar
+  diameters. Its alpha reaches zero at every edge, preventing square artifacts.
+- Night sides are genuinely dark; the global ambient floor is exactly 0.02 for
+  playability. Earth keeps its authored night-light emissive map with minimum
+  intensity 4 at the fixed exposure so localized city lights remain visible.
+  The RGB cloud texture also supplies its green channel as the cloud shell's
+  alpha map and the transparent shell does not write depth, preserving the
+  surface and night lights below it.
 - Earth atmosphere: simple rim/fresnel shader in v1 (full scattering is a future task).
 
 ## 5. Starfield

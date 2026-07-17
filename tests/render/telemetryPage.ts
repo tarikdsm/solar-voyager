@@ -25,9 +25,11 @@ const context = {
 const renderer = {
   getContext: () => context,
   info: {
+    autoReset: true,
     memory: { geometries: 2, textures: 3 },
     programs: [{}, {}],
     render: { calls: 4, frame: 0, lines: 0, points: 10, triangles: 20 },
+    reset() {},
   },
 } as unknown as WebGLRenderer;
 const contextReport: RendererContextReport = {

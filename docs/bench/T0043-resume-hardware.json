@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-07-17T10:22:01.597Z",
+  "workingTreeBaseSha": "3b34a5cfd9c79b05e04afdc84773f3929f99bd18",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 16.7,
+  "p75Ms": 16.7,
+  "p99Ms": 16.8,
+  "gpu": {
+    "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (Intel)"
+  },
+  "canvas": {
+    "backingHeight": 1080,
+    "backingWidth": 1920,
+    "cssHeight": 1080,
+    "cssWidth": 1920
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 16.7,
+    "p75Ms": 16.7,
+    "p99Ms": 16.8,
+    "averageFps": 60.003,
+    "drawCalls": 22,
+    "geometries": 8,
+    "points": 9139,
+    "programs": 33,
+    "textures": 22,
+    "triangles": 48963
+  },
+  "gpuRenderMedianMs": 10.615,
+  "gpuRenderP75Ms": 11.14,
+  "gpuRenderP99Ms": 12.573,
+  "heapDeltaBytes": -442992
+}

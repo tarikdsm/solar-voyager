@@ -4,6 +4,7 @@ import { createNewGameSimulation } from './game/createNewGameSimulation.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
+import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import './style.css';
 import { App } from './ui/App.js';
@@ -11,6 +12,7 @@ import { CameraInputController } from './ui/cameraInputController.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 
 const SHIP_MASS_KG = 10_000;
+const SOFTWARE_FALLBACK_EXPOSURE = 3;
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
@@ -27,6 +29,7 @@ const canvas = canvasElement;
 const appRoot = appElement;
 const rendererBootstrap = createRenderer(canvas);
 const { contextReport, renderer } = rendererBootstrap;
+const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
 const simulation = createNewGameSimulation(SHIP_MASS_KG);
@@ -37,10 +40,10 @@ const hardwareWarning = contextReport.warningRequired
   : null;
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
+let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 
 function resizeRenderer(): void {
-  if (world === null) return;
   const clientWidth = canvas.clientWidth;
   const clientHeight = canvas.clientHeight;
   const pixelRatio = renderer.getPixelRatio();
@@ -49,14 +52,24 @@ function resizeRenderer(): void {
 
   if (canvas.width !== drawingBufferWidth || canvas.height !== drawingBufferHeight) {
     renderer.setSize(clientWidth, clientHeight, false);
+  }
+  if (world !== null) {
     world.spaceScene.camera.aspect = clientWidth / clientHeight;
     world.spaceScene.camera.updateProjectionMatrix();
+    postPipeline?.resize(clientWidth, clientHeight, pixelRatio);
   }
 }
 
 function renderFrame(nowMs: number): void {
-  if (world === null) return;
-  const { spaceScene, visualSystem, osculatingConic, cameraController, cameraPositionKm } = world;
+  if (world === null || postPipeline === null) return;
+  const {
+    spaceScene,
+    visualSystem,
+    lighting,
+    osculatingConic,
+    cameraController,
+    cameraPositionKm,
+  } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
   const simulationStartMs = performance.now();
   const snapshot = simulation.step(deltaSec);
@@ -79,10 +92,12 @@ function renderFrame(nowMs: number): void {
     spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
   );
+  lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
+  lighting.update();
   osculatingConic.update(snapshot, canvas.width, canvas.height);
   spaceScene.updateCameraRelative(cameraPositionKm);
   telemetry.beginGpuTimer();
-  renderer.render(spaceScene.scene, spaceScene.camera);
+  postPipeline.render(postProcessingEnabled);
   telemetry.endGpuTimer();
   telemetry.endFrame(
     simulationEndMs - simulationStartMs,
@@ -108,7 +123,19 @@ async function startApplication(): Promise<void> {
   canvas.dataset.rendererName = contextReport.rendererName;
   canvas.dataset.rendererReady = 'true';
   canvas.dataset.softwareRasterizer = String(contextReport.softwareRasterizer);
-  world = await createEpochWorld(renderer);
+  resizeRenderer();
+  world = await createEpochWorld(renderer, { initialViewportHeightPx: canvas.height });
+  postPipeline = new LightingPostPipeline(
+    renderer,
+    world.spaceScene.scene,
+    world.spaceScene.camera,
+  );
+  postPipeline.setBloomEnabled(postProcessingEnabled);
+  if (!postProcessingEnabled) renderer.toneMappingExposure = SOFTWARE_FALLBACK_EXPOSURE;
+  resizeRenderer();
+  world.lighting.update();
+  world.spaceScene.updateCameraRelative(world.cameraPositionKm);
+  postPipeline.warmUp(postProcessingEnabled);
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
@@ -116,7 +143,6 @@ async function startApplication(): Promise<void> {
   cameraInput?.dispose();
   cameraInput = new CameraInputController(canvas, window, focusLabel, world.cameraController);
   canvas.dataset.cameraReady = 'true';
-  resizeRenderer();
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
   requestAnimationFrame(renderFrame);
 }

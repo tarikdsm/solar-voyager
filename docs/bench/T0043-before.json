@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-07-16T23:13:10.047Z",
+  "gitSha": "c5596998cd3dc47e1ca0c9d7004e4c79bdc7ea6f",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 150,
+  "p75Ms": 150,
+  "p99Ms": 166.8,
+  "canvas": {
+    "backingHeight": 720,
+    "backingWidth": 1280,
+    "cssHeight": 720,
+    "cssWidth": 1280
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "heapDeltaBytes": 846732
+}

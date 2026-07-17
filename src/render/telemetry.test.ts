@@ -150,9 +150,12 @@ describe('RenderTelemetry', () => {
   it('refreshes split and renderer.info counters at four hertz', () => {
     const { info, renderer } = fakeRenderer(contextWithoutTimer());
     const telemetry = new RenderTelemetry(renderer, contextReport());
+    expect(info.autoReset).toBe(false);
     telemetry.beginFrame(0);
+    expect(info.reset).toHaveBeenCalledOnce();
     telemetry.endFrame(0, 0, 0, 0);
 
+    telemetry.beginFrame(250);
     info.render.calls = 14;
     info.render.triangles = 18;
     info.render.points = 17;
@@ -160,8 +163,8 @@ describe('RenderTelemetry', () => {
     info.memory.geometries = 12;
     info.memory.textures = 13;
     info.programs = [{}, {}, {}, {}];
-    telemetry.beginFrame(250);
     telemetry.endFrame(1, 2, 0.5, 250);
+    expect(info.reset).toHaveBeenCalledTimes(2);
 
     expect(telemetry.snapshot).toMatchObject({
       context: contextReport(),
@@ -185,6 +188,7 @@ describe('RenderTelemetry', () => {
     const report = { ...contextReport(), gpuTimerQueryAvailable: true };
     const { renderer } = fakeRenderer(timer.context);
     const telemetry = new RenderTelemetry(renderer, report);
+    const gpuTimes = telemetry.gpuTimesMs;
 
     telemetry.beginFrame(0);
     telemetry.beginGpuTimer();
@@ -199,6 +203,10 @@ describe('RenderTelemetry', () => {
     firstQuery.resultNs = 5_250_000;
     telemetry.beginFrame(16);
     expect(telemetry.snapshot.gpuMs).toBeCloseTo(5.25, 12);
+    expect(telemetry.gpuTimesMs).toBe(gpuTimes);
+    expect(telemetry.gpuTimeSampleCount).toBe(1);
+    expect(telemetry.getGpuTimeByAge(0)).toBeCloseTo(5.25, 12);
+    expect(telemetry.getGpuTimeByAge(1)).toBe(Number.NaN);
 
     telemetry.beginGpuTimer();
     telemetry.endGpuTimer();
@@ -209,6 +217,7 @@ describe('RenderTelemetry', () => {
     timer.setDisjoint(true);
     telemetry.beginFrame(32);
     expect(telemetry.snapshot.gpuMs).toBeCloseTo(5.25, 12);
+    expect(telemetry.gpuTimeSampleCount).toBe(1);
 
     telemetry.dispose();
     expect(timer.deleteQuery).toHaveBeenCalledTimes(4);

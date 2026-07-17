@@ -132,6 +132,12 @@ export class OrbitCameraController {
     return target.id;
   }
 
+  get focusPositionOffset(): number {
+    const target = this.targets[this.focusTargetIndex];
+    if (target === undefined) throw new Error('Active camera target is missing.');
+    return target.positionOffset;
+  }
+
   get distanceKm(): number {
     return this.currentDistanceKm;
   }

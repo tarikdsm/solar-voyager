@@ -48,6 +48,7 @@ describe('OrbitCameraController', () => {
       z: positionsKm[2],
     });
     expect(controller.focusId).toBe('earth');
+    expect(controller.focusPositionOffset).toBe(0);
     expect(controller.distanceKm).toBeCloseTo(initialDistanceKm, 7);
     expect(controller.lookDirection.x).toBeCloseTo(-1, 14);
     expect(controller.lookDirection.y).toBeCloseTo(0, 14);
@@ -88,6 +89,7 @@ describe('OrbitCameraController', () => {
     const startZ = controller.cameraPositionKm.z;
 
     expect(controller.focusBody('jupiter')).toBe(true);
+    expect(controller.focusPositionOffset).toBe(3);
     expect(controller.cameraPositionKm).toEqual({ x: startX, y: startY, z: startZ });
 
     controller.update(1e-6);

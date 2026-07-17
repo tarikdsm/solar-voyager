@@ -13,6 +13,7 @@
     "test:render-depth": "node tools/tests/renderDepthRegression.mjs",
     "test:starfield": "node tools/tests/starfieldRegression.mjs",
     "test:visual-tiers": "node tools/tests/visualTierFlyIn.mjs",
+    "test:lighting-post": "node tools/tests/lightingPostRegression.mjs",
     "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
