@@ -1,6 +1,6 @@
 id: T0059
 title: Playwright smoke test in CI
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0059-playwright-smoke
 depends_on: [T0054]
@@ -10,4 +10,11 @@ spec: |
   wired into ci.yml.
 acceptance:
   - Smoke test red on an injected runtime error (fixture), green on main
-handoff_notes: ""
+handoff_notes: >-
+  Production-dist smoke starts Vite preview at the GitHub Pages base path, probes
+  live WebGL framebuffer pixels and HUD anchors, and rejects console/page errors
+  and crashes. Committed immediate and framebuffer-timed init fixtures prove
+  both runtime-error paths fail; npm run test:smoke proves both fixture
+  rejections and clean-page success. Full local CI matrix passed on 2026-07-17.
+  Independent review approved exact head 5bcb1e2 after verifying both negative
+  modes, the post-probe error check, Vite lifecycle cleanup, and green CI.
