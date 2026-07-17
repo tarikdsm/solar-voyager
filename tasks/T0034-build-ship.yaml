@@ -1,6 +1,6 @@
 id: T0034
 title: Ship model (build_ship script)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0034-build-ship
 depends_on: [T0030]
@@ -16,13 +16,13 @@ acceptance:
   - Nozzle node named per rendering-spec so the plume can attach
   - Re-running the script reproduces the artifact
 handoff_notes: |
-  Hand-authored ship source was committed directly to main in 641d092 after an
-  interactive blender-mcp session; assets/blender/ship.blend, ship.glb, and
-  SOURCES.md exist. The task is not complete: tools/blender/build_ship.py is
-  missing, no KTX2/runtime ingest output exists, and reproducibility plus
-  engine_nozzle acceptance evidence has not been recorded.
-
-  Unblocked on 2026-07-17: T0030 is DONE, Blender 5.1 is available at the
-  repository-documented path, and KTX-Software executables are installed under
-  C:/Program Files/KTX-Software/bin. Back-port the approved model to the builder,
-  then ingest and verify the node and 8 MB budget.
+  Review evidence (2026-07-17): build_ship.py deterministically recreates the
+  approved 26.12 m design with an open engine_nozzle and four project-authored
+  1024x512 PBR maps. Two clean Blender 5.1 runs produced matching SHA-256 for
+  ship.glb, all maps, and SOURCES.md; the source asset validates at 5,538 tris.
+  Focused ingest emitted Draco + four external KTX2 maps totaling 135,605 bytes,
+  with exact named-material slots and engine_nozzle preserved. Full ingest
+  regenerated public/assets. Verification: 376 JS tests passed (3 skipped), 50
+  Python tests passed, Blender smoke passed twice, lint/typecheck/Prettier/build,
+  budgets, and task schema passed. Browser smoke rendered one 1920x1080 canvas,
+  accepted the 5x warp interaction, and recorded zero console errors.
