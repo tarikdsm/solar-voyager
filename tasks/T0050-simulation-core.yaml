@@ -1,6 +1,6 @@
 id: T0050
 title: SimulationCore + SimSnapshot + Commands
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0050-simulation-core
 depends_on: [T0013, T0014, T0015, T0017]
@@ -18,4 +18,17 @@ acceptance:
   - step() with zero thrust preserves two-body orbit per spec tolerances
   - Barycenter derivation matches mass-weighted sum over the catalog (test)
   - New-game LEO state carries Earth's barycentric velocity (~30 km/s rel CM)
-handoff_notes: ""
+handoff_notes: |
+  SimulationCore now owns the clock, compiled rails, relativistic ship state,
+  neutral ledger fields, commands, and two immutable-per-frame snapshot buffers.
+  ADR-024 fixes the SimSnapshot/Commands boundary. Barycenter and CM-relative
+  v/a/p/L are allocation-free; the game bootstrap creates the canonical 400 km
+  LEO with Earth's 29-31 km/s barycentric velocity plus local circular speed.
+  Zero-thrust ten-orbit error is < 1e-3 km. Full local CI passed: lint,
+  typecheck, format, 313 TS tests (3 skipped), six browser regressions, 49 Python
+  tests, build, task schema, and asset budgets. The 10,000-step full-catalog
+  benchmark averaged 0.0746 ms/step, reused exactly two snapshots, and retained
+  no heap growth.
+  Independent review approved implementation head a6dc9bb after the mutable
+  snapshot finding was fixed, then approved final documentation head 314295a
+  with zero Critical, Important, or Minor findings. Exact-head CI passed.
