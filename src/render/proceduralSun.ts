@@ -144,8 +144,7 @@ export class ProceduralSun implements ProceduralSunMaterialPort {
     if (geometry.boundingSphere === null) {
       throw new Error('Procedural Sun billboard requires a bounding sphere.');
     }
-    geometry.boundingSphere.radius =
-      (solarRadiusKm * SUN_BILLBOARD_DIAMETER_IN_RADII) / 2;
+    geometry.boundingSphere.radius = (solarRadiusKm * SUN_BILLBOARD_DIAMETER_IN_RADII) / 2;
     const material = new ShaderMaterial({
       uniforms: {
         ...this.state.uniforms,

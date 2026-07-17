@@ -17,10 +17,7 @@ function percentile(sortedValues, fraction) {
 }
 
 function summarize(samples, label) {
-  if (
-    samples.length === 0 ||
-    samples.some((sample) => !Number.isFinite(sample) || sample <= 0)
-  ) {
+  if (samples.length === 0 || samples.some((sample) => !Number.isFinite(sample) || sample <= 0)) {
     throw new RangeError(`${label} GPU samples must be finite and positive.`);
   }
   const sorted = [...samples].sort((left, right) => left - right);

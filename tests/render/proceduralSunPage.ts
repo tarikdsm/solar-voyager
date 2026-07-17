@@ -41,10 +41,7 @@ interface ProceduralSunHarness {
     enabled: boolean,
   ): SunRenderSnapshot;
   renderDistance(label: SolarDistanceLabel, simTimeSec: number): SunRenderSnapshot;
-  measureQualityGpu(
-    quality: ProceduralSunQuality,
-    sampleCount: number,
-  ): Promise<readonly number[]>;
+  measureQualityGpu(quality: ProceduralSunQuality, sampleCount: number): Promise<readonly number[]>;
 }
 
 declare global {

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  qualityRunOrder,
-  summarizeQualitySamples,
-} from './proceduralSunQualityBenchUtils.mjs';
+import { qualityRunOrder, summarizeQualitySamples } from './proceduralSunQualityBenchUtils.mjs';
 
 describe('procedural Sun quality benchmark utilities', () => {
   it('alternates quality order to limit clock-order bias', () => {
@@ -25,9 +22,7 @@ describe('procedural Sun quality benchmark utilities', () => {
 
   it('rejects empty, non-finite, and non-positive sample sets', () => {
     expect(() => summarizeQualitySamples({ full: [], minimum: [1] })).toThrow(RangeError);
-    expect(() =>
-      summarizeQualitySamples({ full: [Number.NaN], minimum: [1] }),
-    ).toThrow(RangeError);
+    expect(() => summarizeQualitySamples({ full: [Number.NaN], minimum: [1] })).toThrow(RangeError);
     expect(() => summarizeQualitySamples({ full: [1], minimum: [0] })).toThrow(RangeError);
   });
 });

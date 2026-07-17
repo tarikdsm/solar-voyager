@@ -47,7 +47,12 @@ try {
   browser = await chromium.launch({
     headless: true,
     args: REQUIRE_HARDWARE_GPU
-      ? ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=default', '--force_high_performance_gpu']
+      ? [
+          '--enable-webgl',
+          '--ignore-gpu-blocklist',
+          '--use-angle=default',
+          '--force_high_performance_gpu',
+        ]
       : [],
   });
   const page = await browser.newPage({ viewport: { width, height } });
@@ -70,14 +75,14 @@ try {
       url: page.url(),
       canvasCount: await page.locator('#procedural-sun-canvas').count(),
     };
-    throw new Error(
-      `Procedural Sun harness did not initialize: ${JSON.stringify(diagnostic)}`,
-      { cause: error },
-    );
+    throw new Error(`Procedural Sun harness did not initialize: ${JSON.stringify(diagnostic)}`, {
+      cause: error,
+    });
   }
 
   const gpu = await page.locator('#procedural-sun-canvas').evaluate((element) => {
-    if (!(element instanceof globalThis.HTMLCanvasElement)) throw new Error('Sun canvas is missing.');
+    if (!(element instanceof globalThis.HTMLCanvasElement))
+      throw new Error('Sun canvas is missing.');
     const context = element.getContext('webgl2');
     if (context === null) throw new Error('WebGL2 context is missing.');
     const debug = context.getExtension('WEBGL_debug_renderer_info');
