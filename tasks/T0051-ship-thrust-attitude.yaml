@@ -1,6 +1,6 @@
 id: T0051
 title: Ship state, thrust, attitude modes
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0051-ship-thrust-attitude
 depends_on: [T0050]
@@ -25,3 +25,6 @@ handoff_notes: |
   (3 skipped), six browser regressions, 49 Python tests, build, schema, and
   budgets. Active-thrust full-catalog benchmark averaged 0.0760 ms/step, reused
   exactly two snapshots, and retained no heap growth.
+  Independent review approved exact implementation head 85cb147 with zero
+  Critical, Important, or Minor findings after reproducing 29 focused tests,
+  334 full tests, and the active-thrust benchmark. Exact-head CI passed.
