@@ -28,8 +28,9 @@ history must also avoid allocations in the frame loop.
    current committed simulation state. Changing positive throttle, attitude,
    target, or warp without coast does not split the interval.
 4. Burn history is a setup-allocated ring of 256 mutable entry records. The
-   public `BurnLog` view returns stable records in chronological order and a
-   stable active-burn record; it creates no entry object during play.
+   public `BurnLogView` is a separate frozen facade with only getters and
+   chronological lookup; the mutation capability remains private to
+   `SimulationCore`. It creates no entry object during play.
 5. Prograde, normal, and radial components use the dominant body's local frame
    at burn start. They are signed projections of the integrated inertial
    proper-delta-v vector. Scalar proper delta-v remains the non-negative path
@@ -48,4 +49,3 @@ history must also avoid allocations in the frame loop.
 - Burn history is bounded. After 256 completed burns, the oldest entry is
   overwritten; chronological indexing remains stable for current contents.
 - String formatting remains outside the frame loop; snapshots store numbers.
-

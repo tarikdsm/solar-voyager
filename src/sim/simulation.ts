@@ -52,7 +52,7 @@ import {
   writeThrustForceInto,
 } from './ship/thrust.js';
 import {
-  BurnLog,
+  createBurnLog,
   SIMULATION_STATE_DIMENSION,
   STATE_ENERGY_J,
   STATE_PROPER_DELTA_V_MS,
@@ -60,6 +60,8 @@ import {
   STATE_PROPER_DELTA_V_VECTOR_Y_MS,
   STATE_PROPER_DELTA_V_VECTOR_Z_MS,
   writeLedgerDerivativeRates,
+  type BurnLogRecorder,
+  type BurnLogView,
 } from './ship/ledger.js';
 
 /** Setup-time inputs owned by one simulation core instance. */
@@ -126,12 +128,13 @@ function normalizeInto(output: Float64Array, x: number, y: number, z: number): v
 /** Pure owner of simulation time, rails, ship propagation, ledger, and snapshots. */
 export class SimulationCore {
   readonly commands: Commands;
-  readonly burnLog: BurnLog;
+  readonly burnLog: BurnLogView;
 
   private readonly catalog: CompiledRailsCatalog;
   private readonly shipMassKg: number;
   private readonly maximumProperAccelerationKmS2: number;
   private readonly initialKineticEnergyJ: number;
+  private readonly burnLogRecorder: BurnLogRecorder;
   private readonly clock: SimClock;
   private readonly snapshots: readonly [SimulationSnapshotBuffer, SimulationSnapshotBuffer];
   private readonly shipStates: readonly [Float64Array, Float64Array];
@@ -178,7 +181,9 @@ export class SimulationCore {
       options.initialShipState[5] as number,
       this.shipMassKg,
     );
-    this.burnLog = new BurnLog();
+    const burnLogController = createBurnLog();
+    this.burnLog = burnLogController.view;
+    this.burnLogRecorder = burnLogController.recorder;
     this.clock = createSimClock(initialTimeSec);
     this.stepStartTimeSec = initialTimeSec;
     this.integrationTolerance = createSimulationTolerance(
@@ -329,7 +334,7 @@ export class SimulationCore {
     this.clock.timeSec = targetTimeSec;
     this.attitudeQuaternion.set(this.endpointAttitudeQuaternion);
     if (targetTimeSec > this.stepStartTimeSec && this.commandState.throttle > 0) {
-      this.burnLog.notePeakPower(this.powerForThrottle(this.commandState.throttle));
+      this.burnLogRecorder.notePeakPower(this.powerForThrottle(this.commandState.throttle));
     }
     this.synchronizeActiveBurn(nextShipState);
     const nextRailsState =
@@ -412,7 +417,7 @@ export class SimulationCore {
     const state = this.currentPrivateShipState();
     if (nextThrottle <= 0) {
       this.synchronizeActiveBurn(state);
-      this.burnLog.end();
+      this.burnLogRecorder.end();
       return;
     }
     if (this.burnLog.activeBurn !== null) {
@@ -436,7 +441,7 @@ export class SimulationCore {
       this.gravityRailsState.positionsKm,
     );
     this.writeBurnBasis(state, dominantBodyIndex);
-    this.burnLog.begin(
+    this.burnLogRecorder.begin(
       this.clock.timeSec,
       state[6] as number,
       state[STATE_ENERGY_J] as number,
@@ -453,7 +458,7 @@ export class SimulationCore {
   }
 
   private synchronizeActiveBurn(state: Float64Array): void {
-    this.burnLog.synchronize(
+    this.burnLogRecorder.synchronize(
       this.clock.timeSec,
       state[6] as number,
       state[STATE_ENERGY_J] as number,

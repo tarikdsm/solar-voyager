@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SPEED_OF_LIGHT_KM_S } from '../../core/constants.js';
 import {
-  BurnLog,
+  createBurnLog,
   SIMULATION_STATE_DIMENSION,
   STATE_ENERGY_J,
   STATE_PROPER_DELTA_V_MS,
@@ -27,13 +27,15 @@ describe('photon-drive ledger — physics-spec.md §5', () => {
   });
 
   it('retains completed burns chronologically in a fixed-capacity ring', () => {
-    const log = new BurnLog(2);
+    const controller = createBurnLog(2);
+    const log = controller.view;
+    const recorder = controller.recorder;
     const prograde = new Float64Array([0, 1, 0]);
     const normal = new Float64Array([0, 0, 1]);
     const radial = new Float64Array([1, 0, 0]);
 
     for (let burn = 0; burn < 3; burn += 1) {
-      log.begin(
+      recorder.begin(
         burn * 10,
         burn * 9,
         burn * 100,
@@ -47,11 +49,21 @@ describe('photon-drive ledger — physics-spec.md §5', () => {
         radial,
         50 + burn,
       );
-      log.synchronize(burn * 10 + 5, burn * 9 + 4, burn * 100 + 80, burn * 2 + 3, burn + 1, 2, 3);
-      log.end();
+      recorder.synchronize(
+        burn * 10 + 5,
+        burn * 9 + 4,
+        burn * 100 + 80,
+        burn * 2 + 3,
+        burn + 1,
+        2,
+        3,
+      );
+      recorder.end();
     }
 
     expect(log.count).toBe(2);
+    expect('begin' in log).toBe(false);
+    expect('end' in log).toBe(false);
     expect(log.activeBurn).toBeNull();
     expect(log.get(-1)).toBeNull();
     expect(log.get(2)).toBeNull();
@@ -69,20 +81,22 @@ describe('photon-drive ledger — physics-spec.md §5', () => {
   });
 
   it('keeps positive throttle changes in one active burn and tracks peak power', () => {
-    const log = new BurnLog();
+    const controller = createBurnLog();
+    const log = controller.view;
+    const recorder = controller.recorder;
     const x = new Float64Array([1, 0, 0]);
     const y = new Float64Array([0, 1, 0]);
     const z = new Float64Array([0, 0, 1]);
 
-    log.begin(0, 0, 0, 0, 0, 0, 0, 'earth', x, z, y, 10);
+    recorder.begin(0, 0, 0, 0, 0, 0, 0, 'earth', x, z, y, 10);
     const activeIdentity = log.activeBurn;
-    log.notePeakPower(25);
-    log.synchronize(2, 2, 50, 4, 3, 0, 0);
+    recorder.notePeakPower(25);
+    recorder.synchronize(2, 2, 50, 4, 3, 0, 0);
 
     expect(log.activeBurn).toBe(activeIdentity);
     expect(log.activeBurn?.peakPowerW).toBe(25);
     expect(log.activeBurn?.energySpentJ).toBe(50);
-    log.end();
+    recorder.end();
     expect(log.count).toBe(1);
   });
 });

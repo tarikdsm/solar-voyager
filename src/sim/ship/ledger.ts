@@ -24,6 +24,48 @@ export interface BurnLogEntry {
   readonly radialDeltaVMS: number;
 }
 
+/** Public read-only burn history exposed by SimulationCore. */
+export interface BurnLogView {
+  readonly capacity: number;
+  readonly count: number;
+  readonly activeBurn: BurnLogEntry | null;
+  get(index: number): BurnLogEntry | null;
+}
+
+/** Internal mutation surface retained only by SimulationCore. */
+export interface BurnLogRecorder {
+  begin(
+    timeSec: number,
+    properTimeSec: number,
+    energySpentJ: number,
+    properDeltaVMS: number,
+    vectorXMS: number,
+    vectorYMS: number,
+    vectorZMS: number,
+    dominantBodyId: string | null,
+    progradeBasis: Float64Array,
+    normalBasis: Float64Array,
+    radialBasis: Float64Array,
+    powerW: number,
+  ): void;
+  notePeakPower(powerW: number): void;
+  synchronize(
+    timeSec: number,
+    properTimeSec: number,
+    energySpentJ: number,
+    properDeltaVMS: number,
+    vectorXMS: number,
+    vectorYMS: number,
+    vectorZMS: number,
+  ): void;
+  end(): void;
+}
+
+export interface BurnLogController {
+  readonly view: BurnLogView;
+  readonly recorder: BurnLogRecorder;
+}
+
 interface MutableBurnLogEntry extends BurnLogEntry {
   startTimeSec: number;
   endTimeSec: number;
@@ -87,7 +129,7 @@ export function writeLedgerDerivativeRates(
 }
 
 /** Fixed-capacity, setup-allocated chronological view of contiguous burns. */
-export class BurnLog {
+class BurnLogStorage implements BurnLogView, BurnLogRecorder {
   private readonly entries: MutableBurnLogEntry[];
   private readonly activeEntry = createBurnEntry();
   private readonly startVectorMS = new Float64Array(3);
@@ -208,4 +250,33 @@ export class BurnLog {
     }
     this.isActive = false;
   }
+}
+
+class ReadOnlyBurnLog implements BurnLogView {
+  constructor(private readonly storage: BurnLogStorage) {}
+
+  get capacity(): number {
+    return this.storage.capacity;
+  }
+
+  get count(): number {
+    return this.storage.count;
+  }
+
+  get activeBurn(): BurnLogEntry | null {
+    return this.storage.activeBurn;
+  }
+
+  get(index: number): BurnLogEntry | null {
+    return this.storage.get(index);
+  }
+}
+
+/** Creates separate public-view and private-recorder capabilities at setup. */
+export function createBurnLog(capacity = DEFAULT_BURN_LOG_CAPACITY): BurnLogController {
+  const storage = new BurnLogStorage(capacity);
+  return {
+    view: Object.freeze(new ReadOnlyBurnLog(storage)),
+    recorder: storage,
+  };
 }

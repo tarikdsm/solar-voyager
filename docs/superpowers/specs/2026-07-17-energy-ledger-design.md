@@ -58,14 +58,16 @@ cadence operation, never part of `step()`.
 
 ## Verification
 
-- An analytic impulsive Hohmann LEO-to-GEO delta-v drives a 1 g far-field burn;
-  scalar proper delta-v and `c*m*delta-v` energy agree within the specified 1%.
+- A two-burn, high-acceleration impulsive approximation starts in a computed
+  circular 300 km LEO, coasts to the computed GEO transfer apogee, and performs
+  the circularization burn. Scalar proper delta-v and `c*m*delta-v` energy agree
+  with the vis-viva solution and canonical 3.90 km/s within the specified 1%.
 - A continuous 90-degree turn of a 30 km/s celerity vector uses a rotating
   perpendicular thrust direction. Energy matches `integral(F*c dt)` within 2%
   and exceeds the impulsive momentum-change lower bound.
-- The same nonzero burn at 1x and 100x yields matching totals.
+- The same nonzero burn at 1x and 100x yields matching totals across genuinely
+  different frame partitions (1000 short 1x frames versus 10 long 100x frames).
 - Failed propagation publishes neither motion nor ledger progress.
 - A multi-frame throttle interval produces one completed burn with signed local
   components and peak power.
 - Formatter boundary and prefix cases are deterministic.
-
