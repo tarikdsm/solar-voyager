@@ -33,3 +33,6 @@ handoff_notes: |
   and DualClock each render once while the clock text updates; covered nonzero true
   anomaly and circular-inclined publication; and removed blank document EOF lines.
   Awaiting exact-head re-review and CI.
+  Re-review of SHA 4335a9f confirmed Critical 0, Important 0, Minor 1; all
+  substantive findings are resolved. The sole minor was one blank EOF line in the
+  new Chromium regression script, removed in the following mechanical fix.

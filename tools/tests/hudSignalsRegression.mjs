@@ -42,4 +42,3 @@ try {
   if (browser !== undefined) await browser.close();
   await server.close();
 }
-
