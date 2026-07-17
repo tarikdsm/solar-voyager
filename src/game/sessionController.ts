@@ -22,13 +22,15 @@ export type SessionActionResult =
 export type SessionExportResult =
   { readonly ok: true; readonly json: string } | { readonly ok: false; readonly message: string };
 
+export type SettingsChangeOrigin = 'restore' | 'user';
+
 export interface GameSessionControllerOptions {
   readonly initialSimulation: SimulationCore;
   readonly saveRepository: SaveRepository;
   readonly settingsRepository: SettingsRepository;
   readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV1) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV1, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
@@ -40,7 +42,8 @@ export class GameSessionController {
   private readonly settingsRepository: SettingsRepository;
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
-  private readonly onSettingsChanged: ((settings: GameSettingsV1) => void) | null;
+  private readonly onSettingsChanged:
+    ((settings: GameSettingsV1, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -158,7 +161,7 @@ export class GameSessionController {
     this.currentSimulation = candidateSimulation;
     this.currentSettings = envelope.settings;
     this.onSimulationReplaced?.(candidateSimulation);
-    this.onSettingsChanged?.(envelope.settings);
+    this.onSettingsChanged?.(envelope.settings, 'restore');
     return { ok: true, message: successMessage };
   }
 
@@ -168,7 +171,7 @@ export class GameSessionController {
       return { ok: false, message: 'Unable to save settings', detail: result.error };
     }
     this.currentSettings = settings;
-    this.onSettingsChanged?.(settings);
+    this.onSettingsChanged?.(settings, 'user');
     return { ok: true, message: successMessage };
   }
 }

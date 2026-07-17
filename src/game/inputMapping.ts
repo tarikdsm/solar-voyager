@@ -142,6 +142,12 @@ export class KeyboardCommandMapper {
     this.codeMap = buildCodeMap(bindings);
   }
 
+  /** Replaces restored bindings without overwriting restored continuous commands. */
+  restoreBindings(bindings: InputBindings): void {
+    this.resetHeldAxes();
+    this.codeMap = buildCodeMap(bindings);
+  }
+
   updateCommands(commands: Commands, snapshotProvider: InputCommandSnapshotProvider): void {
     this.releaseHeldAxes();
     this.commands = commands;
@@ -188,13 +194,17 @@ export class KeyboardCommandMapper {
   }
 
   private releaseHeldAxes(): void {
+    this.resetHeldAxes();
+    this.commands.rotate(0, 0, 0);
+  }
+
+  private resetHeldAxes(): void {
     this.pitchUp = 0;
     this.pitchDown = 0;
     this.yawLeft = 0;
     this.yawRight = 0;
     this.rollLeft = 0;
     this.rollRight = 0;
-    this.commands.rotate(0, 0, 0);
     this.axesDirty = false;
   }
 

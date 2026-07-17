@@ -310,6 +310,9 @@ function migrateV1(
     'save v1.ledger.properDeltaVMS',
   );
   if (!Array.isArray(value.burnLog)) throw new RangeError('save v1.burnLog must be an array');
+  if (value.burnLog.length > DEFAULT_BURN_LOG_CAPACITY) {
+    throw new RangeError('save v1 burn log entries exceed capacity');
+  }
   const entries: BurnLogEntry[] = [];
   for (let index = 0; index < value.burnLog.length; index += 1) {
     entries.push(parseBurnEntry(value.burnLog[index], `save v1.burnLog[${index}]`));

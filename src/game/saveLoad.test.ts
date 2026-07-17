@@ -166,6 +166,19 @@ describe('save envelope', () => {
     );
   });
 
+  it('rejects oversized v1 burn history before materializing migrated entries', () => {
+    const oversizedV1 = structuredClone(saveV1Fixture);
+    const entry = saveV1Fixture.burnLog[0];
+    if (entry === undefined) throw new Error('v1 fixture has no burn entry');
+    oversizedV1.burnLog = Array.from({ length: DEFAULT_BURN_LOG_CAPACITY + 1 }, () => ({
+      ...entry,
+    }));
+
+    expect(() => parseSave(JSON.stringify(oversizedV1))).toThrow(
+      /save v1 burn log entries exceed capacity/u,
+    );
+  });
+
   it('rejects malformed JSON, unknown versions, invalid numbers, targets, and burns', () => {
     expect(() => parseSave('{bad')).toThrow(/parse save JSON/u);
     expect(() => parseSave('{"version":99}')).toThrow(/version/u);

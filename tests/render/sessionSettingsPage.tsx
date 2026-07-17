@@ -59,8 +59,9 @@ const controller = new GameSessionController({
   onSimulationReplaced: (simulation) => {
     mapper?.updateCommands(simulation.commands, currentSnapshot);
   },
-  onSettingsChanged: (settings) => {
-    mapper?.updateBindings(settings.inputBindings);
+  onSettingsChanged: (settings, origin) => {
+    if (origin === 'restore') mapper?.restoreBindings(settings.inputBindings);
+    else mapper?.updateBindings(settings.inputBindings);
   },
 });
 

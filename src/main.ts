@@ -63,8 +63,9 @@ const session = new GameSessionController({
   onSimulationReplaced: (replacement) => {
     hudStore.publish(replacement.snapshot, performance.now());
   },
-  onSettingsChanged: (settings) => {
-    commandInput?.updateBindings(settings.inputBindings);
+  onSettingsChanged: (settings, origin) => {
+    if (origin === 'restore') commandInput?.restoreBindings(settings.inputBindings);
+    else commandInput?.updateBindings(settings.inputBindings);
   },
 });
 

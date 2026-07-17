@@ -82,7 +82,17 @@ describe('GameSessionController', () => {
 
   it('preserves restored manual rotation through the production input-frame order', () => {
     const storage = new MemoryStorage();
-    const controller = createController(storage);
+    let mapper: KeyboardCommandMapper | null = null;
+    const controller = new GameSessionController({
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+      onSettingsChanged: (settings, origin) => {
+        if (origin === 'restore') mapper?.restoreBindings(settings.inputBindings);
+        else mapper?.updateBindings(settings.inputBindings);
+      },
+    });
     const sessionCommands: Commands = {
       rotate: (pitch, yaw, roll) => controller.simulation.commands.rotate(pitch, yaw, roll),
       setAttitudeMode: (mode) => controller.simulation.commands.setAttitudeMode(mode),
@@ -94,7 +104,7 @@ describe('GameSessionController', () => {
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
     };
-    const mapper = new KeyboardCommandMapper(
+    mapper = new KeyboardCommandMapper(
       keyboardTarget,
       sessionCommands,
       () => controller.simulation.snapshot,
