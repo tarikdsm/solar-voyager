@@ -1,6 +1,6 @@
 id: T0044
 title: Free camera + body focus controls
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0044-free-camera
 depends_on: [T0040]
