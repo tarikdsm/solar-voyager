@@ -1,6 +1,6 @@
 id: T0044
 title: Free camera + body focus controls
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0044-free-camera
 depends_on: [T0040]
@@ -19,4 +19,5 @@ handoff_notes: >-
   transfer with visible Jupiter. Full Vitest (284 passed), render regressions,
   tools, lint, typecheck, format, build, budgets, and task schema pass.
   Benchmark: unchanged 150/150/166.7 ms headless median/p75/p99 versus base;
-  see docs/bench/T0044-summary.md.
+  see docs/bench/T0044-summary.md. Independently reviewed and approved on
+  1666e36 with zero Critical, Important, or Minor findings; exact-head CI passed.
