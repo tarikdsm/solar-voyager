@@ -1,7 +1,8 @@
 import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 
-import { createSimulationSnapshotBuffer } from '../sim/simulationSnapshot.js';
+import { formatEnergyWh, formatPowerW } from '../core/formatUnits.js';
+import { createSimulationSnapshotBuffer, WarpClampReason } from '../sim/simulationSnapshot.js';
 import {
   createHudSignalStore,
   formatDurationSec,
@@ -93,6 +94,114 @@ describe('HUD signal store', () => {
     expect(store.display.apoapsis.value).toBe('∞');
     expect(store.display.period.value).toBe('∞');
     expect(store.display.gamma.value).toBe('γ 1.001001');
+  });
+
+  it('publishes a clamp reason synchronously inside the next frame', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    store.publish(snapshot, 0);
+    snapshot.requestedWarp = 1_000;
+    snapshot.effectiveWarp = 100;
+    snapshot.warpClampReason = WarpClampReason.INTEGRATION_BUDGET;
+
+    expect(store.publish(snapshot, 16)).toBe(false);
+    expect(store.signals.requestedWarp.value).toBe(1_000);
+    expect(store.signals.effectiveWarp.value).toBe(100);
+    expect(store.signals.warpClampReason.value).toBe(WarpClampReason.INTEGRATION_BUDGET);
+    expect(store.display.requestedWarp.value).toBe('1,000×');
+    expect(store.display.effectiveWarp.value).toBe('100×');
+    expect(store.display.warpClamp.value).toBe(
+      'Gravity well · integration budget · 100× sustainable',
+    );
+  });
+
+  it('uses the shared energy formatters and exposes secondary ledger values', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    snapshot.energySpentJ = 4.82e15 * 3_600;
+    snapshot.powerDrawW = 3.21e12;
+    snapshot.properDeltaVMS = 1_234.5;
+    snapshot.kineticEnergyChangeJ = -6.78e11;
+
+    store.publish(snapshot, 0);
+
+    expect(store.display.energySpent.value).toBe(formatEnergyWh(snapshot.energySpentJ));
+    expect(store.display.energySpent.value).toBe('4.82 PWh');
+    expect(store.display.powerDraw.value).toBe(formatPowerW(snapshot.powerDrawW));
+    expect(store.display.powerDraw.value).toBe('3.21 TW');
+    expect(store.display.properDeltaV.value).toBe('1.23 km/s');
+    expect(store.display.kineticEnergyChange.value).toBe('-678 GJ');
+  });
+
+  it('shows the active or latest burn separately from session totals', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    store.publish(snapshot, 0);
+
+    expect(store.display.burnSummaryLabel.value).toBe('No burns yet');
+    expect(store.display.burnEnergy.value).toBe('—');
+    expect(store.display.burnProperDeltaV.value).toBe('—');
+
+    snapshot.burnSummaryAvailable = true;
+    snapshot.burnSummaryActive = true;
+    snapshot.burnEnergySpentJ = 3_600_000;
+    snapshot.burnProperDeltaVMS = 12.3;
+    store.publish(snapshot, 100);
+
+    expect(store.display.burnSummaryLabel.value).toBe('Active burn');
+    expect(store.display.burnEnergy.value).toBe('1.00 kWh');
+    expect(store.display.burnProperDeltaV.value).toBe('12.3 m/s');
+
+    snapshot.burnSummaryActive = false;
+    store.publish(snapshot, 200);
+    expect(store.display.burnSummaryLabel.value).toBe('Last burn');
+  });
+
+  it('promotes signed kinetic-energy values at rounded SI-prefix boundaries', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    snapshot.kineticEnergyChangeJ = 999.5;
+    store.publish(snapshot, 0);
+    expect(store.display.kineticEnergyChange.value).toBe('1.00 kJ');
+
+    snapshot.kineticEnergyChangeJ = -999.5;
+    store.publish(snapshot, 100);
+    expect(store.display.kineticEnergyChange.value).toBe('-1.00 kJ');
+  });
+
+  it('derives selected-target distance and relative speed directly from snapshot arrays', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    snapshot.shipState.set([0, 0, 0]);
+    snapshot.shipCoordinateVelocityKmS.set([4, 6, 3]);
+    snapshot.bodyPositionsKm.set([100, 100, 100, 3, 4, 0]);
+    snapshot.bodyVelocitiesKmS.set([0, 0, 0, 1, 2, 3]);
+    snapshot.targetBodyIndex = 1;
+    snapshot.targetBodyId = 'earth';
+
+    store.publish(snapshot, 0);
+
+    expect(store.signals.targetBodyId.value).toBe('earth');
+    expect(store.signals.targetDistanceKm.value).toBe(5);
+    expect(store.signals.targetRelativeSpeedKmS.value).toBe(5);
+    expect(store.display.targetBody.value).toBe('Earth');
+    expect(store.display.targetDistance.value).toBe('5 km');
+    expect(store.display.targetRelativeSpeed.value).toBe('5 km/s');
+    expect(store.display.nextClosestApproach.value).toBe('Awaiting trajectory predictor');
+  });
+
+  it('keeps coordinate and proper clocks visibly divergent above gamma 1.1', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    snapshot.utcTimeMs = Date.UTC(2026, 0, 1, 0, 0, 10);
+    snapshot.shipProperTimeSec = 8;
+    snapshot.gamma = 1.25;
+
+    store.publish(snapshot, 0);
+
+    expect(store.display.coordinateUtc.value).toBe('2026-01-01 00:00:10.000 UTC');
+    expect(store.display.missionElapsedTime.value).toBe('00:00:08.000');
+    expect(store.display.gamma.value).toBe('γ 1.250000');
   });
 });
 

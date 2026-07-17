@@ -136,6 +136,32 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     ).toBeLessThan(1e-12);
   });
 
+  it('publishes the active burn or latest completed burn as primitive snapshot values', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    core.commands.setThrottle(0.25);
+
+    const activeSnapshot = core.step(1);
+    const activeBurn = core.burnLog.activeBurn;
+    expect(activeBurn).not.toBeNull();
+    expect(activeSnapshot.burnSummaryAvailable).toBe(true);
+    expect(activeSnapshot.burnSummaryActive).toBe(true);
+    expect(activeSnapshot.burnEnergySpentJ).toBe(activeBurn?.energySpentJ);
+    expect(activeSnapshot.burnProperDeltaVMS).toBe(activeBurn?.properDeltaVMS);
+
+    core.commands.setThrottle(0);
+    const completedSnapshot = core.step(0.01);
+    const completedBurn = core.burnLog.get(0);
+    expect(completedBurn).not.toBeNull();
+    expect(completedSnapshot.burnSummaryAvailable).toBe(true);
+    expect(completedSnapshot.burnSummaryActive).toBe(false);
+    expect(completedSnapshot.burnEnergySpentJ).toBe(completedBurn?.energySpentJ);
+    expect(completedSnapshot.burnProperDeltaVMS).toBe(completedBurn?.properDeltaVMS);
+  });
+
   it('does not publish ledger progress when propagation fails', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),

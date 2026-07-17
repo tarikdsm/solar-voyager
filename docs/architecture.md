@@ -53,7 +53,7 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 - body positions/velocities (Float64Array, heliocentric ecliptic J2000, km)
 - ship state: r, celerity u, derived v, **γ, % of c**, attitude quaternion, throttle, thrust vector, current power draw
 - **barycenter state** (r_cm, v_cm) and CM-relative derived vectors: velocity, proper acceleration, relativistic p and L (physics-spec §6)
-- derived: dominant body id, osculating elements, energy ledger totals (E_spent J, proper Δv), active warnings
+- derived: dominant body id, osculating elements, energy ledger totals (E_spent J, proper Δv), active-or-latest burn summary, active warnings
 
 **`Commands`** (the ONLY way player intent enters the sim; changes require an ADR):
 - `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`; (deferred launch phase adds `setPitchRate(r)`, `stage()` via ADR when built)

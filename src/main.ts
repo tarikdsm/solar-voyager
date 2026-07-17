@@ -93,7 +93,16 @@ function renderFrame(nowMs: number): void {
 }
 
 async function startApplication(): Promise<void> {
-  render(h(App, { hardwareWarning, hud: hudStore.display }), appRoot);
+  render(
+    h(App, {
+      bodyIds: simulation.snapshot.bodyIds,
+      commands: simulation.commands,
+      hardwareWarning,
+      hud: hudStore.display,
+      hudState: hudStore.signals,
+    }),
+    appRoot,
+  );
   canvas.dataset.depthStrategy = contextReport.depthStrategy;
   canvas.dataset.rendererName = contextReport.rendererName;
   canvas.dataset.rendererReady = 'true';
