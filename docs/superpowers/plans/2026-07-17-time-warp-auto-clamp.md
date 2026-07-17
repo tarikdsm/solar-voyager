@@ -14,4 +14,3 @@
    build, task schema, budgets, and simulation benchmark.
 7. Mark T0052 REVIEW, open a PR with acceptance evidence, obtain independent
    review, address findings, wait for exact-head CI, and merge normally.
-

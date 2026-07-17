@@ -1,7 +1,7 @@
 import { MAX_THRUST_WARP, WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { RELATIVISTIC_STATE_DIMENSION } from './ship/relativity.js';
 
-/** Stable codes explaining why effective warp differs from requested warp. */
+/** Stable codes explaining budget clamps or coast-only warp safety. */
 export const WarpClampReason = Object.freeze({
   NONE: 0,
   INTEGRATION_BUDGET: 1,

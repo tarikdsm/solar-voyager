@@ -270,7 +270,7 @@ describe('SimulationCore', () => {
     expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
   });
 
-  it('keeps equivalent physical horizons and reserved ledger totals stable across warp changes', () => {
+  it('keeps equivalent physical horizons stable across warp changes', () => {
     const warped = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
@@ -300,9 +300,5 @@ describe('SimulationCore', () => {
         7,
       );
     }
-    expect(warpedSnapshot.energySpentJ).toBe(0);
-    expect(warpedSnapshot.properDeltaVMS).toBe(0);
-    expect(realtimeSnapshot.energySpentJ).toBe(0);
-    expect(realtimeSnapshot.properDeltaVMS).toBe(0);
   });
 });

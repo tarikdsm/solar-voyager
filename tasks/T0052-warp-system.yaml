@@ -25,3 +25,7 @@ handoff_notes: |
   lint, typecheck, formatting, task schema, budgets, six browser regressions, live
   Earth-to-Jupiter playtest with zero console warnings/errors, and simulation benchmark
   at 0.112 ms/step with two snapshots and negative retained heap growth.
+  Independent review of SHA 1f8ee243 found no critical issues, one important dependency,
+  and two minor documentation/whitespace issues (fixed next). The remaining acceptance
+  requires a nonzero 1x-vs-100x ledger burn, whose implementation is owned by T0053.
+  Resume this PR after T0053 is DONE, rebase it, and add that real ledger regression.

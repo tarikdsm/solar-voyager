@@ -51,4 +51,3 @@ frame start would also spend more than the stated per-frame budget.
   command.
 - Future ledger integration can use the same accepted trajectory segments; a
   discarded partial segment must not commit ledger state.
-

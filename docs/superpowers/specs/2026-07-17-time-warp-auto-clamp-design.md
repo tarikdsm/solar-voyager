@@ -66,8 +66,7 @@ duplicates.
 - All completed attempts together stay inside a deliberately small injected
   budget.
 - High warp clears/blocks throttle and reports coast-only status.
-- Warp changes preserve physical endpoint/proper-time behavior and leave the
-  not-yet-implemented ledger baseline unchanged.
+- Warp changes preserve physical endpoint/proper-time behavior. Nonzero ledger
+  invariance is verified after its owning implementation in T0053 lands.
 - Failed 1x propagation retains the previously published frame.
 - Performance tests confirm the same two snapshots and no frame allocations.
-
