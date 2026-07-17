@@ -17,3 +17,11 @@ handoff_notes: |
   T0053 implements a nonzero ledger. Resume after T0053 is DONE, rebase PR #31, add a
   real 1x-vs-100x burn regression, obtain exact-head review, and merge normally.
   Resumed after T0053 reached DONE in merge commit 2e04d8f.
+  Implemented ascending canonical warp checkpoints under one cumulative accepted-step
+  budget, integration-budget rollback, and coast-only thrust lockout above 1000x.
+  Added ADR-026, precise physics-spec semantics, and focused coverage for LEO clamp,
+  deep-space sustain, checkpoint rollback, command invalidation, and reserved ledger
+  stability. Local gates: 339 TypeScript tests + 3 skipped, 49 Python tests, build,
+  lint, typecheck, formatting, task schema, budgets, six browser regressions, live
+  Earth-to-Jupiter playtest with zero console warnings/errors, and simulation benchmark
+  at 0.112 ms/step with two snapshots and negative retained heap growth.
