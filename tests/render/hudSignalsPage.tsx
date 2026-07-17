@@ -2,6 +2,7 @@ import { options, render, type VNode } from 'preact';
 
 import '../../src/style.css';
 import type { WarpFactor } from '../../src/core/time.js';
+import { writeQuaternionFromForwardInto } from '../../src/sim/ship/attitude.js';
 import {
   createSimulationSnapshotBuffer,
   type Commands,
@@ -16,11 +17,13 @@ import {
   WarpControl,
 } from '../../src/ui/App.js';
 import { createHudSignalStore } from '../../src/ui/hudSignals.js';
+import { Navball } from '../../src/ui/Navball.js';
 
 interface RenderCounts {
   app: number;
   dualClock: number;
   energyPanel: number;
+  navball: number;
   orbitReadout: number;
   targetPanel: number;
   warpControl: number;
@@ -29,6 +32,7 @@ interface RenderCounts {
 interface HudSignalsHarness {
   commitCommands(): Promise<HudSignalsHarnessSnapshot>;
   snapshot(): HudSignalsHarnessSnapshot;
+  updateAttitude(): Promise<HudSignalsHarnessSnapshot>;
   updateClamp(): Promise<HudSignalsHarnessSnapshot>;
   updateClock(): Promise<HudSignalsHarnessSnapshot>;
 }
@@ -43,6 +47,10 @@ interface HudSignalsHarnessSnapshot {
   readonly commandedWarp: WarpFactor;
   readonly coordinateClock: string;
   readonly counts: RenderCounts;
+  readonly navballMode: string;
+  readonly navballProgradeTransform: string;
+  readonly navballRadialOutTransform: string;
+  readonly navballThrustOpacity: string;
   readonly warpClampStatus: string;
 }
 
@@ -73,6 +81,9 @@ snapshot.burnSummaryAvailable = true;
 snapshot.burnSummaryActive = true;
 snapshot.burnEnergySpentJ = 3_600_000;
 snapshot.burnProperDeltaVMS = 12.3;
+snapshot.shipState.set([6_778.137, 0, 0]);
+snapshot.shipCoordinateVelocityKmS.set([0, 7.668_558, 0]);
+snapshot.shipProperAccelerationKmS2.set([0.009_806_65, 0, 0]);
 
 const store = createHudSignalStore();
 store.publish(snapshot, 0);
@@ -80,6 +91,7 @@ const counts: RenderCounts = {
   app: 0,
   dualClock: 0,
   energyPanel: 0,
+  navball: 0,
   orbitReadout: 0,
   targetPanel: 0,
   warpControl: 0,
@@ -111,6 +123,7 @@ options.diffed = (vnode: VNode): void => {
   if (vnode.type === App) counts.app += 1;
   if (vnode.type === DualClock) counts.dualClock += 1;
   if (vnode.type === EnergyPanel) counts.energyPanel += 1;
+  if (vnode.type === Navball) counts.navball += 1;
   if (vnode.type === OrbitReadout) counts.orbitReadout += 1;
   if (vnode.type === TargetPanel) counts.targetPanel += 1;
   if (vnode.type === WarpControl) counts.warpControl += 1;
@@ -131,6 +144,7 @@ function copyCounts(): RenderCounts {
     app: counts.app,
     dualClock: counts.dualClock,
     energyPanel: counts.energyPanel,
+    navball: counts.navball,
     orbitReadout: counts.orbitReadout,
     targetPanel: counts.targetPanel,
     warpControl: counts.warpControl,
@@ -148,6 +162,12 @@ function readHarnessSnapshot() {
     commandedWarp,
     counts: copyCounts(),
     coordinateClock: document.querySelector('#coordinate-clock')?.textContent ?? '',
+    navballMode: document.querySelector('#navball-mode')?.textContent ?? '',
+    navballProgradeTransform:
+      document.querySelector('#navball-prograde')?.getAttribute('transform') ?? '',
+    navballRadialOutTransform:
+      document.querySelector('#navball-radial-out')?.getAttribute('transform') ?? '',
+    navballThrustOpacity: document.querySelector('#navball-thrust')?.getAttribute('opacity') ?? '',
     warpClampStatus: document.querySelector('#warp-clamp-status')?.textContent ?? '',
   };
 }
@@ -166,11 +186,18 @@ window.__hudSignalsHarness = {
     snapshot.targetBodyId = commandedTarget;
     snapshot.targetBodyIndex =
       commandedTarget === null ? -1 : snapshot.bodyIds.indexOf(commandedTarget);
-    store.publish(snapshot, 200);
+    store.publish(snapshot, 300);
     await nextFrame();
     return readHarnessSnapshot();
   },
   snapshot: readHarnessSnapshot,
+  updateAttitude: async () => {
+    snapshot.attitudeMode = 'prograde';
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0, 1, 0);
+    store.publish(snapshot, 200);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
   updateClamp: async () => {
     snapshot.requestedWarp = 1_000;
     snapshot.effectiveWarp = 100;

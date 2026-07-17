@@ -2,6 +2,7 @@ import { effect } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
 
 import { formatEnergyWh, formatPowerW } from '../core/formatUnits.js';
+import { writeQuaternionFromForwardInto } from '../sim/ship/attitude.js';
 import { createSimulationSnapshotBuffer, WarpClampReason } from '../sim/simulationSnapshot.js';
 import {
   createHudSignalStore,
@@ -9,6 +10,7 @@ import {
   formatOrbitDistanceKm,
   formatUtcTimeMs,
 } from './hudSignals.js';
+import { NavballMarkerIndex } from './navballProjection.js';
 
 function populatedSnapshot() {
   const snapshot = createSimulationSnapshotBuffer(Object.freeze(['sun', 'earth']));
@@ -202,6 +204,43 @@ describe('HUD signal store', () => {
     expect(store.display.coordinateUtc.value).toBe('2026-01-01 00:00:10.000 UTC');
     expect(store.display.missionElapsedTime.value).toBe('00:00:08.000');
     expect(store.display.gamma.value).toBe('γ 1.250000');
+  });
+
+  it('samples the dominant-body navball frame and attitude label at 10 Hz', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    const earthOffset = 3;
+    snapshot.bodyPositionsKm[earthOffset] = 0;
+    snapshot.bodyPositionsKm[earthOffset + 1] = 0;
+    snapshot.bodyPositionsKm[earthOffset + 2] = 0;
+    snapshot.shipState.set([6_778.137, 0, 0]);
+    snapshot.shipCoordinateVelocityKmS.set([0, 7.668_558, 0]);
+    snapshot.shipProperAccelerationKmS2.set([0.009_806_65, 0, 0]);
+    snapshot.attitudeMode = 'prograde';
+
+    store.publish(snapshot, 0);
+
+    const prograde = store.signals.navball.markers[NavballMarkerIndex.PROGRADE];
+    const radialOut = store.signals.navball.markers[NavballMarkerIndex.RADIAL_OUT];
+    expect(store.signals.navball.valid.value).toBe(true);
+    expect(prograde?.x.value).toBeCloseTo(1, 12);
+    expect(prograde?.y.value).toBeCloseTo(0, 12);
+    expect(prograde?.visible.value).toBe(true);
+    expect(radialOut?.x.value).toBeCloseTo(0, 12);
+    expect(radialOut?.visible.value).toBe(true);
+    expect(store.signals.navball.thrustVisible.value).toBe(true);
+    expect(store.display.attitudeMode.value).toBe('Prograde hold');
+
+    snapshot.attitudeMode = 'normal';
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0, 1, 0);
+    expect(store.publish(snapshot, 50)).toBe(false);
+    expect(store.display.attitudeMode.value).toBe('Prograde hold');
+    expect(prograde?.x.value).toBeCloseTo(1, 12);
+
+    expect(store.publish(snapshot, 100)).toBe(true);
+    expect(store.display.attitudeMode.value).toBe('Normal hold');
+    expect(prograde?.x.value).toBeCloseTo(0, 12);
+    expect(prograde?.visible.value).toBe(true);
   });
 });
 

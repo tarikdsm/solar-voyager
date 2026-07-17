@@ -79,6 +79,7 @@ try {
   const before = await page.evaluate(() => globalThis.__hudSignalsHarness.snapshot());
   const clamped = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClamp());
   const after = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClock());
+  const afterAttitude = await page.evaluate(() => globalThis.__hudSignalsHarness.updateAttitude());
   await page.getByRole('button', { name: '100×', exact: true }).click();
   await page.locator('#target-selector').selectOption('mars');
   const afterCommands = await page.evaluate(() => globalThis.__hudSignalsHarness.commitCommands());
@@ -87,6 +88,7 @@ try {
     app: 1,
     dualClock: 1,
     energyPanel: 1,
+    navball: 1,
     orbitReadout: 1,
     targetPanel: 1,
     warpControl: 1,
@@ -94,12 +96,23 @@ try {
   assert.equal(before.burnSummaryLabel, 'Active burn');
   assert.equal(before.burnEnergy, '1.00 kWh');
   assert.equal(before.burnProperDeltaV, '12.3 m/s');
+  assert.equal(before.navballMode, 'Manual attitude');
+  assert.equal(before.navballProgradeTransform, 'translate(82.000 0.000)');
+  assert.equal(before.navballRadialOutTransform, 'translate(0.000 0.000)');
+  assert.equal(before.navballThrustOpacity, '1');
   assert.deepEqual(clamped.counts, before.counts, 'same-frame clamp rerendered a HUD component');
   assert.equal(
     clamped.warpClampStatus,
     'Gravity well · integration budget · 100× sustainable',
   );
   assert.deepEqual(after.counts, before.counts, 'signal text update rerendered a HUD component');
+  assert.deepEqual(
+    afterAttitude.counts,
+    before.counts,
+    'navball signal update rerendered a HUD component',
+  );
+  assert.equal(afterAttitude.navballMode, 'Prograde hold');
+  assert.equal(afterAttitude.navballProgradeTransform, 'translate(0.000 0.000)');
   assert.deepEqual(
     afterCommands.counts,
     before.counts,
@@ -118,6 +131,15 @@ try {
   assert.ok(
     targetPanelMetrics.scrollHeight <= targetPanelMetrics.clientHeight,
     `target panel clips its content: ${JSON.stringify(targetPanelMetrics)}`,
+  );
+  assert.equal(await page.locator('#navball .navball-marker').count(), 6);
+  const navballMetrics = await page.locator('#navball').evaluate((panel) => ({
+    clientHeight: panel.clientHeight,
+    scrollHeight: panel.scrollHeight,
+  }));
+  assert.ok(
+    navballMetrics.scrollHeight <= navballMetrics.clientHeight,
+    `navball clips its content: ${JSON.stringify(navballMetrics)}`,
   );
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileMetrics = await page.evaluate(() => {
@@ -182,7 +204,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
-  process.stdout.write(`${JSON.stringify({ before, after, afterCommands }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ before, after, afterAttitude, afterCommands }, null, 2)}\n`,
+  );
 } finally {
   if (browser !== undefined) await browser.close();
   await server.close();
