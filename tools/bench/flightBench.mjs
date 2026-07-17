@@ -19,7 +19,6 @@ const HOST = '127.0.0.1';
 const PORT = 4177;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
-const WARMUP_FRAMES = 120;
 const STEADY_HEAP_SETTLE_MS = 30_000;
 const STEADY_HEAP_MEASURE_MS = 30_000;
 const DEFAULT_SAMPLE_FRAMES = 300;
@@ -122,7 +121,7 @@ async function forceGc(page) {
 
 async function measureFlight(page, schedule) {
   return page.evaluate(
-    ({ schedule: flightSchedule, telemetryProperty, warmupFrames }) =>
+    ({ schedule: flightSchedule, telemetryProperty }) =>
       new Promise((resolvePromise, rejectPromise) => {
         const canvas = globalThis.document.querySelector('#space-canvas');
         if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -136,23 +135,13 @@ async function measureFlight(page, schedule) {
         }
         const frameDeltasMs = new Float64Array(flightSchedule.sampleFrames);
         let focusEventIndex = 0;
-        let framesToWarm = warmupFrames;
         let maxDrawCalls = 0;
         let maxTriangles = 0;
-        let previousFrameTimeMs = 0;
+        let previousFrameTimeMs = performance.now();
         let sampleIndex = 0;
         let zoomEventIndex = 0;
 
         function measureFrame(frameTimeMs) {
-          if (framesToWarm > 0) {
-            framesToWarm -= 1;
-            if (framesToWarm === 0) {
-              previousFrameTimeMs = frameTimeMs;
-            }
-            globalThis.requestAnimationFrame(measureFrame);
-            return;
-          }
-
           frameDeltasMs[sampleIndex] = frameTimeMs - previousFrameTimeMs;
           previousFrameTimeMs = frameTimeMs;
           const focusEvent = flightSchedule.focusEvents[focusEventIndex];
@@ -191,7 +180,6 @@ async function measureFlight(page, schedule) {
     {
       schedule,
       telemetryProperty: TELEMETRY_PROPERTY,
-      warmupFrames: WARMUP_FRAMES,
     },
   );
 }
