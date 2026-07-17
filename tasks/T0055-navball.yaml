@@ -47,10 +47,7 @@ handoff_notes: |
   Scaffold baseline 2cfd14c measured 149.9/150.0/166.7 ms at median/p75/p99.
   Three exact-code captures measured 150.0/~150.0/~183.3 ms externally but all
   retained an internal p99 of 166.7 ms, 6 draws, 48,564 triangles, no errors, and
-  sampled UI time no greater than 0.10 ms. A same-build Intel UHD D3D11 A/B
-  diagnostic measured p99 6.20 ms both with the navball visible and after removing
-  it (max 6.40 vs 6.50 ms), isolating the external tail to Chromium/SwiftShader
-  scheduling rather than SVG composition. Raw results and interpretation are in
+  sampled UI time no greater than 0.10 ms. Raw results and interpretation are in
   docs/bench/T0055-summary.md.
 
   Independent review of SHA 3332e0f found one Important and two Minor issues:
@@ -77,7 +74,14 @@ handoff_notes: |
 
   Exact-code SwiftShader captures retained 150.0/150.0/183.3 ms externally with
   6 draws, 48,564 triangles, 0.00 ms sampled UI time, and zero errors; the rolling
-  internal windows captured 180.23 and 183.40 ms p99. A versioned 600+600 frame
-  Intel UHD D3D11 A/B measured identical 6.10/6.10/6.20 ms median/p75/p99 with
-  navball visible and removed, max 6.30 versus 6.50 ms. Exact artifacts are under
-  docs/bench/.
+  internal windows captured 180.23 and 183.40 ms p99.
+
+  Re-review confirmed the three code findings closed, then found one Important
+  evidence issue: the first hardware A/B attempted to remove an absent
+  `.navball-panel` selector and therefore compared the visible panel with itself.
+  That conclusion was discarded. Three corrected captures require `#navball` to
+  exist and assert zero matches after removal. At 1280x720, visible p99 was
+  12.20/12.30 ms versus 6.30/6.50 ms removed; at 1920x1080 it was 12.40 versus
+  6.30 ms. Median/p75 remained 6.10 ms throughout, and visible p99 stayed below
+  16.67 ms. Isolated visible maxima of 72.80 and 54.50 ms are preserved without
+  filtering. Exact removal proof and artifacts are under docs/bench/.

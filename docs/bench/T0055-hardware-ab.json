@@ -1,25 +1,83 @@
 {
-  "timestamp": "2026-07-17T07:49:54.353Z",
-  "gitSha": "430327d4989e43df335a8e2b967c5b56035480c6",
-  "viewport": {
-    "width": 1280,
-    "height": 720
-  },
+  "timestamp": "2026-07-17T07:58:53.545Z",
+  "gitSha": "f8632da814b68588b2ac805f49cc85208ae0f5d0",
   "warmupFramesPerVariant": 60,
   "sampleFramesPerVariant": 600,
   "rendererName": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
   "softwareRasterizer": false,
-  "method": "The visible variant used the production DOM unchanged. The removed variant deleted .navball-panel after load, leaving the simulation and signal publisher active while removing navball composition.",
-  "visible": {
-    "medianMs": 6.1,
-    "p75Ms": 6.1,
-    "p99Ms": 6.2,
-    "maxMs": 6.3
-  },
-  "removed": {
-    "medianMs": 6.1,
-    "p75Ms": 6.1,
-    "p99Ms": 6.2,
-    "maxMs": 6.5
-  }
+  "method": "Each capture measured the unchanged production DOM, then required #navball to exist, removed it, asserted that zero #navball elements remained, and measured again. Simulation and signal publication stayed active.",
+  "captures": [
+    {
+      "timestamp": "2026-07-17T07:57:44.454Z",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "removal": {
+        "selector": "#navball",
+        "navballWasPresent": true,
+        "remainingNavballCount": 0
+      },
+      "visible": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 12.2,
+        "maxMs": 12.7
+      },
+      "removed": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 6.3,
+        "maxMs": 12.2
+      }
+    },
+    {
+      "timestamp": "2026-07-17T07:58:11.874Z",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "removal": {
+        "selector": "#navball",
+        "navballWasPresent": true,
+        "remainingNavballCount": 0
+      },
+      "visible": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 12.3,
+        "maxMs": 72.8
+      },
+      "removed": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 6.5,
+        "maxMs": 12.2
+      }
+    },
+    {
+      "timestamp": "2026-07-17T07:58:53.545Z",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "removal": {
+        "selector": "#navball",
+        "navballWasPresent": true,
+        "remainingNavballCount": 0
+      },
+      "visible": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 12.4,
+        "maxMs": 54.5
+      },
+      "removed": {
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 6.3,
+        "maxMs": 12.2
+      }
+    }
+  ]
 }

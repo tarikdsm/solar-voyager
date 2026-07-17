@@ -54,21 +54,22 @@ publication remained 0.00 ms in both final snapshots.
 
 ## Hardware composition A/B
 
-To isolate browser composition from the software-renderer scheduler, an A/B on
-the exact final code measured 600 frames with the production navball visible and
-600 frames after removing its panel. The simulation and signal publisher remained
-active in both variants.
+To isolate browser composition from the software-renderer scheduler, each A/B
+capture measured 600 frames with the production navball visible, required
+`#navball` to exist, removed it, asserted that zero matching elements remained,
+then measured 600 more frames. Simulation and signal publication remained active.
 
-| Metric            | Navball visible | Panel removed |
-| ----------------- | --------------: | ------------: |
-| Median frame time |         6.10 ms |       6.10 ms |
-| p75 frame time    |         6.10 ms |       6.10 ms |
-| p99 frame time    |         6.20 ms |       6.20 ms |
-| Maximum           |         6.30 ms |       6.50 ms |
+| Viewport / capture | Visible median/p75/p99 | Removed median/p75/p99 | Visible/removed max |
+| ------------------ | ---------------------: | ---------------------: | ------------------: |
+| 1280x720           |     6.10/6.10/12.20 ms |      6.10/6.10/6.30 ms |      12.70/12.20 ms |
+| 1280x720 repeat    |     6.10/6.10/12.30 ms |      6.10/6.10/6.50 ms |      72.80/12.20 ms |
+| 1920x1080          |     6.10/6.10/12.40 ms |      6.10/6.10/6.30 ms |      54.50/12.20 ms |
 
-The Intel UHD D3D11 renderer produced identical p99 with and without navball
-composition, and both variants stayed below the 16.67 ms reference interval.
-The exact collector metadata and result are preserved in
+The corrected Intel UHD D3D11 A/B shows a repeatable approximately 6 ms p99
+composition tail from the navball, consistent with the software-renderer tail.
+Median and p75 remained 6.10 ms, and visible p99 stayed below the 16.67 ms floor
+at both benchmark sizes. Two visible captures contained isolated maximum outliers;
+they are retained rather than filtered. Exact removal proof and results are in
 `T0055-hardware-ab.json`.
 
 The first and third after samples retained about 0.7 MB, while the immediate
@@ -78,5 +79,5 @@ growth. The static SVG adds no WebGL work, signal publication remains gated to
 10 Hz, and all six marker updates preserve component render count at one.
 
 Absolute approximately 7 fps scaffold throughput is SwiftShader performance.
-The hardware A/B directly exercises the 60 fps floor and remained comfortably
-below a 16.67 ms frame interval.
+The corrected hardware captures sustain substantial median/p75 headroom and
+remain below a 16.67 ms interval at p99, including at 1920x1080.
