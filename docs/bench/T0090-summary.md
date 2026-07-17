@@ -2,16 +2,16 @@
 
 ## Measured results
 
-| Check | Result | Contract |
-| --- | ---: | ---: |
-| Focused Chromium panel FPS | 60.0 FPS | 1 s average |
-| Independent rAF meter | 60.0 FPS | cross-check |
-| FPS difference | 0.0 FPS | within 25% / 8 FPS gate |
-| Panel cost, focused repeat 1 | 0.013 ms/frame | < 0.2 ms/frame |
-| Panel cost, focused repeat 2 | 0.027 ms/frame | < 0.2 ms/frame |
-| Panel cost, focused final | 0.019 ms/frame | < 0.2 ms/frame |
-| Full-game browser playtest | 0.013–0.040 ms/frame | < 0.2 ms/frame |
-| Sparkline samples | 120 | exactly 120 frames |
+| Check                        |               Result |                Contract |
+| ---------------------------- | -------------------: | ----------------------: |
+| Focused Chromium panel FPS   |             60.0 FPS |             1 s average |
+| Independent rAF meter        |             60.0 FPS |             cross-check |
+| FPS difference               |              0.0 FPS | within 25% / 8 FPS gate |
+| Panel cost, focused repeat 1 |       0.013 ms/frame |          < 0.2 ms/frame |
+| Panel cost, focused repeat 2 |       0.027 ms/frame |          < 0.2 ms/frame |
+| Panel cost, focused final    |       0.019 ms/frame |          < 0.2 ms/frame |
+| Full-game browser playtest   | 0.013–0.040 ms/frame |          < 0.2 ms/frame |
+| Sparkline samples            |                  120 |      exactly 120 frames |
 
 The independent requestAnimationFrame counter is the same frame-boundary signal
 used to cross-check the readout with the browser DevTools FPS meter, but remains
@@ -41,4 +41,3 @@ The final desktop expansion is 16 rem tall with no internal overflow; mobile
 uses a 25 rem single-column detail layout. The production smoke now requires the
 real `#perf-panel`, preventing a deterministic fixture from hiding integration
 drift.
-
