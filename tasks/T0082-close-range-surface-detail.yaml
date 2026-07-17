@@ -1,6 +1,6 @@
 id: T0082
 title: Close-range surface detail shading (detail maps + procedural noise)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0082-close-range-surface-detail
 depends_on: [T0041, T0043]
@@ -35,3 +35,5 @@ handoff_notes: >-
   that skips all procedural waves at zero blend. All local gates pass (427
   Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
   full-range diff check, and Earth assets:verify with 15 byte-identical files).
+  Independent third review on 054ea52 approved the task with Critical 0,
+  Important 0, Minor 0; exact-head CI passed.
