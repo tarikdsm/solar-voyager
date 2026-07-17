@@ -47,6 +47,26 @@ a negative heap delta, which rules out consistent retained growth in this
 non-GC-forced sample. The final simulation benchmark also ended with a negative
 retained-byte delta, while sampled UI time stayed at 0.10 ms or less.
 
+## Final responsive-input correction
+
+| Metric            | Camera fix (`897b4fe`) | Repeat (`897b4fe`) |
+| ----------------- | ---------------------: | -----------------: |
+| Median frame time |              150.00 ms |          149.90 ms |
+| p75 frame time    |              150.00 ms |          150.00 ms |
+| p99 frame time    |              183.20 ms |          166.70 ms |
+| JS heap delta     |             +106,788 B |         +846,607 B |
+| Draw calls        |                      6 |                  6 |
+| Triangles         |                 48,564 |             48,564 |
+| Console errors    |                      0 |                  0 |
+| Page errors       |                      0 |                  0 |
+
+The first outer-harness capture contained a single p99 timing excursion, while
+its independent in-page telemetry remained at 166.70 ms and the immediate
+repeat returned to 166.70 ms. Both samples preserved median/p75, renderer counts,
+and the UI budget. The change is CSS plus regression instrumentation and adds no
+production frame-loop work. A same-head simulation benchmark averaged 0.080992
+ms per step and retained -182,304 bytes across 10,000 measured steps.
+
 The hot-path source adds only primitive snapshot and signal assignments;
 numeric energy and target telemetry remains gated to 10 Hz. The full signal DOM
 regression confirms that unchanged values do not rerender any HUD component,
