@@ -1,6 +1,6 @@
 id: T0056
 title: Warp control, energy panel, target panel UI
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0056-warp-dv-target-ui
 depends_on: [T0054, T0052, T0053]
@@ -84,3 +84,7 @@ handoff_notes: |
   the first sample's documented outer-harness p99 excursion, are retained under
   docs/bench/. Same-head simulation benchmark averaged 0.080992 ms and retained
   -182,304 bytes.
+
+  Independent final re-review approved exact SHA
+  bf57c1fc2f4ce74a192b77d35e8f2ba0d0d98801 with Critical 0, Important 0,
+  Minor 0. Exact-head GitHub CI passed before the transition to DONE.
