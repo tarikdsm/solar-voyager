@@ -1,6 +1,6 @@
 id: T0059
 title: Playwright smoke test in CI
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0059-playwright-smoke
 depends_on: [T0054]
