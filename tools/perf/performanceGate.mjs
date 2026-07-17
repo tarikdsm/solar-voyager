@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { installHighQualitySetting } from './browserSettings.mjs';
 import { measureBundleSizes } from './bundleMeasurement.mjs';
 import {
   parsePerformanceGolden,
@@ -25,26 +26,6 @@ const HEAP_SETTLE_MS = 30_000;
 const FIXTURE_SETTLE_MS = 1_000;
 const STABLE_SNAPSHOT_COUNT = 4;
 const PRODUCTION_ONLY = process.argv.includes('--production-only');
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';
-const HIGH_QUALITY_SETTINGS = JSON.stringify({
-  version: 1,
-  qualityLock: 'high',
-  inputBindings: {
-    throttleIncrease: 'KeyR',
-    throttleDecrease: 'KeyF',
-    warpIncrease: 'Equal',
-    warpDecrease: 'Minus',
-    pitchUp: 'KeyW',
-    pitchDown: 'KeyS',
-    yawLeft: 'KeyA',
-    yawRight: 'KeyD',
-    rollLeft: 'KeyZ',
-    rollRight: 'KeyC',
-    attitudeManual: 'Digit1',
-    attitudePrograde: 'Digit2',
-    attitudeRetrograde: 'Digit3',
-  },
-});
 
 function describeError(error) {
   return error instanceof Error ? error.message : String(error);
@@ -93,15 +74,6 @@ async function waitForReady(page) {
     },
     TELEMETRY_PROPERTY,
     { timeout: 60_000 },
-  );
-}
-
-async function installHighQualitySetting(page) {
-  await page.addInitScript(
-    ({ key, value }) => {
-      globalThis.localStorage.setItem(key, value);
-    },
-    { key: SETTINGS_STORAGE_KEY, value: HIGH_QUALITY_SETTINGS },
   );
 }
 
