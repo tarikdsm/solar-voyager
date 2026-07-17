@@ -1,6 +1,6 @@
 id: T0034
 title: Ship model (build_ship script)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0034-build-ship
 depends_on: [T0030]
