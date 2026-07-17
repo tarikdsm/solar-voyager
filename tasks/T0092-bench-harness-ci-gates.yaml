@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
