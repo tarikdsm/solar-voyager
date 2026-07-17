@@ -48,10 +48,23 @@ receive NaN or infinity.
   at exposure 1.0; `OutputPass` performs tone mapping and output conversion
   once, at the end. Bloom uses threshold 1.0, strength 0.15, radius 0.35, and
   the official half-resolution bright target.
-- Sun rendered **procedurally** (ADR-010, task T0084): animated convective granulation, limb darkening, prominence arcs + billboard glare — the static emissive texture is only a fallback. Gas giants animate their real base maps with procedural band flow (T0085). Policy for all procedural shading (tiers, bake-at-load rule, governor octave rung): ADR-010.
-- Until T0084, the fallback Sun material has minimum emissive intensity 4 and
-  one additive, depth-tested 64×64 radial glare sprite spans four solar
-  diameters. Its alpha reaches zero at every edge, preventing square artifacts.
+- Sun rendering is **procedural** (ADR-010, task T0084). Tier-2 Lambert and
+  tier-3 Standard materials share a seeded, UV-free, object-space domain-warped
+  fBm photosphere. The visible-limb profile is
+  `I(μ) = 1 - 0.52(1 - μ) - 0.16(1 - μ)²`. Simulation time drives bounded
+  600 s granulation and 21,600 s activity cycles; wall time is never sampled.
+  The fixed quality rungs are `full/half/minimum = 4/2/1` fBm octaves in one
+  precompiled shader program.
+- One additive, depth-tested billboard spans eight solar radii and combines a
+  bounded corona with exactly three deterministic prominence arcs. Its alpha
+  reaches zero at every edge, and a four-radius bounding sphere permits safe
+  off-screen frustum culling. The billboard replaces the former glare sprite,
+  so the typical production draw count does not increase.
+- The authored emissive Sun materials remain the disabled-procedural fallback.
+  All photosphere variants and the billboard shader are created and precompiled
+  before gameplay; frame updates mutate only the existing shared uniforms.
+  Gas giants animate their real base maps with procedural band flow (T0085).
+  Policy for procedural shading and governor rungs remains in ADR-010.
 - Night sides are genuinely dark; the global ambient floor is exactly 0.02 for
   playability. Earth keeps its authored night-light emissive map with minimum
   intensity 4 at the fixed exposure so localized city lights remain visible.
