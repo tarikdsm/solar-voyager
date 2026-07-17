@@ -4,7 +4,7 @@
    control first. Run fixture-only mode and confirm it exits nonzero for the
    injected error.
 2. Implement production preview lifecycle and the clean application probe:
-   readiness markers, HUD anchors, canvas screenshot pixel range, console errors,
+   readiness markers, HUD anchors, framebuffer pixel range, console errors,
    runtime errors, and crash collection.
 3. Add `test:smoke` to `package.json`; make the default command validate both the
    expected-red fixture and the expected-green production page.

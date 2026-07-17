@@ -17,9 +17,10 @@ a committed fixture injects a runtime error.
   test framework or browser installation path.
 - Wait for the production readiness contract already published by `main.ts`:
   `#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]`.
-- Verify pixels from a real canvas screenshot. A downsampled RGB probe must have
-  meaningful luminance range and multiple lit pixels, so a mounted but blank
-  WebGL canvas cannot pass.
+- Verify pixels directly from the live WebGL framebuffer after a rendered frame.
+  The RGB probe must have meaningful luminance range and multiple lit pixels, so
+  a mounted but blank WebGL canvas cannot pass without waiting for an animated
+  element to become screenshot-stable.
 - Verify the HUD with stable semantic/DOM anchors: `.app-overlay`, orbit readout,
   simulation clocks, time-warp controls, and the session/settings panel.
 - Collect `pageerror`, error-level console messages, and page crashes from before

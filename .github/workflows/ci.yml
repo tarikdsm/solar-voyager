@@ -38,6 +38,12 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Build
+        run: npm run build
+
+      - name: Application smoke
+        run: npm run test:smoke
+
       - name: Render depth regression
         run: npm run test:render-depth
 
@@ -73,9 +79,6 @@ jobs:
 
       - name: Tool tests
         run: npm run test:tools
-
-      - name: Build
-        run: npm run build
 
       - name: Asset budgets
         run: npm run check:budgets
