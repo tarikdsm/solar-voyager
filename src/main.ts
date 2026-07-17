@@ -1,8 +1,9 @@
-import { render } from 'preact';
+import { h, render } from 'preact';
 
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
+import { RenderTelemetry } from './render/telemetry.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
@@ -20,11 +21,15 @@ if (!(appElement instanceof HTMLElement)) {
 
 const canvas = canvasElement;
 const appRoot = appElement;
-const renderer = createRenderer(canvas);
+const rendererBootstrap = createRenderer(canvas);
+const { contextReport, renderer } = rendererBootstrap;
+const telemetry = new RenderTelemetry(renderer, contextReport);
+const hardwareWarning = contextReport.warningRequired
+  ? { rendererName: contextReport.rendererName }
+  : null;
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
 let cameraInput: CameraInputController | null = null;
-let previousFrameTimeMs = 0;
 
 function resizeRenderer(): void {
   if (world === null) return;
@@ -44,9 +49,8 @@ function resizeRenderer(): void {
 function renderFrame(nowMs: number): void {
   if (world === null) return;
   const { spaceScene, visualSystem, cameraController, cameraPositionKm } = world;
-  const deltaSec =
-    previousFrameTimeMs === 0 ? 0 : Math.min(0.1, (nowMs - previousFrameTimeMs) / 1_000);
-  previousFrameTimeMs = nowMs;
+  const deltaSec = telemetry.beginFrame(nowMs);
+  const renderStartMs = performance.now();
   cameraController.update(deltaSec);
   spaceScene.camera.lookAt(
     cameraController.lookDirection.x,
@@ -61,12 +65,19 @@ function renderFrame(nowMs: number): void {
     nowMs,
   );
   spaceScene.updateCameraRelative(cameraPositionKm);
+  telemetry.beginGpuTimer();
   renderer.render(spaceScene.scene, spaceScene.camera);
+  telemetry.endGpuTimer();
+  telemetry.endFrame(0, performance.now() - renderStartMs, 0, nowMs);
   requestAnimationFrame(renderFrame);
 }
 
 async function startApplication(): Promise<void> {
-  render(App(), appRoot);
+  render(h(App, { hardwareWarning }), appRoot);
+  canvas.dataset.depthStrategy = contextReport.depthStrategy;
+  canvas.dataset.rendererName = contextReport.rendererName;
+  canvas.dataset.rendererReady = 'true';
+  canvas.dataset.softwareRasterizer = String(contextReport.softwareRasterizer);
   world = await createEpochWorld(renderer);
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {

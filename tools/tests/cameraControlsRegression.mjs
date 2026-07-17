@@ -55,7 +55,7 @@ try {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
 
-  await page.goto(FIXTURE_URL, { waitUntil: 'networkidle' });
+  await page.goto(FIXTURE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => globalThis.__cameraControlsHarness !== undefined);
 
   const surfaceFrames = [];
@@ -124,6 +124,12 @@ try {
   assert.ok(finalFrame.litPixels > 0, 'final Jupiter frame rendered dark');
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
+  await page.close();
+  await browser.close();
+  browser = await chromium.launch({
+    headless: true,
+    args: ['--enable-webgl', '--ignore-gpu-blocklist'],
+  });
 
   const productionPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const productionErrors = [];
@@ -132,11 +138,29 @@ try {
     if (message.type() === 'error') productionErrors.push(message.text());
   });
   await productionPage.goto(`http://${HOST}:${PORT}/solar-voyager/`, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
   });
-  await productionPage.waitForSelector('#space-canvas[data-camera-ready="true"]', {
-    timeout: 60_000,
-  });
+  try {
+    await productionPage.waitForSelector('#space-canvas[data-camera-ready="true"]', {
+      timeout: 60_000,
+    });
+  } catch (error) {
+    const content = await productionPage.content();
+    const canvasState = await productionPage.locator('#space-canvas').count();
+    process.stderr.write(
+      `${JSON.stringify(
+        {
+          canvasCount: canvasState,
+          content: content.slice(0, 500),
+          productionErrors,
+          url: productionPage.url(),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    throw error;
+  }
   const productionClip = { x: 320, y: 140, width: 640, height: 440 };
   const productionEarth = await screenshotEvidence(
     await productionPage.screenshot({ clip: productionClip }),

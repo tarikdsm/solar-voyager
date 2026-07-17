@@ -50,17 +50,22 @@ try {
   });
 
   let logarithmic;
+  let reversed;
   let standardControl;
   try {
-    logarithmic = await capture(page);
+    logarithmic = await capture(page, '?depth=logarithmic');
+    reversed = await capture(page, '?depth=reversed');
     standardControl = await capture(page, '?standard-control');
   } catch (error) {
     process.stderr.write(`${JSON.stringify({ pageErrors, consoleErrors }, null, 2)}\n`);
     throw error;
   }
 
-  process.stdout.write(`${JSON.stringify({ logarithmic, standardControl }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ logarithmic, reversed, standardControl }, null, 2)}\n`);
   assertVisibleAndStable(logarithmic);
+  assertVisibleAndStable(reversed);
+  assert.equal(reversed.mode, 'reversed');
+  assert.equal(logarithmic.mode, 'logarithmic');
   assert.ok(
     standardControl.cases.some((depthCase) => !depthCase.centerFront),
     'standard-depth control unexpectedly passed; regression is not sensitive to depth precision',
