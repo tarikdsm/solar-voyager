@@ -198,8 +198,10 @@ class SampledPerfPanelStore implements PerfPanelStore {
         SPARKLINE_SLOT_COUNT,
         this.telemetry.frameSampleCount,
       );
-      this.writableDisplay.resolution.value = `${String(Math.round(this.resolution.width))}×${String(
-        Math.round(this.resolution.height),
+      this.writableDisplay.resolution.value = `${String(
+        Math.round(this.resolution.width * this.quality.renderScale),
+      )}×${String(
+        Math.round(this.resolution.height * this.quality.renderScale),
       )} @${this.quality.renderScale.toFixed(2)}`;
       this.writableDisplay.qualityTier.value = `Q${String(this.quality.tier)}/${String(
         this.quality.tierCount,

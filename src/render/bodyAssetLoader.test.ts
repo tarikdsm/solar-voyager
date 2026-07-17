@@ -67,6 +67,58 @@ describe('BodyAssetLoader', () => {
     );
   });
 
+  it('selects real lazy-body sphere and model variants for the 2k and 1k caps', async () => {
+    const textureUrls: string[] = [];
+    const modelUrls: string[] = [];
+    const factory: BodyAssetBackendFactory = async () => ({
+      loadTexture: async (url) => {
+        textureUrls.push(url);
+        return new Texture();
+      },
+      loadModel: async (url) => {
+        modelUrls.push(url);
+        return new Group();
+      },
+    });
+    const files = [
+      'models/saturn.glb',
+      'models/saturn_2k.glb',
+      'models/saturn_1k.glb',
+      'textures/saturn_albedo.ktx2',
+      'textures/saturn_albedo_2k.ktx2',
+      'textures/saturn_albedo_1k.ktx2',
+    ];
+
+    const capped2k = new BodyAssetLoader(
+      renderer,
+      manifest(entry('saturn', 'planet', files)),
+      factory,
+      '/solar-voyager/',
+    );
+    capped2k.setTextureTierCap('2k');
+    await capped2k.loadSphereAlbedo('saturn', 'planet');
+    await capped2k.loadModel('saturn');
+
+    const capped1k = new BodyAssetLoader(
+      renderer,
+      manifest(entry('saturn', 'planet', files)),
+      factory,
+      '/solar-voyager/',
+    );
+    capped1k.setTextureTierCap('1k');
+    await capped1k.loadSphereAlbedo('saturn', 'planet');
+    await capped1k.loadModel('saturn');
+
+    expect(textureUrls).toEqual([
+      '/solar-voyager/assets/textures/saturn_albedo_2k.ktx2',
+      '/solar-voyager/assets/textures/saturn_albedo_1k.ktx2',
+    ]);
+    expect(modelUrls).toEqual([
+      '/solar-voyager/assets/models/saturn_2k.glb',
+      '/solar-voyager/assets/models/saturn_1k.glb',
+    ]);
+  });
+
   it('preloads only available Sun, Earth, and Moon sphere resources', async () => {
     const textureUrls: string[] = [];
     const modelUrls: string[] = [];
@@ -173,6 +225,56 @@ describe('BodyAssetLoader', () => {
     expect(normal.wrapT).toBe(RepeatWrapping);
     expect(albedo.anisotropy).toBe(4);
     expect(normal.anisotropy).toBe(4);
+  });
+
+  it('selects a capped texture variant only for the next uncached lazy load', async () => {
+    const earthRoot = new Group();
+    const moonRoot = new Group();
+    const loadTexture = vi.fn(async (url: string) => {
+      void url;
+      return new Texture();
+    });
+    const detail = (id: string): RuntimeSurfaceDetail => ({
+      albedo: `textures/${id}_detail_albedo.ktx2`,
+      normal: `textures/${id}_detail_normal.ktx2`,
+      tilesPerEquator: 32,
+      seed: 1,
+    });
+    const earthDetail = detail('earth');
+    const moonDetail = detail('moon');
+    const variantFiles = (value: RuntimeSurfaceDetail) => [
+      value.albedo,
+      value.normal,
+      value.albedo.replace('.ktx2', '_2k.ktx2'),
+      value.normal.replace('.ktx2', '_2k.ktx2'),
+      value.albedo.replace('.ktx2', '_1k.ktx2'),
+      value.normal.replace('.ktx2', '_1k.ktx2'),
+    ];
+    const loader = new BodyAssetLoader(
+      renderer,
+      manifest(
+        entry('earth', 'planet', ['models/earth.glb', ...variantFiles(earthDetail)], earthDetail),
+        entry('moon', 'moon', ['models/moon.glb', ...variantFiles(moonDetail)], moonDetail),
+      ),
+      async () => ({
+        loadTexture,
+        loadModel: async (url) => (url.includes('earth') ? earthRoot : moonRoot),
+      }),
+      '/',
+    );
+
+    loader.setTextureTierCap('2k');
+    await loader.loadModel('earth');
+    loader.setTextureTierCap('1k');
+    await loader.loadModel('earth');
+    await loader.loadModel('moon');
+
+    expect(loadTexture.mock.calls.map(([url]) => url)).toEqual([
+      '/assets/textures/earth_detail_albedo_2k.ktx2',
+      '/assets/textures/earth_detail_normal_2k.ktx2',
+      '/assets/textures/moon_detail_albedo_1k.ktx2',
+      '/assets/textures/moon_detail_normal_1k.ktx2',
+    ]);
   });
 
   it('keeps a loaded model when its optional detail pair fails and never retries', async () => {

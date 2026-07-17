@@ -2,6 +2,7 @@ import type { WebGLRenderer } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RendererContextReport } from './createRenderer.js';
+import { QualityActionReason } from './perfGovernor.js';
 import { RENDER_TELEMETRY_PROPERTY, RenderTelemetry, exposeRenderTelemetry } from './telemetry.js';
 
 interface FakeQuery {
@@ -201,6 +202,41 @@ describe('RenderTelemetry', () => {
     expect(telemetry.frameSampleCount).toBe(120);
     expect(telemetry.snapshot.oneSecondAverageFps).toBeCloseTo(144, 10);
     expect(telemetry.snapshot.averageFps).toBeCloseTo(180, 10);
+  });
+
+  it('logs quality actions into stable bounded numeric telemetry storage', () => {
+    const { renderer } = fakeRenderer(contextWithoutTimer());
+    const telemetry = new RenderTelemetry(renderer, contextReport());
+    const times = telemetry.qualityActionTimesMs;
+    const transitions = telemetry.qualityActionRungs;
+    const reasons = telemetry.qualityActionReasons;
+
+    for (let action = 0; action < 40; action += 1) {
+      telemetry.recordQualityAction(
+        action * 250,
+        action % 15,
+        (action + 1) % 15,
+        QualityActionReason.OverBudget,
+      );
+    }
+
+    expect(telemetry.qualityActionTimesMs).toBe(times);
+    expect(telemetry.qualityActionRungs).toBe(transitions);
+    expect(telemetry.qualityActionReasons).toBe(reasons);
+    expect(telemetry.qualityActionCount).toBe(32);
+    expect(telemetry.snapshot.qualityActionCount).toBe(32);
+    const record = { fromRung: -1, reason: -1, timestampMs: -1, toRung: -1 };
+    expect(telemetry.readQualityActionByAge(0, record)).toBe(true);
+    expect(record).toEqual({
+      fromRung: 9,
+      reason: QualityActionReason.OverBudget,
+      timestampMs: 9_750,
+      toRung: 10,
+    });
+    expect(telemetry.readQualityActionByAge(31, record)).toBe(true);
+    expect(record.timestampMs).toBe(2_000);
+    expect(telemetry.readQualityActionByAge(32, record)).toBe(false);
+    expect(record.timestampMs).toBe(2_000);
   });
 
   it('collects GPU time only after an asynchronous non-disjoint result', () => {

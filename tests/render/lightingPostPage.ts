@@ -79,6 +79,8 @@ const earthPipeline = new LightingPostPipeline(
   world.spaceScene.scene,
   world.spaceScene.camera,
 );
+// Keep the lighting golden independent of the governor-owned AA stage.
+earthPipeline.setAntiAliasing('off');
 earthPipeline.resize(VIEWPORT_SIZE, VIEWPORT_SIZE, 1);
 const directProgramsBeforeWarmUp = renderer.info.programs?.length ?? 0;
 earthPipeline.warmUp(false);

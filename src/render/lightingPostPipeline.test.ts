@@ -13,19 +13,24 @@ import {
   BLOOM_STRENGTH,
   BLOOM_THRESHOLD,
   LightingPostPipeline,
+  type AdaptivePostPassPort,
+  type FxaaPassPort,
   type LightingPostBackend,
   type PostComposerPort,
   type PostPassPort,
   type UnrealBloomPassPort,
 } from './lightingPostPipeline.js';
+import { QUALITY_PROFILES } from './perfGovernor.js';
 
 interface Fixture {
   readonly backend: LightingPostBackend;
   readonly bloomPass: UnrealBloomPassPort;
   readonly composer: PostComposerPort;
-  readonly outputPass: PostPassPort;
+  readonly fxaaPass: FxaaPassPort;
+  readonly outputPass: AdaptivePostPassPort;
   readonly renderPass: PostPassPort;
   readonly renderer: WebGLRenderer;
+  readonly smaaPass: AdaptivePostPassPort;
 }
 
 function pass(): PostPassPort {
@@ -36,20 +41,41 @@ function pass(): PostPassPort {
   };
 }
 
+function adaptivePass(): AdaptivePostPassPort {
+  return { ...pass(), setRenderScale: vi.fn() };
+}
+
+function renderTarget() {
+  return {
+    height: 1,
+    scissor: { set: vi.fn() },
+    scissorTest: false,
+    texture: { type: HalfFloatType },
+    viewport: { set: vi.fn() },
+    width: 1,
+  };
+}
+
 function createFixture(): Fixture {
   const renderPass = pass();
-  const outputPass = pass();
+  const outputPass = adaptivePass();
+  const smaaPass = adaptivePass();
+  const fxaaPass: FxaaPassPort = {
+    ...adaptivePass(),
+    setResolution: vi.fn(),
+  };
   const bloomPass: UnrealBloomPassPort = {
     ...pass(),
     threshold: -1,
     strength: -1,
     radius: -1,
+    setQualityScale: vi.fn(),
   };
   const passes: PostPassPort[] = [];
   const composer: PostComposerPort = {
     passes,
-    readBuffer: { width: 1, height: 1, texture: { type: HalfFloatType } },
-    writeBuffer: { width: 1, height: 1, texture: { type: HalfFloatType } },
+    readBuffer: renderTarget(),
+    writeBuffer: renderTarget(),
     addPass: vi.fn((candidate: PostPassPort) => passes.push(candidate)),
     setPixelRatio: vi.fn(),
     setSize: vi.fn(),
@@ -60,7 +86,9 @@ function createFixture(): Fixture {
     createComposer: vi.fn(() => composer),
     createRenderPass: vi.fn(() => renderPass),
     createBloomPass: vi.fn(() => bloomPass),
+    createFxaaPass: vi.fn(() => fxaaPass),
     createOutputPass: vi.fn(() => outputPass),
+    createSmaaPass: vi.fn(() => smaaPass),
   };
   const renderer = {
     toneMapping: NoToneMapping,
@@ -68,11 +96,11 @@ function createFixture(): Fixture {
     getPixelRatio: () => 2,
     render: vi.fn(),
   } as unknown as WebGLRenderer;
-  return { backend, bloomPass, composer, outputPass, renderPass, renderer };
+  return { backend, bloomPass, composer, fxaaPass, outputPass, renderPass, renderer, smaaPass };
 }
 
 describe('LightingPostPipeline', () => {
-  it('configures ACES and one ordered half-float render/bloom/output chain', () => {
+  it('configures ACES and one ordered reusable render/bloom/AA/output chain', () => {
     const fixture = createFixture();
     const scene = new Scene();
     const camera = new PerspectiveCamera();
@@ -81,12 +109,15 @@ describe('LightingPostPipeline', () => {
     expect(fixture.renderer.toneMapping).toBe(ACESFilmicToneMapping);
     expect(fixture.renderer.toneMappingExposure).toBe(1);
     expect(fixture.backend.createComposer).toHaveBeenCalledWith(fixture.renderer);
+    expect(fixture.backend.createComposer).toHaveBeenCalledOnce();
     expect(fixture.backend.createRenderPass).toHaveBeenCalledWith(scene, camera);
     expect(fixture.backend.createBloomPass).toHaveBeenCalledOnce();
     expect(fixture.backend.createOutputPass).toHaveBeenCalledOnce();
     expect(fixture.composer.passes).toEqual([
       fixture.renderPass,
       fixture.bloomPass,
+      fixture.smaaPass,
+      fixture.fxaaPass,
       fixture.outputPass,
     ]);
     expect(fixture.composer.readBuffer.texture.type).toBe(HalfFloatType);
@@ -94,6 +125,10 @@ describe('LightingPostPipeline', () => {
     expect(pipeline.renderPass).toBe(fixture.renderPass);
     expect(pipeline.outputPass).toBe(fixture.outputPass);
     expect(pipeline.bloomPass).toBe(fixture.bloomPass);
+    expect(pipeline.smaaPass).toBe(fixture.smaaPass);
+    expect(pipeline.fxaaPass).toBe(fixture.fxaaPass);
+    expect(fixture.smaaPass.enabled).toBe(true);
+    expect(fixture.fxaaPass.enabled).toBe(false);
     expect(fixture.bloomPass.threshold).toBe(BLOOM_THRESHOLD);
     expect(fixture.bloomPass.strength).toBe(BLOOM_STRENGTH);
     expect(fixture.bloomPass.radius).toBe(BLOOM_RADIUS);
@@ -113,6 +148,37 @@ describe('LightingPostPipeline', () => {
     expect(fixture.composer.setPixelRatio).toHaveBeenCalledOnce();
     expect(fixture.composer.setPixelRatio).toHaveBeenLastCalledWith(1);
     expect(fixture.composer.setSize).toHaveBeenLastCalledWith(640, 360);
+    expect(fixture.fxaaPass.setResolution).toHaveBeenLastCalledWith(640, 360);
+
+    pipeline.setBloomQuality('half');
+    expect(fixture.bloomPass.enabled).toBe(true);
+    expect(fixture.bloomPass.setQualityScale).toHaveBeenLastCalledWith(1, 0.5);
+    const resizeCount = vi.mocked(fixture.bloomPass.setSize).mock.calls.length;
+    pipeline.setBloomQuality('off');
+    expect(fixture.bloomPass.enabled).toBe(false);
+    expect(fixture.bloomPass.setSize).toHaveBeenCalledTimes(resizeCount);
+    pipeline.setBloomQuality('full');
+    expect(fixture.bloomPass.setQualityScale).toHaveBeenLastCalledWith(1, 1);
+
+    pipeline.setAntiAliasing('fxaa');
+    expect(fixture.smaaPass.enabled).toBe(false);
+    expect(fixture.fxaaPass.enabled).toBe(true);
+    pipeline.setAntiAliasing('off');
+    expect(fixture.fxaaPass.enabled).toBe(false);
+    pipeline.setAntiAliasing('smaa');
+    expect(fixture.smaaPass.enabled).toBe(true);
+
+    const composerResizeCount = vi.mocked(fixture.composer.setSize).mock.calls.length;
+    pipeline.selectQuality(QUALITY_PROFILES[4] as (typeof QUALITY_PROFILES)[number]);
+    expect(fixture.bloomPass.setQualityScale).toHaveBeenLastCalledWith(0.55, 0.5);
+    expect((fixture.smaaPass as AdaptivePostPassPort).setRenderScale).toHaveBeenLastCalledWith(
+      0.55,
+    );
+    expect(fixture.fxaaPass.setRenderScale).toHaveBeenLastCalledWith(0.55);
+    expect((fixture.outputPass as AdaptivePostPassPort).setRenderScale).toHaveBeenLastCalledWith(
+      0.55,
+    );
+    expect(fixture.composer.setSize).toHaveBeenCalledTimes(composerResizeCount);
 
     pipeline.setBloomEnabled(false);
     expect(fixture.bloomPass.enabled).toBe(false);
@@ -159,6 +225,8 @@ describe('LightingPostPipeline', () => {
 
     expect(fixture.renderPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.bloomPass.dispose).toHaveBeenCalledOnce();
+    expect(fixture.smaaPass.dispose).toHaveBeenCalledOnce();
+    expect(fixture.fxaaPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.outputPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.composer.dispose).toHaveBeenCalledOnce();
   });

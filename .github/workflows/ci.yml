@@ -76,6 +76,8 @@ jobs:
 
       - name: Performance panel regression
         run: npm run test:perf-panel
+      - name: Adaptive quality governor regression
+        run: npm run test:perf-governor
 
       - name: Session settings regression
         run: npm run test:session-settings

@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-07-17T20:55:48.942Z",
+  "gitSha": "50c258edee8388d4034caa8afa14fbbea9836924",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 83.4,
+  "p75Ms": 100,
+  "p99Ms": 116.7,
+  "gpu": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "vendor": "Google Inc. (Google)"
+  },
+  "canvas": {
+    "backingHeight": 360,
+    "backingWidth": 640,
+    "cssHeight": 360,
+    "cssWidth": 640
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 83.4,
+    "p75Ms": 100,
+    "p99Ms": 100.1,
+    "snapshot": {
+      "averageFps": 11.043419042535572,
+      "context": {
+        "contextFlavor": "webgl2",
+        "depthStrategy": "reversed",
+        "effectiveContextAttributes": {
+          "alpha": false,
+          "antialias": false,
+          "depth": true,
+          "desynchronized": true,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "high-performance",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false
+        },
+        "gpuTimerQueryAvailable": false,
+        "rendererName": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "softwareRasterizer": true,
+        "usedPerformanceCaveatFallback": true,
+        "warningRequired": true
+      },
+      "drawCalls": 9,
+      "frameCount": 746,
+      "frameMs": 100,
+      "frameSampleCount": 120,
+      "geometries": 7,
+      "gpuMs": -1,
+      "lines": 0,
+      "oneSecondAverageFps": 10.819317399429558,
+      "p75FrameMs": 100,
+      "p99FrameMs": 100.10000000000582,
+      "points": 2043,
+      "programs": 29,
+      "qualityActionCount": 14,
+      "renderMs": 0.8999999761581421,
+      "simMs": 0.29999998211860657,
+      "textures": 11,
+      "triangles": 65077,
+      "uiMs": 0.30000004172325134
+    }
+  },
+  "heapDeltaBytes": -2636123
+}

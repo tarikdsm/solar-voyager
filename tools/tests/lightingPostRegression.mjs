@@ -148,7 +148,13 @@ function assertPipeline(snapshot, label) {
     Math.abs(snapshot.brightHeight * 2 - snapshot.bufferHeight) <= 1,
     `${label}: bloom height is not half the effective render height`,
   );
-  assert.deepEqual(snapshot.passNames, ['RenderPass', 'UnrealBloomPass', 'OutputPass']);
+  assert.deepEqual(snapshot.passNames, [
+    'RenderPass',
+    'AdaptiveBloomPass',
+    'AdaptiveSmaaPass',
+    'AdaptiveFxaaPass',
+    'AdaptiveOutputPass',
+  ]);
   assert.equal(snapshot.toneMapping, snapshot.expectedToneMapping, `${label}: ACES is not active`);
 }
 

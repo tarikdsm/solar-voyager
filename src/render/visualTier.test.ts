@@ -40,6 +40,14 @@ describe('selectVisualTier', () => {
     expect(selectVisualTier(3, 159.99)).toBe(2);
   });
 
+  it('raises both model thresholds with a quality multiplier', () => {
+    expect(selectVisualTier(2, 479.99, 2)).toBe(2);
+    expect(selectVisualTier(2, 480, 2)).toBe(3);
+    expect(selectVisualTier(3, 320, 2)).toBe(3);
+    expect(selectVisualTier(3, 319.99, 2)).toBe(2);
+    expect(() => selectVisualTier(2, 240, 0)).toThrow(/threshold/iu);
+  });
+
   it('permits direct jumps after a large camera step', () => {
     expect(selectVisualTier(1, 240)).toBe(3);
     expect(selectVisualTier(3, 1.19)).toBe(1);

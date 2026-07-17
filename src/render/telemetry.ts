@@ -1,6 +1,7 @@
 import type { WebGLRenderer } from 'three';
 
 import type { RendererContextReport } from './createRenderer.js';
+import { QualityActionReason } from './perfGovernor.js';
 
 const FRAME_WINDOW_SIZE = 120;
 const FPS_TIMESTAMP_WINDOW_SIZE = 256;
@@ -12,6 +13,7 @@ const GPU_QUERY_ACTIVE = 1;
 const GPU_QUERY_PENDING = 2;
 const GPU_QUERY_INVALID = 3;
 const MAX_GAME_DELTA_SEC = 0.1;
+const QUALITY_ACTION_CAPACITY = 32;
 
 export const RENDER_TELEMETRY_PROPERTY = 'solarVoyagerTelemetry' as const;
 
@@ -35,6 +37,7 @@ export interface RenderTelemetrySnapshot {
   p99FrameMs: number;
   points: number;
   programs: number;
+  qualityActionCount: number;
   renderMs: number;
   simMs: number;
   textures: number;
@@ -42,10 +45,20 @@ export interface RenderTelemetrySnapshot {
   uiMs: number;
 }
 
+export interface QualityActionSnapshot {
+  fromRung: number;
+  reason: number;
+  timestampMs: number;
+  toRung: number;
+}
+
 /** Single allocation-free source of renderer performance truth. */
 export class RenderTelemetry {
   readonly frameTimesMs = new Float64Array(FRAME_WINDOW_SIZE);
   readonly gpuTimesMs = new Float64Array(GPU_TIME_WINDOW_SIZE);
+  readonly qualityActionReasons = new Uint8Array(QUALITY_ACTION_CAPACITY);
+  readonly qualityActionRungs = new Uint8Array(QUALITY_ACTION_CAPACITY * 2);
+  readonly qualityActionTimesMs = new Float64Array(QUALITY_ACTION_CAPACITY);
   readonly snapshot: RenderTelemetrySnapshot;
 
   private readonly percentileScratchMs = new Float64Array(FRAME_WINDOW_SIZE);
@@ -70,6 +83,8 @@ export class RenderTelemetry {
   private nextGpuQueryIndex = 0;
   private gpuTimeWriteIndex = 0;
   private gpuSampleCount = 0;
+  private qualityActionSampleCount = 0;
+  private qualityActionWriteIndex = 0;
 
   constructor(renderer: WebGLRenderer, contextReport: RendererContextReport) {
     this.renderer = renderer;
@@ -95,6 +110,7 @@ export class RenderTelemetry {
       p99FrameMs: 0,
       points: 0,
       programs: 0,
+      qualityActionCount: 0,
       renderMs: 0,
       simMs: 0,
       textures: 0,
@@ -124,6 +140,10 @@ export class RenderTelemetry {
 
   get gpuTimeSampleCount(): number {
     return this.gpuSampleCount;
+  }
+
+  get qualityActionCount(): number {
+    return this.qualityActionSampleCount;
   }
 
   /** Begins a frame and returns the clamped game delta in seconds. */
@@ -192,6 +212,47 @@ export class RenderTelemetry {
     const index =
       (this.gpuTimeWriteIndex - 1 - age + GPU_TIME_WINDOW_SIZE * 2) % GPU_TIME_WINDOW_SIZE;
     return this.gpuTimesMs[index] ?? Number.NaN;
+  }
+
+  recordQualityAction(
+    timestampMs: number,
+    fromRung: number,
+    toRung: number,
+    reason: QualityActionReason,
+  ): void {
+    if (!Number.isFinite(timestampMs)) throw new RangeError('Quality action time must be finite.');
+    if (!Number.isInteger(fromRung) || fromRung < 0 || fromRung > 14) {
+      throw new RangeError('Quality action source rung must be between 0 and 14.');
+    }
+    if (!Number.isInteger(toRung) || toRung < 0 || toRung > 14) {
+      throw new RangeError('Quality action target rung must be between 0 and 14.');
+    }
+    if (reason < QualityActionReason.OverBudget || reason > QualityActionReason.AutoResume) {
+      throw new RangeError('Quality action reason is invalid.');
+    }
+    const index = this.qualityActionWriteIndex;
+    this.qualityActionTimesMs[index] = timestampMs;
+    this.qualityActionRungs[index * 2] = fromRung;
+    this.qualityActionRungs[index * 2 + 1] = toRung;
+    this.qualityActionReasons[index] = reason;
+    this.qualityActionWriteIndex = (index + 1) % QUALITY_ACTION_CAPACITY;
+    this.qualityActionSampleCount = Math.min(
+      QUALITY_ACTION_CAPACITY,
+      this.qualityActionSampleCount + 1,
+    );
+    this.snapshot.qualityActionCount = this.qualityActionSampleCount;
+  }
+
+  readQualityActionByAge(age: number, output: QualityActionSnapshot): boolean {
+    if (!Number.isInteger(age) || age < 0 || age >= this.qualityActionSampleCount) return false;
+    const index =
+      (this.qualityActionWriteIndex - 1 - age + QUALITY_ACTION_CAPACITY * 2) %
+      QUALITY_ACTION_CAPACITY;
+    output.timestampMs = this.qualityActionTimesMs[index] ?? 0;
+    output.fromRung = this.qualityActionRungs[index * 2] ?? 0;
+    output.toRung = this.qualityActionRungs[index * 2 + 1] ?? 0;
+    output.reason = this.qualityActionReasons[index] ?? 0;
+    return true;
   }
 
   dispose(): void {

@@ -83,12 +83,28 @@ function assertPixelRatio(pixelRatio: number): void {
   }
 }
 
+export function createMagnitudeOrderedStarIndices(catalog: StarCatalog): Uint16Array | Uint32Array {
+  const indices =
+    catalog.starCount <= 0xffff
+      ? new Uint16Array(catalog.starCount)
+      : new Uint32Array(catalog.starCount);
+  for (let index = 0; index < catalog.starCount; index += 1) indices[index] = index;
+  indices.sort((left, right) => {
+    const leftMagnitude = catalog.data[left * STAR_STRIDE_FLOATS + 3] ?? Number.POSITIVE_INFINITY;
+    const rightMagnitude = catalog.data[right * STAR_STRIDE_FLOATS + 3] ?? Number.POSITIVE_INFINITY;
+    return leftMagnitude === rightMagnitude ? left - right : leftMagnitude - rightMagnitude;
+  });
+  return indices;
+}
+
 /** Setup-only ownership boundary for the complete static star catalog draw. */
 export class Starfield {
   readonly points: Points<BufferGeometry, ShaderMaterial>;
+  private readonly starCount: number;
 
   constructor(catalog: StarCatalog, pixelRatio: number) {
     assertPixelRatio(pixelRatio);
+    this.starCount = catalog.starCount;
 
     const catalogBuffer = new InterleavedBuffer(catalog.data, STAR_STRIDE_FLOATS);
     const sizes = new Float32Array(catalog.starCount);
@@ -105,6 +121,7 @@ export class Starfield {
     geometry.setAttribute('aColor', new InterleavedBufferAttribute(catalogBuffer, 3, 4));
     geometry.setAttribute('aSizeCssPx', new BufferAttribute(sizes, 1));
     geometry.setAttribute('aOpacity', new BufferAttribute(opacities, 1));
+    geometry.setIndex(new BufferAttribute(createMagnitudeOrderedStarIndices(catalog), 1));
     geometry.setDrawRange(0, catalog.starCount);
 
     const material = new ShaderMaterial({
@@ -134,6 +151,13 @@ export class Starfield {
     assertPixelRatio(pixelRatio);
     const uniform = this.points.material.uniforms.uPixelRatio;
     if (uniform !== undefined) uniform.value = pixelRatio;
+  }
+
+  setCountCap(countCap: number): void {
+    if (!Number.isInteger(countCap) || countCap <= 0) {
+      throw new RangeError(`starfield count cap must be a positive integer: ${countCap}`);
+    }
+    this.points.geometry.setDrawRange(0, Math.min(this.starCount, countCap));
   }
 
   dispose(): void {

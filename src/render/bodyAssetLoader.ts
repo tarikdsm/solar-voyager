@@ -12,6 +12,7 @@ import type {
   RuntimeAssetEntry,
   RuntimeAssetManifest,
 } from './assetManifest.js';
+import type { TextureQualityCap } from './perfGovernor.js';
 
 export interface LoadedBodyModel {
   readonly root: Object3D;
@@ -39,6 +40,11 @@ export type BodyAssetBackendFactory = (
 export type BodyAssetErrorReporter = (message: string, error: unknown) => void;
 
 const HERO_IDS = ['sun', 'earth', 'moon'] as const;
+
+function isStartupHero(id: string): boolean {
+  for (const heroId of HERO_IDS) if (heroId === id) return true;
+  return false;
+}
 const NULL_TEXTURE_PROMISE: Promise<Texture | null> = Promise.resolve(null);
 const NULL_MODEL_PROMISE: Promise<LoadedBodyModel | null> = Promise.resolve(null);
 
@@ -117,6 +123,7 @@ export class BodyAssetLoader {
   private readonly modelPromises = new Map<string, Promise<LoadedBodyModel | null>>();
   private readonly baseUrl: string;
   private backendPromise: Promise<BodyAssetBackend> | null = null;
+  private textureTierCap: TextureQualityCap = 'full';
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -139,7 +146,14 @@ export class BodyAssetLoader {
       this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);
       return NULL_TEXTURE_PROMISE;
     }
-    const file = findFile(entry, `textures/${id}_albedo_tier2.ktx2`);
+    const startupFile = isStartupHero(id)
+      ? findFile(entry, `textures/${id}_albedo_tier2.ktx2`)
+      : null;
+    const canonicalFile =
+      startupFile ??
+      findFile(entry, `textures/${id}_albedo.ktx2`) ??
+      findFile(entry, `textures/${id}_albedo_tier2.ktx2`);
+    const file = canonicalFile === null ? null : this.cappedTextureFile(entry, canonicalFile);
     if (file === null) {
       this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);
       return NULL_TEXTURE_PROMISE;
@@ -165,11 +179,16 @@ export class BodyAssetLoader {
       this.modelPromises.set(id, NULL_MODEL_PROMISE);
       return NULL_MODEL_PROMISE;
     }
-    const file = findFile(entry, `models/${id}.glb`);
-    if (file === null) {
+    const canonicalFile = findFile(entry, `models/${id}.glb`);
+    if (canonicalFile === null) {
       this.modelPromises.set(id, NULL_MODEL_PROMISE);
       return NULL_MODEL_PROMISE;
     }
+    const cappedFile =
+      this.textureTierCap === 'full'
+        ? null
+        : findFile(entry, `models/${id}_${this.textureTierCap}.glb`);
+    const file = cappedFile ?? canonicalFile;
 
     const url = `${this.baseUrl}assets/${file}`;
     const promise = this.getBackend()
@@ -196,6 +215,13 @@ export class BodyAssetLoader {
     await Promise.all(promises);
   }
 
+  setTextureTierCap(cap: TextureQualityCap): void {
+    if (cap !== 'full' && cap !== '2k' && cap !== '1k') {
+      throw new RangeError('Unknown texture tier cap.');
+    }
+    this.textureTierCap = cap;
+  }
+
   private getBackend(): Promise<BodyAssetBackend> {
     this.backendPromise ??= this.createBackend(this.renderer, this.baseUrl);
     return this.backendPromise;
@@ -207,8 +233,8 @@ export class BodyAssetLoader {
   ): Promise<LoadedSurfaceDetail | null> {
     const detail = entry.surfaceDetail;
     if (detail === undefined) return null;
-    const albedoUrl = `${this.baseUrl}assets/${detail.albedo}`;
-    const normalUrl = `${this.baseUrl}assets/${detail.normal}`;
+    const albedoUrl = `${this.baseUrl}assets/${this.cappedTextureFile(entry, detail.albedo)}`;
+    const normalUrl = `${this.baseUrl}assets/${this.cappedTextureFile(entry, detail.normal)}`;
     const [albedoResult, normalResult] = await Promise.allSettled([
       backend.loadTexture(albedoUrl),
       backend.loadTexture(normalUrl),
@@ -236,5 +262,11 @@ export class BodyAssetLoader {
       tilesPerEquator: detail.tilesPerEquator,
       seed: detail.seed,
     };
+  }
+
+  private cappedTextureFile(entry: RuntimeAssetEntry, canonicalFile: string): string {
+    if (this.textureTierCap === 'full') return canonicalFile;
+    const candidate = canonicalFile.replace(/\.ktx2$/u, `_${this.textureTierCap}.ktx2`);
+    return findFile(entry, candidate) ?? canonicalFile;
   }
 }

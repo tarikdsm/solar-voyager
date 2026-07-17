@@ -57,22 +57,31 @@ export function projectedDiameterPx(
 }
 
 /** Selects a representation with twenty-percent hysteresis around both boundaries. */
-export function selectVisualTier(current: VisualTier, diameterPx: number): VisualTier {
+export function selectVisualTier(
+  current: VisualTier,
+  diameterPx: number,
+  modelThresholdScale = 1,
+): VisualTier {
   if (current !== 1 && current !== 2 && current !== 3) {
     throw new RangeError('current visual tier must be 1, 2, or 3.');
   }
   assertFiniteNonnegative('diameterPx', diameterPx);
+  if (!Number.isFinite(modelThresholdScale) || modelThresholdScale < 1) {
+    throw new RangeError('model threshold scale must be finite and at least one.');
+  }
+  const sphereToModelPx = SPHERE_TO_MODEL_PX * modelThresholdScale;
+  const modelToSpherePx = MODEL_TO_SPHERE_PX * modelThresholdScale;
 
   switch (current) {
     case 1:
-      if (diameterPx >= SPHERE_TO_MODEL_PX) return 3;
+      if (diameterPx >= sphereToModelPx) return 3;
       return diameterPx >= POINT_TO_SPHERE_PX ? 2 : 1;
     case 2:
-      if (diameterPx >= SPHERE_TO_MODEL_PX) return 3;
+      if (diameterPx >= sphereToModelPx) return 3;
       return diameterPx < SPHERE_TO_POINT_PX ? 1 : 2;
     case 3:
       if (diameterPx < SPHERE_TO_POINT_PX) return 1;
-      return diameterPx < MODEL_TO_SPHERE_PX ? 2 : 3;
+      return diameterPx < modelToSpherePx ? 2 : 3;
   }
 }
 

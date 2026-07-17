@@ -13,6 +13,8 @@ import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
+import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
+import { RenderQualityController } from './render/renderQualityController.js';
 import type { Commands } from './sim/simulationSnapshot.js';
 import './style.css';
 import { App } from './ui/App.js';
@@ -41,13 +43,7 @@ const { contextReport, renderer } = rendererBootstrap;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
-const perfQualityState = {
-  governorState: 'Awaiting adaptive governor',
-  lastAction: 'None',
-  renderScale: 1,
-  tier: 6,
-  tierCount: 6,
-};
+const perfQualityState = createPerfQualityState();
 const perfPanelStore = createPerfPanelStore({
   quality: perfQualityState,
   resolution: canvas,
@@ -64,6 +60,7 @@ let world: EpochWorld | null = null;
 let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let commandInput: KeyboardCommandMapper | null = null;
+let perfGovernor: PerfGovernor | null = null;
 const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
   setItem: (key, value) => window.localStorage.setItem(key, value),
@@ -79,6 +76,7 @@ const session = new GameSessionController({
   onSettingsChanged: (settings, origin) => {
     if (origin === 'restore') commandInput?.restoreBindings(settings.inputBindings);
     else commandInput?.updateBindings(settings.inputBindings);
+    perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
 
@@ -150,7 +148,7 @@ function renderFrame(nowMs: number): void {
   spaceScene.camera.updateMatrix();
   visualSystem.update(
     cameraPositionKm,
-    canvas.height,
+    Math.max(1, canvas.clientHeight),
     spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
   );
@@ -171,6 +169,7 @@ function renderFrame(nowMs: number): void {
     hudEndMs - uiStartMs + (perfPanelEndMs - perfPanelStartMs),
     nowMs,
   );
+  perfGovernor?.update(nowMs, telemetry.snapshot);
   requestAnimationFrame(renderFrame);
 }
 
@@ -192,13 +191,29 @@ async function startApplication(): Promise<void> {
   canvas.dataset.rendererReady = 'true';
   canvas.dataset.softwareRasterizer = String(contextReport.softwareRasterizer);
   resizeRenderer();
-  world = await createEpochWorld(renderer, { initialViewportHeightPx: canvas.height });
+  world = await createEpochWorld(renderer, {
+    initialViewportHeightPx: Math.max(1, canvas.clientHeight),
+  });
   postPipeline = new LightingPostPipeline(
     renderer,
     world.spaceScene.scene,
     world.spaceScene.camera,
   );
-  postPipeline.setBloomEnabled(postProcessingEnabled);
+  const qualityController = new RenderQualityController({
+    assetLoader: world.visualSystem,
+    pipeline: postPipeline,
+    postProcessingAvailable: postProcessingEnabled,
+    proceduralSun: world.proceduralSun,
+    renderer,
+    starfield: world.starfield,
+    visualSystem: world.visualSystem,
+  });
+  perfGovernor = new PerfGovernor({
+    application: qualityController,
+    initialLock: session.settings.qualityLock,
+    state: perfQualityState,
+    telemetry,
+  });
   if (!postProcessingEnabled) renderer.toneMappingExposure = SOFTWARE_FALLBACK_EXPOSURE;
   resizeRenderer();
   world.lighting.update();
