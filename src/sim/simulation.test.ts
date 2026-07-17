@@ -251,6 +251,8 @@ describe('SimulationCore', () => {
     expect(snapshot.throttle).toBe(0);
     expect(snapshot.powerDrawW).toBe(0);
     expect(snapshot.shipProperAccelerationKmS2).toEqual(new Float64Array(3));
+    expect(core.burnLog.activeBurn).toBeNull();
+    expect(core.burnLog.count).toBe(0);
   });
 
   it('publishes the highest completed checkpoint when the shared budget is exhausted', () => {
@@ -260,6 +262,7 @@ describe('SimulationCore', () => {
       shipMassKg: SHIP_MASS_KG,
       integrationTolerance: verificationTolerance(2),
     });
+    core.commands.setThrottle(0.4);
     core.commands.setWarp(10);
 
     const snapshot = core.step(1);
@@ -268,6 +271,8 @@ describe('SimulationCore', () => {
     expect(snapshot.effectiveWarp).toBe(5);
     expect(snapshot.simTimeSec).toBe(5);
     expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
+    expect(snapshot.energySpentJ).toBeCloseTo(snapshot.powerDrawW * 5, 0);
+    expect(snapshot.properDeltaVMS).toBeGreaterThan(0);
   });
 
   it('keeps equivalent physical horizons stable across warp changes', () => {
