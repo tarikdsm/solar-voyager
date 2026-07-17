@@ -44,9 +44,9 @@ handoff_notes: |
   0.000053 ms/frame overhead (repeat 0.000100), versus the <0.1 ms limit, with
   stable snapshot identity and 120 samples.
 
-  Production before/after at 1280x720 SwiftShader: median 150.0 -> 149.9 ms,
+  Production before/after at 1280x720 SwiftShader: median 150.0 -> 150.0 ms,
   p75 150.0 -> 150.0 ms, p99 166.7 -> 166.7 ms, main JS gzip 165.61 ->
-  169.05 kB. Absolute software fps is not reference-hardware evidence. Raw
+  169.15 kB. Absolute software fps is not reference-hardware evidence. Raw
   captures and caveats are in docs/bench/T0045-{before,after}.json and
   T0045-summary.md.
 

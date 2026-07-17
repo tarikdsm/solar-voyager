@@ -42,7 +42,7 @@ different lengths.
 - GPU timer queries disabled for the software renderer;
 - 6 draw calls, 48,564 triangles, and 9,139 points;
 - 5 geometries, 7 textures, and 10 programs;
-- latest render split 0.3 ms; sim/UI splits 0 ms in the current scaffold.
+- latest render split 0.4 ms; sim/UI splits 0 ms in the current scaffold.
 
 ## Telemetry Overhead Gate
 
