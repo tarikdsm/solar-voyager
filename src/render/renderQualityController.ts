@@ -1,8 +1,6 @@
 import type { WebGLRenderer } from 'three';
 
 import type {
-  AntiAliasingQuality,
-  BloomQuality,
   RenderQualityApplicationPort,
   RenderQualityProfile,
   TextureQualityCap,
@@ -10,8 +8,7 @@ import type {
 import type { ProceduralSunQuality } from './proceduralSunState.js';
 
 export interface QualityPostPipelinePort {
-  setAntiAliasing(quality: AntiAliasingQuality): void;
-  setBloomQuality(quality: BloomQuality): void;
+  selectQuality(profile: RenderQualityProfile, postProcessingAvailable: boolean): void;
 }
 
 export interface QualityStarfieldPort {
@@ -37,7 +34,6 @@ export interface RenderQualityControllerOptions {
   readonly postProcessingAvailable: boolean;
   readonly proceduralSun: QualityProceduralPort;
   readonly renderer: WebGLRenderer;
-  readonly resize: () => void;
   readonly starfield: QualityStarfieldPort;
   readonly visualSystem: QualityVisualSystemPort;
 }
@@ -49,8 +45,6 @@ export class RenderQualityController implements RenderQualityApplicationPort {
   private readonly pipeline: QualityPostPipelinePort;
   private readonly postProcessingAvailable: boolean;
   private readonly proceduralSun: QualityProceduralPort;
-  private readonly renderer: WebGLRenderer;
-  private readonly resize: () => void;
   private readonly starfield: QualityStarfieldPort;
   private readonly visualSystem: QualityVisualSystemPort;
   private appliedRung = -1;
@@ -60,8 +54,6 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.pipeline = options.pipeline;
     this.postProcessingAvailable = options.postProcessingAvailable;
     this.proceduralSun = options.proceduralSun;
-    this.renderer = options.renderer;
-    this.resize = options.resize;
     this.starfield = options.starfield;
     this.visualSystem = options.visualSystem;
     this.basePixelRatio = options.renderer.getPixelRatio();
@@ -73,15 +65,12 @@ export class RenderQualityController implements RenderQualityApplicationPort {
   apply(profile: RenderQualityProfile): void {
     if (profile.rung === this.appliedRung) return;
     const effectivePixelRatio = this.basePixelRatio * profile.renderScale;
-    this.renderer.setPixelRatio(effectivePixelRatio);
-    this.pipeline.setBloomQuality(this.postProcessingAvailable ? profile.bloom : 'off');
-    this.pipeline.setAntiAliasing(this.postProcessingAvailable ? profile.antiAliasing : 'off');
+    this.pipeline.selectQuality(profile, this.postProcessingAvailable);
     this.starfield.setPixelRatio(effectivePixelRatio);
     this.starfield.setCountCap(profile.starCountCap);
     this.proceduralSun.setQuality(profile.proceduralQuality);
     this.assetLoader.setTextureTierCap(profile.textureCap);
     this.visualSystem.setModelThresholdScale(profile.modelThresholdScale);
     this.appliedRung = profile.rung;
-    this.resize();
   }
 }

@@ -11,6 +11,7 @@ import type { StarCatalog } from './starCatalog.js';
 import {
   STARFIELD_RADIUS_KM,
   Starfield,
+  createMagnitudeOrderedStarIndices,
   magnitudeToStarOpacity,
   magnitudeToStarSizeCssPx,
 } from './starfield.js';
@@ -63,9 +64,28 @@ describe('Starfield', () => {
     const expectedOpacities = new Float32Array([-1, 1, 8].map(magnitudeToStarOpacity));
     expect(Array.from((size as BufferAttribute).array)).toEqual(Array.from(expectedSizes));
     expect(Array.from((opacity as BufferAttribute).array)).toEqual(Array.from(expectedOpacities));
+    expect(Array.from(geometry.getIndex()?.array ?? [])).toEqual([0, 1, 2]);
     expect(geometry.drawRange).toEqual({ start: 0, count: catalog.starCount });
     expect(starfield.points.matrixAutoUpdate).toBe(false);
     expect(starfield.points.frustumCulled).toBe(false);
+  });
+
+  it('keeps the brightest stars across the source order when applying a prefix cap', () => {
+    const catalog: StarCatalog = {
+      starCount: 6,
+      strideFloats: 7,
+      data: new Float32Array([
+        1, 0, 0, 8, 1, 1, 1, 0.8, 0.2, 0, 7, 1, 1, 1, 0.5, 0.5, 0, -1, 1, 1, 1, -0.5, 0.5, 0, 0, 1,
+        1, 1, -0.8, 0.2, 0, 6, 1, 1, 1, -1, 0, 0, 5, 1, 1, 1,
+      ]),
+    };
+
+    expect(Array.from(createMagnitudeOrderedStarIndices(catalog))).toEqual([2, 3, 5, 4, 1, 0]);
+    const starfield = new Starfield(catalog, 1);
+    starfield.setCountCap(2);
+    const order = Array.from(starfield.points.geometry.getIndex()?.array ?? []).slice(0, 2);
+    expect(order).toEqual([2, 3]);
+    expect(order.map((index) => catalog.data[index * 7])).toEqual([0.5, -0.5]);
   });
 
   it('uses fixed-radius far-plane additive rendering with pixel-ratio control', () => {

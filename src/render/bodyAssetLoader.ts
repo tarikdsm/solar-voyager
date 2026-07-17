@@ -40,6 +40,11 @@ export type BodyAssetBackendFactory = (
 export type BodyAssetErrorReporter = (message: string, error: unknown) => void;
 
 const HERO_IDS = ['sun', 'earth', 'moon'] as const;
+
+function isStartupHero(id: string): boolean {
+  for (const heroId of HERO_IDS) if (heroId === id) return true;
+  return false;
+}
 const NULL_TEXTURE_PROMISE: Promise<Texture | null> = Promise.resolve(null);
 const NULL_MODEL_PROMISE: Promise<LoadedBodyModel | null> = Promise.resolve(null);
 
@@ -141,7 +146,13 @@ export class BodyAssetLoader {
       this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);
       return NULL_TEXTURE_PROMISE;
     }
-    const canonicalFile = findFile(entry, `textures/${id}_albedo_tier2.ktx2`);
+    const startupFile = isStartupHero(id)
+      ? findFile(entry, `textures/${id}_albedo_tier2.ktx2`)
+      : null;
+    const canonicalFile =
+      startupFile ??
+      findFile(entry, `textures/${id}_albedo.ktx2`) ??
+      findFile(entry, `textures/${id}_albedo_tier2.ktx2`);
     const file = canonicalFile === null ? null : this.cappedTextureFile(entry, canonicalFile);
     if (file === null) {
       this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);

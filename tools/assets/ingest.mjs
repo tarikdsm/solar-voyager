@@ -144,6 +144,23 @@ export async function ingestAssets(options) {
             },
           );
           files.push(sphereRelative);
+          for (const [suffix, width] of [
+            ['2k', 2048],
+            ['1k', 1024],
+          ]) {
+            const qualityOutputName = `${asset.id}_albedo_${suffix}.ktx2`;
+            const qualityRelative = `textures/${qualityOutputName}`;
+            await (options.encodeTexture ?? encodeKtxTexture)(
+              join(asset.directory, texture),
+              join(stagingRoot, 'textures', qualityOutputName),
+              {
+                executable: options.ktxExecutable,
+                width,
+                height: width / 2,
+              },
+            );
+            files.push(qualityRelative);
+          }
         }
       }
       const modelRelative = `models/${asset.id}.glb`;

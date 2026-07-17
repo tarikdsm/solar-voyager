@@ -7,7 +7,10 @@ Captured by `npm run test:perf-governor` on 2026-07-17. The browser regression a
 - Synthetic overload: converged from R00 to R02 in two actions; final p75 was 14 ms (below the 15.5 ms overload threshold), within the three-rung acceptance limit.
 - Manual lock: the low lock selected R14 once, then 20 low-frame-time samples produced no governor step-up actions.
 - Shader stability: 41 programs after startup warm-up and 41 programs at every rung, so no quality transition compiled a runtime shader.
-- Ordered effects: drawing-buffer scale, bloom resolution/off, SMAA/FXAA/off, procedural octaves, star draw cap, texture cap, and model threshold are asserted independently.
+- Resource stability: 1,500 rung transitions retained the same composer/bloom render targets and, after forced GC, retained no JS heap (observed delta -836,450 bytes).
+- Window integrity: automatic evidence is ignored until all 120 frame-time samples exist.
+- Star coverage: the brightest 2,000 indexed stars reach both hemispheres on X/Y/Z (all extrema beyond ±0.998), instead of retaining an HR-catalog prefix.
+- Ordered effects: preallocated internal render scale, bloom resolution/off, SMAA/FXAA/off, procedural octaves, star draw cap, real texture variants, and model threshold are asserted independently.
 
 ## Rung evidence
 
@@ -29,4 +32,4 @@ Captured by `npm run test:perf-governor` on 2026-07-17. The browser regression a
 |  R13 |   Q1 | Future uncached textures capped at 1k    | [rung-13.png](T0091-rungs/rung-13.png) |
 |  R14 |   Q1 | Detailed-model thresholds doubled        | [rung-14.png](T0091-rungs/rung-14.png) |
 
-Texture-cap screenshots intentionally retain already-loaded Earth textures. The regression separately asserts the loader selects `_2k` and `_1k` variants for subsequent uncached loads, avoiding visible texture swaps or frame-loop allocations.
+Texture-cap screenshots intentionally retain already-loaded Earth textures. Deterministic asset ingestion now publishes `_2k` and `_1k` variants in the real manifest, and integration tests assert that subsequent uncached Saturn loads select each cap without a visible swap or frame-loop allocation.

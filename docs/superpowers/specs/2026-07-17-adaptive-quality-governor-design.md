@@ -51,19 +51,20 @@ count. Manual `high`, `medium`, and `low` map to rungs 0, 7, and 14.
 
 - `render/perfGovernor.ts` owns only scalar state and the control law. Profiles
   are module-level frozen data, and `update()` performs no allocations.
-- `RenderQualityController` applies a changed profile to the existing renderer,
-  post chain, starfield, procedural Sun, lazy asset policy, and body tier
-  thresholds. Changes are rare control events; normal frames only compare the
-  already-applied rung.
-- The renderer pixel ratio is the startup hardware ratio multiplied by render
-  scale. CSS dimensions never change. The post composer and star point-size
-  uniform receive the same effective ratio.
-- SMAA and FXAA passes are created and warmed at setup, then toggled; no material,
-  geometry, pass, or shader program is created after the first frame. Half bloom
-  resizes the existing bloom targets after composer resize.
-- Texture caps affect only assets that have not entered a promise cache. A
-  capped filename is selected when present and the canonical file is the safe
-  fallback while the asset catalog is being expanded.
+- `RenderQualityController` selects a preallocated post variant and applies the
+  remaining scalar controls to the starfield, procedural Sun, lazy asset policy,
+  and body tier thresholds. Normal frames only compare the already-applied rung.
+- Five post variants are allocated, sized, and warmed at startup for scale
+  1.00/0.85/0.70/0.55 and the 0.55 half-bloom path. CSS and the renderer drawing
+  buffer remain fixed; selecting a rung changes only the active composer and the
+  star point-size uniform.
+- SMAA and FXAA passes exist in every preallocated variant. Bloom off preserves
+  the existing half-size target instead of resizing it. No material, geometry,
+  pass, shader program, composer, or render target is created or resized by a
+  rung transition.
+- Texture caps affect only assets that have not entered a promise cache. The
+  deterministic asset ingest emits real `_2k` and `_1k` albedo variants and the
+  loader selects them for subsequent lazy body-sphere loads.
 - The tier-3 threshold multiplier changes only numeric selection thresholds and
   reuses all existing body representations.
 
@@ -75,8 +76,8 @@ count. Manual `high`, `medium`, and `low` map to rungs 0, 7, and 14.
 - Unit tests cover every profile, exact thresholds, cooldown, repeated-snapshot
   immunity, headroom timing, limits, lock precedence, and the synthetic-load
   recovery/no-oscillation acceptance scenario.
-- Browser regression drives real renderer knobs, checks drawing-buffer and draw
-  count changes, confirms no shader compilation after warm-up, and records one
-  committed screenshot for every rung. Texture-cap screenshots use a lazy-load
-  fixture with explicit full/2k/1k variants so the deferred policy is visible.
-
+- Browser regression drives real renderer knobs, checks internal-buffer and draw
+  count changes, verifies render-target identity and heap stability across 1,500
+  rung transitions, checks full-sky coverage of the 2k brightest-star subset,
+  confirms no shader compilation after warm-up, and records one committed
+  screenshot for every rung.

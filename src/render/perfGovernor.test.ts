@@ -29,6 +29,10 @@ function fixture(initialLock = AUTO_QUALITY_LOCK) {
   return { actions, appliedRungs, governor, state };
 }
 
+function fullWindow(frameCount: number, p75FrameMs: number) {
+  return { frameCount, frameSampleCount: 120, p75FrameMs };
+}
+
 describe('quality profiles', () => {
   it('walks one ordered knob at a time across all 15 immutable profiles', () => {
     expect(QUALITY_PROFILES).toHaveLength(15);
@@ -113,6 +117,23 @@ describe('quality profiles', () => {
     expect(QUALITY_PROFILES.map((profile) => profile.tier)).toEqual([
       6, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 2, 1, 1, 1,
     ]);
+    expect(QUALITY_PROFILES.map((profile) => profile.upAction)).toEqual([
+      'Restored · render scale 1.00',
+      'Restored · render scale 0.85',
+      'Restored · render scale 0.70',
+      'Restored · bloom full resolution',
+      'Restored · bloom half resolution',
+      'Restored · SMAA',
+      'Restored · FXAA',
+      'Restored · procedural octaves full',
+      'Restored · procedural octaves half',
+      'Restored · 9,000 stars',
+      'Restored · 4,000 stars',
+      'Restored · full textures',
+      'Restored · texture cap 2k',
+      'Restored · tier-3 threshold',
+      'Restored · tier-3 threshold',
+    ]);
     expect(Object.isFrozen(QUALITY_PROFILES)).toBe(true);
     expect(QUALITY_PROFILES.every((profile) => Object.isFrozen(profile))).toBe(true);
   });
@@ -122,14 +143,14 @@ describe('PerfGovernor', () => {
   it('requires two unique over-budget windows and enforces a three-second cooldown', () => {
     const { actions, appliedRungs, governor, state } = fixture();
 
-    expect(governor.update(0, { frameCount: 120, p75FrameMs: 16 })).toBe(false);
-    expect(governor.update(1, { frameCount: 120, p75FrameMs: 16 })).toBe(false);
-    expect(governor.update(250, { frameCount: 135, p75FrameMs: 16 })).toBe(true);
+    expect(governor.update(0, fullWindow(120, 16))).toBe(false);
+    expect(governor.update(1, fullWindow(120, 16))).toBe(false);
+    expect(governor.update(250, fullWindow(135, 16))).toBe(true);
     expect(state.rung).toBe(1);
-    expect(governor.update(500, { frameCount: 150, p75FrameMs: 20 })).toBe(false);
-    expect(governor.update(3_249, { frameCount: 165, p75FrameMs: 20 })).toBe(false);
-    expect(governor.update(3_250, { frameCount: 180, p75FrameMs: 20 })).toBe(false);
-    expect(governor.update(3_500, { frameCount: 195, p75FrameMs: 20 })).toBe(true);
+    expect(governor.update(500, fullWindow(150, 20))).toBe(false);
+    expect(governor.update(3_249, fullWindow(165, 20))).toBe(false);
+    expect(governor.update(3_250, fullWindow(180, 20))).toBe(false);
+    expect(governor.update(3_500, fullWindow(195, 20))).toBe(true);
 
     expect(appliedRungs).toEqual([0, 1, 2]);
     expect(actions).toEqual([
@@ -142,15 +163,15 @@ describe('PerfGovernor', () => {
     const { governor, state } = fixture('medium');
     governor.setLock('auto', 0);
 
-    expect(governor.update(3_000, { frameCount: 1, p75FrameMs: 10 })).toBe(false);
-    expect(governor.update(12_999, { frameCount: 2, p75FrameMs: 10 })).toBe(false);
-    expect(governor.update(13_000, { frameCount: 3, p75FrameMs: 10 })).toBe(true);
+    expect(governor.update(3_000, fullWindow(120, 10))).toBe(false);
+    expect(governor.update(12_999, fullWindow(121, 10))).toBe(false);
+    expect(governor.update(13_000, fullWindow(122, 10))).toBe(true);
     expect(state.rung).toBe(6);
 
-    governor.update(16_000, { frameCount: 4, p75FrameMs: 10 });
-    governor.update(20_000, { frameCount: 5, p75FrameMs: 12 });
-    governor.update(30_000, { frameCount: 6, p75FrameMs: 10 });
-    expect(governor.update(39_999, { frameCount: 7, p75FrameMs: 10 })).toBe(false);
+    governor.update(16_000, fullWindow(123, 10));
+    governor.update(20_000, fullWindow(124, 12));
+    governor.update(30_000, fullWindow(125, 10));
+    expect(governor.update(39_999, fullWindow(126, 10))).toBe(false);
     expect(state.rung).toBe(6);
   });
 
@@ -161,16 +182,16 @@ describe('PerfGovernor', () => {
     expect(state.rung).toBe(14);
     expect(state.governorState).toBe('Locked · Low');
     for (let sample = 1; sample <= 20; sample += 1) {
-      expect(governor.update(sample * 1_000, { frameCount: sample, p75FrameMs: 5 })).toBe(false);
+      expect(governor.update(sample * 1_000, fullWindow(120 + sample, 5))).toBe(false);
     }
     expect(appliedRungs).toEqual([0, 14]);
 
     governor.setLock('high', 21_000);
     expect(state.rung).toBe(0);
     governor.setLock('auto', 22_000);
-    governor.update(24_999, { frameCount: 30, p75FrameMs: 20 });
-    governor.update(25_000, { frameCount: 31, p75FrameMs: 20 });
-    expect(governor.update(25_250, { frameCount: 32, p75FrameMs: 20 })).toBe(true);
+    governor.update(24_999, fullWindow(150, 20));
+    governor.update(25_000, fullWindow(151, 20));
+    expect(governor.update(25_250, fullWindow(152, 20))).toBe(true);
     expect(actions.map((action) => action.reason)).toEqual([
       QualityActionReason.ManualLock,
       QualityActionReason.ManualLock,
@@ -187,7 +208,7 @@ describe('PerfGovernor', () => {
 
     for (let sample = 0; sample < 40; sample += 1) {
       frameCount += 15;
-      governor.update(nowMs, { frameCount, p75FrameMs: syntheticP75() });
+      governor.update(nowMs, fullWindow(frameCount, syntheticP75()));
       nowMs += 250;
     }
 
@@ -196,13 +217,30 @@ describe('PerfGovernor', () => {
     expect(state.lastAction).toContain('render scale 0.70');
   });
 
+  it('does not accumulate control evidence before the 120-frame window is full', () => {
+    const { governor, state } = fixture();
+
+    expect(governor.update(0, { frameCount: 30, frameSampleCount: 30, p75FrameMs: 30 })).toBe(
+      false,
+    );
+    expect(governor.update(250, { frameCount: 60, frameSampleCount: 60, p75FrameMs: 30 })).toBe(
+      false,
+    );
+    expect(governor.update(500, fullWindow(120, 30))).toBe(false);
+    expect(governor.update(750, fullWindow(135, 30))).toBe(true);
+    expect(state.rung).toBe(1);
+  });
+
   it('rejects invalid clocks and samples without calling collaborators', () => {
     const { governor } = fixture();
     const updateSpy = vi.spyOn(governor, 'update');
 
-    expect(() => governor.update(Number.NaN, { frameCount: 1, p75FrameMs: 10 })).toThrow(/time/iu);
-    expect(() => governor.update(0, { frameCount: -1, p75FrameMs: 10 })).toThrow(/frame/iu);
-    expect(() => governor.update(0, { frameCount: 1, p75FrameMs: Number.NaN })).toThrow(/p75/iu);
-    expect(updateSpy).toHaveBeenCalledTimes(3);
+    expect(() => governor.update(Number.NaN, fullWindow(120, 10))).toThrow(/time/iu);
+    expect(() => governor.update(0, fullWindow(-1, 10))).toThrow(/frame/iu);
+    expect(() => governor.update(0, fullWindow(120, Number.NaN))).toThrow(/p75/iu);
+    expect(() =>
+      governor.update(0, { frameCount: 120, frameSampleCount: 121, p75FrameMs: 10 }),
+    ).toThrow(/sample count/iu);
+    expect(updateSpy).toHaveBeenCalledTimes(4);
   });
 });

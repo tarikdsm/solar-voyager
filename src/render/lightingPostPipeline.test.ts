@@ -13,12 +13,14 @@ import {
   BLOOM_STRENGTH,
   BLOOM_THRESHOLD,
   LightingPostPipeline,
+  PreallocatedLightingPostPipeline,
   type FxaaPassPort,
   type LightingPostBackend,
   type PostComposerPort,
   type PostPassPort,
   type UnrealBloomPassPort,
 } from './lightingPostPipeline.js';
+import { QUALITY_PROFILES } from './perfGovernor.js';
 
 interface Fixture {
   readonly backend: LightingPostBackend;
@@ -131,8 +133,10 @@ describe('LightingPostPipeline', () => {
     pipeline.setBloomQuality('half');
     expect(fixture.bloomPass.enabled).toBe(true);
     expect(fixture.bloomPass.setSize).toHaveBeenLastCalledWith(320, 180);
+    const halfResizeCount = vi.mocked(fixture.bloomPass.setSize).mock.calls.length;
     pipeline.setBloomQuality('off');
     expect(fixture.bloomPass.enabled).toBe(false);
+    expect(fixture.bloomPass.setSize).toHaveBeenCalledTimes(halfResizeCount);
     pipeline.setBloomQuality('full');
     expect(fixture.bloomPass.setSize).toHaveBeenLastCalledWith(640, 360);
 
@@ -193,5 +197,65 @@ describe('LightingPostPipeline', () => {
     expect(fixture.fxaaPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.outputPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.composer.dispose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('PreallocatedLightingPostPipeline', () => {
+  it('sizes every setup variant once and only switches existing resources between rungs', () => {
+    const variants = Array.from({ length: 5 }, () => ({
+      bloomPass: pass(),
+      composer: { readBuffer: {}, writeBuffer: {} },
+      dispose: vi.fn(),
+      fxaaPass: pass(),
+      render: vi.fn(),
+      resize: vi.fn(),
+      setAntiAliasing: vi.fn(),
+      setBloomQuality: vi.fn(),
+      smaaPass: pass(),
+      warmUp: vi.fn(),
+    })) as unknown as LightingPostPipeline[];
+    let nextVariant = 0;
+    const factory = vi.fn(() => {
+      const variant = variants[nextVariant];
+      nextVariant += 1;
+      if (variant === undefined) throw new Error('test variant missing');
+      return variant;
+    });
+    const renderer = { getPixelRatio: () => 2 } as unknown as WebGLRenderer;
+    const pipeline = new PreallocatedLightingPostPipeline(
+      renderer,
+      new Scene(),
+      new PerspectiveCamera(),
+      factory,
+    );
+
+    pipeline.resize(800, 600, 2);
+    expect(variants.every((variant) => vi.mocked(variant.resize).mock.calls.length === 1)).toBe(
+      true,
+    );
+    const [full, scaled85, scaled70, scaled55, scaled55Half] = variants;
+    if (
+      full === undefined ||
+      scaled85 === undefined ||
+      scaled70 === undefined ||
+      scaled55 === undefined ||
+      scaled55Half === undefined
+    ) {
+      throw new Error('preallocated test variant is missing');
+    }
+    expect(vi.mocked(full.resize).mock.calls[0]).toEqual([800, 600, 2]);
+    expect(vi.mocked(scaled85.resize).mock.calls[0]).toEqual([800, 600, 1.7]);
+    expect(vi.mocked(scaled70.resize).mock.calls[0]).toEqual([800, 600, 1.4]);
+    expect(vi.mocked(scaled55.resize).mock.calls[0]).toEqual([800, 600, 1.1]);
+    expect(vi.mocked(scaled55Half.resize).mock.calls[0]).toEqual([800, 600, 1.1]);
+
+    for (const variant of variants) vi.mocked(variant.resize).mockClear();
+    for (const profile of QUALITY_PROFILES) pipeline.selectQuality(profile, true);
+    expect(variants.every((variant) => vi.mocked(variant.resize).mock.calls.length === 0)).toBe(
+      true,
+    );
+    expect(pipeline.active).toBe(variants[4]);
+    expect(variants[4]?.setBloomQuality).toHaveBeenLastCalledWith('off');
+    expect(variants[4]?.setAntiAliasing).toHaveBeenLastCalledWith('off');
   });
 });

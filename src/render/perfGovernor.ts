@@ -7,6 +7,7 @@ export const QUALITY_OVER_BUDGET_MS = 15.5;
 export const QUALITY_HEADROOM_MS = 11;
 export const QUALITY_COOLDOWN_MS = 3_000;
 export const QUALITY_HEADROOM_DURATION_MS = 10_000;
+export const QUALITY_FRAME_WINDOW_SIZE = 120;
 
 export type BloomQuality = 'full' | 'half' | 'off';
 export type AntiAliasingQuality = 'smaa' | 'fxaa' | 'off';
@@ -66,7 +67,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Startup · full quality',
-    'Restored · full quality',
+    'Restored · render scale 1.00',
   ),
   profile(
     1,
@@ -105,7 +106,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · render scale 0.55',
-    'Restored · render scale 0.55',
+    'Restored · bloom full resolution',
   ),
   profile(
     4,
@@ -131,7 +132,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · bloom off',
-    'Restored · bloom full',
+    'Restored · SMAA',
   ),
   profile(6, 4, 0.55, 'off', 'fxaa', 'full', 9_000, 'full', 1, 'Reduced · FXAA', 'Restored · FXAA'),
   profile(
@@ -145,7 +146,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · anti-aliasing off',
-    'Restored · SMAA',
+    'Restored · procedural octaves full',
   ),
   profile(
     8,
@@ -171,7 +172,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · procedural octaves minimum',
-    'Restored · procedural octaves full',
+    'Restored · 9,000 stars',
   ),
   profile(
     10,
@@ -184,7 +185,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · 4,000 stars',
-    'Restored · 9,000 stars',
+    'Restored · 4,000 stars',
   ),
   profile(
     11,
@@ -197,7 +198,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     'full',
     1,
     'Reduced · 2,000 stars',
-    'Restored · 4,000 stars',
+    'Restored · full textures',
   ),
   profile(
     12,
@@ -210,7 +211,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     '2k',
     1,
     'Reduced · texture cap 2k',
-    'Restored · full textures',
+    'Restored · texture cap 2k',
   ),
   profile(
     13,
@@ -223,7 +224,7 @@ export const QUALITY_PROFILES: readonly RenderQualityProfile[] = Object.freeze([
     '1k',
     1,
     'Reduced · texture cap 1k',
-    'Restored · texture cap 2k',
+    'Restored · tier-3 threshold',
   ),
   profile(
     14,
@@ -271,6 +272,7 @@ export interface QualityActionTelemetryPort {
 
 export interface PerfGovernorSample {
   readonly frameCount: number;
+  readonly frameSampleCount: number;
   readonly p75FrameMs: number;
 }
 
@@ -350,6 +352,10 @@ export class PerfGovernor {
     if (sample.frameCount === this.lastFrameCount) return false;
     this.lastFrameCount = sample.frameCount;
     if (this.currentLock !== AUTO_QUALITY_LOCK) return false;
+    if (sample.frameSampleCount < QUALITY_FRAME_WINDOW_SIZE) {
+      this.resetEvidence();
+      return false;
+    }
     if (nowMs < this.cooldownUntilMs) {
       this.resetEvidence();
       return false;
@@ -445,6 +451,13 @@ export class PerfGovernor {
     if (!Number.isFinite(nowMs)) throw new RangeError('Governor sample time must be finite.');
     if (!Number.isInteger(sample.frameCount) || sample.frameCount < 0) {
       throw new RangeError('Governor sample frame count must be a nonnegative integer.');
+    }
+    if (
+      !Number.isInteger(sample.frameSampleCount) ||
+      sample.frameSampleCount < 0 ||
+      sample.frameSampleCount > QUALITY_FRAME_WINDOW_SIZE
+    ) {
+      throw new RangeError('Governor frame sample count must be an integer between zero and 120.');
     }
     if (!Number.isFinite(sample.p75FrameMs) || sample.p75FrameMs < 0) {
       throw new RangeError('Governor p75 frame time must be finite and nonnegative.');

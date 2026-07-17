@@ -164,7 +164,7 @@ describe('PerfPanelStore', () => {
     store.publish(250);
 
     expect(store.display.resolution).toBe(resolutionSignal);
-    expect(store.display.resolution.value).toBe('1344×756 @0.70');
+    expect(store.display.resolution.value).toBe('941×529 @0.70');
     expect(store.display.qualityTier.value).toBe('Q4/6');
     expect(store.display.governorState.value).toBe('Auto · cooldown');
     expect(store.display.lastAction.value).toBe('Reduced bloom');

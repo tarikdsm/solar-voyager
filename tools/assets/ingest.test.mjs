@@ -81,6 +81,8 @@ describe('complete asset ingest', () => {
         category: 'asteroid',
         files: [
           'models/vesta.glb',
+          'textures/vesta_albedo_1k.ktx2',
+          'textures/vesta_albedo_2k.ktx2',
           'textures/vesta_albedo_tier2.ktx2',
           'textures/vesta_albedo.ktx2',
         ],
@@ -99,6 +101,16 @@ describe('complete asset ingest', () => {
     expect(encoder).toHaveBeenCalledWith(
       expect.stringMatching(/vesta_albedo\.jpg$/),
       expect.stringMatching(/vesta_albedo_tier2\.ktx2$/),
+      expect.objectContaining({ width: 1024, height: 512 }),
+    );
+    expect(encoder).toHaveBeenCalledWith(
+      expect.stringMatching(/vesta_albedo\.jpg$/),
+      expect.stringMatching(/vesta_albedo_2k\.ktx2$/),
+      expect.objectContaining({ width: 2048, height: 1024 }),
+    );
+    expect(encoder).toHaveBeenCalledWith(
+      expect.stringMatching(/vesta_albedo\.jpg$/),
+      expect.stringMatching(/vesta_albedo_1k\.ktx2$/),
       expect.objectContaining({ width: 1024, height: 512 }),
     );
   });

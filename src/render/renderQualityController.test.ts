@@ -13,21 +13,18 @@ function fixture(postProcessingAvailable = true) {
     }),
   } as unknown as WebGLRenderer;
   const pipeline = {
-    setAntiAliasing: vi.fn(),
-    setBloomQuality: vi.fn(),
+    selectQuality: vi.fn(),
   };
   const starfield = { setCountCap: vi.fn(), setPixelRatio: vi.fn() };
   const proceduralSun = { setQuality: vi.fn() };
   const assetLoader = { setTextureTierCap: vi.fn() };
   const visualSystem = { setModelThresholdScale: vi.fn() };
-  const resize = vi.fn();
   const controller = new RenderQualityController({
     assetLoader,
     pipeline,
     postProcessingAvailable,
     proceduralSun,
     renderer,
-    resize,
     starfield,
     visualSystem,
   });
@@ -37,34 +34,31 @@ function fixture(postProcessingAvailable = true) {
     pipeline,
     proceduralSun,
     renderer,
-    resize,
     starfield,
     visualSystem,
   };
 }
 
 describe('RenderQualityController', () => {
-  it('applies every scalar knob and resizes from the immutable startup pixel ratio', () => {
+  it('applies every scalar knob without resizing runtime render targets', () => {
     const target = QUALITY_PROFILES[12];
     if (target === undefined) throw new Error('test profile missing');
     const subject = fixture();
 
     subject.controller.apply(target);
 
-    expect(subject.renderer.setPixelRatio).toHaveBeenCalledWith(1.1);
-    expect(subject.pipeline.setBloomQuality).toHaveBeenCalledWith('off');
-    expect(subject.pipeline.setAntiAliasing).toHaveBeenCalledWith('off');
+    expect(subject.renderer.setPixelRatio).not.toHaveBeenCalled();
+    expect(subject.pipeline.selectQuality).toHaveBeenCalledWith(target, true);
     expect(subject.starfield.setPixelRatio).toHaveBeenCalledWith(1.1);
     expect(subject.starfield.setCountCap).toHaveBeenCalledWith(2_000);
     expect(subject.proceduralSun.setQuality).toHaveBeenCalledWith('minimum');
     expect(subject.assetLoader.setTextureTierCap).toHaveBeenCalledWith('2k');
     expect(subject.visualSystem.setModelThresholdScale).toHaveBeenCalledWith(1);
-    expect(subject.resize).toHaveBeenCalledOnce();
 
     const full = QUALITY_PROFILES[0];
     if (full === undefined) throw new Error('full profile missing');
     subject.controller.apply(full);
-    expect(subject.renderer.setPixelRatio).toHaveBeenLastCalledWith(2);
+    expect(subject.pipeline.selectQuality).toHaveBeenLastCalledWith(full, true);
   });
 
   it('does not reapply the same rung and keeps post effects off on software rendering', () => {
@@ -75,10 +69,7 @@ describe('RenderQualityController', () => {
     subject.controller.apply(target);
     subject.controller.apply(target);
 
-    expect(subject.pipeline.setBloomQuality).toHaveBeenCalledOnce();
-    expect(subject.pipeline.setBloomQuality).toHaveBeenCalledWith('off');
-    expect(subject.pipeline.setAntiAliasing).toHaveBeenCalledOnce();
-    expect(subject.pipeline.setAntiAliasing).toHaveBeenCalledWith('off');
-    expect(subject.resize).toHaveBeenCalledOnce();
+    expect(subject.pipeline.selectQuality).toHaveBeenCalledOnce();
+    expect(subject.pipeline.selectQuality).toHaveBeenCalledWith(target, false);
   });
 });

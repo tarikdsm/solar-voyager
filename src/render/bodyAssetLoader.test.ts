@@ -67,6 +67,45 @@ describe('BodyAssetLoader', () => {
     );
   });
 
+  it('selects real lazy-body sphere variants for the 2k and 1k caps', async () => {
+    const textureUrls: string[] = [];
+    const factory: BodyAssetBackendFactory = async () => ({
+      loadTexture: async (url) => {
+        textureUrls.push(url);
+        return new Texture();
+      },
+      loadModel: vi.fn(),
+    });
+    const files = [
+      'textures/saturn_albedo.ktx2',
+      'textures/saturn_albedo_2k.ktx2',
+      'textures/saturn_albedo_1k.ktx2',
+    ];
+
+    const capped2k = new BodyAssetLoader(
+      renderer,
+      manifest(entry('saturn', 'planet', files)),
+      factory,
+      '/solar-voyager/',
+    );
+    capped2k.setTextureTierCap('2k');
+    await capped2k.loadSphereAlbedo('saturn', 'planet');
+
+    const capped1k = new BodyAssetLoader(
+      renderer,
+      manifest(entry('saturn', 'planet', files)),
+      factory,
+      '/solar-voyager/',
+    );
+    capped1k.setTextureTierCap('1k');
+    await capped1k.loadSphereAlbedo('saturn', 'planet');
+
+    expect(textureUrls).toEqual([
+      '/solar-voyager/assets/textures/saturn_albedo_2k.ktx2',
+      '/solar-voyager/assets/textures/saturn_albedo_1k.ktx2',
+    ]);
+  });
+
   it('preloads only available Sun, Earth, and Moon sphere resources', async () => {
     const textureUrls: string[] = [];
     const modelUrls: string[] = [];

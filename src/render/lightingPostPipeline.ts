@@ -14,7 +14,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
-import type { AntiAliasingQuality, BloomQuality } from './perfGovernor.js';
+import type { AntiAliasingQuality, BloomQuality, RenderQualityProfile } from './perfGovernor.js';
 
 export const BLOOM_THRESHOLD = 1;
 export const BLOOM_STRENGTH = 0.15;
@@ -109,7 +109,7 @@ export class LightingPostPipeline {
   private pixelRatio: number;
   private width = 1;
   private height = 1;
-  private bloomQuality: BloomQuality = 'full';
+  private bloomResolution: Exclude<BloomQuality, 'off'> = 'full';
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -171,9 +171,11 @@ export class LightingPostPipeline {
     if (quality !== 'full' && quality !== 'half' && quality !== 'off') {
       throw new RangeError('Unknown bloom quality.');
     }
-    this.bloomQuality = quality;
     this.bloomPass.enabled = quality !== 'off';
-    this.resizeBloom();
+    if (quality !== 'off' && quality !== this.bloomResolution) {
+      this.bloomResolution = quality;
+      this.resizeBloom();
+    }
   }
 
   setAntiAliasing(quality: AntiAliasingQuality): void {
@@ -221,10 +223,106 @@ export class LightingPostPipeline {
   }
 
   private resizeBloom(): void {
-    const scale = this.bloomQuality === 'half' ? 0.5 : 1;
+    const scale = this.bloomResolution === 'half' ? 0.5 : 1;
     this.bloomPass.setSize(
       Math.max(1, Math.floor(this.width * this.pixelRatio * scale)),
       Math.max(1, Math.floor(this.height * this.pixelRatio * scale)),
     );
+  }
+}
+
+interface PreallocatedVariant {
+  readonly bloom: Exclude<BloomQuality, 'off'>;
+  readonly pipeline: LightingPostPipeline;
+  readonly renderScale: number;
+}
+
+export type LightingPostPipelineFactory = (
+  renderer: WebGLRenderer,
+  scene: Scene,
+  camera: Camera,
+) => LightingPostPipeline;
+
+const DEFAULT_PIPELINE_FACTORY: LightingPostPipelineFactory = (renderer, scene, camera) =>
+  new LightingPostPipeline(renderer, scene, camera);
+
+/** Setup-owned post variants; rung changes only select already-sized resources. */
+export class PreallocatedLightingPostPipeline {
+  readonly variants: readonly PreallocatedVariant[];
+  private activeIndex = 0;
+
+  constructor(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: Camera,
+    createPipeline: LightingPostPipelineFactory = DEFAULT_PIPELINE_FACTORY,
+  ) {
+    this.variants = Object.freeze([
+      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 1 },
+      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.85 },
+      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.7 },
+      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.55 },
+      { bloom: 'half', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.55 },
+    ]);
+    const halfVariant = this.variants[4];
+    if (halfVariant === undefined) throw new Error('Half-resolution post variant is missing.');
+    halfVariant.pipeline.setBloomQuality('half');
+  }
+
+  get active(): LightingPostPipeline {
+    const variant = this.variants[this.activeIndex];
+    if (variant === undefined) throw new Error('Active post variant is missing.');
+    return variant.pipeline;
+  }
+
+  resize(width: number, height: number, pixelRatio: number): void {
+    for (let index = 0; index < this.variants.length; index += 1) {
+      const variant = this.variants[index];
+      if (variant === undefined) throw new Error('Post variant array is sparse.');
+      variant.pipeline.resize(width, height, pixelRatio * variant.renderScale);
+    }
+  }
+
+  selectQuality(profile: RenderQualityProfile, postProcessingAvailable = true): void {
+    const bloom = postProcessingAvailable ? profile.bloom : 'off';
+    const antiAliasing = postProcessingAvailable ? profile.antiAliasing : 'off';
+    const targetBloom = profile.renderScale === 0.55 && profile.bloom !== 'full' ? 'half' : 'full';
+    let selectedIndex = -1;
+    for (let index = 0; index < this.variants.length; index += 1) {
+      const variant = this.variants[index];
+      if (
+        variant !== undefined &&
+        variant.renderScale === profile.renderScale &&
+        variant.bloom === targetBloom
+      ) {
+        selectedIndex = index;
+        break;
+      }
+    }
+    if (selectedIndex < 0)
+      throw new RangeError('No preallocated post variant matches the profile.');
+    this.activeIndex = selectedIndex;
+    this.active.setBloomQuality(bloom);
+    this.active.setAntiAliasing(antiAliasing);
+  }
+
+  warmUp(postProcessingAvailable = true): void {
+    for (let index = 0; index < this.variants.length; index += 1) {
+      const variant = this.variants[index];
+      if (variant === undefined) throw new Error('Post variant array is sparse.');
+      variant.pipeline.warmUp(postProcessingAvailable);
+    }
+  }
+
+  render(postProcessingAvailable = true): void {
+    this.active.render(postProcessingAvailable);
+  }
+
+  dispose(): void {
+    for (let index = 0; index < this.variants.length; index += 1) {
+      const variant = this.variants[index];
+      if (variant === undefined) throw new Error('Post variant array is sparse.');
+      variant.pipeline.dispose();
+    }
   }
 }

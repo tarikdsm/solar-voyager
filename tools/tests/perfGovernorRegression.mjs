@@ -25,7 +25,10 @@ let browser;
 try {
   await mkdir(screenshotDirectory, { recursive: true });
   await server.listen();
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
+  });
   const page = await browser.newPage({ viewport: { width: 900, height: 360 } });
   const errors = [];
   page.on('console', (message) => {
@@ -55,6 +58,10 @@ try {
 
   assert.deepEqual(
     snapshots.map(({ canvasWidth }) => canvasWidth),
+    Array.from({ length: 15 }, () => 640),
+  );
+  assert.deepEqual(
+    snapshots.map(({ internalWidth }) => internalWidth),
     [640, 544, 448, ...Array.from({ length: 12 }, () => 352)],
   );
   assert.equal(snapshots[3].bloom, 'full');
@@ -76,6 +83,28 @@ try {
     snapshots.every(({ programCount }) => programCount === programCountAfterWarmUp),
     `a quality rung compiled a shader after warm-up: ${JSON.stringify({ programCountAfterWarmUp, snapshots })}`,
   );
+  assert.equal(
+    await page.evaluate(() => globalThis.__perfGovernorHarness.resourcesStable()),
+    true,
+    'a rung replaced a preallocated composer or bloom render target',
+  );
+  const starCapBounds = await page.evaluate(() =>
+    globalThis.__perfGovernorHarness.starCapBounds(2_000),
+  );
+  for (const axis of ['X', 'Y', 'Z']) {
+    assert.ok(starCapBounds[`min${axis}`] < -0.9, `2k star cap misses -${axis} hemisphere`);
+    assert.ok(starCapBounds[`max${axis}`] > 0.9, `2k star cap misses +${axis} hemisphere`);
+  }
+  const heap = await page.evaluate(() => {
+    globalThis.gc?.();
+    const beforeBytes = performance.memory?.usedJSHeapSize ?? -1;
+    globalThis.__perfGovernorHarness.cycleRungs(100);
+    globalThis.gc?.();
+    const afterBytes = performance.memory?.usedJSHeapSize ?? -1;
+    return { afterBytes, beforeBytes, deltaBytes: afterBytes - beforeBytes };
+  });
+  assert.ok(heap.beforeBytes >= 0, 'precise Chromium heap metrics are unavailable');
+  assert.ok(heap.deltaBytes <= 64 * 1024, `quality transitions retained heap: ${JSON.stringify(heap)}`);
 
   const synthetic = await page.evaluate(() => globalThis.__perfGovernorHarness.syntheticLoad());
   assert.equal(synthetic.rung, 2);
@@ -85,7 +114,7 @@ try {
   assert.deepEqual(lock, { actionCount: 1, rung: 14 });
   assert.deepEqual(errors, []);
   process.stdout.write(
-    `${JSON.stringify({ lock, programCountAfterWarmUp, screenshotDirectory, snapshots, synthetic }, null, 2)}\n`,
+    `${JSON.stringify({ heap, lock, programCountAfterWarmUp, screenshotDirectory, snapshots, starCapBounds, synthetic }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();

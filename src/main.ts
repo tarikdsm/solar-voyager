@@ -11,7 +11,7 @@ import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
-import { LightingPostPipeline } from './render/lightingPostPipeline.js';
+import { PreallocatedLightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
@@ -57,7 +57,7 @@ const hardwareWarning = contextReport.warningRequired
   : null;
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
-let postPipeline: LightingPostPipeline | null = null;
+let postPipeline: PreallocatedLightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let commandInput: KeyboardCommandMapper | null = null;
 let perfGovernor: PerfGovernor | null = null;
@@ -194,19 +194,17 @@ async function startApplication(): Promise<void> {
   world = await createEpochWorld(renderer, {
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
   });
-  postPipeline = new LightingPostPipeline(
+  postPipeline = new PreallocatedLightingPostPipeline(
     renderer,
     world.spaceScene.scene,
     world.spaceScene.camera,
   );
-  postPipeline.setBloomEnabled(postProcessingEnabled);
   const qualityController = new RenderQualityController({
     assetLoader: world.visualSystem,
     pipeline: postPipeline,
     postProcessingAvailable: postProcessingEnabled,
     proceduralSun: world.proceduralSun,
     renderer,
-    resize: resizeRenderer,
     starfield: world.starfield,
     visualSystem: world.visualSystem,
   });
