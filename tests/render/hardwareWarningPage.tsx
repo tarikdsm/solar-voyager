@@ -5,6 +5,7 @@ import {
   createRendererContextReport,
   createWebGL2Context,
 } from '../../src/render/createRenderer.js';
+import type { Commands } from '../../src/sim/simulationSnapshot.js';
 import { App } from '../../src/ui/App.js';
 import { createHudSignalStore } from '../../src/ui/hudSignals.js';
 
@@ -52,4 +53,21 @@ root.dataset.policyReady = 'true';
 root.dataset.rendererName = contextReport.rendererName;
 root.dataset.usedPerformanceCaveatFallback = String(contextReport.usedPerformanceCaveatFallback);
 root.dataset.warningRequired = String(contextReport.warningRequired);
-render(<App hardwareWarning={hardwareWarning} hud={createHudSignalStore().display} />, root);
+const hudStore = createHudSignalStore();
+const commands: Commands = {
+  rotate: () => undefined,
+  setAttitudeMode: () => undefined,
+  setTarget: () => undefined,
+  setThrottle: () => undefined,
+  setWarp: () => undefined,
+};
+render(
+  <App
+    bodyIds={[]}
+    commands={commands}
+    hardwareWarning={hardwareWarning}
+    hud={hudStore.display}
+    hudState={hudStore.signals}
+  />,
+  root,
+);

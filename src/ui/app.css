@@ -135,6 +135,134 @@
   visibility: hidden;
 }
 
+.warp-control {
+  position: absolute;
+  top: 5.5rem;
+  left: 50%;
+  width: min(21rem, calc(100vw - 2rem));
+  height: 7.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.7rem;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.warp-control header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.warp-control header strong {
+  color: #f0f9ff;
+  font-size: 0.9rem;
+}
+
+.warp-control header small {
+  color: rgb(186 230 253 / 58%);
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.warp-ladder {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.warp-ladder button {
+  min-height: 1.55rem;
+  padding: 0.2rem 0.25rem;
+  border: 1px solid rgb(125 211 252 / 18%);
+  border-radius: 0.3rem;
+  background: rgb(15 23 42 / 58%);
+  color: rgb(224 242 254 / 72%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.warp-ladder button:hover,
+.warp-ladder button:focus-visible {
+  border-color: rgb(125 211 252 / 58%);
+  color: #f0f9ff;
+}
+
+.warp-ladder button[aria-pressed='true'] {
+  border-color: rgb(56 189 248 / 78%);
+  background: rgb(14 116 144 / 62%);
+  box-shadow: inset 0 0 0 1px rgb(125 211 252 / 18%);
+  color: #f0f9ff;
+}
+
+.warp-clamp-status {
+  min-height: 0.85rem;
+  margin: 0.35rem 0 0;
+  color: #fde68a;
+  font-size: 0.62rem;
+  text-align: center;
+}
+
+.energy-panel,
+.target-panel {
+  position: absolute;
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  width: min(16rem, calc(100vw - 1.5rem));
+  padding: 0.85rem 1rem;
+  border-radius: 0.7rem;
+}
+
+.energy-panel {
+  bottom: 6.5rem;
+  height: 10.5rem;
+}
+
+.energy-panel header,
+.target-panel h2 {
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgb(125 211 252 / 14%);
+}
+
+.energy-panel h2,
+.target-panel h2 {
+  margin: 0.16rem 0 0;
+  color: #f0f9ff;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.energy-panel dl,
+.target-panel dl {
+  margin: 0.45rem 0 0;
+}
+
+.target-panel {
+  top: 6.75rem;
+  height: 13.75rem;
+  pointer-events: auto;
+}
+
+.target-panel select {
+  width: 100%;
+  height: 1.85rem;
+  margin: 0.35rem 0 0.45rem;
+  padding: 0 0.45rem;
+  border: 1px solid rgb(125 211 252 / 28%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 92%);
+  color: #f0f9ff;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.target-panel .hud-readout-row:last-child dd {
+  max-width: 8rem;
+  font-size: 0.62rem;
+}
+
 .camera-help {
   position: absolute;
   bottom: clamp(1rem, 3vh, 2rem);
@@ -217,9 +345,52 @@
 }
 
 @media (width <= 720px) {
+  .app-overlay {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow-y: auto;
+  }
+
+  .hud-panel,
+  .camera-help {
+    position: relative;
+    inset: auto;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    transform: none;
+  }
+
   .dual-clock {
+    order: 1;
     grid-template-columns: 1fr;
     height: 5.65rem;
+  }
+
+  .warp-control {
+    order: 2;
+    height: 7.75rem;
+  }
+
+  .orbit-readout {
+    order: 3;
+    height: 15.5rem;
+  }
+
+  .target-panel {
+    order: 4;
+    height: 13.75rem;
+  }
+
+  .energy-panel {
+    order: 5;
+    height: 10.5rem;
+  }
+
+  .camera-help {
+    order: 6;
   }
 
   .clock-block:last-child {
@@ -230,9 +401,5 @@
     position: absolute;
     right: 0.8rem;
     bottom: 0.65rem;
-  }
-
-  .orbit-readout {
-    top: 7.25rem;
   }
 }

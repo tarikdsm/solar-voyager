@@ -38,4 +38,3 @@ prediction is authoritative.
 The existing dual clock remains driven by coordinate time and ship proper time.
 Tests publish a gamma > 1.1 snapshot with deliberately divergent values and
 assert both leaf strings and the gamma readout independently.
-
