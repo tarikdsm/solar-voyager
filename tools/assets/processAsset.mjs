@@ -14,10 +14,32 @@ export const DRACO_OPTIONS = Object.freeze({
   quantizeTexcoord: 12,
 });
 
+function parseTextureRole(role) {
+  const separator = role.indexOf('__');
+  if (separator < 1 || separator === role.length - 2) {
+    return { materialName: null, semanticRole: role };
+  }
+  return {
+    materialName: role.slice(0, separator),
+    semanticRole: role.slice(separator + 2),
+  };
+}
+
 function materialForRole(document, role) {
   const materials = document.getRoot().listMaterials();
+  const parsed = parseTextureRole(role);
+  if (parsed.materialName !== null) {
+    const material = materials.find((candidate) => candidate.getName() === parsed.materialName);
+    if (material === undefined) {
+      throw new Error(`Texture role "${role}" targets missing material "${parsed.materialName}"`);
+    }
+    return { material, semanticRole: parsed.semanticRole };
+  }
   const targetName = role === 'clouds' ? 'mat_clouds' : role === 'rings' ? 'mat_rings' : 'mat_surface';
-  return materials.find((material) => material.getName() === targetName) ?? materials[0] ?? null;
+  return {
+    material: materials.find((material) => material.getName() === targetName) ?? materials[0] ?? null,
+    semanticRole: parsed.semanticRole,
+  };
 }
 
 function attachTexture(document, binding) {
@@ -29,14 +51,14 @@ function attachTexture(document, binding) {
     .setImage(null)
     .setURI(binding.uri)
     .setMimeType('image/ktx2');
-  const material = materialForRole(document, binding.role);
+  const { material, semanticRole } = materialForRole(document, binding.role);
   if (material === null) return;
-  if (binding.role === 'normal') material.setNormalTexture(texture);
-  else if (binding.role === 'emissive') material.setEmissiveTexture(texture);
-  else if (['roughness', 'orm', 'metallic'].includes(binding.role)) {
+  if (semanticRole === 'normal') material.setNormalTexture(texture);
+  else if (semanticRole === 'emissive') material.setEmissiveTexture(texture);
+  else if (['roughness', 'orm', 'metallic'].includes(semanticRole)) {
     material.setMetallicRoughnessTexture(texture);
-  } else if (['ao', 'occlusion'].includes(binding.role)) material.setOcclusionTexture(texture);
-  else if (['albedo', 'clouds', 'rings'].includes(binding.role)) material.setBaseColorTexture(texture);
+  } else if (['ao', 'occlusion'].includes(semanticRole)) material.setOcclusionTexture(texture);
+  else if (['albedo', 'clouds', 'rings'].includes(semanticRole)) material.setBaseColorTexture(texture);
   else {
     const extras = material.getExtras();
     material.setExtras({
@@ -45,7 +67,7 @@ function attachTexture(document, binding) {
         ...(typeof extras.solarVoyagerTextures === 'object' && extras.solarVoyagerTextures !== null
           ? extras.solarVoyagerTextures
           : {}),
-        [binding.role]: binding.uri,
+        [semanticRole]: binding.uri,
       },
     });
   }

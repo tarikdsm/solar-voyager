@@ -1,3 +1,11 @@
-# Sources — ship
+# Sources — Ship
 
-- `ship.glb` — original design, hand-authored interactively in Blender 5.1 via blender-mcp (2026-07-15). Source scene: `assets/blender/ship.blend` (committed hero asset per ADR-009). No external textures — PBR material factors only (`mat_hull`, `mat_hull_dark`, `mat_radiator`, `mat_canopy`, `mat_nozzle`, `mat_engine_glow` emissive); texture maps may be added in a later pass. Scale: 1 unit = 1 m, length ≈ 26 m; nose toward glTF −Z (three.js forward); `engine_nozzle` node named per MODELING-GUIDE §4 for plume attachment. 6,174 tris (budget ≤30k).
+- `ship.glb` — `tools/blender/build_ship.py` — Solar Voyager original asset; all rights reserved for project distribution — deterministic Blender 5.1 hard-surface model back-ported from the approved interactive reference scene.
+- `ship_mat_hull__albedo.png` — `tools/blender/build_ship.py` — Solar Voyager original asset — deterministic 1024×512 seam-safe silver hull panel pattern.
+- `ship_mat_hull__normal.png` — `tools/blender/build_ship.py` — Solar Voyager original asset — deterministic 1024×512 tangent-space panel normal map.
+- `ship_mat_hull__metallic.png` — `tools/blender/build_ship.py` — Solar Voyager original asset — deterministic 1024×512 glTF metallic/roughness channel map.
+- `ship_mat_engine_glow__emissive.png` — `tools/blender/build_ship.py` — Solar Voyager original asset — deterministic 1024×512 cyan engine emission map.
+
+## Authoring contract
+
+One Blender unit equals one metre. Length: 26.12 m; nose and drive axis point toward local +X per ADR-025; `engine_nozzle` is the plume attachment node. Applied geometry: 5,538 triangles (budget ≤30,000).

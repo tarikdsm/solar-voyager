@@ -80,4 +80,43 @@ describe('asset processing', () => {
     expect(json.textures[0].extensions.KHR_texture_basisu.source).toBe(0);
     expect(json.materials[0].pbrMetallicRoughness.baseColorTexture.index).toBe(0);
   });
+
+  it('wires scoped roles to the exact named material', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'solar-voyager-process-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'ship.glb');
+    const output = join(directory, 'compressed.glb');
+    await writeFile(input, createGlb({ materialNames: ['mat_hull', 'mat_engine_glow'] }));
+
+    await compressGlb(input, output, {
+      textures: [
+        { role: 'mat_hull__albedo', uri: '../textures/ship_mat_hull__albedo.ktx2' },
+        { role: 'mat_hull__normal', uri: '../textures/ship_mat_hull__normal.ktx2' },
+        { role: 'mat_hull__metallic', uri: '../textures/ship_mat_hull__metallic.ktx2' },
+        { role: 'mat_engine_glow__emissive', uri: '../textures/ship_mat_engine_glow__emissive.ktx2' },
+      ],
+    });
+
+    const json = parseGlbJson(await readFile(output));
+    const hull = json.materials.find((material) => material.name === 'mat_hull');
+    const engineGlow = json.materials.find((material) => material.name === 'mat_engine_glow');
+    expect(hull.pbrMetallicRoughness.baseColorTexture).toBeDefined();
+    expect(hull.normalTexture).toBeDefined();
+    expect(hull.pbrMetallicRoughness.metallicRoughnessTexture).toBeDefined();
+    expect(hull.emissiveTexture).toBeUndefined();
+    expect(engineGlow.emissiveTexture).toBeDefined();
+    expect(engineGlow.pbrMetallicRoughness?.baseColorTexture).toBeUndefined();
+  });
+
+  it('rejects a scoped role whose named material is absent', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'solar-voyager-process-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'ship.glb');
+    const output = join(directory, 'compressed.glb');
+    await writeFile(input, createGlb({ materialName: 'mat_hull' }));
+
+    await expect(compressGlb(input, output, {
+      textures: [{ role: 'mat_missing__albedo', uri: '../textures/missing.ktx2' }],
+    })).rejects.toThrow('Texture role "mat_missing__albedo" targets missing material "mat_missing"');
+  });
 });

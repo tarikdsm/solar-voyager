@@ -31,6 +31,9 @@ scripts whose ids exist in the catalog; pass exactly one of `--all` or one or mo
 `--only <id>` flags. Execution order is stable by id.
 The strict exporter canonicalizes triangle order after Blender writes the GLB,
 removing process-dependent index ordering while preserving triangle winding.
+It also rounds exported texture coordinates to six decimal places, eliminating
+single-ULP variation from evaluated hard-surface modifiers while retaining far
+more precision than the runtime's 12-bit Draco texcoord quantization.
 Oblate planet builders also derive every float32 glTF normal analytically from
 the exported position and catalogued polar ratio; this avoids Blender 5.1's
 process-dependent smooth-normal calculation while preserving ellipsoid shading.
@@ -43,6 +46,13 @@ equirectangular surface maps, including per-loop seam and pole handling.
 - **No Draco at export** — ingest compresses (position quantization 14 bit, normal 10, texcoord 12).
 - Textures NOT embedded — referenced externally as JPEG/PNG; ingest encodes complete-mip KTX2 (ETC1S for color maps, UASTC for normal maps). Color output is tagged sRGB/BT.709; normals are linear. Hero cloud/emissive sources above 4k are downsampled to their 4096×2048 runtime tier.
 - Runtime GLBs require `KHR_texture_basisu` and point to the emitted external KTX2 files. Standard albedo, normal, emissive, metallic-roughness, occlusion, cloud, and ring slots are wired by the material/filename conventions; detail-map URIs are recorded in `mat_surface.extras.solarVoyagerTextures` for the close-range shader.
+- Textures that target a material other than the category default use
+  `<asset>_<material-name>__<role>.<ext>`. For example,
+  `ship_mat_hull__normal.png` targets the `normal` slot of `mat_hull`, while
+  `ship_mat_engine_glow__emissive.png` targets the emissive slot of
+  `mat_engine_glow`. Ingest requires the exact material name and rejects a
+  scoped texture when that material is absent. Unscoped body texture names
+  retain their existing `mat_surface`, `mat_clouds`, and `mat_rings` behavior.
 - Every albedo also produces a standalone ETC1S sphere tier: 2048x1024 for planets and 1024x512 for moons, dwarfs, asteroids, and comets. These derivatives are listed explicitly in the runtime manifest. Ingest copies the pinned Three.js Basis and Draco decoders plus its license to `public/assets/codecs/`; runtime loading never depends on a codec CDN (ADR-023).
 
 ### Ingest commands
@@ -115,7 +125,7 @@ Source textures: prefer documenting download+processing in `tools/fetch_textures
 
 ## The ship
 
-`build_ship.py`: original design, ~30k tris, PBR materials (albedo/metal-rough/normal/emissive for engine glow), separate node for the engine nozzle (renderer attaches plume). Modeled once, iterated via MCP sessions, always back-ported to script.
+`build_ship.py`: original design, ~30k tris, PBR materials (albedo/metal-rough/normal/emissive for engine glow), local +X nose/drive axis (ADR-025), and separate `hull_tip` orientation plus `engine_nozzle` plume-attachment nodes. Modeled once, iterated via MCP sessions, always back-ported to script.
 
 ## Budgets (CI-gated, `npm run check:budgets`)
 
