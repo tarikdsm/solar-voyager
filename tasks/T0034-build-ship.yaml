@@ -1,6 +1,6 @@
 id: T0034
 title: Ship model (build_ship script)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0034-build-ship
 depends_on: [T0030]
@@ -33,3 +33,7 @@ handoff_notes: |
   builds again matched byte-for-byte, and full ingest changed only the ship GLB.
   Post-fix lint, typecheck, Prettier, production build, asset budgets, Blender
   smoke, and validation of all 53 task files passed.
+  Independent re-review of head 20a0672 approved with 0 Critical, 0 Important,
+  and 0 Minor findings after verifying the builder, source/runtime GLBs,
+  documentation, regression test, reproducibility, runtime bindings, budgets,
+  task schema, and remote CI.
