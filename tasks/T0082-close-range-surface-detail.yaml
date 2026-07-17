@@ -32,6 +32,6 @@ handoff_notes: >-
   (+2.535 ms), 56.25 vs 60 fps. This older proxy predates the 2023+ reference,
   misses the 10 ms target at baseline, and its absolute miss is retained.
   Second-review shader feedback was fixed with a tested vertex uniform branch
-  that skips all procedural waves at zero blend. All local gates pass (425
+  that skips all procedural waves at zero blend. All local gates pass (427
   Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
   full-range diff check, and Earth assets:verify with 15 byte-identical files).
