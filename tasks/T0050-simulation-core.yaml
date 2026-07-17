@@ -1,6 +1,6 @@
 id: T0050
 title: SimulationCore + SimSnapshot + Commands
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0050-simulation-core
 depends_on: [T0013, T0014, T0015, T0017]
