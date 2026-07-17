@@ -14,7 +14,12 @@ import type { ReadonlyVec3 } from '../core/vec3.js';
 import type { LoadedBodyModel } from './bodyAssetLoader.js';
 import type { RuntimeAssetCategory } from './assetManifest.js';
 import { BodyPointCloud } from './bodyPointCloud.js';
+import {
+  prepareEarthSurfaceLayers,
+  type PreparedEarthSurfaceLayers,
+} from './earthSurfaceLayers.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
 import {
   apparentMagnitude,
   projectedDiameterPx,
@@ -85,6 +90,8 @@ export class BodyVisualSystem {
   private readonly modelBaseDepthWrites: Array<Uint8Array | null>;
   private readonly modelBaseTransparencies: Array<Uint8Array | null>;
   private readonly modelBaseForceSinglePasses: Array<Uint8Array | null>;
+  private readonly surfaceDetails: Array<PreparedSurfaceDetail | null>;
+  private readonly earthSurfaceLayers: Array<PreparedEarthSurfaceLayers | null>;
   private readonly selectedTiers: Uint8Array;
   private readonly displayTargetTiers: Uint8Array;
   private readonly fadeActive: Uint8Array;
@@ -142,6 +149,8 @@ export class BodyVisualSystem {
     this.modelBaseDepthWrites = new Array<Uint8Array | null>(count).fill(null);
     this.modelBaseTransparencies = new Array<Uint8Array | null>(count).fill(null);
     this.modelBaseForceSinglePasses = new Array<Uint8Array | null>(count).fill(null);
+    this.surfaceDetails = new Array<PreparedSurfaceDetail | null>(count).fill(null);
+    this.earthSurfaceLayers = new Array<PreparedEarthSurfaceLayers | null>(count).fill(null);
     this.selectedTiers = new Uint8Array(count);
     this.selectedTiers.fill(1);
     this.displayTargetTiers = new Uint8Array(count);
@@ -257,6 +266,12 @@ export class BodyVisualSystem {
       const deltaY = y - cameraPositionKm.y;
       const deltaZ = z - cameraPositionKm.z;
       const distanceKm = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+      const surfaceDetail = this.surfaceDetails[index];
+      if (surfaceDetail !== null && surfaceDetail !== undefined) {
+        surfaceDetail.setDistance(distanceKm, definition.meanRadiusKm);
+      }
+      const earthLayers = this.earthSurfaceLayers[index];
+      if (earthLayers !== null && earthLayers !== undefined) earthLayers.update(nowMs);
       const diameterPx = projectedDiameterPx(
         definition.meanRadiusKm,
         distanceKm,
@@ -327,6 +342,14 @@ export class BodyVisualSystem {
     );
   }
 
+  getSurfaceDetailBlend(id: string): number {
+    return this.surfaceDetails[this.indexForId(id)]?.blend ?? 0;
+  }
+
+  setSurfaceDetailEnabled(id: string, enabled: boolean): void {
+    this.surfaceDetails[this.indexForId(id)]?.setEnabled(enabled);
+  }
+
   private indexForId(id: string): number {
     const index = this.idToIndex.get(id);
     if (index === undefined) throw new Error(`Unknown body visual id "${id}".`);
@@ -390,6 +413,21 @@ export class BodyVisualSystem {
     }
     const definition = this.definitions[index];
     if (definition === undefined) throw new Error('Body definition array is sparse.');
+    if (model.surfaceDetail !== null) {
+      const surfaceMaterial = model.materials.find(
+        (material): material is MeshStandardMaterial =>
+          material instanceof MeshStandardMaterial && material.name === 'mat_surface',
+      );
+      if (surfaceMaterial === undefined) {
+        model.surfaceDetail.albedo.dispose();
+        model.surfaceDetail.normal.dispose();
+      } else {
+        this.surfaceDetails[index] = prepareSurfaceDetail(surfaceMaterial, model.surfaceDetail);
+      }
+    }
+    if (definition.id === 'earth') {
+      this.earthSurfaceLayers[index] = prepareEarthSurfaceLayers(model.root, model.materials);
+    }
     const baseOpacities = new Float32Array(model.materials.length);
     const baseDepthWrites = new Uint8Array(model.materials.length);
     const baseTransparencies = new Uint8Array(model.materials.length);
@@ -443,6 +481,10 @@ export class BodyVisualSystem {
       await this.compileModel(model.root);
       this.modelLoadStates[index] = LOAD_READY;
     } catch {
+      this.surfaceDetails[index]?.dispose();
+      this.surfaceDetails[index] = null;
+      this.earthSurfaceLayers[index]?.dispose();
+      this.earthSurfaceLayers[index] = null;
       model.root.visible = false;
       this.modelLoadStates[index] = LOAD_FAILED;
     }

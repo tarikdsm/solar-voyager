@@ -22,6 +22,8 @@ interface SurfaceDetailUniforms extends Record<string, IUniform> {
 }
 
 export interface PreparedSurfaceDetail {
+  readonly blend: number;
+  readonly proceduralBlend: number;
   setDistance(distanceKm: number, radiusKm: number): void;
   setEnabled(enabled: boolean): void;
   dispose(): void;
@@ -173,7 +175,7 @@ if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
 class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
   private enabled = true;
   private detailBlend = 0;
-  private proceduralBlend = 0;
+  private proceduralBlendValue = 0;
   private disposed = false;
 
   constructor(
@@ -182,9 +184,17 @@ class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
     private readonly normal: Texture,
   ) {}
 
+  get blend(): number {
+    return this.enabled ? this.detailBlend : 0;
+  }
+
+  get proceduralBlend(): number {
+    return this.enabled ? this.proceduralBlendValue : 0;
+  }
+
   setDistance(distanceKm: number, radiusKm: number): void {
     this.detailBlend = surfaceDetailBlend(distanceKm, radiusKm);
-    this.proceduralBlend = surfaceDetailProceduralBlend(distanceKm, radiusKm);
+    this.proceduralBlendValue = surfaceDetailProceduralBlend(distanceKm, radiusKm);
     this.applyBlends();
   }
 
@@ -202,7 +212,7 @@ class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
 
   private applyBlends(): void {
     this.uniforms.uSurfaceDetailBlend.value = this.enabled ? this.detailBlend : 0;
-    this.uniforms.uSurfaceProceduralBlend.value = this.enabled ? this.proceduralBlend : 0;
+    this.uniforms.uSurfaceProceduralBlend.value = this.enabled ? this.proceduralBlendValue : 0;
   }
 }
 
