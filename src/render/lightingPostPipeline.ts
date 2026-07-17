@@ -1,7 +1,9 @@
 import {
   ACESFilmicToneMapping,
   HalfFloatType,
+  type ShaderMaterial,
   Vector2,
+  type WebGLRenderTarget,
   type Camera,
   type Scene,
   type WebGLRenderer,
@@ -26,13 +28,18 @@ export interface PostPassPort {
   dispose(): void;
 }
 
+export interface AdaptivePostPassPort extends PostPassPort {
+  setRenderScale(scale: number): void;
+}
+
 export interface UnrealBloomPassPort extends PostPassPort {
   threshold: number;
   strength: number;
   radius: number;
+  setQualityScale(renderScale: number, bloomScale: number): void;
 }
 
-export interface FxaaPassPort extends PostPassPort {
+export interface FxaaPassPort extends AdaptivePostPassPort {
   setResolution(width: number, height: number): void;
 }
 
@@ -60,13 +67,58 @@ export interface LightingPostBackend {
   createRenderPass(scene: Scene, camera: Camera): PostPassPort;
   createBloomPass(): UnrealBloomPassPort;
   createFxaaPass(): FxaaPassPort;
-  createOutputPass(): PostPassPort;
-  createSmaaPass(): PostPassPort;
+  createOutputPass(): AdaptivePostPassPort;
+  createSmaaPass(): AdaptivePostPassPort;
 }
 
-class ReusableFxaaPass extends ShaderPass implements FxaaPassPort {
+interface AdaptiveSmaaInternals {
+  readonly _edgesRT: WebGLRenderTarget;
+  readonly _weightsRT: WebGLRenderTarget;
+  readonly _materialEdges: ShaderMaterial;
+  readonly _materialWeights: ShaderMaterial;
+  readonly _materialBlend: ShaderMaterial;
+}
+
+interface AdaptiveBloomInternals {
+  readonly renderTargetBright: WebGLRenderTarget;
+  readonly renderTargetsHorizontal: readonly WebGLRenderTarget[];
+  readonly renderTargetsVertical: readonly WebGLRenderTarget[];
+  readonly materialHighPassFilter: ShaderMaterial;
+  readonly separableBlurMaterials: readonly ShaderMaterial[];
+  readonly compositeMaterial: ShaderMaterial;
+  readonly blendMaterial: ShaderMaterial;
+}
+
+function installUvScale(material: ShaderMaterial): void {
+  material.uniforms.uAdaptiveUvScale = { value: 1 };
+  const scaledVertexShader = material.vertexShader
+    .replace('varying vec2 vUv;', 'uniform float uAdaptiveUvScale;\nvarying vec2 vUv;')
+    .replace(/vUv = uv;/gu, 'vUv = uv * uAdaptiveUvScale;');
+  if (scaledVertexShader === material.vertexShader) {
+    throw new Error(`Adaptive post material ${material.name} has no scalable UV assignment.`);
+  }
+  material.vertexShader = scaledVertexShader;
+  material.needsUpdate = true;
+}
+
+function setMaterialUvScale(material: ShaderMaterial, scale: number): void {
+  const uniform = material.uniforms.uAdaptiveUvScale;
+  if (uniform === undefined) throw new Error('Adaptive UV scale uniform is missing.');
+  uniform.value = scale;
+}
+
+function setTargetViewportScale(target: WebGLRenderTarget, scale: number): void {
+  const width = Math.max(1, Math.floor(target.width * scale));
+  const height = Math.max(1, Math.floor(target.height * scale));
+  target.viewport.set(0, 0, width, height);
+  target.scissor.set(0, 0, width, height);
+  target.scissorTest = true;
+}
+
+class AdaptiveFxaaPass extends ShaderPass implements FxaaPassPort {
   constructor() {
     super(FXAAShader);
+    installUvScale(this.material);
   }
 
   setResolution(width: number, height: number): void {
@@ -74,21 +126,104 @@ class ReusableFxaaPass extends ShaderPass implements FxaaPassPort {
     if (resolution === undefined) throw new Error('FXAA resolution uniform is missing.');
     (resolution.value as Vector2).set(1 / width, 1 / height);
   }
+
+  setRenderScale(scale: number): void {
+    setMaterialUvScale(this.material, scale);
+  }
+}
+
+class AdaptiveOutputPass extends OutputPass implements AdaptivePostPassPort {
+  constructor() {
+    super();
+    installUvScale(this.material);
+  }
+
+  setRenderScale(scale: number): void {
+    setMaterialUvScale(this.material, scale);
+  }
+}
+
+class AdaptiveSmaaPass extends SMAAPass implements AdaptivePostPassPort {
+  private renderScale = 1;
+
+  constructor() {
+    super();
+    const internals = this as unknown as AdaptiveSmaaInternals;
+    installUvScale(internals._materialEdges);
+    installUvScale(internals._materialWeights);
+    installUvScale(internals._materialBlend);
+  }
+
+  override setSize(width: number, height: number): void {
+    super.setSize(width, height);
+    this.applyScale();
+  }
+
+  setRenderScale(scale: number): void {
+    this.renderScale = scale;
+    this.applyScale();
+  }
+
+  private applyScale(): void {
+    const internals = this as unknown as AdaptiveSmaaInternals;
+    setTargetViewportScale(internals._edgesRT, this.renderScale);
+    setTargetViewportScale(internals._weightsRT, this.renderScale);
+    setMaterialUvScale(internals._materialEdges, this.renderScale);
+    setMaterialUvScale(internals._materialWeights, this.renderScale);
+    setMaterialUvScale(internals._materialBlend, this.renderScale);
+  }
+}
+
+class AdaptiveBloomPass extends UnrealBloomPass implements UnrealBloomPassPort {
+  private renderScale = 1;
+  private bloomScale = 1;
+
+  constructor() {
+    super(new Vector2(1, 1), BLOOM_STRENGTH, BLOOM_RADIUS, BLOOM_THRESHOLD);
+    const internals = this as unknown as AdaptiveBloomInternals;
+    installUvScale(internals.materialHighPassFilter);
+    for (const material of internals.separableBlurMaterials) installUvScale(material);
+    installUvScale(internals.compositeMaterial);
+    installUvScale(internals.blendMaterial);
+  }
+
+  override setSize(width: number, height: number): void {
+    super.setSize(width, height);
+    this.applyScale();
+  }
+
+  setQualityScale(renderScale: number, bloomScale: number): void {
+    this.renderScale = renderScale;
+    this.bloomScale = bloomScale;
+    this.applyScale();
+  }
+
+  private applyScale(): void {
+    const internals = this as unknown as AdaptiveBloomInternals;
+    const targetScale = this.renderScale * this.bloomScale;
+    setTargetViewportScale(internals.renderTargetBright, targetScale);
+    for (const target of internals.renderTargetsHorizontal) {
+      setTargetViewportScale(target, targetScale);
+    }
+    for (const target of internals.renderTargetsVertical) {
+      setTargetViewportScale(target, targetScale);
+    }
+    setMaterialUvScale(internals.materialHighPassFilter, this.renderScale);
+    for (const material of internals.separableBlurMaterials) {
+      setMaterialUvScale(material, targetScale);
+    }
+    setMaterialUvScale(internals.compositeMaterial, targetScale);
+    setMaterialUvScale(internals.blendMaterial, targetScale);
+  }
 }
 
 const THREE_POST_BACKEND: LightingPostBackend = {
   createComposer: (renderer) => new EffectComposer(renderer) as unknown as PostComposerPort,
   createRenderPass: (scene, camera) => new RenderPass(scene, camera) as unknown as PostPassPort,
-  createBloomPass: () =>
-    new UnrealBloomPass(
-      new Vector2(1, 1),
-      BLOOM_STRENGTH,
-      BLOOM_RADIUS,
-      BLOOM_THRESHOLD,
-    ) as unknown as UnrealBloomPassPort,
-  createFxaaPass: () => new ReusableFxaaPass(),
-  createOutputPass: () => new OutputPass() as unknown as PostPassPort,
-  createSmaaPass: () => new SMAAPass() as unknown as PostPassPort,
+  createBloomPass: () => new AdaptiveBloomPass(),
+  createFxaaPass: () => new AdaptiveFxaaPass(),
+  createOutputPass: () => new AdaptiveOutputPass(),
+  createSmaaPass: () => new AdaptiveSmaaPass(),
 };
 
 function assertPositiveFinite(label: string, value: number): void {
@@ -103,12 +238,11 @@ export class LightingPostPipeline {
   readonly renderPass: PostPassPort;
   readonly bloomPass: UnrealBloomPassPort;
   readonly fxaaPass: FxaaPassPort;
-  readonly outputPass: PostPassPort;
-  readonly smaaPass: PostPassPort;
+  readonly outputPass: AdaptivePostPassPort;
+  readonly smaaPass: AdaptivePostPassPort;
 
   private pixelRatio: number;
-  private width = 1;
-  private height = 1;
+  private renderScale = 1;
   private bloomResolution: Exclude<BloomQuality, 'off'> = 'full';
 
   constructor(
@@ -154,13 +288,11 @@ export class LightingPostPipeline {
       this.composer.setPixelRatio(pixelRatio);
       this.pixelRatio = pixelRatio;
     }
-    this.width = width;
-    this.height = height;
     this.composer.setSize(width, height);
     const effectiveWidth = Math.max(1, Math.floor(width * pixelRatio));
     const effectiveHeight = Math.max(1, Math.floor(height * pixelRatio));
     this.fxaaPass.setResolution(effectiveWidth, effectiveHeight);
-    this.resizeBloom();
+    this.applyQualityScale();
   }
 
   setBloomEnabled(enabled: boolean): void {
@@ -172,10 +304,8 @@ export class LightingPostPipeline {
       throw new RangeError('Unknown bloom quality.');
     }
     this.bloomPass.enabled = quality !== 'off';
-    if (quality !== 'off' && quality !== this.bloomResolution) {
-      this.bloomResolution = quality;
-      this.resizeBloom();
-    }
+    if (quality !== 'off') this.bloomResolution = quality;
+    this.bloomPass.setQualityScale(this.renderScale, this.bloomResolution === 'half' ? 0.5 : 1);
   }
 
   setAntiAliasing(quality: AntiAliasingQuality): void {
@@ -184,6 +314,13 @@ export class LightingPostPipeline {
     }
     this.smaaPass.enabled = quality === 'smaa';
     this.fxaaPass.enabled = quality === 'fxaa';
+  }
+
+  selectQuality(profile: RenderQualityProfile, postProcessingAvailable = true): void {
+    this.renderScale = profile.renderScale;
+    this.applyQualityScale();
+    this.setBloomQuality(postProcessingAvailable ? profile.bloom : 'off');
+    this.setAntiAliasing(postProcessingAvailable ? profile.antiAliasing : 'off');
   }
 
   /** Compiles and initializes the selected render path before the first animation frame. */
@@ -222,107 +359,14 @@ export class LightingPostPipeline {
     this.composer.dispose();
   }
 
-  private resizeBloom(): void {
-    const scale = this.bloomResolution === 'half' ? 0.5 : 1;
-    this.bloomPass.setSize(
-      Math.max(1, Math.floor(this.width * this.pixelRatio * scale)),
-      Math.max(1, Math.floor(this.height * this.pixelRatio * scale)),
-    );
-  }
-}
-
-interface PreallocatedVariant {
-  readonly bloom: Exclude<BloomQuality, 'off'>;
-  readonly pipeline: LightingPostPipeline;
-  readonly renderScale: number;
-}
-
-export type LightingPostPipelineFactory = (
-  renderer: WebGLRenderer,
-  scene: Scene,
-  camera: Camera,
-) => LightingPostPipeline;
-
-const DEFAULT_PIPELINE_FACTORY: LightingPostPipelineFactory = (renderer, scene, camera) =>
-  new LightingPostPipeline(renderer, scene, camera);
-
-/** Setup-owned post variants; rung changes only select already-sized resources. */
-export class PreallocatedLightingPostPipeline {
-  readonly variants: readonly PreallocatedVariant[];
-  private activeIndex = 0;
-
-  constructor(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: Camera,
-    createPipeline: LightingPostPipelineFactory = DEFAULT_PIPELINE_FACTORY,
-  ) {
-    this.variants = Object.freeze([
-      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 1 },
-      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.85 },
-      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.7 },
-      { bloom: 'full', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.55 },
-      { bloom: 'half', pipeline: createPipeline(renderer, scene, camera), renderScale: 0.55 },
-    ]);
-    const halfVariant = this.variants[4];
-    if (halfVariant === undefined) throw new Error('Half-resolution post variant is missing.');
-    halfVariant.pipeline.setBloomQuality('half');
-  }
-
-  get active(): LightingPostPipeline {
-    const variant = this.variants[this.activeIndex];
-    if (variant === undefined) throw new Error('Active post variant is missing.');
-    return variant.pipeline;
-  }
-
-  resize(width: number, height: number, pixelRatio: number): void {
-    for (let index = 0; index < this.variants.length; index += 1) {
-      const variant = this.variants[index];
-      if (variant === undefined) throw new Error('Post variant array is sparse.');
-      variant.pipeline.resize(width, height, pixelRatio * variant.renderScale);
-    }
-  }
-
-  selectQuality(profile: RenderQualityProfile, postProcessingAvailable = true): void {
-    const bloom = postProcessingAvailable ? profile.bloom : 'off';
-    const antiAliasing = postProcessingAvailable ? profile.antiAliasing : 'off';
-    const targetBloom = profile.renderScale === 0.55 && profile.bloom !== 'full' ? 'half' : 'full';
-    let selectedIndex = -1;
-    for (let index = 0; index < this.variants.length; index += 1) {
-      const variant = this.variants[index];
-      if (
-        variant !== undefined &&
-        variant.renderScale === profile.renderScale &&
-        variant.bloom === targetBloom
-      ) {
-        selectedIndex = index;
-        break;
-      }
-    }
-    if (selectedIndex < 0)
-      throw new RangeError('No preallocated post variant matches the profile.');
-    this.activeIndex = selectedIndex;
-    this.active.setBloomQuality(bloom);
-    this.active.setAntiAliasing(antiAliasing);
-  }
-
-  warmUp(postProcessingAvailable = true): void {
-    for (let index = 0; index < this.variants.length; index += 1) {
-      const variant = this.variants[index];
-      if (variant === undefined) throw new Error('Post variant array is sparse.');
-      variant.pipeline.warmUp(postProcessingAvailable);
-    }
-  }
-
-  render(postProcessingAvailable = true): void {
-    this.active.render(postProcessingAvailable);
-  }
-
-  dispose(): void {
-    for (let index = 0; index < this.variants.length; index += 1) {
-      const variant = this.variants[index];
-      if (variant === undefined) throw new Error('Post variant array is sparse.');
-      variant.pipeline.dispose();
-    }
+  private applyQualityScale(): void {
+    const readBuffer = this.composer.readBuffer as unknown as WebGLRenderTarget;
+    const writeBuffer = this.composer.writeBuffer as unknown as WebGLRenderTarget;
+    setTargetViewportScale(readBuffer, this.renderScale);
+    setTargetViewportScale(writeBuffer, this.renderScale);
+    this.smaaPass.setRenderScale(this.renderScale);
+    this.fxaaPass.setRenderScale(this.renderScale);
+    this.outputPass.setRenderScale(this.renderScale);
+    this.bloomPass.setQualityScale(this.renderScale, this.bloomResolution === 'half' ? 0.5 : 1);
   }
 }

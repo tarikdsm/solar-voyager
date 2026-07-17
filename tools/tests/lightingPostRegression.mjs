@@ -150,10 +150,10 @@ function assertPipeline(snapshot, label) {
   );
   assert.deepEqual(snapshot.passNames, [
     'RenderPass',
-    'UnrealBloomPass',
-    'SMAAPass',
-    'ReusableFxaaPass',
-    'OutputPass',
+    'AdaptiveBloomPass',
+    'AdaptiveSmaaPass',
+    'AdaptiveFxaaPass',
+    'AdaptiveOutputPass',
   ]);
   assert.equal(snapshot.toneMapping, snapshot.expectedToneMapping, `${label}: ACES is not active`);
 }

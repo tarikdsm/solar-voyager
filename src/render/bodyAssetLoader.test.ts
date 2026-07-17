@@ -67,16 +67,23 @@ describe('BodyAssetLoader', () => {
     );
   });
 
-  it('selects real lazy-body sphere variants for the 2k and 1k caps', async () => {
+  it('selects real lazy-body sphere and model variants for the 2k and 1k caps', async () => {
     const textureUrls: string[] = [];
+    const modelUrls: string[] = [];
     const factory: BodyAssetBackendFactory = async () => ({
       loadTexture: async (url) => {
         textureUrls.push(url);
         return new Texture();
       },
-      loadModel: vi.fn(),
+      loadModel: async (url) => {
+        modelUrls.push(url);
+        return new Group();
+      },
     });
     const files = [
+      'models/saturn.glb',
+      'models/saturn_2k.glb',
+      'models/saturn_1k.glb',
       'textures/saturn_albedo.ktx2',
       'textures/saturn_albedo_2k.ktx2',
       'textures/saturn_albedo_1k.ktx2',
@@ -90,6 +97,7 @@ describe('BodyAssetLoader', () => {
     );
     capped2k.setTextureTierCap('2k');
     await capped2k.loadSphereAlbedo('saturn', 'planet');
+    await capped2k.loadModel('saturn');
 
     const capped1k = new BodyAssetLoader(
       renderer,
@@ -99,10 +107,15 @@ describe('BodyAssetLoader', () => {
     );
     capped1k.setTextureTierCap('1k');
     await capped1k.loadSphereAlbedo('saturn', 'planet');
+    await capped1k.loadModel('saturn');
 
     expect(textureUrls).toEqual([
       '/solar-voyager/assets/textures/saturn_albedo_2k.ktx2',
       '/solar-voyager/assets/textures/saturn_albedo_1k.ktx2',
+    ]);
+    expect(modelUrls).toEqual([
+      '/solar-voyager/assets/models/saturn_2k.glb',
+      '/solar-voyager/assets/models/saturn_1k.glb',
     ]);
   });
 

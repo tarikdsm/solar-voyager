@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ingestAssets } from './ingest.mjs';
+import { readGlbJson } from './glb.mjs';
 import { createGlb } from './testFixtures.mjs';
 
 const temporaryDirectories = [];
@@ -80,6 +81,8 @@ describe('complete asset ingest', () => {
       assets: [{
         category: 'asteroid',
         files: [
+          'models/vesta_1k.glb',
+          'models/vesta_2k.glb',
           'models/vesta.glb',
           'textures/vesta_albedo_1k.ktx2',
           'textures/vesta_albedo_2k.ktx2',
@@ -106,13 +109,21 @@ describe('complete asset ingest', () => {
     expect(encoder).toHaveBeenCalledWith(
       expect.stringMatching(/vesta_albedo\.jpg$/),
       expect.stringMatching(/vesta_albedo_2k\.ktx2$/),
-      expect.objectContaining({ width: 2048, height: 1024 }),
+      expect.objectContaining({ width: 1024, height: 512 }),
     );
     expect(encoder).toHaveBeenCalledWith(
       expect.stringMatching(/vesta_albedo\.jpg$/),
       expect.stringMatching(/vesta_albedo_1k\.ktx2$/),
       expect.objectContaining({ width: 1024, height: 512 }),
     );
+    const capped2kModel = await readGlbJson(join(paths.outputRoot, 'models', 'vesta_2k.glb'));
+    const capped1kModel = await readGlbJson(join(paths.outputRoot, 'models', 'vesta_1k.glb'));
+    expect(capped2kModel.images.map((image) => image.uri)).toEqual([
+      '../textures/vesta_albedo_2k.ktx2',
+    ]);
+    expect(capped1kModel.images.map((image) => image.uri)).toEqual([
+      '../textures/vesta_albedo_1k.ktx2',
+    ]);
   });
 
   it('publishes explicit deterministic surface-detail metadata', async () => {

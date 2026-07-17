@@ -51,20 +51,23 @@ count. Manual `high`, `medium`, and `low` map to rungs 0, 7, and 14.
 
 - `render/perfGovernor.ts` owns only scalar state and the control law. Profiles
   are module-level frozen data, and `update()` performs no allocations.
-- `RenderQualityController` selects a preallocated post variant and applies the
-  remaining scalar controls to the starfield, procedural Sun, lazy asset policy,
-  and body tier thresholds. Normal frames only compare the already-applied rung.
-- Five post variants are allocated, sized, and warmed at startup for scale
-  1.00/0.85/0.70/0.55 and the 0.55 half-bloom path. CSS and the renderer drawing
-  buffer remain fixed; selecting a rung changes only the active composer and the
-  star point-size uniform.
-- SMAA and FXAA passes exist in every preallocated variant. Bloom off preserves
-  the existing half-size target instead of resizing it. No material, geometry,
-  pass, shader program, composer, or render target is created or resized by a
-  rung transition.
+- `RenderQualityController` applies the post and remaining scalar controls to the
+  starfield, procedural Sun, lazy asset policy, and body tier thresholds. Normal
+  frames only compare the already-applied rung.
+- One half-float composer is allocated, sized, and warmed at startup. Its two
+  maximum-size color targets remain fixed; render-scale changes mutate only the
+  existing target viewports/scissors, star point-size uniform, and preinstalled
+  UV-scale uniforms, so the valid subregion is upscaled to the fixed drawing
+  buffer without reallocating.
+- The single bloom, SMAA, FXAA, and output passes use the same adaptive subregion.
+  Half bloom narrows the already-downscaled bloom viewports. No material,
+  geometry, pass, shader program, composer, or render target is created or
+  resized by a rung transition.
 - Texture caps affect only assets that have not entered a promise cache. The
-  deterministic asset ingest emits real `_2k` and `_1k` albedo variants and the
-  loader selects them for subsequent lazy body-sphere loads.
+  deterministic asset ingest emits real `_2k` and `_1k` variants for every
+  model-bound texture plus capped GLBs whose image URIs reference only matching
+  variants. The loader selects capped spheres, details, and models for subsequent
+  uncached lazy bodies.
 - The tier-3 threshold multiplier changes only numeric selection thresholds and
   reuses all existing body representations.
 

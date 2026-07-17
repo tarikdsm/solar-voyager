@@ -179,11 +179,16 @@ export class BodyAssetLoader {
       this.modelPromises.set(id, NULL_MODEL_PROMISE);
       return NULL_MODEL_PROMISE;
     }
-    const file = findFile(entry, `models/${id}.glb`);
-    if (file === null) {
+    const canonicalFile = findFile(entry, `models/${id}.glb`);
+    if (canonicalFile === null) {
       this.modelPromises.set(id, NULL_MODEL_PROMISE);
       return NULL_MODEL_PROMISE;
     }
+    const cappedFile =
+      this.textureTierCap === 'full'
+        ? null
+        : findFile(entry, `models/${id}_${this.textureTierCap}.glb`);
+    const file = cappedFile ?? canonicalFile;
 
     const url = `${this.baseUrl}assets/${file}`;
     const promise = this.getBackend()

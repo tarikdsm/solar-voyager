@@ -26,7 +26,7 @@ The governor performed all 14 reductions and reached the 2,000-star cap without 
 - Resource stability: 1,500 rung transitions retained the same composer/bloom render targets and, after forced GC, retained no JS heap (final observed delta -838,058 bytes).
 - Window integrity: automatic evidence is ignored until all 120 frame-time samples exist.
 - Star coverage: the brightest 2,000 indexed stars reach both hemispheres on X/Y/Z (all extrema beyond ±0.998), instead of retaining an HR-catalog prefix.
-- Ordered effects: preallocated internal render scale, bloom resolution/off, SMAA/FXAA/off, procedural octaves, star draw cap, real texture variants, and model threshold are asserted independently.
+- Ordered effects: single-chain viewport/UV render scale, bloom resolution/off, SMAA/FXAA/off, procedural octaves, star draw cap, real texture/model variants, and model threshold are asserted independently.
 
 ## Rung evidence
 
@@ -48,4 +48,4 @@ The governor performed all 14 reductions and reached the 2,000-star cap without 
 |  R13 |   Q1 | Future uncached textures capped at 1k    | [rung-13.png](T0091-rungs/rung-13.png) |
 |  R14 |   Q1 | Detailed-model thresholds doubled        | [rung-14.png](T0091-rungs/rung-14.png) |
 
-Texture-cap screenshots intentionally retain already-loaded Earth textures. Deterministic asset ingestion now publishes `_2k` and `_1k` variants in the real manifest, and integration tests assert that subsequent uncached Saturn loads select each cap without a visible swap or frame-loop allocation.
+Texture-cap screenshots intentionally retain already-loaded Earth textures. Deterministic asset ingestion now publishes `_2k` and `_1k` variants for every bound texture and matching capped GLBs in the real manifest. Integration tests assert capped lazy sphere/model selection, inspect every capped GLB URI, and verify every referenced KTX2 stays within its declared maximum dimension without a visible swap or frame-loop allocation.

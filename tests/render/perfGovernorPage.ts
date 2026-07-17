@@ -2,7 +2,7 @@ import { WebGLRenderer } from 'three';
 
 import bodiesDocument from '../../data/bodies.json';
 import { createEpochWorld } from '../../src/render/createEpochWorld.js';
-import { PreallocatedLightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
+import { LightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
 import {
   QUALITY_PROFILES,
   PerfGovernor,
@@ -85,7 +85,7 @@ renderer.setPixelRatio(1);
 renderer.setSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, false);
 renderer.setClearColor(0x020617, 1);
 const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_HEIGHT });
-const pipeline = new PreallocatedLightingPostPipeline(
+const pipeline = new LightingPostPipeline(
   renderer,
   world.spaceScene.scene,
   world.spaceScene.camera,
@@ -157,20 +157,13 @@ updateWorld();
 resize();
 pipeline.warmUp(true);
 const programCountAfterWarmUp = renderer.info.programs?.length ?? 0;
-const composerReadBuffers = pipeline.variants.map(
-  (variant) => variant.pipeline.composer.readBuffer,
-);
-const composerWriteBuffers = pipeline.variants.map(
-  (variant) => variant.pipeline.composer.writeBuffer,
-);
-const bloomBrightTargets = pipeline.variants.map(
-  (variant) =>
-    (
-      variant.pipeline.bloomPass as unknown as {
-        readonly renderTargetBright: unknown;
-      }
-    ).renderTargetBright,
-);
+const composerReadBuffer = pipeline.composer.readBuffer;
+const composerWriteBuffer = pipeline.composer.writeBuffer;
+const bloomBrightTarget = (
+  pipeline.bloomPass as unknown as {
+    readonly renderTargetBright: unknown;
+  }
+).renderTargetBright;
 
 function row(label: string, value: string): string {
   return `<dt>${label}</dt><dd>${value}</dd>`;
@@ -190,8 +183,13 @@ function renderProfileLabel(profile: RenderQualityProfile): void {
 }
 
 function profileSnapshot(profile: RenderQualityProfile): RungSnapshot {
-  const bloom = pipeline.active.bloomPass as unknown as {
-    readonly renderTargetBright: { readonly height: number; readonly width: number };
+  const bloom = pipeline.bloomPass as unknown as {
+    readonly renderTargetBright: {
+      readonly viewport: { readonly w: number; readonly z: number };
+    };
+  };
+  const composerTarget = pipeline.composer.readBuffer as unknown as {
+    readonly viewport: { readonly w: number; readonly z: number };
   };
   const sunMaterial = world.proceduralSun.billboard.material;
   const uniforms = (
@@ -202,20 +200,20 @@ function profileSnapshot(profile: RenderQualityProfile): RungSnapshot {
   return {
     antiAliasing: profile.antiAliasing,
     bloom: profile.bloom,
-    bloomHeight: bloom.renderTargetBright.height,
-    bloomWidth: bloom.renderTargetBright.width,
+    bloomHeight: bloom.renderTargetBright.viewport.w,
+    bloomWidth: bloom.renderTargetBright.viewport.z,
     canvasHeight: canvas.height,
     canvasWidth: canvas.width,
     earthTier: world.visualSystem.getTier('earth'),
-    fxaaEnabled: pipeline.active.fxaaPass.enabled,
-    internalHeight: pipeline.active.composer.readBuffer.height,
-    internalWidth: pipeline.active.composer.readBuffer.width,
+    fxaaEnabled: pipeline.fxaaPass.enabled,
+    internalHeight: composerTarget.viewport.w,
+    internalWidth: composerTarget.viewport.z,
     modelThresholdScale: profile.modelThresholdScale,
     proceduralOctaves: uniforms?.uSunOctaves?.value ?? -1,
     programCount: renderer.info.programs?.length ?? 0,
     renderScale: profile.renderScale,
     rung: profile.rung,
-    smaaEnabled: pipeline.active.smaaPass.enabled,
+    smaaEnabled: pipeline.smaaPass.enabled,
     starCount: world.starfield.points.geometry.drawRange.count,
     textureCap: profile.textureCap,
     tier: profile.tier,
@@ -262,21 +260,14 @@ globalThis.__perfGovernorHarness = {
   },
   programCountAfterWarmUp,
   resourcesStable() {
-    for (let index = 0; index < pipeline.variants.length; index += 1) {
-      const variant = pipeline.variants[index];
-      if (variant === undefined) return false;
-      const bloom = variant.pipeline.bloomPass as unknown as {
-        readonly renderTargetBright: unknown;
-      };
-      if (
-        variant.pipeline.composer.readBuffer !== composerReadBuffers[index] ||
-        variant.pipeline.composer.writeBuffer !== composerWriteBuffers[index] ||
-        bloom.renderTargetBright !== bloomBrightTargets[index]
-      ) {
-        return false;
-      }
-    }
-    return true;
+    const bloom = pipeline.bloomPass as unknown as {
+      readonly renderTargetBright: unknown;
+    };
+    return (
+      pipeline.composer.readBuffer === composerReadBuffer &&
+      pipeline.composer.writeBuffer === composerWriteBuffer &&
+      bloom.renderTargetBright === bloomBrightTarget
+    );
   },
   starCapBounds(count) {
     const geometry = world.starfield.points.geometry;

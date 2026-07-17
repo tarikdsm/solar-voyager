@@ -2,6 +2,8 @@ import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import sharp from 'sharp';
+
 import { discoverAssets, validateAssetDirectory } from './assetIngest.mjs';
 import {
   CATEGORY_CONFIG,
@@ -20,6 +22,10 @@ const CODEC_FILES = Object.freeze([
   ['examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js', 'codecs/draco/draco_wasm_wrapper.js'],
   ['examples/jsm/libs/draco/gltf/draco_decoder.wasm', 'codecs/draco/draco_decoder.wasm'],
   ['LICENSE', 'codecs/THREE-LICENSE.txt'],
+]);
+const QUALITY_CAPS = Object.freeze([
+  ['2k', 2048],
+  ['1k', 1024],
 ]);
 
 function sphereTierWidth(category) {
@@ -42,6 +48,20 @@ function textureRole(filename) {
   if (suffix.startsWith('emissive')) return 'emissive';
   if (suffix.startsWith('detail_')) return suffix;
   return suffix.replace(/_night$/, '');
+}
+
+async function cappedTextureDimensions(path, maximumDimension) {
+  const metadata = await sharp(path).metadata();
+  const width = metadata.width;
+  const height = metadata.height;
+  if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+    throw new Error(`Texture dimensions are unavailable for ${path}`);
+  }
+  const scale = Math.min(1, maximumDimension / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }
 
 async function publishDirectory(stagingRoot, outputRoot) {
@@ -115,11 +135,13 @@ export async function ingestAssets(options) {
     for (const asset of validated) {
       const files = [];
       const textureBindings = [];
+      const cappedTextureBindings = new Map(QUALITY_CAPS.map(([suffix]) => [suffix, []]));
       for (const texture of asset.textures) {
+        const sourcePath = join(asset.directory, texture);
         const textureOutputName = `${basename(texture, extname(texture))}.ktx2`;
         const textureRelative = `textures/${textureOutputName}`;
         await (options.encodeTexture ?? encodeKtxTexture)(
-          join(asset.directory, texture),
+          sourcePath,
           join(stagingRoot, 'textures', textureOutputName),
           { executable: options.ktxExecutable },
         );
@@ -129,6 +151,28 @@ export async function ingestAssets(options) {
           sourceName: texture,
           uri: `../${textureRelative}`,
         });
+        for (const [suffix, maximumDimension] of QUALITY_CAPS) {
+          const cappedOutputName = `${basename(texture, extname(texture))}_${suffix}.ktx2`;
+          const cappedRelative = `textures/${cappedOutputName}`;
+          const dimensions = await cappedTextureDimensions(sourcePath, maximumDimension);
+          await (options.encodeTexture ?? encodeKtxTexture)(
+            sourcePath,
+            join(stagingRoot, 'textures', cappedOutputName),
+            {
+              executable: options.ktxExecutable,
+              width: dimensions.width,
+              height: dimensions.height,
+            },
+          );
+          files.push(cappedRelative);
+          const bindings = cappedTextureBindings.get(suffix);
+          if (bindings === undefined) throw new Error(`Unknown texture cap ${suffix}`);
+          bindings.push({
+            role: textureRole(texture),
+            sourceName: texture,
+            uri: `../${cappedRelative}`,
+          });
+        }
         const role = textureRole(texture);
         const tierWidth = role === 'albedo' ? sphereTierWidth(asset.category) : null;
         if (tierWidth !== null) {
@@ -144,23 +188,6 @@ export async function ingestAssets(options) {
             },
           );
           files.push(sphereRelative);
-          for (const [suffix, width] of [
-            ['2k', 2048],
-            ['1k', 1024],
-          ]) {
-            const qualityOutputName = `${asset.id}_albedo_${suffix}.ktx2`;
-            const qualityRelative = `textures/${qualityOutputName}`;
-            await (options.encodeTexture ?? encodeKtxTexture)(
-              join(asset.directory, texture),
-              join(stagingRoot, 'textures', qualityOutputName),
-              {
-                executable: options.ktxExecutable,
-                width,
-                height: width / 2,
-              },
-            );
-            files.push(qualityRelative);
-          }
         }
       }
       const modelRelative = `models/${asset.id}.glb`;
@@ -171,6 +198,19 @@ export async function ingestAssets(options) {
         { textures: textureBindings },
       );
       files.push(modelRelative);
+      if (textureBindings.length > 0) {
+        for (const [suffix] of QUALITY_CAPS) {
+          const bindings = cappedTextureBindings.get(suffix);
+          if (bindings === undefined) throw new Error(`Unknown model texture cap ${suffix}`);
+          const cappedModelRelative = `models/${asset.id}_${suffix}.glb`;
+          await (options.compressGlb ?? compressGlb)(
+            join(asset.directory, `${asset.id}.glb`),
+            join(stagingRoot, 'models', `${asset.id}_${suffix}.glb`),
+            { textures: bindings },
+          );
+          files.push(cappedModelRelative);
+        }
+      }
       files.sort((left, right) => left.localeCompare(right, 'en'));
 
       let totalBytes = 0;
