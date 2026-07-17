@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SPEED_OF_LIGHT_KM_S } from '../../core/constants.js';
 import {
+  type BurnLogEntry,
+  type BurnLogView,
   createBurnLog,
   SIMULATION_STATE_DIMENSION,
   STATE_ENERGY_J,
@@ -11,6 +13,25 @@ import {
   STATE_PROPER_DELTA_V_VECTOR_Z_MS,
   writeLedgerDerivativeRates,
 } from './ledger.js';
+
+function copyBurnEntry(entry: BurnLogEntry): BurnLogEntry {
+  return { ...entry };
+}
+
+function copyBurnLog(log: BurnLogView): {
+  readonly active: BurnLogEntry | null;
+  readonly completed: readonly BurnLogEntry[];
+} {
+  const completed: BurnLogEntry[] = [];
+  for (let index = 0; index < log.count; index += 1) {
+    const entry = log.get(index);
+    if (entry !== null) completed.push(copyBurnEntry(entry));
+  }
+  return {
+    active: log.activeBurn === null ? null : copyBurnEntry(log.activeBurn),
+    completed,
+  };
+}
 
 describe('photon-drive ledger — physics-spec.md §5', () => {
   it('writes energy, scalar proper-dv, and inertial vector rates', () => {
@@ -98,5 +119,30 @@ describe('photon-drive ledger — physics-spec.md §5', () => {
     expect(log.activeBurn?.energySpentJ).toBe(50);
     recorder.end();
     expect(log.count).toBe(1);
+  });
+
+  it('restores completed and active burns without losing continuation state', () => {
+    const original = createBurnLog(4);
+    const prograde = new Float64Array([0, 1, 0]);
+    const normal = new Float64Array([0, 0, 1]);
+    const radial = new Float64Array([1, 0, 0]);
+
+    original.recorder.begin(0, 0, 100, 2, 1, 2, 3, 'earth', prograde, normal, radial, 10);
+    original.recorder.synchronize(5, 4, 180, 5, 2, 4, 6);
+    original.recorder.end();
+    original.recorder.begin(10, 8, 180, 5, 2, 4, 6, 'mars', radial, prograde, normal, 20);
+    original.recorder.notePeakPower(25);
+    original.recorder.synchronize(12, 9.5, 230, 7, 5, 8, 10);
+
+    const persisted = original.persistence.exportState();
+    const restored = createBurnLog(4, persisted);
+
+    expect(copyBurnLog(restored.view)).toEqual(copyBurnLog(original.view));
+    original.recorder.synchronize(15, 12, 300, 10, 7, 12, 15);
+    restored.recorder.synchronize(15, 12, 300, 10, 7, 12, 15);
+    original.recorder.end();
+    restored.recorder.end();
+
+    expect(copyBurnLog(restored.view)).toEqual(copyBurnLog(original.view));
   });
 });

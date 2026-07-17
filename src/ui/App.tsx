@@ -7,6 +7,7 @@ import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
 import { Navball } from './Navball.js';
+import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
 
 const scaffoldState = createScaffoldState();
 const WARP_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -21,6 +22,7 @@ export interface AppProps {
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
+  readonly session?: SessionSettingsPort | null;
 }
 
 interface ReadoutValueProps {
@@ -219,13 +221,21 @@ function HardwareAccelerationWarning({ rendererName }: HardwareAccelerationWarni
 }
 
 /** Renders the Solar Voyager overlay and setup warnings. */
-export function App({ bodyIds, commands, hud, hudState, hardwareWarning = null }: AppProps) {
+export function App({
+  bodyIds,
+  commands,
+  hud,
+  hudState,
+  hardwareWarning = null,
+  session = null,
+}: AppProps) {
   return (
     <main class="app-overlay">
       {hardwareWarning === null ? null : (
         <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
       )}
       <h1 class="app-title">{scaffoldState.title}</h1>
+      {session === null ? null : <SessionSettingsPanel session={session} />}
       <OrbitReadout hud={hud} />
       <DualClock hud={hud} />
       <WarpControl commands={commands} hud={hud} hudState={hudState} />

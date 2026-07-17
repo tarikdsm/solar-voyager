@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest';
+
+import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
+import {
+  DEFAULT_GAME_SETTINGS,
+  parseGameSettings,
+  rebindInput,
+  type GameSettingsV1,
+  type InputAction,
+  type QualityLock,
+} from '../game/settings.js';
+import {
+  createSessionSettingsModel,
+  type SessionFilePort,
+  type SessionSettingsPort,
+} from './SessionSettingsPanel.js';
+
+class FakeSession implements SessionSettingsPort {
+  initializationWarning: string | null = null;
+  settings: GameSettingsV1 = DEFAULT_GAME_SETTINGS;
+  importedJson = '';
+  loadResult: SessionActionResult = { ok: true, message: 'Session loaded' };
+  saveResult: SessionActionResult = { ok: true, message: 'Session saved' };
+  exportResult: SessionExportResult = { ok: true, json: '{"version":2}' };
+
+  exportJson(): SessionExportResult {
+    return this.exportResult;
+  }
+
+  importJson(json: string): SessionActionResult {
+    this.importedJson = json;
+    return { ok: true, message: 'Session imported' };
+  }
+
+  loadLocal(): SessionActionResult {
+    return this.loadResult;
+  }
+
+  rebind(action: InputAction, code: string): SessionActionResult {
+    try {
+      this.settings = rebindInput(this.settings, action, code);
+      return { ok: true, message: 'Input binding updated' };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update input binding',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  saveLocal(): SessionActionResult {
+    return this.saveResult;
+  }
+
+  updateQualityLock(qualityLock: QualityLock): SessionActionResult {
+    this.settings = parseGameSettings({ ...this.settings, qualityLock });
+    return { ok: true, message: 'Quality setting updated' };
+  }
+}
+
+class FakeFiles implements SessionFilePort {
+  downloaded: { readonly filename: string; readonly json: string } | null = null;
+  readValue = '{"version":1}';
+  saveError: unknown = null;
+
+  async readText(): Promise<string> {
+    return this.readValue;
+  }
+
+  saveJson(filename: string, json: string): void {
+    if (this.saveError !== null) throw this.saveError;
+    this.downloaded = { filename, json };
+  }
+}
+
+describe('session settings panel model', () => {
+  it('forwards save/load and keeps their actionable messages', () => {
+    const session = new FakeSession();
+    const model = createSessionSettingsModel(session, new FakeFiles());
+
+    expect(model.save()).toEqual({ ok: true, message: 'Session saved' });
+    expect(model.load()).toEqual({ ok: true, message: 'Session loaded' });
+    session.loadResult = { ok: false, message: 'No local save found' };
+    expect(model.load()).toEqual({ ok: false, message: 'No local save found' });
+  });
+
+  it('exports through the injected file port and reports file failures', () => {
+    const session = new FakeSession();
+    const files = new FakeFiles();
+    const model = createSessionSettingsModel(session, files);
+
+    expect(model.exportFile()).toEqual({ ok: true, message: 'Session exported' });
+    expect(files.downloaded).toEqual({
+      filename: 'solar-voyager-save.json',
+      json: '{"version":2}',
+    });
+    files.saveError = new Error('download denied');
+    expect(model.exportFile()).toMatchObject({ ok: false, message: 'Unable to export session' });
+  });
+
+  it('imports selected files and treats cancellation as a no-op', async () => {
+    const session = new FakeSession();
+    const files = new FakeFiles();
+    const model = createSessionSettingsModel(session, files);
+
+    expect(await model.importFile(null)).toBeNull();
+    expect(await model.importFile({} as File)).toEqual({ ok: true, message: 'Session imported' });
+    expect(session.importedJson).toBe('{"version":1}');
+  });
+
+  it('updates quality and bindings while retaining rejected binding state', () => {
+    const session = new FakeSession();
+    const model = createSessionSettingsModel(session, new FakeFiles());
+
+    expect(model.selectQuality('low')).toMatchObject({ ok: true });
+    expect(session.settings.qualityLock).toBe('low');
+    expect(model.captureBinding('pitchUp', 'KeyI')).toMatchObject({ ok: true });
+    expect(session.settings.inputBindings.pitchUp).toBe('KeyI');
+    const before = session.settings;
+    expect(model.captureBinding('pitchUp', session.settings.inputBindings.pitchDown)).toMatchObject(
+      {
+        ok: false,
+      },
+    );
+    expect(session.settings).toBe(before);
+    expect(model.selectQuality('ultra')).toMatchObject({ ok: false });
+  });
+});

@@ -7,6 +7,7 @@ import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
 import { WarpClampReason, type SimSnapshot } from './simulationSnapshot.js';
 import { writeForwardFromQuaternionInto } from './ship/attitude.js';
+import type { BurnLogEntry, BurnLogView } from './ship/ledger.js';
 import { DEFAULT_MAX_PROPER_ACCELERATION_M_S2 } from './ship/thrust.js';
 
 const EARTH_MU_KM3_S2 = 398_600.4418;
@@ -42,7 +43,77 @@ function stubRendererConsume(snapshot: SimSnapshot): number {
   return (snapshot.bodyPositionsKm[0] as number) + (snapshot.shipState[0] as number);
 }
 
+function copyBurnLog(log: BurnLogView): {
+  readonly active: BurnLogEntry | null;
+  readonly entries: readonly BurnLogEntry[];
+} {
+  const entries: BurnLogEntry[] = [];
+  for (let index = 0; index < log.count; index += 1) {
+    const entry = log.get(index);
+    if (entry !== null) entries.push({ ...entry });
+  }
+  return {
+    active: log.activeBurn === null ? null : { ...log.activeBurn },
+    entries,
+  };
+}
+
+function copyPersistentSnapshot(snapshot: SimSnapshot) {
+  return {
+    attitudeMode: snapshot.attitudeMode,
+    attitudeQuaternion: [...snapshot.attitudeQuaternion],
+    bodyPositionsKm: [...snapshot.bodyPositionsKm],
+    bodyVelocitiesKmS: [...snapshot.bodyVelocitiesKmS],
+    effectiveWarp: snapshot.effectiveWarp,
+    energySpentJ: snapshot.energySpentJ,
+    kineticEnergyChangeJ: snapshot.kineticEnergyChangeJ,
+    properDeltaVMS: snapshot.properDeltaVMS,
+    requestedWarp: snapshot.requestedWarp,
+    shipState: [...snapshot.shipState],
+    simTimeSec: snapshot.simTimeSec,
+    targetBodyId: snapshot.targetBodyId,
+    throttle: snapshot.throttle,
+    warpClampReason: snapshot.warpClampReason,
+  };
+}
+
 describe('SimulationCore', () => {
+  it('exports and restores the complete simulation continuation state', () => {
+    const catalog = earthCatalog();
+    const original = new SimulationCore({
+      catalog,
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    original.commands.setTarget('earth');
+    original.commands.setAttitudeMode('prograde');
+    original.commands.setThrottle(0.2);
+    original.step(1);
+    original.commands.setThrottle(0);
+    original.commands.setAttitudeMode('manual');
+    original.commands.rotate(0.01, -0.02, 0.03);
+    original.commands.setWarp(5);
+    original.commands.setThrottle(0.3);
+    original.step(0.2);
+
+    const saved = original.exportPersistentState();
+    const restored = new SimulationCore({
+      catalog,
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+      persistentState: saved,
+    });
+
+    expect(copyPersistentSnapshot(restored.snapshot)).toEqual(
+      copyPersistentSnapshot(original.snapshot),
+    );
+    expect(copyBurnLog(restored.burnLog)).toEqual(copyBurnLog(original.burnLog));
+    expect(copyPersistentSnapshot(restored.step(0.25))).toEqual(
+      copyPersistentSnapshot(original.step(0.25)),
+    );
+    expect(copyBurnLog(restored.burnLog)).toEqual(copyBurnLog(original.burnLog));
+  });
+
   it('publishes a render-consumable initial snapshot and exactly two frame buffers', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),

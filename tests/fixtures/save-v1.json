@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "simTimeSec": 86400,
+  "phase": "space",
+  "shipState": [1000, 2000, 3000, 4, 5, 6, 7],
+  "ledger": {
+    "energySpentJ": 9000,
+    "properDeltaVMS": 12
+  },
+  "burnLog": [
+    {
+      "startTimeSec": 100,
+      "endTimeSec": 110,
+      "startProperTimeSec": 99,
+      "endProperTimeSec": 109,
+      "energySpentJ": 8000,
+      "properDeltaVMS": 10,
+      "peakPowerW": 800,
+      "dominantBodyId": "earth",
+      "progradeDeltaVMS": 9,
+      "normalDeltaVMS": 1,
+      "radialDeltaVMS": 0
+    }
+  ],
+  "settings": {
+    "version": 1,
+    "qualityLock": "medium",
+    "inputBindings": {
+      "throttleIncrease": "KeyR",
+      "throttleDecrease": "KeyF",
+      "warpIncrease": "Equal",
+      "warpDecrease": "Minus",
+      "pitchUp": "KeyW",
+      "pitchDown": "KeyS",
+      "yawLeft": "KeyA",
+      "yawRight": "KeyD",
+      "rollLeft": "KeyZ",
+      "rollRight": "KeyC",
+      "attitudeManual": "Digit1",
+      "attitudePrograde": "Digit2",
+      "attitudeRetrograde": "Digit3"
+    }
+  }
+}

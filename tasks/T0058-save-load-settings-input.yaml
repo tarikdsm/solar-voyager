@@ -1,6 +1,6 @@
 id: T0058
 title: Save/load, settings, input mapping
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0058-save-load-settings-input
 depends_on: [T0050]
@@ -12,4 +12,17 @@ spec: |
 acceptance:
   - Save -> reload -> identical sim state (positions derived from time)
   - Envelope version migration test (v1 -> v2 fixture)
-handoff_notes: ""
+handoff_notes: |
+  Implemented a validated v2 save envelope with v1 fixture migration, exact
+  SimulationCore reconstruction, atomic session replacement, independent
+  versioned settings, rebindable keyboard-to-Commands mapping, and the
+  production Session & settings panel with local save/load and JSON import/export.
+  Verification: lint, typecheck, format:check, build, 480 Vitest tests, 50 Python
+  tool tests, task/budget checks, the full existing browser regression matrix,
+  the new session-settings browser regression, and a real production-app
+  Playwright save/advance/load/mobile playtest all pass without console errors.
+  Independent review completed against head 801be5710e347a1e580ea5e48213296f2b28a830.
+  Two review rounds found and resolved allocation-boundary, active-burn
+  consistency, restored-input, v1 kinetic-baseline, and settings-warning gaps;
+  the final read-only review reported no Critical, Important, or Minor findings
+  and explicitly approved the task for merge.
