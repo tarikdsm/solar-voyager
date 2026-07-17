@@ -20,8 +20,8 @@ const PORT = 4177;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const WARMUP_FRAMES = 120;
-const STEADY_HEAP_SETTLE_FRAMES = 1_800;
-const STEADY_HEAP_MEASURE_FRAMES = 1_800;
+const STEADY_HEAP_SETTLE_MS = 30_000;
+const STEADY_HEAP_MEASURE_MS = 30_000;
 const DEFAULT_SAMPLE_FRAMES = 1_800;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
 
@@ -111,15 +111,18 @@ async function readEnvironment(page) {
   }, TELEMETRY_PROPERTY);
 }
 
+async function forceGc(page) {
+  return page.evaluate(() => {
+    if (typeof globalThis.gc !== 'function') throw new Error('Chromium did not expose gc().');
+    globalThis.gc();
+    globalThis.gc();
+    return 'memory' in performance ? performance.memory.usedJSHeapSize : null;
+  });
+}
+
 async function measureFlight(page, schedule) {
   return page.evaluate(
-    ({
-      schedule: flightSchedule,
-      steadyHeapMeasureFrames,
-      steadyHeapSettleFrames,
-      telemetryProperty,
-      warmupFrames,
-    }) =>
+    ({ schedule: flightSchedule, telemetryProperty, warmupFrames }) =>
       new Promise((resolvePromise, rejectPromise) => {
         const canvas = globalThis.document.querySelector('#space-canvas');
         if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -134,60 +137,16 @@ async function measureFlight(page, schedule) {
         const frameDeltasMs = new Float64Array(flightSchedule.sampleFrames);
         let focusEventIndex = 0;
         let framesToWarm = warmupFrames;
-        let pathHeapAfterBytes = null;
-        let pathHeapBeforeBytes = null;
         let maxDrawCalls = 0;
         let maxTriangles = 0;
         let previousFrameTimeMs = 0;
         let sampleIndex = 0;
-        let steadyFramesRemaining = steadyHeapSettleFrames;
-        let steadyHeapBeforeBytes = null;
         let zoomEventIndex = 0;
-
-        function heapBytes() {
-          return 'memory' in performance ? performance.memory.usedJSHeapSize : null;
-        }
-
-        function finishSteadyMeasurement() {
-          steadyFramesRemaining -= 1;
-          if (steadyFramesRemaining > 0) {
-            globalThis.requestAnimationFrame(finishSteadyMeasurement);
-            return;
-          }
-          globalThis.gc?.();
-          globalThis.gc?.();
-          resolvePromise({
-            finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
-            frameDeltasMs: Array.from(frameDeltasMs),
-            maxDrawCalls,
-            maxTriangles,
-            pathHeapAfterBytes,
-            pathHeapBeforeBytes,
-            steadyHeapAfterBytes: heapBytes(),
-            steadyHeapBeforeBytes,
-          });
-        }
-
-        function settleSteadyHeap() {
-          steadyFramesRemaining -= 1;
-          if (steadyFramesRemaining > 0) {
-            globalThis.requestAnimationFrame(settleSteadyHeap);
-            return;
-          }
-          globalThis.gc?.();
-          globalThis.gc?.();
-          steadyHeapBeforeBytes = heapBytes();
-          steadyFramesRemaining = steadyHeapMeasureFrames;
-          globalThis.requestAnimationFrame(finishSteadyMeasurement);
-        }
 
         function measureFrame(frameTimeMs) {
           if (framesToWarm > 0) {
             framesToWarm -= 1;
             if (framesToWarm === 0) {
-              globalThis.gc?.();
-              globalThis.gc?.();
-              pathHeapBeforeBytes = heapBytes();
               previousFrameTimeMs = frameTimeMs;
             }
             globalThis.requestAnimationFrame(measureFrame);
@@ -220,17 +179,17 @@ async function measureFlight(page, schedule) {
             globalThis.requestAnimationFrame(measureFrame);
             return;
           }
-          globalThis.gc?.();
-          globalThis.gc?.();
-          pathHeapAfterBytes = heapBytes();
-          globalThis.requestAnimationFrame(settleSteadyHeap);
+          resolvePromise({
+            finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
+            frameDeltasMs: Array.from(frameDeltasMs),
+            maxDrawCalls,
+            maxTriangles,
+          });
         }
         globalThis.requestAnimationFrame(measureFrame);
       }),
     {
       schedule,
-      steadyHeapMeasureFrames: STEADY_HEAP_MEASURE_FRAMES,
-      steadyHeapSettleFrames: STEADY_HEAP_SETTLE_FRAMES,
       telemetryProperty: TELEMETRY_PROPERTY,
       warmupFrames: WARMUP_FRAMES,
     },
@@ -247,31 +206,32 @@ async function runOnce(browser, schedule, index) {
     await waitForReady(page);
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     const environment = await readEnvironment(page);
+    const pathHeapBeforeBytes = await forceGc(page);
     const raw = await measureFlight(page, schedule);
+    const pathHeapAfterBytes = await forceGc(page);
+    await page.waitForTimeout(STEADY_HEAP_SETTLE_MS);
+    const steadyHeapBeforeBytes = await forceGc(page);
+    await page.waitForTimeout(STEADY_HEAP_MEASURE_MS);
+    const steadyHeapAfterBytes = await forceGc(page);
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     const legs = schedule.legs.map((leg) => ({
       frameDeltasMs: raw.frameDeltasMs.slice(leg.startFrame, leg.endFrame),
       id: leg.id,
     }));
-    const summary = summarizeFlightRun({ ...raw, legs });
+    const summary = summarizeFlightRun({
+      ...raw,
+      legs,
+      pathHeapAfterBytes,
+      pathHeapBeforeBytes,
+      steadyHeapAfterBytes,
+      steadyHeapBeforeBytes,
+    });
     if (raw.finalFocusLabel !== 'Focus: Jupiter') {
       throw new Error(`Flight ended on an unexpected focus: ${String(raw.finalFocusLabel)}`);
     }
     return { environment, errors, finalFocusLabel: raw.finalFocusLabel, summary };
   } finally {
     await page.close();
-  }
-}
-
-async function runIsolated(schedule, index) {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
-  });
-  try {
-    return await runOnce(browser, schedule, index);
-  } finally {
-    await browser.close();
   }
 }
 
@@ -290,10 +250,15 @@ async function main() {
     logLevel: 'error',
     preview: { host: HOST, port: PORT, strictPort: true },
   });
+  let browser;
   try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
+    });
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
-      runs.push(await runIsolated(schedule, index));
+      runs.push(await runOnce(browser, schedule, index));
     }
     const stabilityFindings =
       runs.length === 2 ? compareBenchmarkRuns(runs[0].summary, runs[1].summary) : [];
@@ -318,6 +283,7 @@ async function main() {
       throw new Error(`Flight benchmark is unstable: ${stabilityFindings.join(' | ')}`);
     }
   } finally {
+    if (browser !== undefined) await browser.close();
     await server.close();
     await assertPortAvailable(PORT, HOST);
   }
