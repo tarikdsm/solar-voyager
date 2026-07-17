@@ -1,6 +1,6 @@
 id: T0051
 title: Ship state, thrust, attitude modes
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0051-ship-thrust-attitude
 depends_on: [T0050]
