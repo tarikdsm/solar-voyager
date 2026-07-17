@@ -14,6 +14,7 @@ import {
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 import { SolarLighting } from './solarLighting.js';
 import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
+import { ProceduralSun } from './proceduralSun.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
 
@@ -24,6 +25,7 @@ export interface EpochWorld {
   readonly visualSystem: BodyVisualSystem;
   readonly starfield: Starfield;
   readonly lighting: SolarLighting;
+  readonly proceduralSun: ProceduralSun;
   readonly osculatingConic: OsculatingConicOverlay;
   readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
@@ -69,6 +71,7 @@ export async function createEpochWorld(
   let sunIndex = -1;
   let earthIndex = -1;
   let solarRadiusKm = 0;
+  let sunProceduralSeed = -1;
   for (let index = 0; index < epochState.bodies.length; index += 1) {
     const body = epochState.bodies[index];
     if (body === undefined) throw new Error('Epoch body array is sparse.');
@@ -82,6 +85,7 @@ export async function createEpochWorld(
     if (body.id === 'sun') {
       sunIndex = index;
       solarRadiusKm = body.meanRadiusKm;
+      sunProceduralSeed = body.proceduralSeed;
     }
     if (body.id === 'earth') earthIndex = index;
     cameraTargets.push({
@@ -90,7 +94,13 @@ export async function createEpochWorld(
       meanRadiusKm: body.meanRadiusKm,
     });
   }
-  if (sunIndex < 0 || earthIndex < 0 || solarRadiusKm <= 0) {
+  if (
+    sunIndex < 0 ||
+    earthIndex < 0 ||
+    solarRadiusKm <= 0 ||
+    !Number.isInteger(sunProceduralSeed) ||
+    sunProceduralSeed < 0
+  ) {
     throw new Error('Epoch lighting requires catalogued Sun and Earth definitions.');
   }
 
@@ -117,6 +127,13 @@ export async function createEpochWorld(
     earthIndex * 3,
     solarRadiusKm,
   );
+  const proceduralSun = new ProceduralSun(
+    spaceScene,
+    epochState.positionsKm,
+    sunIndex * 3,
+    solarRadiusKm,
+    sunProceduralSeed,
+  );
 
   const starCatalog = options.starCatalog ?? (await loadStarCatalog(starCatalogUrl));
   const starfield = new Starfield(starCatalog, renderer.getPixelRatio());
@@ -137,6 +154,7 @@ export async function createEpochWorld(
     epochState.positionsKm,
     assetLoader,
     compileModel,
+    proceduralSun,
   );
 
   await visualSystem.initializeEager();
@@ -155,6 +173,7 @@ export async function createEpochWorld(
     visualSystem,
     starfield,
     lighting,
+    proceduralSun,
     osculatingConic,
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,

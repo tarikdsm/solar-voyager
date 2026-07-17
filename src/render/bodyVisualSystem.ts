@@ -19,6 +19,7 @@ import {
   type PreparedEarthSurfaceLayers,
 } from './earthSurfaceLayers.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import type { ProceduralSunMaterialPort } from './proceduralSun.js';
 import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
 import {
   apparentMagnitude,
@@ -110,6 +111,7 @@ export class BodyVisualSystem {
     private readonly positionsKm: Float64Array,
     private readonly assetLoader: BodyVisualAssetLoader,
     private readonly compileModel: BodyModelCompiler,
+    private readonly proceduralSun: ProceduralSunMaterialPort,
   ) {
     if (definitions.length === 0 || positionsKm.length !== definitions.length * 3) {
       throw new RangeError('Body definitions and packed positions must have matching counts.');
@@ -192,6 +194,10 @@ export class BodyVisualSystem {
         opacity: 0,
         depthWrite: false,
       });
+      if (isSun) {
+        this.proceduralSun.prepareMaterial(fallbackMaterial);
+        this.proceduralSun.prepareMaterial(texturedMaterial);
+      }
       const fallbackSphere = new Mesh(sphereGeometry, fallbackMaterial);
       const texturedSphere = new Mesh(sphereGeometry, texturedMaterial);
       fallbackSphere.name = `${definition.id}-sphere-fallback`;
@@ -438,6 +444,7 @@ export class BodyVisualSystem {
       if (definition.category === 'sun' && material instanceof MeshStandardMaterial) {
         material.emissiveIntensity = Math.max(SUN_EMISSIVE_INTENSITY, material.emissiveIntensity);
       }
+      if (definition.category === 'sun') this.proceduralSun.prepareMaterial(material);
       if (
         definition.id === 'earth' &&
         material instanceof MeshStandardMaterial &&

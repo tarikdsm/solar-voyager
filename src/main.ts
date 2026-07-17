@@ -66,6 +66,7 @@ function renderFrame(nowMs: number): void {
     spaceScene,
     visualSystem,
     lighting,
+    proceduralSun,
     osculatingConic,
     cameraController,
     cameraPositionKm,
@@ -74,6 +75,7 @@ function renderFrame(nowMs: number): void {
   const simulationStartMs = performance.now();
   const snapshot = simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
+  proceduralSun.update(snapshot.simTimeSec);
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
   hudStore.publish(snapshot, nowMs);

@@ -100,6 +100,7 @@ const visualSystem = new BodyVisualSystem(
   async () => {
     await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   },
+  { prepareMaterial: () => undefined },
 );
 await visualSystem.initializeEager();
 spaceScene.updateCameraRelative(cameraPositionKm);

@@ -18,6 +18,7 @@ describe('createEpochState', () => {
     }
 
     expect(state.bodies).toHaveLength(bodiesDocument.bodies.length);
+    expect(state.bodies.find((body) => body.id === 'sun')?.proceduralSeed).toBe(10);
     expect(state.positionsKm).toHaveLength(bodiesDocument.bodies.length * 3);
     expect(Array.from(state.positionsKm).every(Number.isFinite)).toBe(true);
     const offsetX = state.cameraPositionKm.x - earthX;

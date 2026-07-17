@@ -6,7 +6,6 @@ import {
   Mesh,
   MeshLambertMaterial,
   Points,
-  Sprite,
   Vector3,
   type Object3D,
   type WebGLRenderer,
@@ -49,7 +48,7 @@ describe('createEpochWorld', () => {
     expect(world.cameraController.focusId).toBe('jupiter');
     expect(world.spaceScene.camera.getWorldDirection(new Vector3()).length()).toBeCloseTo(1, 12);
     const spheres = world.spaceScene.scene.children.filter(
-      (child): child is Mesh => child instanceof Mesh,
+      (child): child is Mesh => child instanceof Mesh && child.name.includes('-sphere-'),
     );
     const points = world.spaceScene.scene.children.filter(
       (child): child is Points => child instanceof Points,
@@ -60,15 +59,14 @@ describe('createEpochWorld', () => {
     const directionalLights = world.spaceScene.scene.children.filter(
       (child): child is DirectionalLight => child instanceof DirectionalLight,
     );
-    const sprites = world.spaceScene.scene.children.filter(
-      (child): child is Sprite => child instanceof Sprite,
-    );
     expect(spheres).toHaveLength(bodyCount * 2);
     expect(spheres.every((sphere) => sphere.material instanceof MeshLambertMaterial)).toBe(true);
     expect(points).toHaveLength(2);
     expect(ambientLights).toEqual([world.lighting.ambientLight]);
     expect(directionalLights).toEqual([world.lighting.directionalLight]);
-    expect(sprites).toEqual([world.lighting.glare]);
+    expect(world.proceduralSun.seed).toBe(10);
+    expect(world.proceduralSun.billboard.name).toBe('sun-glare');
+    expect(world.spaceScene.scene.getObjectByName('sun-glare')).toBe(world.proceduralSun.billboard);
     expect(world.lighting.directionalLight.intensity).toBeGreaterThan(0);
     expect(world.visualSystem.pointCloud.points.geometry.getAttribute('position').count).toBe(
       bodyCount,

@@ -13,9 +13,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LoadedBodyModel, LoadedSurfaceDetail } from './bodyAssetLoader.js';
 import type { BodyVisualAssetLoader, BodyVisualDefinition } from './bodyVisualSystem.js';
 import { BodyVisualSystem, EARTH_NIGHT_EMISSIVE_INTENSITY } from './bodyVisualSystem.js';
+import type { ProceduralSunMaterialPort } from './proceduralSun.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 
 const AU_KM = 149_597_870.7;
+const PROCEDURAL_SUN_STUB: ProceduralSunMaterialPort = {
+  prepareMaterial: () => undefined,
+};
 
 function definitions(): BodyVisualDefinition[] {
   return [
@@ -64,6 +68,7 @@ describe('BodyVisualSystem structure', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     const points = spaceScene.scene.children.filter((child) => child.type === 'Points');
@@ -104,6 +109,7 @@ describe('BodyVisualSystem structure', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     await system.initializeEager();
@@ -124,17 +130,24 @@ describe('BodyVisualSystem structure', () => {
       loadSphereAlbedo: vi.fn(async () => null),
       loadModel: vi.fn(async (id: string) => (id === 'sun' ? sunModel : null)),
     };
+    const prepareMaterial = vi.fn();
+    const compileModel = vi.fn(async () => {
+      expect(prepareMaterial).toHaveBeenCalledTimes(3);
+    });
     const system = new BodyVisualSystem(
       new CameraRelativeSpaceScene(),
       definitions(),
       positions(),
       loader,
-      vi.fn(async () => undefined),
+      compileModel,
+      { prepareMaterial },
     );
 
+    expect(prepareMaterial).toHaveBeenCalledTimes(2);
     system.update({ x: 11, y: 0, z: 0 }, 1_000, 1, 0);
 
     await vi.waitFor(() => expect(system.getLoadState('sun')).toBe('ready'));
+    expect(compileModel).toHaveBeenCalledOnce();
     expect(sunMaterial.emissiveIntensity).toBeGreaterThan(1);
     expect(sunMaterial.emissive.getHex()).toBe(0xffaa55);
   });
@@ -168,6 +181,7 @@ describe('BodyVisualSystem structure', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     system.update(cameraAtEarthDistance(5), 1_000, 1, 0);
@@ -214,6 +228,7 @@ describe('BodyVisualSystem structure', () => {
       positions(),
       loader,
       compileModel,
+      PROCEDURAL_SUN_STUB,
     );
 
     system.update(cameraAtEarthDistance(5), 1_000, 1, 0);
@@ -245,6 +260,7 @@ describe('BodyVisualSystem transitions', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     system.initializeView(cameraAtEarthDistance(5), 1_000, 1);
@@ -281,6 +297,7 @@ describe('BodyVisualSystem transitions', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     system.update(cameraAtEarthDistance(2_000), 1_000, 1, 0);
@@ -303,6 +320,7 @@ describe('BodyVisualSystem transitions', () => {
         loadModel: vi.fn(async () => null),
       },
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     system.update(cameraAtEarthDistance(2_000), 1_000, 1, 0);
@@ -328,6 +346,7 @@ describe('BodyVisualSystem transitions', () => {
         loadModel: vi.fn(async () => null),
       },
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
     const fallback = spaceScene.scene.getObjectByName('earth-sphere-fallback') as Mesh;
     const textured = spaceScene.scene.getObjectByName('earth-sphere-textured') as Mesh;
@@ -372,6 +391,7 @@ describe('BodyVisualSystem transitions', () => {
       positions(),
       loader,
       compile,
+      PROCEDURAL_SUN_STUB,
     );
     const fov = 1;
     const height = 1_000;
@@ -439,6 +459,7 @@ describe('BodyVisualSystem transitions', () => {
       positions(),
       loader,
       vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
     );
 
     system.update(cameraAtEarthDistance(5), 1_000, 1, 0);
