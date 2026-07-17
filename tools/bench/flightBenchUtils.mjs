@@ -79,14 +79,19 @@ export function summarizeFlightRun(raw) {
     Object.freeze({ id: leg.id, ...summarizeFrameTimes(leg.frameDeltasMs) }),
   );
   const heapDeltaBytes =
-    raw.heapBeforeBytes === null || raw.heapAfterBytes === null
+    raw.steadyHeapBeforeBytes === null || raw.steadyHeapAfterBytes === null
       ? null
-      : raw.heapAfterBytes - raw.heapBeforeBytes;
+      : raw.steadyHeapAfterBytes - raw.steadyHeapBeforeBytes;
+  const pathHeapDeltaBytes =
+    raw.pathHeapBeforeBytes === null || raw.pathHeapAfterBytes === null
+      ? null
+      : raw.pathHeapAfterBytes - raw.pathHeapBeforeBytes;
   return Object.freeze({
     heapDeltaBytes,
     legs: Object.freeze(legs),
     maxDrawCalls: raw.maxDrawCalls,
     maxTriangles: raw.maxTriangles,
+    pathHeapDeltaBytes,
     ...summary,
   });
 }

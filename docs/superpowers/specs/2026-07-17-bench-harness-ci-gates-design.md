@@ -14,9 +14,9 @@ The scripted path contains 1,800 measured animation frames and represents 180 vi
 2. 60-120 s: Moon flyby, selected through the real camera input path;
 3. 120-180 s: Jupiter approach, selected through the real camera input path.
 
-A fixed seed (`0x5a17c0de`) creates a precomputed zoom/orbit input schedule. The page driver allocates outside the application frame loop; production code remains unchanged. Warm-up completes before measurement and shader/model loading is allowed to settle at each transition. The JSON report records schema version, git SHA, environment, path definition, median/p75/p99 frame time, draw calls, triangles, heap delta, console/page errors, and per-leg summaries under `docs/bench/`.
+A fixed seed (`0x5a17c0de`) creates a precomputed zoom/orbit input schedule. The page driver allocates outside the application frame loop; production code remains unchanged. Warm-up completes before measurement. The JSON report records schema version, git SHA, environment, path definition, median/p75/p99 frame time, draw calls, triangles, console/page errors, and per-leg summaries under `docs/bench/`. Memory is split into the route delta, which exposes legitimate lazy asset loading, and a steady-state delta measured after 300 settling frames followed by another 300 measured frames at Jupiter, with explicit GC at each boundary.
 
-Two-run mode compares median, p75, and p99 with a symmetric relative difference below 5%, requires exact workload counts, and reports both raw runs. Timestamp, SHA, GPU identity, and heap delta are evidence fields rather than stability keys.
+Two-run mode compares median, p75, and p99 with a symmetric relative difference below 5%, requires exact workload counts, and reports both raw runs. Timestamp, SHA, GPU identity, route heap delta, and steady-state heap delta are evidence fields rather than stability keys.
 
 ## CI performance contract
 
@@ -46,4 +46,3 @@ Fixture runs use a short duration because they only prove rejection. The product
 ## Failure policy
 
 Missing precise heap metrics, unstable workload snapshots, browser errors, occupied ports, fixture acceptance, or malformed golden/report documents fail closed. Gates are never auto-rebased from the current result; golden changes are explicit reviewable commits.
-

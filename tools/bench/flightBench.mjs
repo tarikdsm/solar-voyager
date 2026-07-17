@@ -20,6 +20,8 @@ const PORT = 4177;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const WARMUP_FRAMES = 120;
+const STEADY_HEAP_SETTLE_FRAMES = 300;
+const STEADY_HEAP_MEASURE_FRAMES = 300;
 const DEFAULT_SAMPLE_FRAMES = 1_800;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
 
@@ -116,7 +118,13 @@ async function readEnvironment(page) {
 
 async function measureFlight(page, schedule) {
   return page.evaluate(
-    ({ schedule: flightSchedule, telemetryProperty, warmupFrames }) =>
+    ({
+      schedule: flightSchedule,
+      steadyHeapMeasureFrames,
+      steadyHeapSettleFrames,
+      telemetryProperty,
+      warmupFrames,
+    }) =>
       new Promise((resolvePromise, rejectPromise) => {
         const canvas = globalThis.document.querySelector('#space-canvas');
         if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -131,15 +139,51 @@ async function measureFlight(page, schedule) {
         const frameDeltasMs = new Float64Array(flightSchedule.sampleFrames);
         let focusEventIndex = 0;
         let framesToWarm = warmupFrames;
-        let heapBeforeBytes = null;
+        let pathHeapAfterBytes = null;
+        let pathHeapBeforeBytes = null;
         let maxDrawCalls = 0;
         let maxTriangles = 0;
         let previousFrameTimeMs = 0;
         let sampleIndex = 0;
+        let steadyFramesRemaining = steadyHeapSettleFrames;
+        let steadyHeapBeforeBytes = null;
         let zoomEventIndex = 0;
 
         function heapBytes() {
           return 'memory' in performance ? performance.memory.usedJSHeapSize : null;
+        }
+
+        function finishSteadyMeasurement() {
+          steadyFramesRemaining -= 1;
+          if (steadyFramesRemaining > 0) {
+            globalThis.requestAnimationFrame(finishSteadyMeasurement);
+            return;
+          }
+          globalThis.gc?.();
+          globalThis.gc?.();
+          resolvePromise({
+            finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
+            frameDeltasMs: Array.from(frameDeltasMs),
+            maxDrawCalls,
+            maxTriangles,
+            pathHeapAfterBytes,
+            pathHeapBeforeBytes,
+            steadyHeapAfterBytes: heapBytes(),
+            steadyHeapBeforeBytes,
+          });
+        }
+
+        function settleSteadyHeap() {
+          steadyFramesRemaining -= 1;
+          if (steadyFramesRemaining > 0) {
+            globalThis.requestAnimationFrame(settleSteadyHeap);
+            return;
+          }
+          globalThis.gc?.();
+          globalThis.gc?.();
+          steadyHeapBeforeBytes = heapBytes();
+          steadyFramesRemaining = steadyHeapMeasureFrames;
+          globalThis.requestAnimationFrame(finishSteadyMeasurement);
         }
 
         function measureFrame(frameTimeMs) {
@@ -148,7 +192,7 @@ async function measureFlight(page, schedule) {
             if (framesToWarm === 0) {
               globalThis.gc?.();
               globalThis.gc?.();
-              heapBeforeBytes = heapBytes();
+              pathHeapBeforeBytes = heapBytes();
               previousFrameTimeMs = frameTimeMs;
             }
             globalThis.requestAnimationFrame(measureFrame);
@@ -183,18 +227,18 @@ async function measureFlight(page, schedule) {
           }
           globalThis.gc?.();
           globalThis.gc?.();
-          resolvePromise({
-            finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
-            frameDeltasMs: Array.from(frameDeltasMs),
-            heapAfterBytes: heapBytes(),
-            heapBeforeBytes,
-            maxDrawCalls,
-            maxTriangles,
-          });
+          pathHeapAfterBytes = heapBytes();
+          globalThis.requestAnimationFrame(settleSteadyHeap);
         }
         globalThis.requestAnimationFrame(measureFrame);
       }),
-    { schedule, telemetryProperty: TELEMETRY_PROPERTY, warmupFrames: WARMUP_FRAMES },
+    {
+      schedule,
+      steadyHeapMeasureFrames: STEADY_HEAP_MEASURE_FRAMES,
+      steadyHeapSettleFrames: STEADY_HEAP_SETTLE_FRAMES,
+      telemetryProperty: TELEMETRY_PROPERTY,
+      warmupFrames: WARMUP_FRAMES,
+    },
   );
 }
 

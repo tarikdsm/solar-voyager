@@ -59,8 +59,10 @@ describe('summarizeFlightRun', () => {
     expect(
       summarizeFlightRun({
         frameDeltasMs: [10, 20, 30, 40],
-        heapAfterBytes: 900,
-        heapBeforeBytes: 1_000,
+        pathHeapAfterBytes: 1_100,
+        pathHeapBeforeBytes: 1_000,
+        steadyHeapAfterBytes: 900,
+        steadyHeapBeforeBytes: 1_000,
         legs: [
           { frameDeltasMs: [10, 20], id: 'leo' },
           { frameDeltasMs: [30], id: 'moon-flyby' },
@@ -81,6 +83,7 @@ describe('summarizeFlightRun', () => {
       medianMs: 25,
       p75Ms: 32.5,
       p99Ms: 39.7,
+      pathHeapDeltaBytes: 100,
     });
   });
 
@@ -88,11 +91,13 @@ describe('summarizeFlightRun', () => {
     expect(() =>
       summarizeFlightRun({
         frameDeltasMs: [],
-        heapAfterBytes: null,
-        heapBeforeBytes: null,
+        pathHeapAfterBytes: null,
+        pathHeapBeforeBytes: null,
         legs: [],
         maxDrawCalls: 0,
         maxTriangles: 0,
+        steadyHeapAfterBytes: null,
+        steadyHeapBeforeBytes: null,
       }),
     ).toThrow('Flight benchmark did not capture frame samples.');
   });
