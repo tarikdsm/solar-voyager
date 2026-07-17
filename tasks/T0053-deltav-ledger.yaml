@@ -1,6 +1,6 @@
 id: T0053
 title: Energy ledger (photon drive, Wh) + burn log
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0053-deltav-ledger
 depends_on: [T0051]
@@ -28,3 +28,5 @@ handoff_notes: |
   zero console warnings/errors, and 0.121 ms/step benchmark with two snapshots and
   negative retained heap growth. After merge, resume blocked T0052 PR #31 and add its
   segmented-warp nonzero ledger regression.
+  Independent re-review approved exact implementation SHA d299833 with zero Critical,
+  Important, or Minor findings after 33 focused tests and typecheck. Exact-head CI passed.
