@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "workload": {
+    "drawCalls": 9,
+    "toleranceFraction": 0.1,
+    "triangles": 65077
+  },
+  "heap": {
+    "durationMs": 30000,
+    "fixtureDurationMs": 1000,
+    "maxRetainedGrowthBytes": 65536
+  },
+  "bundle": {
+    "maxEntryGzipBytes": 285000,
+    "maxTotalGzipBytes": 570000
+  }
+}
