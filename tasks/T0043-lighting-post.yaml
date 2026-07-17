@@ -19,8 +19,8 @@ handoff_notes: >-
   1920x1080 run sustained 60.003 fps with GPU p75 11.140 ms, 22 correctly
   accumulated draw calls, 48,963 triangles, negative endpoint heap delta, and
   zero browser errors. The integration also makes lighting follow camera focus,
-  disables bloom only on explicit software fallback, and shares one preallocated
-  600-sample GPU timing ring between telemetry and the benchmark. Visual
+  bypasses the half-float composer only on explicit software fallback, and
+  shares one preallocated 600-sample GPU timing ring between telemetry and the benchmark. Visual
   acceptance remains 81.0% dark Earth pixels, 12.9% localized night-light
   emission, and clean Sun bloom. Full evidence is in docs/bench/T0043-summary.md;
   full local gates passed with 399 Vitest and 50 Python tests.

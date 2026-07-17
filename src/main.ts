@@ -12,6 +12,7 @@ import { CameraInputController } from './ui/cameraInputController.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 
 const SHIP_MASS_KG = 10_000;
+const SOFTWARE_FALLBACK_EXPOSURE = 3;
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
@@ -28,6 +29,7 @@ const canvas = canvasElement;
 const appRoot = appElement;
 const rendererBootstrap = createRenderer(canvas);
 const { contextReport, renderer } = rendererBootstrap;
+const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
 const simulation = createNewGameSimulation(SHIP_MASS_KG);
@@ -95,7 +97,7 @@ function renderFrame(nowMs: number): void {
   osculatingConic.update(snapshot, canvas.width, canvas.height);
   spaceScene.updateCameraRelative(cameraPositionKm);
   telemetry.beginGpuTimer();
-  postPipeline.render();
+  postPipeline.render(postProcessingEnabled);
   telemetry.endGpuTimer();
   telemetry.endFrame(
     simulationEndMs - simulationStartMs,
@@ -128,11 +130,12 @@ async function startApplication(): Promise<void> {
     world.spaceScene.scene,
     world.spaceScene.camera,
   );
-  postPipeline.setBloomEnabled(!contextReport.softwareRasterizer);
+  postPipeline.setBloomEnabled(postProcessingEnabled);
+  if (!postProcessingEnabled) renderer.toneMappingExposure = SOFTWARE_FALLBACK_EXPOSURE;
   resizeRenderer();
   world.lighting.update();
   world.spaceScene.updateCameraRelative(world.cameraPositionKm);
-  postPipeline.warmUp();
+  if (postProcessingEnabled) postPipeline.warmUp();
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');

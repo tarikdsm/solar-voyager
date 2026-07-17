@@ -82,9 +82,9 @@ export class LightingPostPipeline {
   private pixelRatio: number;
 
   constructor(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: Camera,
+    private readonly renderer: WebGLRenderer,
+    private readonly scene: Scene,
+    private readonly camera: Camera,
     backend: LightingPostBackend = THREE_POST_BACKEND,
   ) {
     renderer.toneMapping = ACESFilmicToneMapping;
@@ -131,8 +131,12 @@ export class LightingPostPipeline {
   }
 
   /** Performs the preallocated post chain without application-owned allocations. */
-  render(): void {
-    this.composer.render();
+  render(postProcessingEnabled = true): void {
+    if (postProcessingEnabled) {
+      this.composer.render();
+      return;
+    }
+    this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {

@@ -66,6 +66,7 @@ function createFixture(): Fixture {
     toneMapping: NoToneMapping,
     toneMappingExposure: 2,
     getPixelRatio: () => 2,
+    render: vi.fn(),
   } as unknown as WebGLRenderer;
   return { backend, bloomPass, composer, outputPass, renderPass, renderer };
 }
@@ -100,12 +101,9 @@ describe('LightingPostPipeline', () => {
 
   it('resizes existing buffers, toggles the existing bloom pass, and delegates rendering', () => {
     const fixture = createFixture();
-    const pipeline = new LightingPostPipeline(
-      fixture.renderer,
-      new Scene(),
-      new PerspectiveCamera(),
-      fixture.backend,
-    );
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    const pipeline = new LightingPostPipeline(fixture.renderer, scene, camera, fixture.backend);
 
     pipeline.resize(800, 600, 2);
     expect(fixture.composer.setPixelRatio).not.toHaveBeenCalled();
@@ -125,6 +123,11 @@ describe('LightingPostPipeline', () => {
     pipeline.render();
     expect(fixture.composer.render).toHaveBeenNthCalledWith(1, 0);
     expect(fixture.composer.render).toHaveBeenNthCalledWith(2);
+
+    pipeline.render(false);
+    expect(fixture.composer.render).toHaveBeenCalledTimes(2);
+    expect(fixture.renderer.render).toHaveBeenCalledOnce();
+    expect(fixture.renderer.render).toHaveBeenCalledWith(scene, camera);
   });
 
   it('rejects invalid dimensions and pixel ratios', () => {

@@ -60,8 +60,9 @@ raw capture is `T0043-resume-hardware.json`.
 
 The integrated benchmark now consumes the single setup-time
 `RenderTelemetry` GPU query ring instead of opening a nested timer query. It
-also disables bloom only for the explicit software-rasterizer fallback; the
-hardware path and the dedicated lighting regression retain the complete
-half-float bloom + ACES chain. The full lighting regression remained at 81.0%
-dark Earth pixels with 12.9% localized night-light emission and a clean solar
-halo.
+also bypasses the half-float compositor only for the explicit
+software-rasterizer fallback, retaining direct ACES rendering at a readable
+fallback exposure; the hardware path and dedicated lighting regression keep
+the complete bloom + ACES chain. The full lighting regression remained at
+81.0% dark Earth pixels with 12.9% localized night-light emission and a clean
+solar halo.

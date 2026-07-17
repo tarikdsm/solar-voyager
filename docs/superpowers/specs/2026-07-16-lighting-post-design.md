@@ -26,6 +26,12 @@ warm-up render compiles every post shader before the first animation frame.
 The normal frame path calls only `composer.render()`; it creates no target,
 pass, geometry, material, vector, closure, or other application-owned object.
 
+The explicit software-rasterizer fallback bypasses the half-float composer and
+bloom passes so the warning-mode game remains interactive on CI and machines
+without usable GPU acceleration. It renders directly with ACES at exposure 3
+to preserve readable body colours. Hardware contexts retain the complete
+bloom + ACES chain at exposure 1.
+
 `UnrealBloomPass` is configured with threshold 1.0, strength 0.15, and radius
 0.35. Its official implementation creates the first bright target at half the
 composer resolution, satisfying the downscaled-bloom rule without a redundant
