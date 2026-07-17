@@ -124,10 +124,12 @@ describe('LightingPostPipeline', () => {
     expect(fixture.composer.render).toHaveBeenNthCalledWith(1, 0);
     expect(fixture.composer.render).toHaveBeenNthCalledWith(2);
 
+    pipeline.warmUp(false);
     pipeline.render(false);
     expect(fixture.composer.render).toHaveBeenCalledTimes(2);
-    expect(fixture.renderer.render).toHaveBeenCalledOnce();
-    expect(fixture.renderer.render).toHaveBeenCalledWith(scene, camera);
+    expect(fixture.renderer.render).toHaveBeenCalledTimes(2);
+    expect(fixture.renderer.render).toHaveBeenNthCalledWith(1, scene, camera);
+    expect(fixture.renderer.render).toHaveBeenNthCalledWith(2, scene, camera);
   });
 
   it('rejects invalid dimensions and pixel ratios', () => {

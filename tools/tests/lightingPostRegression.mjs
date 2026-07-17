@@ -176,6 +176,15 @@ try {
 
   await page.goto(FIXTURE_URL, { waitUntil: 'networkidle', timeout: 60_000 });
   await page.waitForFunction(() => globalThis.__lightingPostHarness !== undefined);
+  const directFallback = await page.evaluate(() =>
+    globalThis.__lightingPostHarness.directFallbackPrograms(),
+  );
+  assert.equal(directFallback.glError, 0, `direct fallback: WebGL error ${directFallback.glError}`);
+  assert.equal(
+    directFallback.afterFirstFrame,
+    directFallback.afterWarmUp,
+    `direct fallback compiled programs on the first gameplay frame: ${JSON.stringify(directFallback)}`,
+  );
   await page.waitForFunction(
     () => globalThis.__lightingPostHarness.renderEarthNight(true).earthLoadState === 'ready',
     undefined,
@@ -226,7 +235,7 @@ try {
   );
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
-  process.stdout.write(`${JSON.stringify({ earth, glare, bloom }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ directFallback, earth, glare, bloom }, null, 2)}\n`);
 } finally {
   if (browser !== undefined) await browser.close();
   await server.close();

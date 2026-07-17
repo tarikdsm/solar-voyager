@@ -125,9 +125,13 @@ export class LightingPostPipeline {
     this.bloomPass.enabled = enabled;
   }
 
-  /** Compiles and initializes post shaders before the first animation frame. */
-  warmUp(): void {
-    this.composer.render(0);
+  /** Compiles and initializes the selected render path before the first animation frame. */
+  warmUp(postProcessingEnabled = true): void {
+    if (postProcessingEnabled) {
+      this.composer.render(0);
+      return;
+    }
+    this.renderer.render(this.scene, this.camera);
   }
 
   /** Performs the preallocated post chain without application-owned allocations. */

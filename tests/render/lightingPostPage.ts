@@ -30,7 +30,15 @@ interface PipelineSnapshot {
   readonly glError: number;
 }
 
+interface DirectFallbackPrograms {
+  readonly beforeWarmUp: number;
+  readonly afterWarmUp: number;
+  readonly afterFirstFrame: number;
+  readonly glError: number;
+}
+
 interface LightingPostHarness {
+  directFallbackPrograms(): DirectFallbackPrograms;
   renderEarthNight(emissionEnabled: boolean): PipelineSnapshot & {
     readonly earthLoadState: string;
     readonly earthTier: number;
@@ -72,6 +80,12 @@ const earthPipeline = new LightingPostPipeline(
   world.spaceScene.camera,
 );
 earthPipeline.resize(VIEWPORT_SIZE, VIEWPORT_SIZE, 1);
+const directProgramsBeforeWarmUp = renderer.info.programs?.length ?? 0;
+earthPipeline.warmUp(false);
+const directProgramsAfterWarmUp = renderer.info.programs?.length ?? 0;
+earthPipeline.render(false);
+const directProgramsAfterFirstFrame = renderer.info.programs?.length ?? 0;
+const directFallbackGlError = renderer.getContext().getError();
 earthPipeline.warmUp();
 
 const earthIndex = bodiesDocument.bodies.findIndex((body) => body.id === 'earth');
@@ -143,6 +157,14 @@ function pipelineSnapshot(pipeline: LightingPostPipeline): PipelineSnapshot {
 }
 
 globalThis.__lightingPostHarness = {
+  directFallbackPrograms() {
+    return {
+      beforeWarmUp: directProgramsBeforeWarmUp,
+      afterWarmUp: directProgramsAfterWarmUp,
+      afterFirstFrame: directProgramsAfterFirstFrame,
+      glError: directFallbackGlError,
+    };
+  },
   renderEarthNight(emissionEnabled) {
     world.spaceScene.camera.lookAt(-outwardX, -outwardY, -outwardZ);
     world.spaceScene.camera.updateMatrix();

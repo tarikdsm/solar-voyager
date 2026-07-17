@@ -135,7 +135,7 @@ async function startApplication(): Promise<void> {
   resizeRenderer();
   world.lighting.update();
   world.spaceScene.updateCameraRelative(world.cameraPositionKm);
-  if (postProcessingEnabled) postPipeline.warmUp();
+  postPipeline.warmUp(postProcessingEnabled);
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
