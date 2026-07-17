@@ -43,6 +43,10 @@ import {
   type TrajectoryInvalidationListener,
 } from './simulationSnapshot.js';
 import {
+  copyAndValidateSimulationPersistentState,
+  type SimulationPersistentState,
+} from './simulationState.js';
+import {
   coordinateVelocityInto,
   createRelativisticDerivative,
   RELATIVISTIC_STATE_DIMENSION,
@@ -73,6 +77,7 @@ import {
   STATE_PROPER_DELTA_V_VECTOR_Z_MS,
   writeLedgerDerivativeRates,
   type BurnLogRecorder,
+  type BurnLogPersistence,
   type BurnLogView,
 } from './ship/ledger.js';
 
@@ -85,6 +90,7 @@ export interface SimulationCoreOptions {
   readonly onTrajectoryInvalidated?: TrajectoryInvalidationListener;
   readonly initialTimeSec?: number;
   readonly integrationTolerance?: Dp54Tolerance;
+  readonly persistentState?: SimulationPersistentState;
 }
 
 function createSnapshotRailsState(snapshot: SimulationSnapshotBuffer): RailsState {
@@ -147,6 +153,7 @@ export class SimulationCore {
   private readonly maximumProperAccelerationKmS2: number;
   private readonly initialKineticEnergyJ: number;
   private readonly burnLogRecorder: BurnLogRecorder;
+  private readonly burnLogPersistence: BurnLogPersistence;
   private readonly clock: SimClock;
   private readonly snapshots: readonly [SimulationSnapshotBuffer, SimulationSnapshotBuffer];
   private readonly shipStates: readonly [Float64Array, Float64Array];
@@ -182,7 +189,14 @@ export class SimulationCore {
     if (!Number.isFinite(options.shipMassKg) || options.shipMassKg <= 0) {
       throw new RangeError('ship mass must be finite and positive');
     }
-    const initialTimeSec = options.initialTimeSec ?? 0;
+    const persistentState =
+      options.persistentState === undefined
+        ? null
+        : copyAndValidateSimulationPersistentState(
+            options.persistentState,
+            options.catalog.bodyIds,
+          );
+    const initialTimeSec = persistentState?.simTimeSec ?? options.initialTimeSec ?? 0;
     if (!Number.isFinite(initialTimeSec)) {
       throw new RangeError('initial simulation time must be finite');
     }
@@ -192,15 +206,21 @@ export class SimulationCore {
     this.maximumProperAccelerationKmS2 = validateMaxProperAcceleration(
       options.maxProperAccelerationMS2 ?? DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
     );
-    this.initialKineticEnergyJ = relativisticKineticEnergyJ(
-      options.initialShipState[3] as number,
-      options.initialShipState[4] as number,
-      options.initialShipState[5] as number,
-      this.shipMassKg,
-    );
-    const burnLogController = createBurnLog();
+    this.initialKineticEnergyJ =
+      persistentState?.initialKineticEnergyJ ??
+      relativisticKineticEnergyJ(
+        options.initialShipState[3] as number,
+        options.initialShipState[4] as number,
+        options.initialShipState[5] as number,
+        this.shipMassKg,
+      );
+    const burnLogController =
+      persistentState === null
+        ? createBurnLog()
+        : createBurnLog(persistentState.burnLog.capacity, persistentState.burnLog);
     this.burnLog = burnLogController.view;
     this.burnLogRecorder = burnLogController.recorder;
+    this.burnLogPersistence = burnLogController.persistence;
     this.clock = createSimClock(initialTimeSec);
     this.stepStartTimeSec = initialTimeSec;
     this.integrationTolerance = createSimulationTolerance(
@@ -229,14 +249,21 @@ export class SimulationCore {
     this.burnProgradeBasis = new Float64Array(3);
     this.burnNormalBasis = new Float64Array(3);
     this.burnRadialBasis = new Float64Array(3);
+    if (persistentState !== null) {
+      this.attitudeQuaternion.set(persistentState.attitudeQuaternion);
+      this.stepStartAttitudeQuaternion.set(persistentState.attitudeQuaternion);
+      this.endpointAttitudeQuaternion.set(persistentState.attitudeQuaternion);
+      this.effectiveWarp = persistentState.effectiveWarp;
+      this.warpClampReason = persistentState.warpClampReason;
+    }
 
     const firstSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     const secondSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     this.snapshots = [firstSnapshot, secondSnapshot];
     const firstShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
     const secondShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
-    firstShipState.set(options.initialShipState);
-    secondShipState.set(options.initialShipState);
+    firstShipState.set(persistentState?.state ?? options.initialShipState);
+    secondShipState.set(persistentState?.state ?? options.initialShipState);
     this.shipStates = [firstShipState, secondShipState];
     this.snapshotRailsStates = [
       createSnapshotRailsState(firstSnapshot),
@@ -252,6 +279,17 @@ export class SimulationCore {
     );
     this.commands = commandController.commands;
     this.commandState = commandController.state;
+    if (persistentState !== null) {
+      this.commandState.throttle = persistentState.throttle;
+      this.commandState.attitudeMode = persistentState.attitudeMode;
+      this.commandState.rotationRatesRadS.set(persistentState.rotationRatesRadS);
+      this.commandState.requestedWarp = persistentState.requestedWarp;
+      this.commandState.targetBodyId = persistentState.targetBodyId;
+      this.commandState.targetBodyIndex =
+        persistentState.targetBodyId === null
+          ? -1
+          : this.catalog.bodyIds.indexOf(persistentState.targetBodyId);
+    }
 
     const gravityEvaluator: RelativisticAccelerationEvaluator = (
       timeSec,
@@ -305,6 +343,24 @@ export class SimulationCore {
   /** Latest completely published frame. */
   get snapshot(): SimSnapshot {
     return this.currentSnapshotIndex === 0 ? this.snapshots[0] : this.snapshots[1];
+  }
+
+  /** Allocates an ownership-safe setup document only for an explicit save. */
+  exportPersistentState(): SimulationPersistentState {
+    return {
+      simTimeSec: this.clock.timeSec,
+      state: new Float64Array(this.currentPrivateShipState()),
+      attitudeQuaternion: new Float64Array(this.attitudeQuaternion),
+      throttle: this.commandState.throttle,
+      attitudeMode: this.commandState.attitudeMode,
+      rotationRatesRadS: new Float64Array(this.commandState.rotationRatesRadS),
+      requestedWarp: this.commandState.requestedWarp,
+      effectiveWarp: this.effectiveWarp,
+      warpClampReason: this.warpClampReason,
+      targetBodyId: this.commandState.targetBodyId,
+      initialKineticEnergyJ: this.initialKineticEnergyJ,
+      burnLog: this.burnLogPersistence.exportState(),
+    };
   }
 
   /** Advances coordinate time and publishes the next immutable-per-frame snapshot. */

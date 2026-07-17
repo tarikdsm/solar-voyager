@@ -61,9 +61,33 @@ export interface BurnLogRecorder {
   end(): void;
 }
 
+/** Private continuation data required to resume an active burn exactly. */
+export interface ActiveBurnPersistentState {
+  readonly entry: BurnLogEntry;
+  readonly startEnergyJ: number;
+  readonly startProperDeltaVMS: number;
+  readonly startVectorMS: Float64Array;
+  readonly progradeBasis: Float64Array;
+  readonly normalBasis: Float64Array;
+  readonly radialBasis: Float64Array;
+}
+
+/** Setup-time copy of the fixed-capacity burn log. */
+export interface BurnLogPersistentState {
+  readonly capacity: number;
+  readonly entries: readonly BurnLogEntry[];
+  readonly active: ActiveBurnPersistentState | null;
+}
+
+/** Capability retained by SimulationCore for explicit save operations. */
+export interface BurnLogPersistence {
+  exportState(): BurnLogPersistentState;
+}
+
 export interface BurnLogController {
   readonly view: BurnLogView;
   readonly recorder: BurnLogRecorder;
+  readonly persistence: BurnLogPersistence;
 }
 
 interface MutableBurnLogEntry extends BurnLogEntry {
@@ -110,6 +134,45 @@ function copyBurnEntry(target: MutableBurnLogEntry, source: BurnLogEntry): void 
   target.radialDeltaVMS = source.radialDeltaVMS;
 }
 
+function cloneBurnEntry(source: BurnLogEntry): BurnLogEntry {
+  return { ...source };
+}
+
+function validateFiniteBurnEntry(entry: BurnLogEntry, label: string): void {
+  const values = [
+    entry.startTimeSec,
+    entry.endTimeSec,
+    entry.startProperTimeSec,
+    entry.endProperTimeSec,
+    entry.energySpentJ,
+    entry.properDeltaVMS,
+    entry.peakPowerW,
+    entry.progradeDeltaVMS,
+    entry.normalDeltaVMS,
+    entry.radialDeltaVMS,
+  ];
+  for (let index = 0; index < values.length; index += 1) {
+    if (!Number.isFinite(values[index]))
+      throw new RangeError(`${label} must contain finite values`);
+  }
+  if (entry.endTimeSec < entry.startTimeSec) {
+    throw new RangeError(`${label} end time must not precede its start time`);
+  }
+  if (entry.endProperTimeSec < entry.startProperTimeSec) {
+    throw new RangeError(`${label} proper end time must not precede its start time`);
+  }
+  if (entry.dominantBodyId !== null && entry.dominantBodyId.length === 0) {
+    throw new RangeError(`${label} dominant body id must not be empty`);
+  }
+}
+
+function validateVector(vector: Float64Array, label: string): void {
+  if (vector.length !== 3) throw new RangeError(`${label} must contain three components`);
+  for (let index = 0; index < vector.length; index += 1) {
+    if (!Number.isFinite(vector[index])) throw new RangeError(`${label} must be finite`);
+  }
+}
+
 /** Writes the five ledger rates evaluated at one integrator stage. */
 export function writeLedgerDerivativeRates(
   outputDerivative: Float64Array,
@@ -129,7 +192,7 @@ export function writeLedgerDerivativeRates(
 }
 
 /** Fixed-capacity, setup-allocated chronological view of contiguous burns. */
-class BurnLogStorage implements BurnLogView, BurnLogRecorder {
+class BurnLogStorage implements BurnLogView, BurnLogRecorder, BurnLogPersistence {
   private readonly entries: MutableBurnLogEntry[];
   private readonly activeEntry = createBurnEntry();
   private readonly startVectorMS = new Float64Array(3);
@@ -142,11 +205,15 @@ class BurnLogStorage implements BurnLogView, BurnLogRecorder {
   private retainedCount = 0;
   private isActive = false;
 
-  constructor(readonly capacity = DEFAULT_BURN_LOG_CAPACITY) {
+  constructor(
+    readonly capacity = DEFAULT_BURN_LOG_CAPACITY,
+    persistentState: BurnLogPersistentState | null = null,
+  ) {
     if (!Number.isInteger(capacity) || capacity <= 0) {
       throw new RangeError('burn log capacity must be a positive integer');
     }
     this.entries = Array.from({ length: capacity }, createBurnEntry);
+    if (persistentState !== null) this.restore(persistentState);
   }
 
   get count(): number {
@@ -250,6 +317,68 @@ class BurnLogStorage implements BurnLogView, BurnLogRecorder {
     }
     this.isActive = false;
   }
+
+  exportState(): BurnLogPersistentState {
+    const entries: BurnLogEntry[] = [];
+    for (let index = 0; index < this.retainedCount; index += 1) {
+      const entry = this.get(index);
+      if (entry !== null) entries.push(cloneBurnEntry(entry));
+    }
+    return {
+      capacity: this.capacity,
+      entries,
+      active: this.isActive
+        ? {
+            entry: cloneBurnEntry(this.activeEntry),
+            startEnergyJ: this.startEnergyJ,
+            startProperDeltaVMS: this.startProperDeltaVMS,
+            startVectorMS: new Float64Array(this.startVectorMS),
+            progradeBasis: new Float64Array(this.progradeBasis),
+            normalBasis: new Float64Array(this.normalBasis),
+            radialBasis: new Float64Array(this.radialBasis),
+          }
+        : null,
+    };
+  }
+
+  private restore(state: BurnLogPersistentState): void {
+    if (state.capacity !== this.capacity) {
+      throw new RangeError('burn log capacity does not match persistent state');
+    }
+    if (state.entries.length > this.capacity) {
+      throw new RangeError('burn log persistent entries exceed capacity');
+    }
+    for (let index = 0; index < state.entries.length; index += 1) {
+      const source = state.entries[index];
+      const target = this.entries[index];
+      if (source === undefined || target === undefined) {
+        throw new RangeError('burn log persistent entries are sparse');
+      }
+      validateFiniteBurnEntry(source, `burn log entry ${index}`);
+      copyBurnEntry(target, source);
+    }
+    this.retainedCount = state.entries.length;
+    this.nextWriteIndex = this.retainedCount % this.capacity;
+
+    const active = state.active;
+    if (active === null) return;
+    validateFiniteBurnEntry(active.entry, 'active burn');
+    if (!Number.isFinite(active.startEnergyJ) || !Number.isFinite(active.startProperDeltaVMS)) {
+      throw new RangeError('active burn starting ledger values must be finite');
+    }
+    validateVector(active.startVectorMS, 'active burn starting vector');
+    validateVector(active.progradeBasis, 'active burn prograde basis');
+    validateVector(active.normalBasis, 'active burn normal basis');
+    validateVector(active.radialBasis, 'active burn radial basis');
+    copyBurnEntry(this.activeEntry, active.entry);
+    this.startEnergyJ = active.startEnergyJ;
+    this.startProperDeltaVMS = active.startProperDeltaVMS;
+    this.startVectorMS.set(active.startVectorMS);
+    this.progradeBasis.set(active.progradeBasis);
+    this.normalBasis.set(active.normalBasis);
+    this.radialBasis.set(active.radialBasis);
+    this.isActive = true;
+  }
 }
 
 class ReadOnlyBurnLog implements BurnLogView {
@@ -273,10 +402,14 @@ class ReadOnlyBurnLog implements BurnLogView {
 }
 
 /** Creates separate public-view and private-recorder capabilities at setup. */
-export function createBurnLog(capacity = DEFAULT_BURN_LOG_CAPACITY): BurnLogController {
-  const storage = new BurnLogStorage(capacity);
+export function createBurnLog(
+  capacity = DEFAULT_BURN_LOG_CAPACITY,
+  persistentState: BurnLogPersistentState | null = null,
+): BurnLogController {
+  const storage = new BurnLogStorage(capacity, persistentState);
   return {
     view: Object.freeze(new ReadOnlyBurnLog(storage)),
     recorder: storage,
+    persistence: storage,
   };
 }
