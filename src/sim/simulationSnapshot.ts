@@ -130,6 +130,9 @@ export interface CommandController {
   readonly state: CommandState;
 }
 
+/** Synchronous setup-provided event fired when active thrust intent changes. */
+export type TrajectoryInvalidationListener = () => void;
+
 function createOsculatingElementsStorage(): OsculatingElementsSnapshot {
   return {
     valid: false,
@@ -213,18 +216,23 @@ class SimulationCommands implements Commands {
   constructor(
     private readonly bodyIds: readonly string[],
     private readonly commandState: CommandState,
+    private readonly onTrajectoryInvalidated: TrajectoryInvalidationListener | null,
   ) {}
 
   setThrottle(fraction: number): void {
     if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
       throw new RangeError('throttle must be a finite fraction in [0, 1]');
     }
+    if (fraction === this.commandState.throttle) return;
     this.commandState.throttle = fraction;
+    this.onTrajectoryInvalidated?.();
   }
 
   setAttitudeMode(mode: AttitudeMode): void {
     if (!isAttitudeMode(mode)) throw new RangeError('attitude mode is not supported');
+    if (mode === this.commandState.attitudeMode) return;
     this.commandState.attitudeMode = mode;
+    if (this.commandState.throttle > 0) this.onTrajectoryInvalidated?.();
   }
 
   rotate(pitchRateRadS: number, yawRateRadS: number, rollRateRadS: number): void {
@@ -235,9 +243,19 @@ class SimulationCommands implements Commands {
     ) {
       throw new RangeError('rotation rates must be finite');
     }
+    if (
+      pitchRateRadS === this.commandState.rotationRatesRadS[0] &&
+      yawRateRadS === this.commandState.rotationRatesRadS[1] &&
+      rollRateRadS === this.commandState.rotationRatesRadS[2]
+    ) {
+      return;
+    }
     this.commandState.rotationRatesRadS[0] = pitchRateRadS;
     this.commandState.rotationRatesRadS[1] = yawRateRadS;
     this.commandState.rotationRatesRadS[2] = rollRateRadS;
+    if (this.commandState.throttle > 0 && this.commandState.attitudeMode === 'manual') {
+      this.onTrajectoryInvalidated?.();
+    }
   }
 
   setWarp(warp: WarpFactor): void {
@@ -247,19 +265,30 @@ class SimulationCommands implements Commands {
 
   setTarget(bodyId: string | null): void {
     if (bodyId === null) {
+      if (this.commandState.targetBodyId === null) return;
       this.commandState.targetBodyIndex = -1;
       this.commandState.targetBodyId = null;
+      if (this.commandState.throttle > 0 && this.commandState.attitudeMode === 'target') {
+        this.onTrajectoryInvalidated?.();
+      }
       return;
     }
     const bodyIndex = this.bodyIds.indexOf(bodyId);
     if (bodyIndex < 0) throw new RangeError('target body must exist in the simulation catalog');
+    if (bodyIndex === this.commandState.targetBodyIndex) return;
     this.commandState.targetBodyIndex = bodyIndex;
     this.commandState.targetBodyId = bodyId;
+    if (this.commandState.throttle > 0 && this.commandState.attitudeMode === 'target') {
+      this.onTrajectoryInvalidated?.();
+    }
   }
 }
 
 /** Allocates a stable command facade and its mutable backing state at setup. */
-export function createCommandController(bodyIds: readonly string[]): CommandController {
+export function createCommandController(
+  bodyIds: readonly string[],
+  onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
+): CommandController {
   const state: CommandState = {
     throttle: 0,
     attitudeMode: 'manual',
@@ -268,5 +297,8 @@ export function createCommandController(bodyIds: readonly string[]): CommandCont
     targetBodyIndex: -1,
     targetBodyId: null,
   };
-  return { commands: new SimulationCommands(bodyIds, state), state };
+  return {
+    commands: new SimulationCommands(bodyIds, state, onTrajectoryInvalidated),
+    state,
+  };
 }

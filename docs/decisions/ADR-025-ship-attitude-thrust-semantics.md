@@ -24,7 +24,8 @@ though their TypeScript shapes do not change.
    dominant-body analysis without changing these direction definitions.
 4. Automatic hold directions are evaluated at every DP54 stage. Manual
    body-frame angular rates use the exact constant-rate quaternion solution at
-   each stage and commit only after a successful step.
+   each stage and commit only after a successful step. With `+X` forward, roll
+   is rotation about `+X`, pitch about `+Y`, and yaw about `+Z`.
 5. Proper acceleration enters `du/dt` as ADR-007 specifies. Snapshot force is
    `m*alpha` in newtons and current photon-drive power is `|F|*c` in watts.
    Ledger accumulation remains T0053.
@@ -45,4 +46,3 @@ though their TypeScript shapes do not change.
   `src/sim`.
 - T0052 must suppress effective throttle above its warp lockout while retaining
   the command; T0053 integrates the already exposed power over substeps.
-

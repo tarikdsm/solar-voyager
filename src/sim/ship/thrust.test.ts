@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { SPEED_OF_LIGHT_KM_S } from '../../core/constants.js';
 import {
+  createDp54Result,
+  createDp54Workspace,
+  createShipDp54Tolerance,
+  propagate,
+} from '../propagation/dp54.js';
+import {
+  coordinateVelocityInto,
+  createRelativisticDerivative,
+  RELATIVISTIC_STATE_DIMENSION,
+  STATE_UX,
+} from './relativity.js';
+import {
   DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
-  parallelCoordinateAccelerationKmS2,
   photonDrivePowerW,
   validateMaxProperAcceleration,
   writeProperAccelerationInto,
@@ -49,7 +60,40 @@ describe('ship proper thrust', () => {
   });
 
   it('recovers the alpha/gamma^3 parallel coordinate-acceleration law at gamma 2', () => {
-    expect(parallelCoordinateAccelerationKmS2(0.01, 2)).toBe(0.01 / 8);
+    const properAccelerationKmS2 = 0.01;
+    const durationSec = 0.1;
+    const state = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    state[STATE_UX] = Math.sqrt(3) * SPEED_OF_LIGHT_KM_S;
+    const initialVelocity = new Float64Array(3);
+    coordinateVelocityInto(initialVelocity, state[STATE_UX] as number, 0, 0);
+    const output = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    const result = createDp54Result();
+    const derivative = createRelativisticDerivative(
+      (_timeSec, _state, acceleration) => acceleration.fill(0),
+      (_timeSec, _state, acceleration) => {
+        acceleration[0] = properAccelerationKmS2;
+        acceleration[1] = 0;
+        acceleration[2] = 0;
+      },
+    );
+
+    propagate(
+      output,
+      state,
+      0,
+      durationSec,
+      derivative,
+      createShipDp54Tolerance(),
+      createDp54Workspace(RELATIVISTIC_STATE_DIMENSION),
+      result,
+    );
+    const finalVelocity = new Float64Array(3);
+    coordinateVelocityInto(finalVelocity, output[STATE_UX] as number, 0, 0);
+    const measuredCoordinateAcceleration =
+      ((finalVelocity[0] as number) - (initialVelocity[0] as number)) / durationSec;
+
+    expect(result.reachedEnd).toBe(true);
+    expect(measuredCoordinateAcceleration).toBeCloseTo(properAccelerationKmS2 / 8, 8);
   });
 
   it('validates configurable maximum proper acceleration', () => {

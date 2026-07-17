@@ -45,6 +45,8 @@ keeps every output finite at zero relative velocity or collinear states.
 ## Manual rotation
 
 `Commands.rotate(pitch,yaw,roll)` stores body-frame angular rates in rad/s.
+With local `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about
+`+Z`; the command's named order is remapped to quaternion XYZ order internally.
 During a `step`, the starting quaternion and rates stay fixed. Each DP54 stage
 evaluates the exact constant-body-rate solution
 `q(t)=normalize(q0 * axisAngle(omega, |omega|*(t-t0)))`; the successful endpoint
@@ -99,4 +101,3 @@ Tests will prove:
 6. active-thrust command changes invalidate once, identical/no-thrust changes do
    not, and a failed step does not commit attitude;
 7. the frame loop still reuses exactly two snapshots and retains no heap growth.
-

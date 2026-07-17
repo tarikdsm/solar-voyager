@@ -5,6 +5,8 @@ import type { Dp54Tolerance } from './propagation/dp54.js';
 import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
 import type { SimSnapshot } from './simulationSnapshot.js';
+import { writeForwardFromQuaternionInto } from './ship/attitude.js';
+import { DEFAULT_MAX_PROPER_ACCELERATION_M_S2 } from './ship/thrust.js';
 
 const EARTH_MU_KM3_S2 = 398_600.4418;
 const ORBIT_RADIUS_KM = 6_778.137;
@@ -66,7 +68,7 @@ describe('SimulationCore', () => {
     expect(core.snapshot).toBe(third);
   });
 
-  it('stores command intent while zero thrust leaves propulsion fields neutral', () => {
+  it('publishes proper acceleration, thrust, and photon-drive power', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
@@ -85,10 +87,72 @@ describe('SimulationCore', () => {
     expect(snapshot.throttle).toBe(0.6);
     expect(snapshot.attitudeMode).toBe('prograde');
     expect(snapshot.targetBodyIndex).toBe(0);
-    expect(snapshot.shipProperAccelerationKmS2).toEqual(new Float64Array(3));
-    expect(snapshot.shipThrustVectorN).toEqual(new Float64Array(3));
-    expect(snapshot.powerDrawW).toBe(0);
+    const expectedAccelerationKmS2 = (0.6 * DEFAULT_MAX_PROPER_ACCELERATION_M_S2) / 1_000;
+    expect(Math.hypot(...snapshot.shipProperAccelerationKmS2)).toBeCloseTo(
+      expectedAccelerationKmS2,
+      14,
+    );
+    const expectedForceN = SHIP_MASS_KG * expectedAccelerationKmS2 * 1_000;
+    expect(Math.hypot(...snapshot.shipThrustVectorN)).toBeCloseTo(expectedForceN, 9);
+    expect(snapshot.powerDrawW).toBeCloseTo(expectedForceN * SPEED_OF_LIGHT_KM_S * 1_000, 0);
+    expect(snapshot.shipState[4] as number).toBeGreaterThan(circularState()[4] as number);
     expect(snapshot.energySpentJ).toBe(0);
+  });
+
+  it('keeps prograde hold tangent while the ship advances through its orbit', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+      integrationTolerance: verificationTolerance(),
+    });
+    core.commands.setAttitudeMode('prograde');
+    const periodSec = 2 * Math.PI * Math.sqrt(ORBIT_RADIUS_KM ** 3 / EARTH_MU_KM3_S2);
+
+    const snapshot = core.step(periodSec / 4);
+    const forward = new Float64Array(3);
+    writeForwardFromQuaternionInto(forward, snapshot.attitudeQuaternion);
+    const speed = Math.hypot(...snapshot.shipCoordinateVelocityKmS);
+    const alignment =
+      ((forward[0] as number) * (snapshot.shipCoordinateVelocityKmS[0] as number) +
+        (forward[1] as number) * (snapshot.shipCoordinateVelocityKmS[1] as number) +
+        (forward[2] as number) * (snapshot.shipCoordinateVelocityKmS[2] as number)) /
+      speed;
+
+    expect(alignment).toBeGreaterThan(1 - 1e-12);
+  });
+
+  it('evaluates manual yaw rates exactly and commits only successful attitude', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    core.commands.rotate(0, Math.PI / 2, 0);
+
+    const snapshot = core.step(1);
+    const forward = new Float64Array(3);
+    writeForwardFromQuaternionInto(forward, snapshot.attitudeQuaternion);
+    expect(forward[0]).toBeCloseTo(0, 13);
+    expect(forward[1]).toBeCloseTo(1, 13);
+    expect(forward[2]).toBeCloseTo(0, 13);
+  });
+
+  it('forwards thrust-command invalidation without duplicate events', () => {
+    let invalidations = 0;
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+      onTrajectoryInvalidated: () => {
+        invalidations += 1;
+      },
+    });
+
+    core.commands.setThrottle(0.4);
+    core.commands.setThrottle(0.4);
+    core.commands.setAttitudeMode('prograde');
+    expect(invalidations).toBe(2);
   });
 
   it('does not let a mutated published ship array alter private physical state', () => {
@@ -135,6 +199,7 @@ describe('SimulationCore', () => {
       integrationTolerance: verificationTolerance(0),
     });
     const initial = core.snapshot;
+    core.commands.rotate(0, Math.PI / 2, 0);
 
     expect(() => core.step(-1)).toThrow(/wall delta/u);
     expect(() => core.step(Number.NaN)).toThrow(/wall delta/u);
@@ -142,5 +207,6 @@ describe('SimulationCore', () => {
     expect(core.snapshot).toBe(initial);
     expect(core.snapshot.simTimeSec).toBe(0);
     expect(core.snapshot.shipState[0]).toBe(ORBIT_RADIUS_KM);
+    expect(core.snapshot.attitudeQuaternion).toEqual(new Float64Array([0, 0, 0, 1]));
   });
 });

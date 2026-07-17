@@ -107,7 +107,8 @@ are `±normalize(r_rel)`, and normal/antinormal are
 Degenerate directions retain the previous finite forward vector.
 
 Manual rates are body-frame angular velocity `ω` in rad/s. Within one
-propagation call they are constant and evaluated exactly at every DP54 stage:
+propagation call they are constant and evaluated exactly at every DP54 stage.
+With `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about `+Z`:
 
 ```
 q(t) = normalize(q0 ⊗ [axis(ω)·sin(|ω|Δt/2), cos(|ω|Δt/2)])

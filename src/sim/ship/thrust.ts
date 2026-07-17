@@ -51,11 +51,3 @@ export function photonDrivePowerW(
     ) * 1_000;
   return shipMassKg * accelerationMS2 * SPEED_OF_LIGHT_KM_S * 1_000;
 }
-
-/** Returns the ADR-007 parallel coordinate acceleration alpha/gamma³. */
-export function parallelCoordinateAccelerationKmS2(
-  properAccelerationKmS2: number,
-  gamma: number,
-): number {
-  return properAccelerationKmS2 / (gamma * gamma * gamma);
-}
