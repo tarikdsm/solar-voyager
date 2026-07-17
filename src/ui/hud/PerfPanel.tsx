@@ -1,9 +1,21 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
-import { PERF_SPARKLINE_BUDGET_Y, type PerfPanelDisplaySignals } from './perfPanelStore.js';
+import {
+  PERF_SPARKLINE_BUDGET_Y,
+  PERF_SPARKLINE_HEIGHT,
+  PERF_SPARKLINE_MAX_FRAME_MS,
+  type PerfPanelDisplaySignals,
+  type PerfPanelSparklineSink,
+  type PerfPanelStore,
+  type PerfPanelTelemetrySource,
+} from './perfPanelStore.js';
+
+const SPARKLINE_WIDTH = 120;
+const BUDGET_STROKE = 'rgb(251 191 36 / 38%)';
+const FRAME_STROKE = 'rgb(125 211 252 / 82%)';
 
 export interface PerfPanelProps {
-  readonly display: PerfPanelDisplaySignals;
+  readonly store: PerfPanelStore;
 }
 
 interface MetricProps {
@@ -21,13 +33,58 @@ function PerfMetric({ id, label, value }: MetricProps) {
   );
 }
 
+class CanvasSparklineSink implements PerfPanelSparklineSink {
+  constructor(private readonly context: CanvasRenderingContext2D) {}
+
+  draw(telemetry: PerfPanelTelemetrySource): void {
+    const context = this.context;
+    const sampleCount = Math.min(SPARKLINE_WIDTH, telemetry.frameSampleCount);
+    const firstX = SPARKLINE_WIDTH - sampleCount;
+    context.clearRect(0, 0, SPARKLINE_WIDTH, PERF_SPARKLINE_HEIGHT);
+    context.strokeStyle = BUDGET_STROKE;
+    context.lineWidth = 0.75;
+    context.beginPath();
+    context.moveTo(0, PERF_SPARKLINE_BUDGET_Y);
+    context.lineTo(SPARKLINE_WIDTH, PERF_SPARKLINE_BUDGET_Y);
+    context.stroke();
+    if (sampleCount === 0) return;
+    context.strokeStyle = FRAME_STROKE;
+    context.lineWidth = 1;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const age = sampleCount - 1 - sampleIndex;
+      const rawFrameMs = telemetry.getFrameTimeByAge(age);
+      const frameMs = Number.isFinite(rawFrameMs) ? Math.max(0, rawFrameMs) : 0;
+      const y =
+        PERF_SPARKLINE_HEIGHT -
+        (Math.min(PERF_SPARKLINE_MAX_FRAME_MS, frameMs) / PERF_SPARKLINE_MAX_FRAME_MS) *
+          PERF_SPARKLINE_HEIGHT;
+      if (sampleIndex === 0) context.moveTo(firstX, y);
+      else context.lineTo(firstX + sampleIndex, y);
+    }
+    context.stroke();
+  }
+}
+
 /** Compact performance truth with an on-demand diagnostic expansion. */
-export function PerfPanel({ display }: PerfPanelProps) {
+export function PerfPanel({ store }: PerfPanelProps) {
+  const display = store.display;
   const [expanded, setExpanded] = useState(false);
+  const sparklineCanvas = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const context = sparklineCanvas.current?.getContext('2d');
+    if (context === null || context === undefined) return;
+    const sink = new CanvasSparklineSink(context);
+    store.setSparklineSink(sink);
+    return () => store.setSparklineSink(null);
+  }, [store]);
 
   useEffect(() => {
     const toggleWithF3 = (event: KeyboardEvent): void => {
-      if (event.code !== 'F3') return;
+      if (event.code !== 'F3' || event.repeat) return;
       event.preventDefault();
       setExpanded((current) => !current);
     };
@@ -55,23 +112,15 @@ export function PerfPanel({ display }: PerfPanelProps) {
         <strong id="perf-panel-fps" class="perf-panel-fps">
           {display.fps}
         </strong>
-        <svg
+        <canvas
+          ref={sparklineCanvas}
           id="perf-panel-sparkline"
           class="perf-panel-sparkline"
-          viewBox="0 0 120 32"
+          width={SPARKLINE_WIDTH}
+          height={PERF_SPARKLINE_HEIGHT}
           role="img"
           aria-label="Last 120 frame times with 16.6 millisecond budget"
-        >
-          <line
-            id="perf-panel-budget-line"
-            class="perf-panel-budget-line"
-            x1="0"
-            x2="120"
-            y1={PERF_SPARKLINE_BUDGET_Y}
-            y2={PERF_SPARKLINE_BUDGET_Y}
-          />
-          <polyline class="perf-panel-frame-line" points={display.sparklinePoints} />
-        </svg>
+        />
         <span id="perf-panel-resolution" class="perf-panel-resolution">
           {display.resolution}
         </span>

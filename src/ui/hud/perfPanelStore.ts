@@ -4,14 +4,14 @@ import type { RenderTelemetrySnapshot } from '../../render/telemetry.js';
 
 const UPDATE_INTERVAL_MS = 250;
 const SPARKLINE_SLOT_COUNT = 120;
-const SPARKLINE_HEIGHT = 32;
-const SPARKLINE_MAX_FRAME_MS = 50;
+export const PERF_SPARKLINE_HEIGHT = 32;
+export const PERF_SPARKLINE_MAX_FRAME_MS = 50;
 const FRAME_BUDGET_MS = 16.6;
 const MEBIBYTE_BYTES = 1_048_576;
 const INTEGER_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 export const PERF_SPARKLINE_BUDGET_Y =
-  SPARKLINE_HEIGHT - (FRAME_BUDGET_MS / SPARKLINE_MAX_FRAME_MS) * SPARKLINE_HEIGHT;
+  PERF_SPARKLINE_HEIGHT - (FRAME_BUDGET_MS / PERF_SPARKLINE_MAX_FRAME_MS) * PERF_SPARKLINE_HEIGHT;
 
 export interface PerfPanelTelemetrySource {
   readonly frameSampleCount: number;
@@ -49,7 +49,6 @@ export interface PerfPanelDisplaySignals {
   readonly resourceStats: ReadonlySignal<string>;
   readonly sampleCount: ReadonlySignal<number>;
   readonly simMs: ReadonlySignal<string>;
-  readonly sparklinePoints: ReadonlySignal<string>;
   readonly uiMs: ReadonlySignal<string>;
 }
 
@@ -70,7 +69,6 @@ interface WritablePerfPanelDisplaySignals {
   readonly resourceStats: Signal<string>;
   readonly sampleCount: Signal<number>;
   readonly simMs: Signal<string>;
-  readonly sparklinePoints: Signal<string>;
   readonly uiMs: Signal<string>;
 }
 
@@ -86,6 +84,11 @@ export interface PerfPanelStore {
   readonly display: PerfPanelDisplaySignals;
   readonly measuredCostMsPerFrame: number;
   publish(nowMs: number): boolean;
+  setSparklineSink(sink: PerfPanelSparklineSink | null): void;
+}
+
+export interface PerfPanelSparklineSink {
+  draw(telemetry: PerfPanelTelemetrySource): void;
 }
 
 interface PerformanceMemorySnapshot {
@@ -123,7 +126,6 @@ function createDisplaySignals(): WritablePerfPanelDisplaySignals {
     resourceStats: signal('—'),
     sampleCount: signal(0),
     simMs: signal('—'),
-    sparklinePoints: signal(''),
     uiMs: signal('—'),
   };
 }
@@ -142,34 +144,6 @@ function formatHeapBytes(value: number | null): string {
     : 'Unavailable';
 }
 
-function oneSecondAverageFps(telemetry: PerfPanelTelemetrySource): number {
-  let elapsedMs = 0;
-  let frameCount = 0;
-  for (let age = 0; age < telemetry.frameSampleCount && elapsedMs < 1_000; age += 1) {
-    const frameMs = telemetry.getFrameTimeByAge(age);
-    if (!Number.isFinite(frameMs) || frameMs <= 0) continue;
-    elapsedMs += frameMs;
-    frameCount += 1;
-  }
-  return elapsedMs > 0 ? (frameCount * 1_000) / elapsedMs : 0;
-}
-
-function buildSparklinePoints(telemetry: PerfPanelTelemetrySource): string {
-  const sampleCount = Math.min(SPARKLINE_SLOT_COUNT, telemetry.frameSampleCount);
-  const firstX = SPARKLINE_SLOT_COUNT - sampleCount;
-  let points = '';
-  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-    const age = sampleCount - 1 - sampleIndex;
-    const rawFrameMs = telemetry.getFrameTimeByAge(age);
-    const frameMs = Number.isFinite(rawFrameMs) ? Math.max(0, rawFrameMs) : 0;
-    const y =
-      SPARKLINE_HEIGHT -
-      (Math.min(SPARKLINE_MAX_FRAME_MS, frameMs) / SPARKLINE_MAX_FRAME_MS) * SPARKLINE_HEIGHT;
-    points += `${sampleIndex === 0 ? '' : ' '}${String(firstX + sampleIndex)},${y.toFixed(2)}`;
-  }
-  return points;
-}
-
 class SampledPerfPanelStore implements PerfPanelStore {
   readonly display: PerfPanelDisplaySignals;
 
@@ -179,9 +153,11 @@ class SampledPerfPanelStore implements PerfPanelStore {
   private readonly readHeapBytes: () => number | null;
   private readonly resolution: PerfPanelResolutionSource;
   private readonly telemetry: PerfPanelTelemetrySource;
+  private accumulatedCostMs = 0;
+  private accumulatedCostFrames = 0;
   private nextPublishMs = Number.NEGATIVE_INFINITY;
-  private previousFrameCount = 0;
   private latestMeasuredCostMsPerFrame = 0;
+  private sparklineSink: PerfPanelSparklineSink | null = null;
 
   constructor(options: PerfPanelStoreOptions) {
     this.clock = options.clock ?? defaultClock;
@@ -197,20 +173,27 @@ class SampledPerfPanelStore implements PerfPanelStore {
     return this.latestMeasuredCostMsPerFrame;
   }
 
+  setSparklineSink(sink: PerfPanelSparklineSink | null): void {
+    this.sparklineSink = sink;
+    sink?.draw(this.telemetry);
+  }
+
   publish(nowMs: number): boolean {
     if (!Number.isFinite(nowMs)) throw new RangeError('Perf panel sample time must be finite');
-    if (nowMs < this.nextPublishMs) return false;
+    const startMs = this.clock();
+    if (nowMs < this.nextPublishMs) {
+      this.accumulateCost(startMs);
+      return false;
+    }
     this.nextPublishMs = nowMs + UPDATE_INTERVAL_MS;
 
-    const startMs = this.clock();
     const snapshot = this.telemetry.snapshot;
     const onePercentLowFps = snapshot.p99FrameMs > 0 ? 1_000 / snapshot.p99FrameMs : 0;
     const heapBytes = this.readHeapBytes();
-    const points = buildSparklinePoints(this.telemetry);
+    this.sparklineSink?.draw(this.telemetry);
     batch(() => {
-      this.writableDisplay.fps.value = formatFps(oneSecondAverageFps(this.telemetry));
+      this.writableDisplay.fps.value = formatFps(snapshot.oneSecondAverageFps);
       this.writableDisplay.onePercentLow.value = formatFps(onePercentLowFps);
-      this.writableDisplay.sparklinePoints.value = points;
       this.writableDisplay.sampleCount.value = Math.min(
         SPARKLINE_SLOT_COUNT,
         this.telemetry.frameSampleCount,
@@ -242,11 +225,17 @@ class SampledPerfPanelStore implements PerfPanelStore {
         3,
       )} ms/frame`;
     });
-    const elapsedMs = Math.max(0, this.clock() - startMs);
-    const elapsedFrames = Math.max(1, snapshot.frameCount - this.previousFrameCount);
-    this.latestMeasuredCostMsPerFrame = elapsedMs / elapsedFrames;
-    this.previousFrameCount = snapshot.frameCount;
+    this.accumulateCost(startMs);
+    this.latestMeasuredCostMsPerFrame =
+      this.accumulatedCostMs / Math.max(1, this.accumulatedCostFrames);
+    this.accumulatedCostMs = 0;
+    this.accumulatedCostFrames = 0;
     return true;
+  }
+
+  private accumulateCost(startMs: number): void {
+    this.accumulatedCostMs += Math.max(0, this.clock() - startMs);
+    this.accumulatedCostFrames += 1;
   }
 }
 

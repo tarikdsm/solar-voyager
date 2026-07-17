@@ -22,6 +22,8 @@ const CONTEXT: RendererContextReport = {
 function createTelemetry(frameTimesChronological: readonly number[]): PerfPanelTelemetrySource & {
   snapshot: RenderTelemetrySnapshot;
 } {
+  const validFrameTimes = frameTimesChronological.filter((frameMs) => frameMs > 0);
+  const elapsedMs = validFrameTimes.reduce((total, frameMs) => total + frameMs, 0);
   return {
     frameSampleCount: frameTimesChronological.length,
     getFrameTimeByAge(age: number) {
@@ -37,6 +39,7 @@ function createTelemetry(frameTimesChronological: readonly number[]): PerfPanelT
       geometries: 3,
       gpuMs: 4.25,
       lines: 0,
+      oneSecondAverageFps: elapsedMs > 0 ? (validFrameTimes.length * 1_000) / elapsedMs : 0,
       p75FrameMs: 16,
       p99FrameMs: 20,
       points: 8_000,
@@ -91,44 +94,56 @@ describe('PerfPanelStore', () => {
     expect(store.display.sampleCount.value).toBe(60);
   });
 
-  it('builds chronological 120-slot SVG points and clamps long frames to the chart', () => {
-    const { store } = createFixture([0, 16.6, 50, 100]);
+  it('publishes the preallocated telemetry ring to a sparkline sink at four hertz', () => {
+    const { store, telemetry } = createFixture([0, 16.6, 50, 100]);
+    const sink = { draw: vi.fn() };
+    store.setSparklineSink(sink);
 
     store.publish(0);
 
     expect(PERF_SPARKLINE_BUDGET_Y).toBeCloseTo(21.376, 3);
-    expect(store.display.sparklinePoints.value).toBe('116,32.00 117,21.38 118,0.00 119,0.00');
+    expect(sink.draw).toHaveBeenCalledTimes(2);
+    expect(sink.draw).toHaveBeenLastCalledWith(telemetry);
   });
 
   it('keeps the per-frame fast path stable between four-hertz sampled commits', () => {
     const clock = vi.fn(() => 0);
     const { store, telemetry } = createFixture([16, 16, 16], clock);
+    store.setSparklineSink({
+      draw(source) {
+        for (let age = 0; age < source.frameSampleCount; age += 1) {
+          source.getFrameTimeByAge(age);
+        }
+      },
+    });
     store.publish(0);
-    const pointsSignal = store.display.sparklinePoints;
-    const previousPoints = pointsSignal.value;
+    const sampleCountSignal = store.display.sampleCount;
+    const previousSampleCount = sampleCountSignal.value;
     const previousFps = store.display.fps.value;
     telemetry.snapshot.p99FrameMs = 50;
     const frameRead = vi.spyOn(telemetry, 'getFrameTimeByAge');
 
     expect(store.publish(249.999)).toBe(false);
-    expect(store.display.sparklinePoints).toBe(pointsSignal);
-    expect(store.display.sparklinePoints.value).toBe(previousPoints);
+    expect(store.display.sampleCount).toBe(sampleCountSignal);
+    expect(store.display.sampleCount.value).toBe(previousSampleCount);
     expect(store.display.fps.value).toBe(previousFps);
-    expect(clock).toHaveBeenCalledTimes(2);
+    expect(clock).toHaveBeenCalledTimes(4);
     expect(frameRead).not.toHaveBeenCalled();
 
     expect(store.publish(250)).toBe(true);
     expect(store.display.onePercentLow.value).toBe('20.0 FPS');
-    expect(clock).toHaveBeenCalledTimes(4);
+    expect(clock).toHaveBeenCalledTimes(6);
     expect(frameRead).toHaveBeenCalled();
   });
 
-  it('reports its sampled commit cost amortized across rendered frames', () => {
-    const timestamps = [10, 10.6];
-    const { store, telemetry } = createFixture([16, 16, 16, 16], () => timestamps.shift() ?? 10.6);
-    telemetry.snapshot.frameCount = 4;
+  it('reports total panel cost across sampled and fast-path calls', () => {
+    const clockValues = [0, 0.1, 1, 1.12, 2, 2.18];
+    const { store, telemetry } = createFixture([16, 16, 16, 16], () => clockValues.shift() ?? 2.18);
+    telemetry.snapshot.frameCount = 10_000;
 
     store.publish(0);
+    store.publish(100);
+    store.publish(250);
 
     expect(store.measuredCostMsPerFrame).toBeCloseTo(0.15, 10);
     expect(store.measuredCostMsPerFrame).toBeLessThan(0.2);

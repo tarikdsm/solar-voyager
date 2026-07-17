@@ -183,6 +183,26 @@ describe('RenderTelemetry', () => {
     });
   });
 
+  it('keeps a true one-second FPS window above the 120-frame sparkline capacity', () => {
+    const { renderer } = fakeRenderer(contextWithoutTimer());
+    const telemetry = new RenderTelemetry(renderer, contextReport());
+
+    for (let frame = 0; frame <= 36; frame += 1) {
+      const timestampMs = frame * (1_000 / 72);
+      telemetry.beginFrame(timestampMs);
+      telemetry.endFrame(0, 0, 0, timestampMs);
+    }
+    for (let frame = 1; frame <= 108; frame += 1) {
+      const timestampMs = 500 + frame * (1_000 / 216);
+      telemetry.beginFrame(timestampMs);
+      telemetry.endFrame(0, 0, 0, timestampMs);
+    }
+
+    expect(telemetry.frameSampleCount).toBe(120);
+    expect(telemetry.snapshot.oneSecondAverageFps).toBeCloseTo(144, 10);
+    expect(telemetry.snapshot.averageFps).toBeCloseTo(180, 10);
+  });
+
   it('collects GPU time only after an asynchronous non-disjoint result', () => {
     const timer = timerContext();
     const report = { ...contextReport(), gpuTimerQueryAvailable: true };

@@ -17,9 +17,13 @@ acceptance:
   - Values cross-checked against browser devtools FPS meter
   - Zero allocations per frame in the sparkline path
 handoff_notes: >-
-  Added the compact/expanded 4 Hz signal-driven perf HUD using RenderTelemetry's
-  existing allocation-free 120-frame ring. Focused Chromium measured 60.0 FPS
-  against an independent 60.0 FPS rAF meter and 0.013-0.027 ms/frame panel cost;
-  full-game playtest measured 0.013-0.040 ms/frame with no console errors. F3,
-  responsive layout, production smoke integration, 491 Vitest tests, 50 Python
-  tests, build, budgets, and the complete browser regression matrix pass.
+  Added the compact/expanded 4 Hz signal-driven perf HUD. Review corrections
+  replaced SVG point-string construction with a setup-time Canvas 2D sink,
+  added RenderTelemetry's preallocated 256-timestamp true one-second FPS window,
+  measured sampled and fast-path panel calls, included the panel in UI/HUD time,
+  and ignored repeated F3 keydowns. Focused Chromium measured 60.0 FPS against
+  an independent 60.0 FPS meter and 0.012 ms/frame isolated (0.056 while the
+  browser matrix ran concurrently); full-game playtest measured 0.018 ms/frame,
+  85.0 FPS, 0.30 ms UI/HUD, and no warnings/errors. Responsive 1280/1024/390 px
+  layout, production smoke, 492 Vitest tests, 50 Python tests, build, budgets,
+  and the complete sequential browser matrix pass.

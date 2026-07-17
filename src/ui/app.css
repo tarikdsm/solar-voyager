@@ -93,25 +93,6 @@
   overflow: visible;
 }
 
-.perf-panel-budget-line,
-.perf-panel-frame-line {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-}
-
-.perf-panel-budget-line {
-  stroke: rgb(251 191 36 / 38%);
-  stroke-dasharray: 2 2;
-  stroke-width: 0.75;
-}
-
-.perf-panel-frame-line {
-  stroke: rgb(125 211 252 / 82%);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1;
-}
-
 .perf-panel-resolution {
   color: rgb(224 242 254 / 72%);
   white-space: nowrap;

@@ -64,10 +64,12 @@ options.diffed = (vnode: VNode): void => {
 
 render(
   <main class="app-overlay">
-    <PerfPanel display={store.display} />
+    <PerfPanel store={store} />
     <details id="session-settings" class="session-settings">
       <summary>Session &amp; settings</summary>
     </details>
+    <section id="dual-clock" class="hud-panel dual-clock" aria-label="Clock placeholder" />
+    <section id="warp-control" class="hud-panel warp-control" aria-label="Warp placeholder" />
     <section id="orbit-readout" class="hud-panel orbit-readout" aria-label="Orbit placeholder" />
   </main>,
   root,

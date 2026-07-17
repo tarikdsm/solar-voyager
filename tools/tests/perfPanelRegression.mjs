@@ -61,9 +61,6 @@ try {
     const settingsRect = settings.getBoundingClientRect();
     const orbitRect = orbit.getBoundingClientRect();
     return {
-      budgetY: globalThis.document
-        .querySelector('#perf-panel-budget-line')
-        ?.getAttribute('y1'),
       cost: panel.dataset.costMsPerFrame ?? '',
       expanded: globalThis.document
         .querySelector('#perf-panel-toggle')
@@ -77,6 +74,17 @@ try {
       resolutionExpected: '1920×1080 @1.00',
       renderCount: globalThis.__perfPanelHarness.snapshot().renderCount,
       sampleCount: panel.dataset.sampleCount ?? '',
+      sparklineInk: (() => {
+        const canvas = globalThis.document.querySelector('#perf-panel-sparkline');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) return 0;
+        const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
+        if (pixels === undefined) return 0;
+        let ink = 0;
+        for (let index = 3; index < pixels.length; index += 4) {
+          if ((pixels[index] ?? 0) > 0) ink += 1;
+        }
+        return ink;
+      })(),
     };
   });
   assert.equal(compact.expanded, 'false');
@@ -84,7 +92,7 @@ try {
   assert.equal(compact.quality, 'Q6/6');
   assert.equal(compact.resolution, compact.resolutionExpected);
   assert.equal(compact.sampleCount, '120');
-  assert.ok(Math.abs(parseLeadingNumber(compact.budgetY ?? '') - 21.376) < 0.01);
+  assert.ok(compact.sparklineInk > 0, 'canvas sparkline did not draw any pixels');
   assert.ok(parseLeadingNumber(compact.cost) < 0.2, `panel cost ${compact.cost} exceeds budget`);
   assert.equal(compact.noSettingsOverlap, true);
   assert.equal(compact.noOrbitOverlap, true);
@@ -109,6 +117,22 @@ try {
   await page.waitForSelector('#perf-panel-details', { state: 'hidden' });
   await page.keyboard.press('F3');
   await page.waitForSelector('#perf-panel-details', { state: 'visible' });
+  await page.evaluate(() =>
+    globalThis.dispatchEvent(
+      new globalThis.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        code: 'F3',
+        repeat: true,
+      }),
+    ),
+  );
+  await page.waitForTimeout(50);
+  assert.equal(
+    await page.locator('#perf-panel-toggle').getAttribute('aria-expanded'),
+    'true',
+    'repeated F3 keydown toggled the panel',
+  );
 
   const independentFps = await page.evaluate(
     () =>
@@ -139,6 +163,30 @@ try {
     `panel ${independentFps.panelFps.toFixed(1)} FPS differs from independent meter ${independentFps.independentFps.toFixed(1)} FPS`,
   );
 
+  await page.locator('#perf-panel-toggle').click();
+  await page.waitForSelector('#perf-panel-details', { state: 'hidden' });
+  await page.setViewportSize({ width: 1_024, height: 720 });
+  await page.waitForTimeout(100);
+  const intermediateLayout = await page.evaluate(() => {
+    const panel = globalThis.document.querySelector('#perf-panel');
+    const clock = globalThis.document.querySelector('#dual-clock');
+    const warp = globalThis.document.querySelector('#warp-control');
+    if (!(panel instanceof globalThis.HTMLElement)) throw new Error('perf panel missing');
+    if (!(clock instanceof globalThis.HTMLElement)) throw new Error('dual clock missing');
+    if (!(warp instanceof globalThis.HTMLElement)) throw new Error('warp control missing');
+    const overlaps = (first, second) => {
+      const a = first.getBoundingClientRect();
+      const b = second.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    };
+    return {
+      panelClockOverlap: overlaps(panel, clock),
+      clockWarpOverlap: overlaps(clock, warp),
+    };
+  });
+  assert.equal(intermediateLayout.panelClockOverlap, false);
+  assert.equal(intermediateLayout.clockWarpOverlap, false);
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   const mobile = await page.evaluate(() => {
@@ -156,7 +204,9 @@ try {
   assert.ok(mobile.panelLeft >= 0 && mobile.panelRight <= mobile.viewportWidth);
   assert.deepEqual(browserErrors, []);
 
-  process.stdout.write(`${JSON.stringify({ compact, expanded, independentFps, mobile }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ compact, expanded, independentFps, intermediateLayout, mobile }, null, 2)}\n`,
+  );
 } finally {
   if (browser !== undefined) await browser.close();
   await server.close();

@@ -6,7 +6,7 @@ import { createScaffoldState } from '../game/createScaffoldState.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
-import type { PerfPanelDisplaySignals } from './hud/perfPanelStore.js';
+import type { PerfPanelStore } from './hud/perfPanelStore.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
 import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
@@ -24,7 +24,7 @@ export interface AppProps {
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
-  readonly perfPanel?: PerfPanelDisplaySignals | null;
+  readonly perfPanel?: PerfPanelStore | null;
   readonly session?: SessionSettingsPort | null;
 }
 
@@ -239,7 +239,7 @@ export function App({
         <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
       )}
       <h1 class="app-title">{scaffoldState.title}</h1>
-      {perfPanel === null ? null : <PerfPanel display={perfPanel} />}
+      {perfPanel === null ? null : <PerfPanel store={perfPanel} />}
       {session === null ? null : <SessionSettingsPanel session={session} />}
       <OrbitReadout hud={hud} />
       <DualClock hud={hud} />

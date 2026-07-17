@@ -139,7 +139,7 @@ function renderFrame(nowMs: number): void {
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
   hudStore.publish(snapshot, nowMs);
-  const uiEndMs = performance.now();
+  const hudEndMs = performance.now();
   const renderStartMs = performance.now();
   cameraController.update(deltaSec);
   spaceScene.camera.lookAt(
@@ -161,13 +161,16 @@ function renderFrame(nowMs: number): void {
   telemetry.beginGpuTimer();
   postPipeline.render(postProcessingEnabled);
   telemetry.endGpuTimer();
+  const renderEndMs = performance.now();
+  const perfPanelStartMs = performance.now();
+  perfPanelStore.publish(nowMs);
+  const perfPanelEndMs = performance.now();
   telemetry.endFrame(
     simulationEndMs - simulationStartMs,
-    performance.now() - renderStartMs,
-    uiEndMs - uiStartMs,
+    renderEndMs - renderStartMs,
+    hudEndMs - uiStartMs + (perfPanelEndMs - perfPanelStartMs),
     nowMs,
   );
-  perfPanelStore.publish(nowMs);
   requestAnimationFrame(renderFrame);
 }
 
@@ -179,7 +182,7 @@ async function startApplication(): Promise<void> {
       hardwareWarning,
       hud: hudStore.display,
       hudState: hudStore.signals,
-      perfPanel: perfPanelStore.display,
+      perfPanel: perfPanelStore,
       session,
     }),
     appRoot,
