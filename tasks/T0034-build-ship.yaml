@@ -1,6 +1,6 @@
 id: T0034
 title: Ship model (build_ship script)
-status: BLOCKED
+status: TODO
 agent: ""
 branch: ""
 depends_on: [T0030]
@@ -18,8 +18,11 @@ acceptance:
 handoff_notes: |
   Hand-authored ship source was committed directly to main in 641d092 after an
   interactive blender-mcp session; assets/blender/ship.blend, ship.glb, and
-  SOURCES.md exist. The task is not complete: T0030 remains TODO,
-  tools/blender/build_ship.py is missing, no KTX2/runtime ingest output exists,
-  and reproducibility plus engine_nozzle acceptance evidence has not been
-  recorded. Resume after T0030, back-port the approved model to the builder, then
-  ingest and verify the node and 8 MB budget.
+  SOURCES.md exist. The task is not complete: tools/blender/build_ship.py is
+  missing, no KTX2/runtime ingest output exists, and reproducibility plus
+  engine_nozzle acceptance evidence has not been recorded.
+
+  Unblocked on 2026-07-17: T0030 is DONE, Blender 5.1 is available at the
+  repository-documented path, and KTX-Software executables are installed under
+  C:/Program Files/KTX-Software/bin. Back-port the approved model to the builder,
+  then ingest and verify the node and 8 MB budget.
