@@ -1,8 +1,8 @@
 id: T0045
 title: GPU context policy + render telemetry module
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0045-gpu-telemetry
 depends_on: [T0040]
 milestone: M2
 spec: |
