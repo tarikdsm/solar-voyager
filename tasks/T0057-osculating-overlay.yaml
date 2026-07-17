@@ -1,6 +1,6 @@
 id: T0057
 title: Osculating conic overlay
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0057-osculating-overlay
 depends_on: [T0050, T0040]
