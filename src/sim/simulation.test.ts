@@ -96,7 +96,8 @@ describe('SimulationCore', () => {
     expect(Math.hypot(...snapshot.shipThrustVectorN)).toBeCloseTo(expectedForceN, 9);
     expect(snapshot.powerDrawW).toBeCloseTo(expectedForceN * SPEED_OF_LIGHT_KM_S * 1_000, 0);
     expect(snapshot.shipState[4] as number).toBeGreaterThan(circularState()[4] as number);
-    expect(snapshot.energySpentJ).toBe(0);
+    expect(snapshot.energySpentJ).toBeCloseTo(snapshot.powerDrawW * 10, 0);
+    expect(snapshot.properDeltaVMS).toBeGreaterThan(0);
   });
 
   it('keeps prograde hold tangent while the ship advances through its orbit', () => {

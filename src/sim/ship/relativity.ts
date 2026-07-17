@@ -22,6 +22,13 @@ export type RelativisticAccelerationEvaluator = (
   outputAcceleration: Float64Array,
 ) => void;
 
+/** Optional writer for passive state rates evaluated from the same DP54 stage. */
+export type RelativisticAdditionalRateWriter = (
+  outputDerivative: Float64Array,
+  properAccelerationKmS2: Float64Array,
+  inverseGamma: number,
+) => void;
+
 function dimensionlessCelerityMagnitude(ux: number, uy: number, uz: number): number {
   return Math.hypot(ux / SPEED_OF_LIGHT_KM_S, uy / SPEED_OF_LIGHT_KM_S, uz / SPEED_OF_LIGHT_KM_S);
 }
@@ -119,6 +126,7 @@ export function relativisticKineticEnergyJ(
 export function createRelativisticDerivative(
   gravity: RelativisticAccelerationEvaluator,
   properAcceleration: RelativisticAccelerationEvaluator,
+  additionalRates: RelativisticAdditionalRateWriter | null = null,
 ): Dp54Derivative {
   const gravityOutput = new Float64Array(3);
   const properAccelerationOutput = new Float64Array(3);
@@ -147,5 +155,6 @@ export function createRelativisticDerivative(
     outputDerivative[STATE_UZ] =
       (gravityOutput[2] as number) + (properAccelerationOutput[2] as number);
     outputDerivative[STATE_TAU] = inverseGamma;
+    additionalRates?.(outputDerivative, properAccelerationOutput, inverseGamma);
   };
 }

@@ -133,6 +133,9 @@ export interface CommandController {
 /** Synchronous setup-provided event fired when active thrust intent changes. */
 export type TrajectoryInvalidationListener = () => void;
 
+/** Synchronous observer for actual throttle transitions. */
+export type ThrottleChangeListener = (previousThrottle: number, nextThrottle: number) => void;
+
 function createOsculatingElementsStorage(): OsculatingElementsSnapshot {
   return {
     valid: false,
@@ -217,6 +220,7 @@ class SimulationCommands implements Commands {
     private readonly bodyIds: readonly string[],
     private readonly commandState: CommandState,
     private readonly onTrajectoryInvalidated: TrajectoryInvalidationListener | null,
+    private readonly onThrottleChanged: ThrottleChangeListener | null,
   ) {}
 
   setThrottle(fraction: number): void {
@@ -224,7 +228,9 @@ class SimulationCommands implements Commands {
       throw new RangeError('throttle must be a finite fraction in [0, 1]');
     }
     if (fraction === this.commandState.throttle) return;
+    const previousThrottle = this.commandState.throttle;
     this.commandState.throttle = fraction;
+    this.onThrottleChanged?.(previousThrottle, fraction);
     this.onTrajectoryInvalidated?.();
   }
 
@@ -288,6 +294,7 @@ class SimulationCommands implements Commands {
 export function createCommandController(
   bodyIds: readonly string[],
   onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
+  onThrottleChanged: ThrottleChangeListener | null = null,
 ): CommandController {
   const state: CommandState = {
     throttle: 0,
@@ -298,7 +305,7 @@ export function createCommandController(
     targetBodyId: null,
   };
   return {
-    commands: new SimulationCommands(bodyIds, state, onTrajectoryInvalidated),
+    commands: new SimulationCommands(bodyIds, state, onTrajectoryInvalidated, onThrottleChanged),
     state,
   };
 }
