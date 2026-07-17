@@ -6,8 +6,9 @@ Implement the pure TypeScript owner of simulation time, analytic body rails,
 the relativistic ship state, baseline ledger values, and the immutable-per-frame
 snapshot contract described by `docs/architecture.md`. The core advances a
 zero-thrust ship through the existing production DP54 integrator and exposes
-the player-intent command boundary without implementing the propulsion, warp,
-attitude, targeting, or analysis systems assigned to later tasks.
+the player-intent command boundary without implementing propulsion, warp
+auto-clamp/lockout, attitude dynamics, targeting behavior, or deferred analysis
+systems assigned to later tasks.
 
 ## Public boundary
 
@@ -55,12 +56,13 @@ the snapshot, and publishes it. A propagation failure throws before the buffer
 swap, preserving the last valid published snapshot.
 
 T0050 starts at warp `1` and applies canonical ladder selections without a
-clamp. T0052 adds substep-budget auto-clamp and thrust lockout. Throttle, thrust,
-power, and ledger totals remain zero; attitude is identity; there is no target,
-warning, or valid osculating solution by default. Commands validate and retain
-player intent in preallocated state; later tasks connect the remaining values
-to dynamics and derived analysis. The snapshot reports both requested and
-effective warp so T0052 can add clamps without an interface change.
+clamp. T0052 adds substep-budget auto-clamp and thrust lockout. The requested
+throttle is reported, while thrust, power, and ledger totals remain zero;
+attitude is identity, and there is no target, warning, or valid osculating
+solution by default. Commands validate and retain player intent in preallocated
+state; later tasks connect the remaining values to dynamics and derived
+analysis. The snapshot reports both requested and effective warp so T0052 can
+add clamps without an interface change.
 
 ## Barycenter and derived state
 

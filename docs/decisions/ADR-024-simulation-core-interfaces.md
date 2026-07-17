@@ -22,8 +22,9 @@ path.
    inactive buffer and publishes it only after successful propagation. A
    consumer may retain the published view through the next `step()` call, but
    not indefinitely. Authoritative ship dynamics use separate private buffers,
-   so runtime mutation of a published typed array cannot feed back into physics;
-   TypeScript consumers still receive the readonly interface contract.
+   so runtime mutation of a published typed array cannot feed back into physics.
+   TypeScript marks snapshot properties readonly, but typed-array elements stay
+   mutable by language design; isolation, not element freezing, protects state.
 2. Time is exposed as TDB seconds plus numeric UTC epoch milliseconds. UI code
    creates `Date` or strings only at display cadence. Warp exposes requested
    and effective factors plus a closed numeric clamp-reason code.
