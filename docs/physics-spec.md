@@ -196,12 +196,26 @@ P = F·c            (drive power for thrust F; braking and turning cost the same
 E_spent = ∫ P dt   (coordinate time; integrated inside the same substeps as motion — warp-invariant)
 ```
 
+`SimulationCore` integrates five private ledger quadratures alongside
+`(r,u,τ)` without expanding the public seven-component ship state. For
+`α_vector` in km/s²:
+
+```
+dE/dt = m · (1000·|α_vector|) · (1000·c)
+d(proper Δv)/dt = (1000·|α_vector|)/γ
+d(proper Δv_vector)/dt = (1000·α_vector)/γ
+```
+
+Ledger components use the same accepted/rejected DP54 stages and transactional
+rollback as motion. The vector is an inertial signed integral; scalar proper
+Δv is its non-negative path integral.
+
 - **Headline HUD metric: cumulative E_spent, displayed in Wh** (1 Wh = 3600 J; internal unit J). Formatter uses SI prefixes k, M, G, T, P, E, Z, Y — values are astronomically large by design (a LEO plane change is TWh-scale; pushing toward c diverges as (γ−1)mc²). 3 significant digits, e.g. `4.82 PWh`.
 - **Current power draw** `P = F·c` (W, same prefix formatter) shown live while thrusting.
 - Secondary readouts:
   - **Proper Δv** `= ∫ α dτ` (m/s) — what the crew experiences; the orbital-mechanics currency at low speed.
   - **Kinetic energy change** `ΔE_kin`, with `E_kin = (γ−1)·m·c²` — exposes both the Oberth effect and the relativistic divergence near c.
-- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, τ_start, τ_end, E_spent, proper Δv, peak power, dominant body, prograde/normal/radial decomposition}`.
+- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, τ_start, τ_end, E_spent, proper Δv, peak power, dominant body, prograde/normal/radial decomposition}`. The dominant body and normalized local axes are captured at burn start: `prograde = normalize(v_rel)`, `normal = normalize(r_rel × v_rel)`, `radial = normalize(r_rel)`. Components are signed dot products of the integrated inertial proper-Δv vector with those start axes. History is a preallocated 256-entry ring; oldest entries are overwritten.
 - **Why plane changes hurt (verify in tests):** E = c·|Δp| for any momentum change; leaving the ecliptic plane inherited from the solar system's angular momentum requires rotating a ~30 km/s momentum vector — the ledger must price that honestly (§7.8).
 - **Launch losses** (deferred launch phase only): gravity loss `= ∫ (μ⊕/r²)·sin γ_fp dt`, drag loss `= ∫ (D/m) dt`.
 

@@ -1,3 +1,4 @@
+import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import { createSimClock, tdbSecondsToUtcTimeMs, type SimClock } from '../core/time.js';
 import { evaluateBarycenterInto } from './analysis/barycenter.js';
 import { updateSnapshotDerivedState } from './analysis/snapshotDerived.js';
@@ -33,10 +34,12 @@ import {
   coordinateVelocityInto,
   createRelativisticDerivative,
   RELATIVISTIC_STATE_DIMENSION,
+  relativisticKineticEnergyJ,
   type RelativisticAccelerationEvaluator,
 } from './ship/relativity.js';
 import {
   evaluateBodyRateQuaternionInto,
+  selectMaximumGravityBodyIndex,
   writeAttitudeDirectionInto,
   writeForwardFromQuaternionInto,
   writeQuaternionFromForwardInto,
@@ -48,6 +51,18 @@ import {
   writeProperAccelerationInto,
   writeThrustForceInto,
 } from './ship/thrust.js';
+import {
+  createBurnLog,
+  SIMULATION_STATE_DIMENSION,
+  STATE_ENERGY_J,
+  STATE_PROPER_DELTA_V_MS,
+  STATE_PROPER_DELTA_V_VECTOR_X_MS,
+  STATE_PROPER_DELTA_V_VECTOR_Y_MS,
+  STATE_PROPER_DELTA_V_VECTOR_Z_MS,
+  writeLedgerDerivativeRates,
+  type BurnLogRecorder,
+  type BurnLogView,
+} from './ship/ledger.js';
 
 /** Setup-time inputs owned by one simulation core instance. */
 export interface SimulationCoreOptions {
@@ -80,13 +95,46 @@ function validateInitialState(initialShipState: Float64Array): void {
   }
 }
 
+function createSimulationTolerance(source: Dp54Tolerance): Dp54Tolerance {
+  if (source.absolute.length !== RELATIVISTIC_STATE_DIMENSION) {
+    throw new RangeError('ship integration tolerance must contain seven absolute components');
+  }
+  const absolute = new Float64Array(SIMULATION_STATE_DIMENSION);
+  absolute.set(source.absolute);
+  absolute[STATE_ENERGY_J] = 1;
+  absolute[STATE_PROPER_DELTA_V_MS] = 1e-6;
+  absolute[STATE_PROPER_DELTA_V_VECTOR_X_MS] = 1e-6;
+  absolute[STATE_PROPER_DELTA_V_VECTOR_Y_MS] = 1e-6;
+  absolute[STATE_PROPER_DELTA_V_VECTOR_Z_MS] = 1e-6;
+  return {
+    absolute,
+    relative: source.relative,
+    initialStepSec: source.initialStepSec,
+    maxAcceptedSteps: source.maxAcceptedSteps,
+  };
+}
+
+function normalizeInto(output: Float64Array, x: number, y: number, z: number): void {
+  const magnitude = Math.hypot(x, y, z);
+  if (!Number.isFinite(magnitude) || magnitude === 0) {
+    output.fill(0);
+    return;
+  }
+  output[0] = x / magnitude;
+  output[1] = y / magnitude;
+  output[2] = z / magnitude;
+}
+
 /** Pure owner of simulation time, rails, ship propagation, ledger, and snapshots. */
 export class SimulationCore {
   readonly commands: Commands;
+  readonly burnLog: BurnLogView;
 
   private readonly catalog: CompiledRailsCatalog;
   private readonly shipMassKg: number;
   private readonly maximumProperAccelerationKmS2: number;
+  private readonly initialKineticEnergyJ: number;
+  private readonly burnLogRecorder: BurnLogRecorder;
   private readonly clock: SimClock;
   private readonly snapshots: readonly [SimulationSnapshotBuffer, SimulationSnapshotBuffer];
   private readonly shipStates: readonly [Float64Array, Float64Array];
@@ -105,6 +153,9 @@ export class SimulationCore {
   private readonly attitudeDirection: Float64Array;
   private readonly attitudeCoordinateVelocityKmS: Float64Array;
   private readonly endpointProperAccelerationKmS2: Float64Array;
+  private readonly burnProgradeBasis: Float64Array;
+  private readonly burnNormalBasis: Float64Array;
+  private readonly burnRadialBasis: Float64Array;
   private readonly derivative: ReturnType<typeof createRelativisticDerivative>;
   private currentSnapshotIndex = 0;
   private stepStartTimeSec = 0;
@@ -124,10 +175,21 @@ export class SimulationCore {
     this.maximumProperAccelerationKmS2 = validateMaxProperAcceleration(
       options.maxProperAccelerationMS2 ?? DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
     );
+    this.initialKineticEnergyJ = relativisticKineticEnergyJ(
+      options.initialShipState[3] as number,
+      options.initialShipState[4] as number,
+      options.initialShipState[5] as number,
+      this.shipMassKg,
+    );
+    const burnLogController = createBurnLog();
+    this.burnLog = burnLogController.view;
+    this.burnLogRecorder = burnLogController.recorder;
     this.clock = createSimClock(initialTimeSec);
     this.stepStartTimeSec = initialTimeSec;
-    this.integrationTolerance = options.integrationTolerance ?? createShipDp54Tolerance();
-    this.integrationWorkspace = createDp54Workspace(RELATIVISTIC_STATE_DIMENSION);
+    this.integrationTolerance = createSimulationTolerance(
+      options.integrationTolerance ?? createShipDp54Tolerance(),
+    );
+    this.integrationWorkspace = createDp54Workspace(SIMULATION_STATE_DIMENSION);
     this.integrationResult = createDp54Result();
     this.railsWorkspace = createRailsWorkspace();
     this.gravityRailsState = createRailsState(this.catalog);
@@ -139,12 +201,15 @@ export class SimulationCore {
     this.attitudeDirection = new Float64Array(3);
     this.attitudeCoordinateVelocityKmS = new Float64Array(3);
     this.endpointProperAccelerationKmS2 = new Float64Array(3);
+    this.burnProgradeBasis = new Float64Array(3);
+    this.burnNormalBasis = new Float64Array(3);
+    this.burnRadialBasis = new Float64Array(3);
 
     const firstSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     const secondSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     this.snapshots = [firstSnapshot, secondSnapshot];
-    const firstShipState = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
-    const secondShipState = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    const firstShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
+    const secondShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
     firstShipState.set(options.initialShipState);
     secondShipState.set(options.initialShipState);
     this.shipStates = [firstShipState, secondShipState];
@@ -156,6 +221,9 @@ export class SimulationCore {
     const commandController = createCommandController(
       this.catalog.bodyIds,
       options.onTrajectoryInvalidated ?? null,
+      (_previousThrottle, nextThrottle) => {
+        this.handleThrottleChange(nextThrottle);
+      },
     );
     this.commands = commandController.commands;
     this.commandState = commandController.state;
@@ -185,7 +253,18 @@ export class SimulationCore {
         outputAcceleration,
       );
     };
-    this.derivative = createRelativisticDerivative(gravityEvaluator, properAccelerationEvaluator);
+    this.derivative = createRelativisticDerivative(
+      gravityEvaluator,
+      properAccelerationEvaluator,
+      (outputDerivative, properAccelerationKmS2, inverseGamma) => {
+        writeLedgerDerivativeRates(
+          outputDerivative,
+          properAccelerationKmS2,
+          inverseGamma,
+          this.shipMassKg,
+        );
+      },
+    );
 
     this.evaluateAttitudeAndAcceleration(
       initialTimeSec,
@@ -254,6 +333,10 @@ export class SimulationCore {
     );
     this.clock.timeSec = targetTimeSec;
     this.attitudeQuaternion.set(this.endpointAttitudeQuaternion);
+    if (targetTimeSec > this.stepStartTimeSec && this.commandState.throttle > 0) {
+      this.burnLogRecorder.notePeakPower(this.powerForThrottle(this.commandState.throttle));
+    }
+    this.synchronizeActiveBurn(nextShipState);
     const nextRailsState =
       nextSnapshotIndex === 0 ? this.snapshotRailsStates[0] : this.snapshotRailsStates[1];
     this.fillSnapshot(nextSnapshot, nextRailsState, nextShipState);
@@ -274,7 +357,9 @@ export class SimulationCore {
     railsState: RailsState,
     shipState: Float64Array,
   ): void {
-    snapshot.shipState.set(shipState);
+    for (let index = 0; index < RELATIVISTIC_STATE_DIMENSION; index += 1) {
+      snapshot.shipState[index] = shipState[index] as number;
+    }
     evaluateRailsInto(railsState, this.catalog, this.clock.timeSec, this.railsWorkspace);
     evaluateBarycenterInto(
       snapshot.barycenterPositionKm,
@@ -301,7 +386,112 @@ export class SimulationCore {
       this.shipMassKg,
     );
     snapshot.powerDrawW = photonDrivePowerW(this.endpointProperAccelerationKmS2, this.shipMassKg);
+    snapshot.energySpentJ = shipState[STATE_ENERGY_J] as number;
+    snapshot.properDeltaVMS = shipState[STATE_PROPER_DELTA_V_MS] as number;
+    snapshot.kineticEnergyChangeJ =
+      relativisticKineticEnergyJ(
+        shipState[3] as number,
+        shipState[4] as number,
+        shipState[5] as number,
+        this.shipMassKg,
+      ) - this.initialKineticEnergyJ;
     updateSnapshotDerivedState(snapshot, this.shipMassKg);
+  }
+
+  private currentPrivateShipState(): Float64Array {
+    return this.currentSnapshotIndex === 0 ? this.shipStates[0] : this.shipStates[1];
+  }
+
+  private powerForThrottle(throttle: number): number {
+    return (
+      this.shipMassKg *
+      throttle *
+      this.maximumProperAccelerationKmS2 *
+      1_000 *
+      SPEED_OF_LIGHT_KM_S *
+      1_000
+    );
+  }
+
+  private handleThrottleChange(nextThrottle: number): void {
+    const state = this.currentPrivateShipState();
+    if (nextThrottle <= 0) {
+      this.synchronizeActiveBurn(state);
+      this.burnLogRecorder.end();
+      return;
+    }
+    if (this.burnLog.activeBurn !== null) {
+      return;
+    }
+    evaluateRailsInto(
+      this.gravityRailsState,
+      this.catalog,
+      this.clock.timeSec,
+      this.railsWorkspace,
+    );
+    coordinateVelocityInto(
+      this.attitudeCoordinateVelocityKmS,
+      state[3] as number,
+      state[4] as number,
+      state[5] as number,
+    );
+    const dominantBodyIndex = selectMaximumGravityBodyIndex(
+      state,
+      this.catalog.muKm3S2,
+      this.gravityRailsState.positionsKm,
+    );
+    this.writeBurnBasis(state, dominantBodyIndex);
+    this.burnLogRecorder.begin(
+      this.clock.timeSec,
+      state[6] as number,
+      state[STATE_ENERGY_J] as number,
+      state[STATE_PROPER_DELTA_V_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_X_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_Y_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_Z_MS] as number,
+      dominantBodyIndex < 0 ? null : (this.catalog.bodyIds[dominantBodyIndex] ?? null),
+      this.burnProgradeBasis,
+      this.burnNormalBasis,
+      this.burnRadialBasis,
+      0,
+    );
+  }
+
+  private synchronizeActiveBurn(state: Float64Array): void {
+    this.burnLogRecorder.synchronize(
+      this.clock.timeSec,
+      state[6] as number,
+      state[STATE_ENERGY_J] as number,
+      state[STATE_PROPER_DELTA_V_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_X_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_Y_MS] as number,
+      state[STATE_PROPER_DELTA_V_VECTOR_Z_MS] as number,
+    );
+  }
+
+  private writeBurnBasis(state: Float64Array, bodyIndex: number): void {
+    if (bodyIndex < 0) {
+      this.burnProgradeBasis.fill(0);
+      this.burnNormalBasis.fill(0);
+      this.burnRadialBasis.fill(0);
+      return;
+    }
+    const offset = bodyIndex * 3;
+    const rx = (state[0] as number) - (this.gravityRailsState.positionsKm[offset] as number);
+    const ry = (state[1] as number) - (this.gravityRailsState.positionsKm[offset + 1] as number);
+    const rz = (state[2] as number) - (this.gravityRailsState.positionsKm[offset + 2] as number);
+    const vx =
+      (this.attitudeCoordinateVelocityKmS[0] as number) -
+      (this.gravityRailsState.velocitiesKmS[offset] as number);
+    const vy =
+      (this.attitudeCoordinateVelocityKmS[1] as number) -
+      (this.gravityRailsState.velocitiesKmS[offset + 1] as number);
+    const vz =
+      (this.attitudeCoordinateVelocityKmS[2] as number) -
+      (this.gravityRailsState.velocitiesKmS[offset + 2] as number);
+    normalizeInto(this.burnProgradeBasis, vx, vy, vz);
+    normalizeInto(this.burnRadialBasis, rx, ry, rz);
+    normalizeInto(this.burnNormalBasis, ry * vz - rz * vy, rz * vx - rx * vz, rx * vy - ry * vx);
   }
 
   private evaluateAttitudeAndAcceleration(
