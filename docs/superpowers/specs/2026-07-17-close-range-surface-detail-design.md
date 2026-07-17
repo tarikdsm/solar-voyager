@@ -68,7 +68,7 @@ When enabled, the shader samples the seamless pair at `uv * tilesPerEquator` and
 
 The loaded Earth model's `mat_clouds` mesh is retained. Its existing alpha-map setup, transparent depth behavior, and authored radius remain unchanged. Model preparation stores the cloud object once; the frame update changes only its Y-rotation and matrix using a deterministic, slow wall-time phase, independent of the surface mesh. No object, matrix, or array is created in the frame loop.
 
-The atmosphere reuses the cloud shell geometry in one additional mesh created during model preparation. It uses one precompiled transparent back-face Fresnel material, slightly larger than the cloud shell, with blue limb color, additive blending, depth test enabled, and depth writes disabled. Its opacity participates in the tier-3 fade through the same material bookkeeping as the model. It adds one draw call only while the Earth tier-3 model is visible.
+The atmosphere reuses the cloud shell geometry in one additional mesh created during model preparation. It uses one precompiled transparent back-face `MeshBasicMaterial` with an isolated Fresnel compile hook, slightly larger than the cloud shell, with blue limb color, additive blending, depth test enabled, and depth writes disabled. Retaining a built-in material keeps Three.js's standard opacity uniform synchronized with the tier-3 fade bookkeeping. It adds one draw call only while the Earth tier-3 model is visible.
 
 ## Ownership and data flow
 
@@ -113,4 +113,3 @@ No `SimSnapshot`, `Commands`, `bodies.json`, physics formula, or layer boundary 
 - Record paired native 1920×1080 telemetry before/after data on the available hardware, including GPU p50/p75/p99, frame cadence, draw calls, triangles, heap delta, and browser errors.
 - The near-Earth render remains at or below the 10 ms render target on reference hardware. If the specified 2023+ reference GPU is unavailable, use the maintainer-approved conservative local hardware proxy and report both absolute time and incremental T0082 cost without hiding the limitation.
 - Run lint, typecheck, Prettier, Vitest, Python/tool tests, every browser regression, build, asset budgets, and task-schema validation before review.
-
