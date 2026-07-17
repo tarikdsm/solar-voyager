@@ -1,6 +1,6 @@
 id: T0058
 title: Save/load, settings, input mapping
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0058-save-load-settings-input
 depends_on: [T0050]
