@@ -133,6 +133,29 @@ describe('OrbitCameraController', () => {
     expect(controller.cameraPositionKm).toEqual({ x: beforeX, y: beforeY, z: beforeZ });
   });
 
+  it('keeps the arrival continuous when zoom reaches the surface limit mid-transfer', () => {
+    const { controller } = createFixture();
+    controller.focusBody('jupiter');
+    controller.update(TRANSFER_DURATION_SEC / 2);
+    controller.zoomByWheel(-1_000);
+    controller.update(TRANSFER_DURATION_SEC / 2 - 0.001);
+    const beforeX = controller.cameraPositionKm.x;
+    const beforeY = controller.cameraPositionKm.y;
+    const beforeZ = controller.cameraPositionKm.z;
+
+    controller.update(0.001);
+
+    expect(controller.isTransitioning).toBe(false);
+    expect(controller.distanceKm).toBeCloseTo(JUPITER_RADIUS_KM + JUPITER_RADIUS_KM * 1e-6, 7);
+    expect(
+      Math.hypot(
+        controller.cameraPositionKm.x - beforeX,
+        controller.cameraPositionKm.y - beforeY,
+        controller.cameraPositionKm.z - beforeZ,
+      ),
+    ).toBeLessThan(5);
+  });
+
   it('cycles focus targets in both directions', () => {
     const { controller } = createFixture();
 
@@ -178,5 +201,16 @@ describe('OrbitCameraController', () => {
 
     const { controller } = createFixture();
     expect(controller.focusBody('saturn')).toBe(false);
+  });
+
+  it('rejects non-finite destination coordinates before and during a transfer', () => {
+    const first = createFixture();
+    first.positionsKm[3] = Number.NaN;
+    expect(() => first.controller.focusBody('jupiter')).toThrow(/finite/u);
+
+    const second = createFixture();
+    second.controller.focusBody('jupiter');
+    second.positionsKm[4] = Number.POSITIVE_INFINITY;
+    expect(() => second.controller.update(0.1)).toThrow(/finite/u);
   });
 });

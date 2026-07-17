@@ -59,6 +59,9 @@ velocity, so handoff into and out of the orbit state is continuous.
 The destination position is read from the caller-owned packed array on every
 update, so the same implementation follows moving simulation targets. A new
 focus request during a transfer starts from the current interpolated state.
+The surface-safe minimum distance is itself smootherstep-interpolated between
+the source and destination targets, preventing zoom input during travel from
+placing the camera inside the destination or creating an arrival-frame clamp.
 
 ## Input and Accessibility
 

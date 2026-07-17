@@ -15,7 +15,8 @@ handoff_notes: >-
   Float64 allocation-free orbit controller, disposable pointer/wheel/keyboard
   input adapter, HUD focus label, and production integration implemented. Real
   WebGL regression verifies 31 pixel-stable surface frames, a smooth 90-step
-  Earth-to-Jupiter transfer, and the production J shortcut. Full Vitest (282
-  passed), render regressions, tools, lint, typecheck, format, build, budgets,
-  and task schema pass. Benchmark: unchanged 150/150/166.7 ms headless
-  median/p75/p99 versus base; see docs/bench/T0044-summary.md.
+  Earth-to-Jupiter transfer with mid-flight zoom, and a completed production
+  transfer with visible Jupiter. Full Vitest (284 passed), render regressions,
+  tools, lint, typecheck, format, build, budgets, and task schema pass.
+  Benchmark: unchanged 150/150/166.7 ms headless median/p75/p99 versus base;
+  see docs/bench/T0044-summary.md.

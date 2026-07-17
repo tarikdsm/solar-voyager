@@ -17,6 +17,8 @@ heap growth was 1,031,663 bytes lower than the baseline.
 
 The dedicated WebGL acceptance (`npm run test:camera-controls`) additionally
 verified 31 byte-stable surface-skimming frames and a 90-step Earth-to-Jupiter
-transfer. Its maximum per-step displacement was 13,951,067.344 km over a
-639,687,262.867 km target transfer, with departure/arrival steps of
-123,711.239 km and 110,267.059 km respectively.
+transfer with an accumulated `-1000` wheel delta at midpoint. Its maximum
+non-input per-step displacement was 13,951,067.344 km over a 639,687,262.867 km
+target transfer, with departure/arrival steps of 123,711.239 km and 6,588.489 km
+respectively. Production screenshots also prove that the center view changes
+from Earth to a visible Jupiter after the real application transfer completes.

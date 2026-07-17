@@ -64,6 +64,8 @@ export class OrbitCameraController {
   private transitionStartFocusZ = 0;
   private transitionStartDistanceKm = 0;
   private transitionEndDistanceKm = 0;
+  private transitionStartMinimumDistanceKm = 0;
+  private transitionEndMinimumDistanceKm = 0;
   private transitionTravelDistanceKm = 0;
   private transitionZoomFactor = 1;
 
@@ -151,7 +153,7 @@ export class OrbitCameraController {
     if (!Number.isFinite(wheelDelta)) throw new RangeError('Camera wheel delta must be finite.');
     const scale = Math.exp(wheelDelta * WHEEL_EXPONENT_PER_DELTA);
     const minimumDistanceKm = this.transitionActive
-      ? MIN_CLEARANCE_KM
+      ? this.transitionMinimumDistanceAtCurrentTime()
       : this.minimumDistanceForTarget(this.focusTargetIndex);
     const nextDistanceKm = clamp(
       this.currentDistanceKm * scale,
@@ -183,15 +185,24 @@ export class OrbitCameraController {
     if (targetX === undefined || targetY === undefined || targetZ === undefined) {
       throw new Error('Requested camera target position is missing.');
     }
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || !Number.isFinite(targetZ)) {
+      throw new RangeError('Requested camera target position must be finite.');
+    }
 
+    const startMinimumDistanceKm = this.transitionActive
+      ? this.transitionMinimumDistanceAtCurrentTime()
+      : this.minimumDistanceForTarget(this.focusTargetIndex);
     this.transitionStartFocusX = this.focusPositionKm.x;
     this.transitionStartFocusY = this.focusPositionKm.y;
     this.transitionStartFocusZ = this.focusPositionKm.z;
     this.transitionStartDistanceKm = this.currentDistanceKm;
     const targetRadiusKm = this.targets[nextIndex]?.meanRadiusKm;
     if (targetRadiusKm === undefined) throw new Error('Requested camera target radius is missing.');
+    const endMinimumDistanceKm = this.minimumDistanceForTarget(nextIndex);
+    this.transitionStartMinimumDistanceKm = startMinimumDistanceKm;
+    this.transitionEndMinimumDistanceKm = endMinimumDistanceKm;
     this.transitionEndDistanceKm = Math.max(
-      this.minimumDistanceForTarget(nextIndex),
+      endMinimumDistanceKm,
       targetRadiusKm * DEFAULT_FRAME_RADIUS_MULTIPLIER,
     );
     const travelX = targetX - this.transitionStartFocusX;
@@ -243,7 +254,7 @@ export class OrbitCameraController {
       this.readTargetPositionIntoFocus();
       this.currentDistanceKm = clamp(
         this.transitionEndDistanceKm * this.transitionZoomFactor,
-        this.minimumDistanceForTarget(this.focusTargetIndex),
+        this.transitionEndMinimumDistanceKm,
         MAX_DISTANCE_KM,
       );
       this.transitionActive = false;
@@ -259,6 +270,9 @@ export class OrbitCameraController {
     const targetZ = this.positionsKm[offset + 2];
     if (targetX === undefined || targetY === undefined || targetZ === undefined) {
       throw new Error('Active camera target position is incomplete.');
+    }
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || !Number.isFinite(targetZ)) {
+      throw new RangeError('Active camera target position must be finite.');
     }
     const blend = smootherstep(time);
     this.focusPositionKm.x =
@@ -277,7 +291,7 @@ export class OrbitCameraController {
       (logarithmicDistanceKm +
         this.transitionTravelDistanceKm * TRANSFER_CONTEXT_RATIO * envelope * envelope) *
         this.transitionZoomFactor,
-      MIN_CLEARANCE_KM,
+      this.transitionMinimumDistanceAtBlend(blend),
       MAX_DISTANCE_KM,
     );
     this.recomputeCamera();
@@ -287,6 +301,18 @@ export class OrbitCameraController {
     const radiusKm = this.targets[index]?.meanRadiusKm;
     if (radiusKm === undefined) throw new Error('Camera target radius is missing.');
     return radiusKm + Math.max(MIN_CLEARANCE_KM, radiusKm * RELATIVE_CLEARANCE);
+  }
+
+  private transitionMinimumDistanceAtCurrentTime(): number {
+    const time = this.transitionElapsedSec / this.transferDurationSec;
+    return this.transitionMinimumDistanceAtBlend(smootherstep(time));
+  }
+
+  private transitionMinimumDistanceAtBlend(blend: number): number {
+    return (
+      this.transitionStartMinimumDistanceKm +
+      (this.transitionEndMinimumDistanceKm - this.transitionStartMinimumDistanceKm) * blend
+    );
   }
 
   private readTargetPositionIntoFocus(): void {

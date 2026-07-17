@@ -32,6 +32,7 @@ interface CameraFrameSnapshot {
 interface CameraControlsHarness {
   beginJupiterTransfer(): boolean;
   renderFrame(deltaSec: number): CameraFrameSnapshot;
+  zoomByWheel(wheelDelta: number): void;
   zoomToEarthSurface(): CameraFrameSnapshot;
 }
 
@@ -148,6 +149,9 @@ globalThis.__cameraControlsHarness = {
     return controller.focusBody('jupiter');
   },
   renderFrame,
+  zoomByWheel(wheelDelta) {
+    controller.zoomByWheel(wheelDelta);
+  },
   zoomToEarthSurface() {
     controller.zoomByWheel(-1_000_000);
     controller.orbitBy(0.731, 0.419);
