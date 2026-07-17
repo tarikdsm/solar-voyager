@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:net';
 
-import { assertPortAvailable, percentile } from './scaffoldBenchUtils.mjs';
+import {
+  assertPortAvailable,
+  hardwareGpuPreferenceArg,
+  percentile,
+} from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
 
@@ -41,6 +45,16 @@ describe('percentile', () => {
 
   it('rejects an empty sample set', () => {
     expect(() => percentile([], 0.5)).toThrow('without frame samples');
+  });
+});
+
+describe('hardwareGpuPreferenceArg', () => {
+  it('selects Chromium low-power GPU preference for the conservative proxy', () => {
+    expect(hardwareGpuPreferenceArg(true)).toBe('--force_low_power_gpu');
+  });
+
+  it('keeps the high-performance GPU preference by default', () => {
+    expect(hardwareGpuPreferenceArg(false)).toBe('--force_high_performance_gpu');
   });
 });
 

@@ -67,6 +67,7 @@ const VERTEX_DECLARATIONS = /* glsl */ `
 varying vec2 vSurfaceDetailUv;
 varying vec3 vSurfaceProceduralNoise;
 uniform vec2 uSurfaceDetailSeed;
+uniform float uSurfaceProceduralBlend;
 
 vec3 surfaceDetailPeriodicWave3( vec3 position ) {
   vec3 seedPhase = vec3(
@@ -91,7 +92,10 @@ vec3 surfaceDetailFbm3( vec3 position ) {
 
 const VERTEX_ASSIGNMENTS = /* glsl */ `
 vSurfaceDetailUv = uv;
-vSurfaceProceduralNoise = surfaceDetailFbm3( normalize( position ) * 96.0 );
+vSurfaceProceduralNoise = vec3( 0.5 );
+if ( uSurfaceProceduralBlend > 0.0 ) {
+  vSurfaceProceduralNoise = surfaceDetailFbm3( normalize( position ) * 96.0 );
+}
 `;
 
 const FRAGMENT_DECLARATIONS = /* glsl */ `
