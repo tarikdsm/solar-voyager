@@ -85,6 +85,13 @@ PBR metal-rough only (glTF standard): baseColor, normal, roughness, emissive. No
 - `mat_clouds` — cloud shell
 - Ship: any names, but `mat_engine_glow` gets emissive animation.
 
+When one asset has maps for multiple materials, name each external image
+`<asset>_<material-name>__<role>.<ext>`, for example
+`ship_mat_hull__albedo.png` or `ship_mat_engine_glow__emissive.png`. Supported
+standard roles are `albedo`, `normal`, `metallic`, `roughness`, `orm`,
+`emissive`, `ao`, and `occlusion`. Ingest resolves the material name exactly;
+the authored GLB must contain the named material.
+
 ## 7. Recommended workflow (Blender)
 
 1. Check `data/bodies.json` for radius/oblateness/seed of your body (or add the entry first — see `agents/skills/add-celestial-body.md`).

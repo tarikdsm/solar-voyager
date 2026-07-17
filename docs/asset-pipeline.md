@@ -43,6 +43,13 @@ equirectangular surface maps, including per-loop seam and pole handling.
 - **No Draco at export** — ingest compresses (position quantization 14 bit, normal 10, texcoord 12).
 - Textures NOT embedded — referenced externally as JPEG/PNG; ingest encodes complete-mip KTX2 (ETC1S for color maps, UASTC for normal maps). Color output is tagged sRGB/BT.709; normals are linear. Hero cloud/emissive sources above 4k are downsampled to their 4096×2048 runtime tier.
 - Runtime GLBs require `KHR_texture_basisu` and point to the emitted external KTX2 files. Standard albedo, normal, emissive, metallic-roughness, occlusion, cloud, and ring slots are wired by the material/filename conventions; detail-map URIs are recorded in `mat_surface.extras.solarVoyagerTextures` for the close-range shader.
+- Textures that target a material other than the category default use
+  `<asset>_<material-name>__<role>.<ext>`. For example,
+  `ship_mat_hull__normal.png` targets the `normal` slot of `mat_hull`, while
+  `ship_mat_engine_glow__emissive.png` targets the emissive slot of
+  `mat_engine_glow`. Ingest requires the exact material name and rejects a
+  scoped texture when that material is absent. Unscoped body texture names
+  retain their existing `mat_surface`, `mat_clouds`, and `mat_rings` behavior.
 - Every albedo also produces a standalone ETC1S sphere tier: 2048x1024 for planets and 1024x512 for moons, dwarfs, asteroids, and comets. These derivatives are listed explicitly in the runtime manifest. Ingest copies the pinned Three.js Basis and Draco decoders plus its license to `public/assets/codecs/`; runtime loading never depends on a codec CDN (ADR-023).
 
 ### Ingest commands
