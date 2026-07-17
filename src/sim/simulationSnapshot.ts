@@ -1,4 +1,4 @@
-import { WARP_LADDER, type WarpFactor } from '../core/time.js';
+import { MAX_THRUST_WARP, WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { RELATIVISTIC_STATE_DIMENSION } from './ship/relativity.js';
 
 /** Stable codes explaining why effective warp differs from requested warp. */
@@ -227,10 +227,11 @@ class SimulationCommands implements Commands {
     if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
       throw new RangeError('throttle must be a finite fraction in [0, 1]');
     }
-    if (fraction === this.commandState.throttle) return;
+    const effectiveFraction = this.commandState.requestedWarp > MAX_THRUST_WARP ? 0 : fraction;
+    if (effectiveFraction === this.commandState.throttle) return;
     const previousThrottle = this.commandState.throttle;
-    this.commandState.throttle = fraction;
-    this.onThrottleChanged?.(previousThrottle, fraction);
+    this.commandState.throttle = effectiveFraction;
+    this.onThrottleChanged?.(previousThrottle, effectiveFraction);
     this.onTrajectoryInvalidated?.();
   }
 
@@ -267,6 +268,12 @@ class SimulationCommands implements Commands {
   setWarp(warp: WarpFactor): void {
     if (!isWarpFactor(warp)) throw new RangeError('warp must use the canonical ladder');
     this.commandState.requestedWarp = warp;
+    if (warp > MAX_THRUST_WARP && this.commandState.throttle > 0) {
+      const previousThrottle = this.commandState.throttle;
+      this.commandState.throttle = 0;
+      this.onThrottleChanged?.(previousThrottle, 0);
+      this.onTrajectoryInvalidated?.();
+    }
   }
 
   setTarget(bodyId: string | null): void {

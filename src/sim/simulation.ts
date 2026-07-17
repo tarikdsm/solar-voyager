@@ -1,5 +1,12 @@
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
-import { createSimClock, tdbSecondsToUtcTimeMs, type SimClock } from '../core/time.js';
+import {
+  MAX_THRUST_WARP,
+  WARP_LADDER,
+  createSimClock,
+  tdbSecondsToUtcTimeMs,
+  type SimClock,
+  type WarpFactor,
+} from '../core/time.js';
 import { evaluateBarycenterInto } from './analysis/barycenter.js';
 import { updateSnapshotDerivedState } from './analysis/snapshotDerived.js';
 import {
@@ -141,8 +148,10 @@ export class SimulationCore {
   private readonly snapshotRailsStates: readonly [RailsState, RailsState];
   private readonly commandState: CommandState;
   private readonly integrationTolerance: Dp54Tolerance;
+  private readonly integrationSegmentTolerance: Dp54Tolerance;
   private readonly integrationWorkspace: Dp54Workspace;
   private readonly integrationResult: Dp54Result;
+  private readonly checkpointShipState: Float64Array;
   private readonly railsWorkspace: RailsWorkspace;
   private readonly gravityRailsState: RailsState;
   private readonly attitudeQuaternion: Float64Array;
@@ -159,6 +168,8 @@ export class SimulationCore {
   private readonly derivative: ReturnType<typeof createRelativisticDerivative>;
   private currentSnapshotIndex = 0;
   private stepStartTimeSec = 0;
+  private effectiveWarp: WarpFactor = 1;
+  private warpClampReason: WarpClampReason = WarpClampReason.NONE;
 
   constructor(options: SimulationCoreOptions) {
     validateInitialState(options.initialShipState);
@@ -189,8 +200,15 @@ export class SimulationCore {
     this.integrationTolerance = createSimulationTolerance(
       options.integrationTolerance ?? createShipDp54Tolerance(),
     );
+    this.integrationSegmentTolerance = {
+      absolute: this.integrationTolerance.absolute,
+      relative: this.integrationTolerance.relative,
+      initialStepSec: this.integrationTolerance.initialStepSec,
+      maxAcceptedSteps: this.integrationTolerance.maxAcceptedSteps,
+    };
     this.integrationWorkspace = createDp54Workspace(SIMULATION_STATE_DIMENSION);
     this.integrationResult = createDp54Result();
+    this.checkpointShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
     this.railsWorkspace = createRailsWorkspace();
     this.gravityRailsState = createRailsState(this.catalog);
     this.attitudeQuaternion = new Float64Array([0, 0, 0, 1]);
@@ -288,9 +306,9 @@ export class SimulationCore {
       throw new RangeError('wall delta must be finite and non-negative');
     }
 
-    const effectiveWarp = this.commandState.requestedWarp;
-    const targetTimeSec = this.clock.timeSec + wallDeltaSec * effectiveWarp;
-    if (!Number.isFinite(targetTimeSec)) {
+    const requestedWarp = this.commandState.requestedWarp;
+    const requestedTargetTimeSec = this.clock.timeSec + wallDeltaSec * requestedWarp;
+    if (!Number.isFinite(requestedTargetTimeSec)) {
       throw new RangeError('simulation endpoint must be finite');
     }
 
@@ -304,26 +322,59 @@ export class SimulationCore {
     this.angularVelocityBodyRadS[0] = this.commandState.rotationRatesRadS[2] as number;
     this.angularVelocityBodyRadS[1] = this.commandState.rotationRatesRadS[0] as number;
     this.angularVelocityBodyRadS[2] = this.commandState.rotationRatesRadS[1] as number;
-    propagate(
-      nextShipState,
-      currentShipState,
-      this.clock.timeSec,
-      targetTimeSec,
-      this.derivative,
-      this.integrationTolerance,
-      this.integrationWorkspace,
-      this.integrationResult,
-    );
+    this.checkpointShipState.set(currentShipState);
 
-    if (!this.integrationResult.reachedEnd) {
+    const requestedWarpIndex = WARP_LADDER.indexOf(requestedWarp);
+    const frameStartTimeSec = this.clock.timeSec;
+    const frameStepBudget = this.integrationTolerance.maxAcceptedSteps;
+    let acceptedSteps = 0;
+    let segmentStartTimeSec = frameStartTimeSec;
+    let suggestedStepSec = this.integrationTolerance.initialStepSec;
+    let completedWarp: WarpFactor | null = null;
+    let budgetExhausted = false;
+
+    for (let warpIndex = 0; warpIndex <= requestedWarpIndex; warpIndex += 1) {
+      const candidateWarp = WARP_LADDER[warpIndex] as WarpFactor;
+      const candidateTimeSec = frameStartTimeSec + wallDeltaSec * candidateWarp;
+      this.integrationSegmentTolerance.initialStepSec = suggestedStepSec;
+      this.integrationSegmentTolerance.maxAcceptedSteps = frameStepBudget - acceptedSteps;
+      propagate(
+        nextShipState,
+        this.checkpointShipState,
+        segmentStartTimeSec,
+        candidateTimeSec,
+        this.derivative,
+        this.integrationSegmentTolerance,
+        this.integrationWorkspace,
+        this.integrationResult,
+      );
+      acceptedSteps += this.integrationResult.acceptedSteps;
+
+      if (this.integrationResult.reachedEnd) {
+        this.checkpointShipState.set(nextShipState);
+        segmentStartTimeSec = candidateTimeSec;
+        completedWarp = candidateWarp;
+        if (this.integrationResult.nextStepSec !== 0) {
+          suggestedStepSec = this.integrationResult.nextStepSec;
+        }
+        continue;
+      }
       if (this.integrationResult.budgetExhausted) {
-        throw new Error('ship propagation exhausted the integration budget');
+        budgetExhausted = true;
+        break;
       }
       if (this.integrationResult.stepUnderflow) {
         throw new Error('ship propagation step underflow');
       }
       throw new Error('ship propagation produced a non-finite state');
     }
+
+    if (completedWarp === null) {
+      throw new Error('ship propagation exhausted the integration budget');
+    }
+
+    const targetTimeSec = frameStartTimeSec + wallDeltaSec * completedWarp;
+    if (budgetExhausted) nextShipState.set(this.checkpointShipState);
 
     this.evaluateAttitudeAndAcceleration(
       targetTimeSec,
@@ -337,6 +388,12 @@ export class SimulationCore {
       this.burnLogRecorder.notePeakPower(this.powerForThrottle(this.commandState.throttle));
     }
     this.synchronizeActiveBurn(nextShipState);
+    this.effectiveWarp = completedWarp;
+    this.warpClampReason = budgetExhausted
+      ? WarpClampReason.INTEGRATION_BUDGET
+      : requestedWarp > MAX_THRUST_WARP
+        ? WarpClampReason.THRUST_LOCKOUT
+        : WarpClampReason.NONE;
     const nextRailsState =
       nextSnapshotIndex === 0 ? this.snapshotRailsStates[0] : this.snapshotRailsStates[1];
     this.fillSnapshot(nextSnapshot, nextRailsState, nextShipState);
@@ -372,8 +429,8 @@ export class SimulationCore {
     snapshot.simTimeSec = this.clock.timeSec;
     snapshot.utcTimeMs = tdbSecondsToUtcTimeMs(this.clock.timeSec);
     snapshot.requestedWarp = this.commandState.requestedWarp;
-    snapshot.effectiveWarp = this.commandState.requestedWarp;
-    snapshot.warpClampReason = WarpClampReason.NONE;
+    snapshot.effectiveWarp = this.effectiveWarp;
+    snapshot.warpClampReason = this.warpClampReason;
     snapshot.throttle = this.commandState.throttle;
     snapshot.attitudeMode = this.commandState.attitudeMode;
     snapshot.targetBodyIndex = this.commandState.targetBodyIndex;

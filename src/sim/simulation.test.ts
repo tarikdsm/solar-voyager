@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
+import { WARP_LADDER } from '../core/time.js';
 import type { Dp54Tolerance } from './propagation/dp54.js';
 import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
-import type { SimSnapshot } from './simulationSnapshot.js';
+import { WarpClampReason, type SimSnapshot } from './simulationSnapshot.js';
 import { writeForwardFromQuaternionInto } from './ship/attitude.js';
 import { DEFAULT_MAX_PROPER_ACCELERATION_M_S2 } from './ship/thrust.js';
 
@@ -22,6 +23,10 @@ function circularState(): Float64Array {
   const speedKmS = Math.sqrt(EARTH_MU_KM3_S2 / ORBIT_RADIUS_KM);
   const gamma = 1 / Math.sqrt(1 - (speedKmS / SPEED_OF_LIGHT_KM_S) ** 2);
   return new Float64Array([ORBIT_RADIUS_KM, 0, 0, 0, gamma * speedKmS, 0, 0]);
+}
+
+function farFieldState(): Float64Array {
+  return new Float64Array([1e12, 0, 0, 0, 1, 0, 0]);
 }
 
 function verificationTolerance(maxAcceptedSteps = 4_000): Dp54Tolerance {
@@ -209,5 +214,95 @@ describe('SimulationCore', () => {
     expect(core.snapshot.simTimeSec).toBe(0);
     expect(core.snapshot.shipState[0]).toBe(ORBIT_RADIUS_KM);
     expect(core.snapshot.attitudeQuaternion).toEqual(new Float64Array([0, 0, 0, 1]));
+  });
+
+  it('clamps requested 1e7x in LEO to a canonical tier within the 4000-step budget', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    core.commands.setWarp(1e7);
+
+    const snapshot = core.step(1);
+
+    expect(snapshot.requestedWarp).toBe(1e7);
+    expect(snapshot.effectiveWarp).toBeLessThan(1e7);
+    expect(WARP_LADDER).toContain(snapshot.effectiveWarp);
+    expect(snapshot.simTimeSec).toBe(snapshot.effectiveWarp);
+    expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
+  });
+
+  it('sustains requested 1e7x in deep space and exposes coast-only thrust lockout', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    core.commands.setThrottle(0.5);
+    core.commands.setWarp(1e7);
+
+    const snapshot = core.step(1);
+
+    expect(snapshot.simTimeSec).toBe(1e7);
+    expect(snapshot.requestedWarp).toBe(1e7);
+    expect(snapshot.effectiveWarp).toBe(1e7);
+    expect(snapshot.warpClampReason).toBe(WarpClampReason.THRUST_LOCKOUT);
+    expect(snapshot.throttle).toBe(0);
+    expect(snapshot.powerDrawW).toBe(0);
+    expect(snapshot.shipProperAccelerationKmS2).toEqual(new Float64Array(3));
+  });
+
+  it('publishes the highest completed checkpoint when the shared budget is exhausted', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      shipMassKg: SHIP_MASS_KG,
+      integrationTolerance: verificationTolerance(2),
+    });
+    core.commands.setWarp(10);
+
+    const snapshot = core.step(1);
+
+    expect(snapshot.requestedWarp).toBe(10);
+    expect(snapshot.effectiveWarp).toBe(5);
+    expect(snapshot.simTimeSec).toBe(5);
+    expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
+  });
+
+  it('keeps equivalent physical horizons and reserved ledger totals stable across warp changes', () => {
+    const warped = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+      integrationTolerance: verificationTolerance(),
+    });
+    const realtime = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+      integrationTolerance: verificationTolerance(),
+    });
+    warped.commands.setThrottle(0.2);
+    warped.commands.setAttitudeMode('prograde');
+    warped.commands.setWarp(100);
+    realtime.commands.setThrottle(0.2);
+    realtime.commands.setAttitudeMode('prograde');
+
+    const warpedSnapshot = warped.step(0.1);
+    const realtimeSnapshot = realtime.step(10);
+
+    expect(warpedSnapshot.simTimeSec).toBe(realtimeSnapshot.simTimeSec);
+    expect(warpedSnapshot.shipProperTimeSec).toBeCloseTo(realtimeSnapshot.shipProperTimeSec, 8);
+    for (let index = 0; index < warpedSnapshot.shipState.length; index += 1) {
+      expect(warpedSnapshot.shipState[index]).toBeCloseTo(
+        realtimeSnapshot.shipState[index] as number,
+        7,
+      );
+    }
+    expect(warpedSnapshot.energySpentJ).toBe(0);
+    expect(warpedSnapshot.properDeltaVMS).toBe(0);
+    expect(realtimeSnapshot.energySpentJ).toBe(0);
+    expect(realtimeSnapshot.properDeltaVMS).toBe(0);
   });
 });
