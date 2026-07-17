@@ -1,8 +1,8 @@
 id: T0057
 title: Osculating conic overlay
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0057-osculating-overlay
 depends_on: [T0050, T0040]
 milestone: M3
 spec: |
