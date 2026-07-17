@@ -267,6 +267,18 @@ async function runOnce(browser, schedule, index) {
   }
 }
 
+async function runIsolated(schedule, index) {
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
+  });
+  try {
+    return await runOnce(browser, schedule, index);
+  } finally {
+    await browser.close();
+  }
+}
+
 async function main() {
   const runsRequested = readPositiveIntegerFlag('--runs', 1);
   if (runsRequested > 2) throw new RangeError('--runs supports one or two benchmark runs.');
@@ -282,15 +294,10 @@ async function main() {
     logLevel: 'error',
     preview: { host: HOST, port: PORT, strictPort: true },
   });
-  let browser;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
-    });
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
-      runs.push(await runOnce(browser, schedule, index));
+      runs.push(await runIsolated(schedule, index));
     }
     const stabilityFindings =
       runs.length === 2 ? compareBenchmarkRuns(runs[0].summary, runs[1].summary) : [];
@@ -315,7 +322,6 @@ async function main() {
       throw new Error(`Flight benchmark is unstable: ${stabilityFindings.join(' | ')}`);
     }
   } finally {
-    if (browser !== undefined) await browser.close();
     await server.close();
     await assertPortAvailable(PORT, HOST);
   }
