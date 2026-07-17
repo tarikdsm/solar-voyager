@@ -5,6 +5,7 @@ import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import './style.css';
 import { App } from './ui/App.js';
+import { CameraInputController } from './ui/cameraInputController.js';
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
@@ -22,6 +23,8 @@ const appRoot = appElement;
 const renderer = createRenderer(canvas);
 const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
+let cameraInput: CameraInputController | null = null;
+let previousFrameTimeMs = 0;
 
 function resizeRenderer(): void {
   if (world === null) return;
@@ -40,7 +43,17 @@ function resizeRenderer(): void {
 
 function renderFrame(nowMs: number): void {
   if (world === null) return;
-  const { spaceScene, visualSystem, cameraPositionKm } = world;
+  const { spaceScene, visualSystem, cameraController, cameraPositionKm } = world;
+  const deltaSec =
+    previousFrameTimeMs === 0 ? 0 : Math.min(0.1, (nowMs - previousFrameTimeMs) / 1_000);
+  previousFrameTimeMs = nowMs;
+  cameraController.update(deltaSec);
+  spaceScene.camera.lookAt(
+    cameraController.lookDirection.x,
+    cameraController.lookDirection.y,
+    cameraController.lookDirection.z,
+  );
+  spaceScene.camera.updateMatrix();
   visualSystem.update(
     cameraPositionKm,
     canvas.height,
@@ -55,6 +68,13 @@ function renderFrame(nowMs: number): void {
 async function startApplication(): Promise<void> {
   render(App(), appRoot);
   world = await createEpochWorld(renderer);
+  const focusLabel = document.querySelector('#camera-focus-label');
+  if (!(focusLabel instanceof HTMLElement)) {
+    throw new Error('Solar Voyager camera focus label was not found.');
+  }
+  cameraInput?.dispose();
+  cameraInput = new CameraInputController(canvas, window, focusLabel, world.cameraController);
+  canvas.dataset.cameraReady = 'true';
   resizeRenderer();
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
   requestAnimationFrame(renderFrame);

@@ -232,6 +232,12 @@ export class OrbitCameraController {
       this.transferDurationSec,
       this.transitionElapsedSec + deltaSec,
     );
+    if (
+      this.transferDurationSec - this.transitionElapsedSec <=
+      Number.EPSILON * this.transferDurationSec * 16
+    ) {
+      this.transitionElapsedSec = this.transferDurationSec;
+    }
     const time = this.transitionElapsedSec / this.transferDurationSec;
     if (time >= 1) {
       this.readTargetPositionIntoFocus();

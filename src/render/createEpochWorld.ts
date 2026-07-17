@@ -2,6 +2,7 @@ import { AmbientLight, DirectionalLight, type WebGLRenderer } from 'three';
 
 import type { ReadonlyVec3 } from '../core/vec3.js';
 import { createEpochState } from '../game/createEpochState.js';
+import { OrbitCameraController, type CameraFocusTarget } from '../game/orbitCameraController.js';
 import { loadAssetManifest } from './assetManifest.js';
 import { BodyAssetLoader } from './bodyAssetLoader.js';
 import {
@@ -20,6 +21,7 @@ export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
   readonly starfield: Starfield;
+  readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly positionsKm: Float64Array;
 }
@@ -59,7 +61,10 @@ export async function createEpochWorld(
 ): Promise<EpochWorld> {
   const epochState = createEpochState();
   const definitions: BodyVisualDefinition[] = [];
-  for (const body of epochState.bodies) {
+  const cameraTargets: CameraFocusTarget[] = [];
+  for (let index = 0; index < epochState.bodies.length; index += 1) {
+    const body = epochState.bodies[index];
+    if (body === undefined) throw new Error('Epoch body array is sparse.');
     definitions.push({
       id: body.id,
       category: runtimeCategory(body.kind),
@@ -67,13 +72,25 @@ export async function createEpochWorld(
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: parseAlbedoColor(body.albedoColor),
     });
+    cameraTargets.push({
+      id: body.id,
+      positionOffset: index * 3,
+      meanRadiusKm: body.meanRadiusKm,
+    });
   }
+
+  const cameraController = new OrbitCameraController({
+    positionsKm: epochState.positionsKm,
+    targets: cameraTargets,
+    initialFocusId: 'earth',
+    initialCameraPositionKm: epochState.cameraPositionKm,
+  });
 
   const spaceScene = new CameraRelativeSpaceScene();
   spaceScene.camera.lookAt(
-    epochState.cameraLookDirection.x,
-    epochState.cameraLookDirection.y,
-    epochState.cameraLookDirection.z,
+    cameraController.lookDirection.x,
+    cameraController.lookDirection.y,
+    cameraController.lookDirection.z,
   );
   spaceScene.camera.updateMatrix();
 
@@ -112,10 +129,10 @@ export async function createEpochWorld(
   );
 
   await visualSystem.initializeEager();
-  spaceScene.updateCameraRelative(epochState.cameraPositionKm);
+  spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   visualSystem.initializeView(
-    epochState.cameraPositionKm,
+    cameraController.cameraPositionKm,
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height),
     spaceScene.camera.fov * (Math.PI / 180),
   );
@@ -124,7 +141,8 @@ export async function createEpochWorld(
     spaceScene,
     visualSystem,
     starfield,
-    cameraPositionKm: epochState.cameraPositionKm,
+    cameraController,
+    cameraPositionKm: cameraController.cameraPositionKm,
     positionsKm: epochState.positionsKm,
   };
 }
