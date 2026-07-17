@@ -140,6 +140,12 @@ export class ProceduralSun implements ProceduralSunMaterialPort {
     this.state = new ProceduralSunState(seed);
     this.seed = seed;
     const geometry = new PlaneGeometry(1, 1);
+    geometry.computeBoundingSphere();
+    if (geometry.boundingSphere === null) {
+      throw new Error('Procedural Sun billboard requires a bounding sphere.');
+    }
+    geometry.boundingSphere.radius =
+      (solarRadiusKm * SUN_BILLBOARD_DIAMETER_IN_RADII) / 2;
     const material = new ShaderMaterial({
       uniforms: {
         ...this.state.uniforms,
@@ -158,7 +164,7 @@ export class ProceduralSun implements ProceduralSunMaterialPort {
     material.name = 'sun-procedural-billboard';
     this.billboard = new Mesh(geometry, material);
     this.billboard.name = 'sun-glare';
-    this.billboard.frustumCulled = false;
+    this.billboard.frustumCulled = true;
     this.spaceScene.bindPackedVisual(this.billboard, positionsKm, componentOffset);
   }
 

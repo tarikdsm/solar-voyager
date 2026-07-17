@@ -45,7 +45,10 @@ describe('ProceduralSun', () => {
     expect(sun.billboard.material.depthTest).toBe(true);
     expect(sun.billboard.material.depthWrite).toBe(false);
     expect(sun.billboard.material.transparent).toBe(true);
-    expect(sun.billboard.frustumCulled).toBe(false);
+    expect(sun.billboard.frustumCulled).toBe(true);
+    expect(sun.billboard.geometry.boundingSphere?.radius).toBe(
+      (SUN_RADIUS_KM * SUN_BILLBOARD_DIAMETER_IN_RADII) / 2,
+    );
     expect(sun.billboard.matrixAutoUpdate).toBe(false);
     expect(sun.billboard.material.vertexShader).toContain('sunCenterView.xy += position.xy');
     expect(sun.billboard.material.fragmentShader).toContain('sunProminenceArc');
