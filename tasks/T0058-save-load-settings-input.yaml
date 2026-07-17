@@ -1,8 +1,8 @@
 id: T0058
 title: Save/load, settings, input mapping
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0058-save-load-settings-input
 depends_on: [T0050]
 milestone: M3
 spec: |
