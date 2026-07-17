@@ -1,6 +1,6 @@
 id: T0056
 title: Warp control, energy panel, target panel UI
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0056-warp-dv-target-ui
 depends_on: [T0054, T0052, T0053]
