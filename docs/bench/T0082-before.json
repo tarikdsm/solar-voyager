@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-17T11:38:55.758Z",
+  "timestamp": "2026-07-17T12:33:11.851Z",
   "gitSha": "cae6343e8ee2d0a804e00009baf6bff8c446fae3",
   "warmupFrames": 120,
   "sampleFrames": 600,
@@ -7,8 +7,8 @@
   "p75Ms": 16.7,
   "p99Ms": 16.8,
   "gpu": {
-    "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
-    "vendor": "Google Inc. (Intel)"
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Laptop GPU (0x000024DD) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (NVIDIA)"
   },
   "canvas": {
     "backingHeight": 1080,
@@ -24,7 +24,7 @@
     "p75Ms": 16.7,
     "p99Ms": 16.8,
     "snapshot": {
-      "averageFps": 60.00300015000751,
+      "averageFps": 59.99999999999999,
       "context": {
         "contextFlavor": "webgl2",
         "depthStrategy": "reversed",
@@ -40,31 +40,31 @@
           "stencil": false
         },
         "gpuTimerQueryAvailable": true,
-        "rendererName": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "rendererName": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Laptop GPU (0x000024DD) Direct3D11 vs_5_0 ps_5_0, D3D11)",
         "softwareRasterizer": false,
         "usedPerformanceCaveatFallback": false,
         "warningRequired": false
       },
       "drawCalls": 22,
-      "frameCount": 725,
-      "frameMs": 16.600000000000364,
+      "frameCount": 721,
+      "frameMs": 16.69999999999891,
       "frameSampleCount": 120,
       "geometries": 8,
-      "gpuMs": 10.209687,
+      "gpuMs": 1.953184,
       "lines": 0,
       "p75FrameMs": 16.700000000000728,
       "p99FrameMs": 16.80000000000109,
       "points": 9139,
       "programs": 33,
-      "renderMs": 0.6000000089406967,
-      "simMs": 0.20000000298023224,
+      "renderMs": 1.0999999940395355,
+      "simMs": 0.09999999403953552,
       "textures": 22,
       "triangles": 48963,
-      "uiMs": 0
+      "uiMs": 0.20000000298023224
     }
   },
-  "gpuRenderMedianMs": 10.408,
-  "gpuRenderP75Ms": 10.861,
-  "gpuRenderP99Ms": 12.624,
-  "heapDeltaBytes": -529068
+  "gpuRenderMedianMs": 2.082,
+  "gpuRenderP75Ms": 3.508,
+  "gpuRenderP99Ms": 3.866,
+  "heapDeltaBytes": 2668116
 }
