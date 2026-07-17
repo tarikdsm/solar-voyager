@@ -1,8 +1,8 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
 milestone: M3
 spec: |
