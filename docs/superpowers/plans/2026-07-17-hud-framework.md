@@ -12,4 +12,3 @@
 5. Run focused tests, full quality/performance gates, browser regressions, and a
    live Playwright playtest. Document evidence, request independent exact-head
    review, and merge only after CI and review pass.
-

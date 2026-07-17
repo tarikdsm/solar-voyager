@@ -64,4 +64,3 @@ formatting, UTC/MET formatting, and signal granularity (an observer of one leaf
 does not run when an unrelated leaf changes). Existing render regressions plus a
 real-browser playtest verify that the overlay coexists with camera controls and
 the WebGL scene without console errors.
-
