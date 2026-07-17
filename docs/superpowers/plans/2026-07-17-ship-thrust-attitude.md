@@ -50,4 +50,3 @@
 - [ ] Run the full CI matrix and simulation benchmark.
 - [ ] Move T0051 to REVIEW, push, open PR, obtain independent exact-head review, fix findings, rerun CI, mark DONE, and merge normally.
 - [ ] Claim the next unblocked canonical task.
-
