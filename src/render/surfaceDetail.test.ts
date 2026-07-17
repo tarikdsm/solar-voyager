@@ -91,13 +91,14 @@ describe('surface detail material extension', () => {
     expect(shader.fragmentShader).toContain('if ( uSurfaceDetailBlend > 0.0 )');
     expect(shader.fragmentShader).toContain('uSurfaceTilesPerEquator * 7.73');
     expect(shader.fragmentShader).toContain('mat2( 0.8829, 0.4695, -0.4695, 0.8829 )');
-    expect(shader.fragmentShader).toContain('surfaceDetailFbm3');
-    expect(shader.fragmentShader).toContain('surfaceDetailPeriodicWave3');
+    expect(shader.vertexShader).toContain('surfaceDetailFbm3');
+    expect(shader.vertexShader).toContain('surfaceDetailPeriodicWave3');
+    expect(shader.fragmentShader).not.toContain('vec3 surfaceDetailPeriodicWave3');
     expect(shader.fragmentShader).toContain('vec3( 0.21404114 )');
     expect(shader.fragmentShader).toContain('#include <map_fragment>');
     expect(shader.fragmentShader).toContain('#include <normal_fragment_maps>');
     expect(shader.fragmentShader).toContain('#include <roughnessmap_fragment>');
-    expect(shader.vertexShader).toContain('vSurfaceDetailDirection');
+    expect(shader.vertexShader).toContain('vSurfaceProceduralNoise');
     expect(shader.vertexShader).toContain('vSurfaceDetailUv');
 
     prepared.dispose();

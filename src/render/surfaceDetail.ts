@@ -65,22 +65,7 @@ export function surfaceDetailProceduralBlend(distanceKm: number, radiusKm: numbe
 
 const VERTEX_DECLARATIONS = /* glsl */ `
 varying vec2 vSurfaceDetailUv;
-varying vec3 vSurfaceDetailDirection;
-`;
-
-const VERTEX_ASSIGNMENTS = /* glsl */ `
-vSurfaceDetailUv = uv;
-vSurfaceDetailDirection = normalize( position );
-`;
-
-const FRAGMENT_DECLARATIONS = /* glsl */ `
-varying vec2 vSurfaceDetailUv;
-varying vec3 vSurfaceDetailDirection;
-uniform sampler2D uSurfaceDetailAlbedo;
-uniform sampler2D uSurfaceDetailNormal;
-uniform float uSurfaceDetailBlend;
-uniform float uSurfaceProceduralBlend;
-uniform float uSurfaceTilesPerEquator;
+varying vec3 vSurfaceProceduralNoise;
 uniform vec2 uSurfaceDetailSeed;
 
 vec3 surfaceDetailPeriodicWave3( vec3 position ) {
@@ -102,6 +87,21 @@ vec3 surfaceDetailFbm3( vec3 position ) {
   return surfaceDetailPeriodicWave3( position ) * 0.6666667 +
     surfaceDetailPeriodicWave3( position * 2.03 + vec3( 17.0 ) ) * 0.3333333;
 }
+`;
+
+const VERTEX_ASSIGNMENTS = /* glsl */ `
+vSurfaceDetailUv = uv;
+vSurfaceProceduralNoise = surfaceDetailFbm3( normalize( position ) * 96.0 );
+`;
+
+const FRAGMENT_DECLARATIONS = /* glsl */ `
+varying vec2 vSurfaceDetailUv;
+varying vec3 vSurfaceProceduralNoise;
+uniform sampler2D uSurfaceDetailAlbedo;
+uniform sampler2D uSurfaceDetailNormal;
+uniform float uSurfaceDetailBlend;
+uniform float uSurfaceProceduralBlend;
+uniform float uSurfaceTilesPerEquator;
 
 mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfaceUv ) {
   vec3 q0 = dFdx( eyePosition );
@@ -119,12 +119,7 @@ mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfa
 `;
 
 const PROCEDURAL_DETAIL = /* glsl */ `
-vec3 surfaceDetailProceduralNoise = vec3( 0.5 );
-if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
-  surfaceDetailProceduralNoise = surfaceDetailFbm3(
-    normalize( vSurfaceDetailDirection ) * 96.0
-  );
-}
+vec3 surfaceDetailProceduralNoise = vSurfaceProceduralNoise;
 `;
 
 const ALBEDO_DETAIL = /* glsl */ `
