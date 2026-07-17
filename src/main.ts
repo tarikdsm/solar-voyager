@@ -1,5 +1,6 @@
 import { h, render } from 'preact';
 
+import { createNewGameSimulation } from './game/createNewGameSimulation.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
@@ -7,6 +8,9 @@ import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
+import { createHudSignalStore } from './ui/hudSignals.js';
+
+const SHIP_MASS_KG = 10_000;
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
@@ -25,6 +29,9 @@ const rendererBootstrap = createRenderer(canvas);
 const { contextReport, renderer } = rendererBootstrap;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
+const simulation = createNewGameSimulation(SHIP_MASS_KG);
+const hudStore = createHudSignalStore();
+hudStore.publish(simulation.snapshot, 0);
 const hardwareWarning = contextReport.warningRequired
   ? { rendererName: contextReport.rendererName }
   : null;
@@ -51,6 +58,13 @@ function renderFrame(nowMs: number): void {
   if (world === null) return;
   const { spaceScene, visualSystem, cameraController, cameraPositionKm } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
+  const simulationStartMs = performance.now();
+  const snapshot = simulation.step(deltaSec);
+  world.positionsKm.set(snapshot.bodyPositionsKm);
+  const simulationEndMs = performance.now();
+  const uiStartMs = simulationEndMs;
+  hudStore.publish(snapshot, nowMs);
+  const uiEndMs = performance.now();
   const renderStartMs = performance.now();
   cameraController.update(deltaSec);
   spaceScene.camera.lookAt(
@@ -69,12 +83,17 @@ function renderFrame(nowMs: number): void {
   telemetry.beginGpuTimer();
   renderer.render(spaceScene.scene, spaceScene.camera);
   telemetry.endGpuTimer();
-  telemetry.endFrame(0, performance.now() - renderStartMs, 0, nowMs);
+  telemetry.endFrame(
+    simulationEndMs - simulationStartMs,
+    performance.now() - renderStartMs,
+    uiEndMs - uiStartMs,
+    nowMs,
+  );
   requestAnimationFrame(renderFrame);
 }
 
 async function startApplication(): Promise<void> {
-  render(h(App, { hardwareWarning }), appRoot);
+  render(h(App, { hardwareWarning, hud: hudStore.display }), appRoot);
   canvas.dataset.depthStrategy = contextReport.depthStrategy;
   canvas.dataset.rendererName = contextReport.rendererName;
   canvas.dataset.rendererReady = 'true';
