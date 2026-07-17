@@ -156,6 +156,7 @@ export function createRenderer(
     depthStrategy,
     effectiveContextAttributes: copyContextAttributes(contextResult.context.getContextAttributes()),
     gpuTimerQueryAvailable:
+      !softwareRasterizer &&
       contextResult.context.getExtension('EXT_disjoint_timer_query_webgl2') !== null,
     rendererName,
     softwareRasterizer,

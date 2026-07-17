@@ -2,7 +2,7 @@ import type { WebGLRenderer } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RendererContextReport } from './createRenderer.js';
-import { RenderTelemetry } from './telemetry.js';
+import { RENDER_TELEMETRY_PROPERTY, RenderTelemetry, exposeRenderTelemetry } from './telemetry.js';
 
 interface FakeQuery {
   available: boolean;
@@ -90,6 +90,26 @@ function timerContext() {
 }
 
 describe('RenderTelemetry', () => {
+  it('exposes one immutable telemetry instance to external read-only consumers', () => {
+    const { renderer } = fakeRenderer(contextWithoutTimer());
+    const telemetry = new RenderTelemetry(renderer, contextReport());
+    const host = {} as HTMLCanvasElement;
+
+    exposeRenderTelemetry(host, telemetry);
+
+    expect(
+      (host as HTMLCanvasElement & { readonly solarVoyagerTelemetry?: RenderTelemetry })[
+        RENDER_TELEMETRY_PROPERTY
+      ],
+    ).toBe(telemetry);
+    expect(Object.getOwnPropertyDescriptor(host, RENDER_TELEMETRY_PROPERTY)).toMatchObject({
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+    expect(() => exposeRenderTelemetry(host, telemetry)).toThrowError(/already exposed/u);
+  });
+
   it('keeps stable storage and wraps the 120-frame ring without allocating snapshots', () => {
     const { renderer } = fakeRenderer(contextWithoutTimer());
     const telemetry = new RenderTelemetry(renderer, contextReport());
@@ -194,5 +214,20 @@ describe('RenderTelemetry', () => {
     telemetry.endGpuTimer();
     telemetry.dispose();
     expect(telemetry.snapshot.gpuMs).toBe(-1);
+  });
+
+  it('does not create GPU queries when the context report disables software timing', () => {
+    const timer = timerContext();
+    const report = {
+      ...contextReport(),
+      gpuTimerQueryAvailable: false,
+      softwareRasterizer: true,
+      warningRequired: true,
+    };
+    const { renderer } = fakeRenderer(timer.context);
+    const telemetry = new RenderTelemetry(renderer, report);
+
+    expect(telemetry.gpuTimerAvailable).toBe(false);
+    expect(timer.queries).toHaveLength(0);
   });
 });

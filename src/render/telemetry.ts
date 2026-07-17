@@ -10,6 +10,8 @@ const GPU_QUERY_ACTIVE = 1;
 const GPU_QUERY_PENDING = 2;
 const MAX_GAME_DELTA_SEC = 0.1;
 
+export const RENDER_TELEMETRY_PROPERTY = 'solarVoyagerTelemetry' as const;
+
 interface DisjointTimerQueryExtension {
   readonly GPU_DISJOINT_EXT: number;
   readonly TIME_ELAPSED_EXT: number;
@@ -62,9 +64,11 @@ export class RenderTelemetry {
   constructor(renderer: WebGLRenderer, contextReport: RendererContextReport) {
     this.renderer = renderer;
     this.context = renderer.getContext() as WebGL2RenderingContext;
-    this.timerExtension = this.context.getExtension(
-      'EXT_disjoint_timer_query_webgl2',
-    ) as DisjointTimerQueryExtension | null;
+    this.timerExtension = contextReport.gpuTimerQueryAvailable
+      ? (this.context.getExtension(
+          'EXT_disjoint_timer_query_webgl2',
+        ) as DisjointTimerQueryExtension | null)
+      : null;
     this.snapshot = {
       averageFps: 0,
       context: contextReport,
@@ -98,7 +102,12 @@ export class RenderTelemetry {
   }
 
   get gpuTimerAvailable(): boolean {
-    return this.timerExtension !== null && this.gpuQueries.length > 0;
+    if (this.timerExtension === null) return false;
+    for (let index = 0; index < this.gpuQueries.length; index += 1) {
+      const query = this.gpuQueries[index];
+      if (query !== undefined && query !== null) return true;
+    }
+    return false;
   }
 
   /** Begins a frame and returns the clamped game delta in seconds. */
@@ -235,4 +244,17 @@ export class RenderTelemetry {
     this.snapshot.triangles = renderInfo.triangles;
     this.snapshot.uiMs = this.latestUiMs;
   }
+}
+
+/** Publishes the stable telemetry instance once for HUD, governor, and bench readers. */
+export function exposeRenderTelemetry(host: HTMLCanvasElement, telemetry: RenderTelemetry): void {
+  if (Object.prototype.hasOwnProperty.call(host, RENDER_TELEMETRY_PROPERTY)) {
+    throw new Error('Render telemetry is already exposed on this canvas.');
+  }
+  Object.defineProperty(host, RENDER_TELEMETRY_PROPERTY, {
+    configurable: false,
+    enumerable: false,
+    value: telemetry,
+    writable: false,
+  });
 }

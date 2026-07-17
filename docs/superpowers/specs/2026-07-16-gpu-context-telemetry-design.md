@@ -55,7 +55,7 @@ hardware path does not render it.
 - renderer.info render/memory/program counters;
 - the immutable context report;
 - four setup-time WebGL timer query slots when
-  `EXT_disjoint_timer_query_webgl2` is available.
+  `EXT_disjoint_timer_query_webgl2` is available on a hardware renderer.
 
 `beginFrame(timestampMs)` derives the frame delta and returns the clamped game
 delta in seconds. `beginGpuTimer()`/`endGpuTimer()` surround the renderer call.
@@ -63,10 +63,20 @@ delta in seconds. `beginGpuTimer()`/`endGpuTimer()` surround the renderer call.
 Consumers read the stable snapshot and indexed ring accessors; no copies are
 made in the frame loop.
 
+The bootstrap publishes the single `RenderTelemetry` instance once on the
+canvas as a non-enumerable, non-configurable, non-writable property. This is the
+read path for the future HUD/governor and lets the production benchmark consume
+the exact ring and snapshot without adding DOM/string work to the frame loop.
+The benchmark waits for renderer, camera, and telemetry readiness before its
+warmup, retains its historical 600-frame comparison metrics, and also records
+the canonical 120-frame ring, renderer counters, and context report.
+
 GPU results are polled only for `QUERY_RESULT_AVAILABLE`; result retrieval
 occurs only after availability and is discarded while `GPU_DISJOINT_EXT` is
 set. No `readPixels`, `finish`, or blocking query is used. Query objects are
-created once and explicitly disposable.
+created once and explicitly disposable. Software rasterizers do not create GPU
+queries: their timings do not represent the reference GPU, and omitting them
+keeps CI/Playwright software paths deterministic.
 
 Percentiles are computed only at 4 Hz by copying into the preallocated scratch
 array and sorting it in place. Normal frames only write numeric fields and one

@@ -12,6 +12,7 @@ const PORT = 4174;
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),
 );
@@ -207,13 +208,44 @@ async function collectBenchmark(pageUrl) {
   page.on('pageerror', (error) => {
     pageErrors.push(error.message);
   });
+  page.on('crash', () => {
+    pageErrors.push('Benchmark page crashed.');
+  });
 
   try {
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(
+      '#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]',
+      { state: 'attached', timeout: 30_000 },
+    );
+    await page.waitForFunction(
+      (telemetryProperty) => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) return false;
+        const telemetry = canvas[telemetryProperty];
+        return telemetry !== undefined && telemetry.frameSampleCount > 0;
+      },
+      TELEMETRY_PROPERTY,
+      { timeout: 30_000 },
+    );
+
+    const canvas = await page.locator('#space-canvas').evaluate((element) => {
+      if (!(element instanceof globalThis.HTMLCanvasElement)) {
+        throw new Error('Expected #space-canvas to be a canvas element.');
+      }
+
+      const bounds = element.getBoundingClientRect();
+      return {
+        backingHeight: element.height,
+        backingWidth: element.width,
+        cssHeight: bounds.height,
+        cssWidth: bounds.width,
+      };
+    });
 
     const measurement = await page.evaluate(
-      ({ sampleFrames, warmupFrames }) =>
-        new Promise((resolvePromise) => {
+      ({ sampleFrames, telemetryProperty, warmupFrames }) =>
+        new Promise((resolvePromise, rejectPromise) => {
           const frameDeltasMs = new Float64Array(sampleFrames);
           let framesToWarm = warmupFrames;
           let previousFrameTimeMs = 0;
@@ -251,33 +283,42 @@ async function collectBenchmark(pageUrl) {
             }
 
             const heapAfterBytes = readHeapBytes();
+            const telemetryHost = globalThis.document.querySelector('#space-canvas');
+            if (!(telemetryHost instanceof globalThis.HTMLCanvasElement)) {
+              rejectPromise(new Error('Telemetry canvas disappeared during the benchmark.'));
+              return;
+            }
+            const telemetry = telemetryHost[telemetryProperty];
+            if (telemetry === undefined) {
+              rejectPromise(new Error('Render telemetry is not exposed to the benchmark.'));
+              return;
+            }
+            const telemetryFrameDeltasMs = new Array(telemetry.frameSampleCount);
+            for (let age = 0; age < telemetry.frameSampleCount; age += 1) {
+              telemetryFrameDeltasMs[age] = telemetry.getFrameTimeByAge(age);
+            }
             resolvePromise({
               frameDeltasMs: Array.from(frameDeltasMs),
               heapAfterBytes,
               heapBeforeBytes,
+              telemetryFrameDeltasMs,
+              telemetrySnapshot: globalThis.structuredClone(telemetry.snapshot),
             });
           }
 
           globalThis.requestAnimationFrame(measureFrame);
         }),
-      { sampleFrames: SAMPLE_FRAMES, warmupFrames: WARMUP_FRAMES },
+      {
+        sampleFrames: SAMPLE_FRAMES,
+        telemetryProperty: TELEMETRY_PROPERTY,
+        warmupFrames: WARMUP_FRAMES,
+      },
     );
 
-    const canvas = await page.locator('#space-canvas').evaluate((element) => {
-      if (!(element instanceof globalThis.HTMLCanvasElement)) {
-        throw new Error('Expected #space-canvas to be a canvas element.');
-      }
-
-      const bounds = element.getBoundingClientRect();
-      return {
-        backingHeight: element.height,
-        backingWidth: element.width,
-        cssHeight: bounds.height,
-        cssWidth: bounds.width,
-      };
-    });
-
     const sortedFrameDeltasMs = measurement.frameDeltasMs.toSorted((left, right) => left - right);
+    const sortedTelemetryFrameDeltasMs = measurement.telemetryFrameDeltasMs.toSorted(
+      (left, right) => left - right,
+    );
     const result = {
       timestamp: new Date().toISOString(),
       gitSha: readGitSha(),
@@ -289,6 +330,13 @@ async function collectBenchmark(pageUrl) {
       canvas,
       consoleErrors,
       pageErrors,
+      telemetry: {
+        frameSampleCount: sortedTelemetryFrameDeltasMs.length,
+        medianMs: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.5)),
+        p75Ms: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.75)),
+        p99Ms: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.99)),
+        snapshot: measurement.telemetrySnapshot,
+      },
     };
 
     if (measurement.heapBeforeBytes !== null && measurement.heapAfterBytes !== null) {

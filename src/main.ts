@@ -3,7 +3,7 @@ import { h, render } from 'preact';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
-import { RenderTelemetry } from './render/telemetry.js';
+import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
@@ -24,6 +24,7 @@ const appRoot = appElement;
 const rendererBootstrap = createRenderer(canvas);
 const { contextReport, renderer } = rendererBootstrap;
 const telemetry = new RenderTelemetry(renderer, contextReport);
+exposeRenderTelemetry(canvas, telemetry);
 const hardwareWarning = contextReport.warningRequired
   ? { rendererName: contextReport.rendererName }
   : null;
