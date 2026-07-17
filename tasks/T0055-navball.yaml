@@ -1,6 +1,6 @@
 id: T0055
 title: Navball
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0055-navball
 depends_on: [T0054, T0051]
@@ -10,4 +10,45 @@ spec: |
   markers and thrust vector indicator.
 acceptance:
   - Markers verified against known orbital directions in LEO (test fixtures)
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review on task/T0055-navball. The bottom-center navball
+  derives its dominant-body orbital frame directly from the existing float64
+  SimSnapshot: radial-out/in, prograde/retrograde, and normal/antinormal markers
+  are projected through the inverse ship quaternion into a static SVG. The thrust
+  reticle uses proper acceleration, the horizon is body-relative, and invalid or
+  degenerate inputs hide affected geometry with finite transforms. No snapshot,
+  command, schema, or physics-formula interface changed, so no ADR was required.
+
+  The allocation-free projection writer owns a setup-time Float64Array and the
+  existing sampled HUD graph copies only scalar slots into leaf signals at 10 Hz.
+  Component functions remain at one render while transforms and opacity update.
+  The SVG adds no WebGL draw calls, geometry, materials, or runtime shaders.
+
+  Acceptance evidence: the exact circular-equatorial LEO fixture places radial
+  out at the ship nose, prograde to screen right, normal upward, and verifies all
+  six antipodal markers. Focused tests also cover inverse-quaternion attitude,
+  thrust direction, and invalid/degenerate finite hiding. Chromium verifies the
+  same marker geometry, a prograde attitude rotation, active thrust visibility,
+  all six leaf-only updates without component rerenders, responsive containment,
+  scroll, and canvas pointer/wheel delivery.
+
+  Production playtest inspected 1280x720 and 390x844 layouts, confirmed Earth and
+  Manual labels plus finite live marker transforms, found no panel intersections
+  or clipping, and recorded zero console errors or warnings. The initial legend
+  clipping found during playtest was corrected before the final pass.
+
+  Full gates at implementation SHA 13d521954c23dc2b827be75eff6836d2c94f425c:
+  lint PASS; strict typecheck PASS; Prettier PASS; Vitest 369 passed / 3 skipped;
+  Python 49/49; production build PASS; repo/public/critical asset budgets PASS;
+  53 task files PASS; all seven Chromium regressions PASS; diff check PASS.
+  The simulation benchmark averaged 0.080042 ms per step, retained fewer bytes,
+  and preserved two snapshot buffers.
+
+  Scaffold baseline 2cfd14c measured 149.9/150.0/166.7 ms at median/p75/p99.
+  Three exact-code captures measured 150.0/~150.0/~183.3 ms externally but all
+  retained an internal p99 of 166.7 ms, 6 draws, 48,564 triangles, no errors, and
+  sampled UI time no greater than 0.10 ms. A same-build Intel UHD D3D11 A/B
+  diagnostic measured p99 6.20 ms both with the navball visible and after removing
+  it (max 6.40 vs 6.50 ms), isolating the external tail to Chromium/SwiftShader
+  scheduling rather than SVG composition. Raw results and interpretation are in
+  docs/bench/T0055-summary.md.
