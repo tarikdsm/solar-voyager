@@ -54,12 +54,22 @@ export function createContextAttributes(
 
 /** Creates WebGL2 strict-first, retrying only to keep software rendering usable. */
 export function createWebGL2Context(canvas: HTMLCanvasElement): WebGL2ContextResult {
-  const strictContext = canvas.getContext('webgl2', createContextAttributes(true));
+  let strictContext: WebGL2RenderingContext | null = null;
+  try {
+    strictContext = canvas.getContext('webgl2', createContextAttributes(true));
+  } catch {
+    // Some browsers throw instead of returning null for a major performance caveat.
+  }
   if (strictContext !== null) {
     return { context: strictContext, usedPerformanceCaveatFallback: false };
   }
 
-  const fallbackContext = canvas.getContext('webgl2', createContextAttributes(false));
+  let fallbackContext: WebGL2RenderingContext | null;
+  try {
+    fallbackContext = canvas.getContext('webgl2', createContextAttributes(false));
+  } catch (cause: unknown) {
+    throw new Error('Solar Voyager requires an available WebGL2 context.', { cause });
+  }
   if (fallbackContext === null) {
     throw new Error('Solar Voyager requires an available WebGL2 context.');
   }

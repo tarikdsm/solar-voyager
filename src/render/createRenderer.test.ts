@@ -74,6 +74,27 @@ describe('GPU renderer bootstrap policy', () => {
     });
   });
 
+  it('retries when the browser throws while rejecting the strict context', () => {
+    const context = fakeContext();
+    const attempts: WebGLContextAttributes[] = [];
+    const canvas = {
+      getContext(name: string, attributes?: WebGLContextAttributes) {
+        expect(name).toBe('webgl2');
+        if (attributes !== undefined) attempts.push(attributes);
+        if (attempts.length === 1) throw new Error('Strict context rejected.');
+        return context;
+      },
+    } as unknown as HTMLCanvasElement;
+
+    expect(createWebGL2Context(canvas)).toEqual({
+      context,
+      usedPerformanceCaveatFallback: true,
+    });
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.failIfMajorPerformanceCaveat).toBe(true);
+    expect(attempts[1]?.failIfMajorPerformanceCaveat).toBe(false);
+  });
+
   it('does not retry a successful strict context and fails after two null attempts', () => {
     const context = fakeContext();
     let strictCalls = 0;
