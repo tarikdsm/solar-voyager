@@ -1,6 +1,6 @@
 id: T0082
 title: Close-range surface detail shading (detail maps + procedural noise)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0082-close-range-surface-detail
 depends_on: [T0041, T0043]
@@ -15,4 +15,16 @@ acceptance:
   - Earth from 400 km LEO shows no visible texel blur or tiling repetition (screenshot review)
   - Far views byte-identical to the non-detail path (regression capture)
   - Shader cost within the render budget at 1080p on reference hardware
-handoff_notes: ""
+handoff_notes: >-
+  Implemented manifest-schema-v2 detail descriptors, deterministic ingest,
+  lazy KTX2 detail loading, distance-faded two-octave albedo/normal shading,
+  closest-range procedural modulation, independent Earth clouds, and a
+  precompiled Fresnel atmosphere. Browser regression: 11.78% LEO detail-energy
+  gain, 0.286 repeat peak (<0.35), byte-identical far captures, 61 atmosphere
+  limb pixels, and stable 27 programs through first frame. All local gates pass
+  (423 Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
+  and Earth assets:verify with 15 byte-identical files). Native 1920x1080 Intel
+  UHD proxy measured GPU p75 10.861 -> 14.397 ms; this older Tiger Lake GPU
+  already misses the 10 ms baseline target, so docs/bench/T0082-summary.md
+  preserves the result and explicitly leaves reference-2023+ certification to
+  suitable hardware.
