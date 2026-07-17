@@ -236,7 +236,18 @@ rollback as motion. The vector is an inertial signed integral; scalar proper
 ## 6. Analysis
 
 - **Solar-system barycenter (CM):** `r_cm = Σ mᵢrᵢ / Σ mᵢ`, `v_cm = Σ mᵢvᵢ / Σ mᵢ` over the whole catalog (masses from GM/G), evaluated per frame from rails. The HUD state-vector widget displays, **relative to the CM**: ship velocity `v − v_cm` (this starts at ~30 km/s in LEO — Earth's real orbital velocity, deliberately visible from the first frame), proper acceleration vector, **relativistic linear momentum** `p = γ·m·(v − v_cm)` and **angular momentum** `L = (r − r_cm) × p`. Also derived: speed as % of c, and γ.
-- **Dominant body:** argmax over bodies of `μᵢ/|r − rᵢ|²`; SOI radii (`r_SOI = a·(m/M)^(2/5)`, precomputed in bodies.json) as tie-break/hysteresis (10% band to avoid flicker).
+- **Dominant body:** start from the instantaneous argmax over bodies of
+  `gᵢ = μᵢ/|r − rᵢ|²`, then apply the catalogued SOI hierarchy and a 10% band
+  (ADR-029). With previous dominant `D` and raw challenger `C`:
+  - no valid `D` publishes `C` immediately;
+  - a descendant `C` replaces its ancestor `D` only when
+    `g_C > 1.1·g_D` and `|r-r_C| ≤ 0.9·r_SOI,C`;
+  - an ancestor `C` cannot reclaim dominance while
+    `|r-r_D| ≤ 1.1·r_SOI,D`, and afterward still requires
+    `g_C > 1.1·g_D`;
+  - unrelated contenders require `g_C > 1.1·g_D`.
+  SOI radii use `r_SOI = a·(m/M)^(2/5)` and are precomputed in bodies.json;
+  the root's null SOI is compiled as infinity.
 - **Osculating elements** wrt dominant body from state vectors (standard conversion via h, e, n vectors; handle e→0 and i→0 degeneracies explicitly). Computed every frame for the HUD; it is an *approximation* in an n-body field — the worker prediction is the truth.
 - **Trajectory prediction:** worker propagates thrust-free with §3.1 over max(2 osculating periods, 90 days, user-extended); downsampled polyline ≤ 2000 points; events: SOI transitions, closest approach to target, **impact** (path crosses body radius + atmosphere top) with time-to-impact.
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.

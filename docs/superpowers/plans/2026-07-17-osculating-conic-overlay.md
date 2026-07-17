@@ -15,7 +15,7 @@
 - `CameraRelativeSpaceScene` remains the only float64-to-float32 camera-relative boundary.
 - The frame loop creates no arrays, objects, closures, materials, geometries, or strings.
 - The overlay uses one draw call and one setup-time material/geometry with at most 256 segments.
-- No `SimSnapshot`, `Commands`, `bodies.json` schema, or physics formula changes are introduced.
+- ADR-029 records the dominant-body formula clarification; `SimSnapshot`, `Commands`, and the `bodies.json` schema remain unchanged.
 
 ---
 

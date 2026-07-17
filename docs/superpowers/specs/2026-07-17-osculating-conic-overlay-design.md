@@ -39,8 +39,8 @@ band:
 
 Parent relationships come from the existing compiled `parentIndices` array.
 This keeps transitions deterministic and allocation-free without changing
-`SimSnapshot`, `Commands`, or the `bodies.json` schema, so no interface ADR is
-required.
+`SimSnapshot`, `Commands`, or the `bodies.json` schema. ADR-029 records the
+physics-spec formula clarification.
 
 ## Analytic conic sampling
 
