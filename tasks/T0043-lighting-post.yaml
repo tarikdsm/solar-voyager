@@ -1,6 +1,6 @@
 id: T0043
 title: Lighting, ACES tone mapping, bloom
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0043-lighting-post
 depends_on: [T0040]
@@ -23,4 +23,7 @@ handoff_notes: >-
   shares one preallocated 600-sample GPU timing ring between telemetry and the benchmark. Visual
   acceptance remains 81.0% dark Earth pixels, 12.9% localized night-light
   emission, and clean Sun bloom. Full evidence is in docs/bench/T0043-summary.md;
-  full local gates passed with 399 Vitest and 50 Python tests.
+  full local gates passed with 399 Vitest and 50 Python tests. Independent
+  re-review of exact head 28d0d96 approved with Critical 0, Important 0, Minor
+  0 after the direct software fallback warm-up regression proved program count
+  stable at 8 -> 8 on the first gameplay frame; exact-head CI passed.
