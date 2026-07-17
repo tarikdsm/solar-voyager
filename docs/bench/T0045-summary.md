@@ -11,13 +11,13 @@ renderer-counter evidence.
 
 ## Before / After
 
-| Metric            | Before (`dc611e0`) | After (`ca8434c`) |        Delta |
+| Metric            | Before (`dc611e0`) | After (`35ff264`) |        Delta |
 | ----------------- | -----------------: | ----------------: | -----------: |
-| Median frame time |           150.0 ms |          149.9 ms |      -0.1 ms |
+| Median frame time |           150.0 ms |          150.0 ms |       0.0 ms |
 | p75 frame time    |           150.0 ms |          150.0 ms |       0.0 ms |
 | p99 frame time    |           166.7 ms |          166.7 ms |       0.0 ms |
-| Main JS gzip      |          165.61 kB |         169.05 kB |     +3.44 kB |
-| JS heap delta     |         -101,456 B |        +825,328 B | GC-sensitive |
+| Main JS gzip      |          165.61 kB |         169.15 kB |     +3.54 kB |
+| JS heap delta     |         -101,456 B |        -169,132 B | GC-sensitive |
 | Console errors    |                  0 |                 0 |            0 |
 | Page errors       |                  0 |                 0 |            0 |
 
@@ -32,7 +32,7 @@ audit, and the isolated 100,000-iteration telemetry regression below.
 
 The after benchmark consumed the production `RenderTelemetry` instance rather
 than reconstructing renderer counters in the harness. Its final 120-frame ring
-reported median/p75/p99 of 149.9/150.0/150.1 ms. The 120-frame p99 differs from
+reported median/p75/p99 of 149.95/150.0/163.546 ms. The 120-frame p99 differs from
 the historical 600-frame p99 because the two windows intentionally have
 different lengths.
 
