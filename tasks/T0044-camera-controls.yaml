@@ -1,8 +1,8 @@
 id: T0044
 title: Free camera + body focus controls
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0044-free-camera
 depends_on: [T0040]
 milestone: M2
 spec: |
