@@ -1,6 +1,6 @@
 id: T0058
 title: Save/load, settings, input mapping
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0058-save-load-settings-input
 depends_on: [T0050]
@@ -21,3 +21,8 @@ handoff_notes: |
   tool tests, task/budget checks, the full existing browser regression matrix,
   the new session-settings browser regression, and a real production-app
   Playwright save/advance/load/mobile playtest all pass without console errors.
+  Independent review completed against head 801be5710e347a1e580ea5e48213296f2b28a830.
+  Two review rounds found and resolved allocation-boundary, active-burn
+  consistency, restored-input, v1 kinetic-baseline, and settings-warning gaps;
+  the final read-only review reported no Critical, Important, or Minor findings
+  and explicitly approved the task for merge.
