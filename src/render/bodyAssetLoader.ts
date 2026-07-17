@@ -1,4 +1,11 @@
-import type { Material, Mesh, Object3D, Texture, WebGLRenderer } from 'three';
+import {
+  RepeatWrapping,
+  type Material,
+  type Mesh,
+  type Object3D,
+  type Texture,
+  type WebGLRenderer,
+} from 'three';
 
 import type {
   RuntimeAssetCategory,
@@ -9,6 +16,14 @@ import type {
 export interface LoadedBodyModel {
   readonly root: Object3D;
   readonly materials: Material[];
+  readonly surfaceDetail: LoadedSurfaceDetail | null;
+}
+
+export interface LoadedSurfaceDetail {
+  readonly albedo: Texture;
+  readonly normal: Texture;
+  readonly tilesPerEquator: number;
+  readonly seed: number;
 }
 
 export interface BodyAssetBackend {
@@ -146,7 +161,11 @@ export class BodyAssetLoader {
     if (cached !== undefined) return cached;
 
     const entry = this.entries.get(id);
-    const file = entry === undefined ? null : findFile(entry, `models/${id}.glb`);
+    if (entry === undefined) {
+      this.modelPromises.set(id, NULL_MODEL_PROMISE);
+      return NULL_MODEL_PROMISE;
+    }
+    const file = findFile(entry, `models/${id}.glb`);
     if (file === null) {
       this.modelPromises.set(id, NULL_MODEL_PROMISE);
       return NULL_MODEL_PROMISE;
@@ -155,9 +174,10 @@ export class BodyAssetLoader {
     const url = `${this.baseUrl}assets/${file}`;
     const promise = this.getBackend()
       .then((backend) => backend.loadModel(url))
-      .then((root): LoadedBodyModel => {
+      .then(async (root): Promise<LoadedBodyModel> => {
+        const surfaceDetail = await this.loadSurfaceDetail(entry, await this.getBackend());
         freezeStaticModel(root);
-        return { root, materials: collectMaterials(root) };
+        return { root, materials: collectMaterials(root), surfaceDetail };
       })
       .catch((error: unknown) => {
         this.reportError(`Failed to load body model ${url}.`, error);
@@ -179,5 +199,42 @@ export class BodyAssetLoader {
   private getBackend(): Promise<BodyAssetBackend> {
     this.backendPromise ??= this.createBackend(this.renderer, this.baseUrl);
     return this.backendPromise;
+  }
+
+  private async loadSurfaceDetail(
+    entry: RuntimeAssetEntry,
+    backend: BodyAssetBackend,
+  ): Promise<LoadedSurfaceDetail | null> {
+    const detail = entry.surfaceDetail;
+    if (detail === undefined) return null;
+    const albedoUrl = `${this.baseUrl}assets/${detail.albedo}`;
+    const normalUrl = `${this.baseUrl}assets/${detail.normal}`;
+    const [albedoResult, normalResult] = await Promise.allSettled([
+      backend.loadTexture(albedoUrl),
+      backend.loadTexture(normalUrl),
+    ]);
+    if (albedoResult.status === 'rejected' || normalResult.status === 'rejected') {
+      if (albedoResult.status === 'fulfilled') albedoResult.value.dispose();
+      if (normalResult.status === 'fulfilled') normalResult.value.dispose();
+      let error: unknown;
+      if (albedoResult.status === 'rejected') error = albedoResult.reason;
+      else if (normalResult.status === 'rejected') error = normalResult.reason;
+      this.reportError(`Failed to load surface detail for body ${entry.id}.`, error);
+      return null;
+    }
+
+    const anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    for (const texture of [albedoResult.value, normalResult.value]) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+    return {
+      albedo: albedoResult.value,
+      normal: normalResult.value,
+      tilesPerEquator: detail.tilesPerEquator,
+      seed: detail.seed,
+    };
   }
 }

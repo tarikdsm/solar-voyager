@@ -46,7 +46,7 @@ function cameraAtEarthDistance(distanceKm: number): { x: number; y: number; z: n
 function loadedModel(material: Material = new MeshBasicMaterial()): LoadedBodyModel {
   const root = new Group();
   root.add(new Mesh(undefined, material));
-  return { root, materials: [material] };
+  return { root, materials: [material], surfaceDetail: null };
 }
 
 describe('BodyVisualSystem structure', () => {
@@ -154,6 +154,7 @@ describe('BodyVisualSystem structure', () => {
     const earthModel: LoadedBodyModel = {
       root: earthRoot,
       materials: [earthMaterial, cloudsMaterial],
+      surfaceDetail: null,
     };
     const loader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
