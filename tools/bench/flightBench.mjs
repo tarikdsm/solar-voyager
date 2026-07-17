@@ -22,7 +22,7 @@ const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const WARMUP_FRAMES = 120;
 const STEADY_HEAP_SETTLE_MS = 30_000;
 const STEADY_HEAP_MEASURE_MS = 30_000;
-const DEFAULT_SAMPLE_FRAMES = 900;
+const DEFAULT_SAMPLE_FRAMES = 300;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
 
 function readPositiveIntegerFlag(flag, fallback) {
