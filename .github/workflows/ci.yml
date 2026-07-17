@@ -74,6 +74,9 @@ jobs:
       - name: HUD signal granularity regression
         run: npm run test:hud-signals
 
+      - name: Performance panel regression
+        run: npm run test:perf-panel
+
       - name: Session settings regression
         run: npm run test:session-settings
 

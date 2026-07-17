@@ -47,7 +47,7 @@ export type SettingsSaveResult =
 export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';
 
 const RESERVED_CODES = Object.freeze(
-  new Set(['Escape', 'F1', 'F5', 'F11', 'F12', 'Tab', 'MetaLeft', 'MetaRight']),
+  new Set(['Escape', 'F1', 'F3', 'F5', 'F11', 'F12', 'Tab', 'MetaLeft', 'MetaRight']),
 );
 
 function freezeSettings(

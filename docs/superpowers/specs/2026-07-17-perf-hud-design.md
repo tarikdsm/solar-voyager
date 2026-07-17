@@ -48,10 +48,12 @@ quality scalars through the same store call without changing the panel contract.
 - Unit tests cover one-second FPS, p99-derived 1% low, chronological capped SVG
   points, 4 Hz sampling, stable hot-path signals, resolution/context formatting,
   and measured cost.
-- A Chromium regression mounts the production panel, compares its FPS with an
-  independent requestAnimationFrame meter (the same cross-check performed with
-  the DevTools FPS meter), verifies compact/expanded/F3 behavior, budget line,
-  metrics, layout, errors, and the 0.2 ms/frame limit.
+- A lightweight Chromium fixture drives the real telemetry and panel for 120
+  requestAnimationFrame samples, compares its FPS with an independent meter (the
+  same cross-check performed with the DevTools FPS meter), and verifies
+  compact/expanded/F3 behavior, budget line, metrics, layout, errors, and the
+  0.2 ms/frame limit without depending on SwiftShader's full-scene throughput.
+- The production application smoke requires the real `#perf-panel` anchor, so
+  deterministic fixture coverage cannot hide a missing production integration.
 - Existing telemetry tests continue to prove stable typed-array storage and the
   allocation-free 120-frame append path.
-

@@ -17,6 +17,7 @@ import type { Commands } from './sim/simulationSnapshot.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
+import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 
 const SHIP_MASS_KG = 10_000;
@@ -40,6 +41,18 @@ const { contextReport, renderer } = rendererBootstrap;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
+const perfQualityState = {
+  governorState: 'Awaiting adaptive governor',
+  lastAction: 'None',
+  renderScale: 1,
+  tier: 6,
+  tierCount: 6,
+};
+const perfPanelStore = createPerfPanelStore({
+  quality: perfQualityState,
+  resolution: canvas,
+  telemetry,
+});
 const initialSimulation = createNewGameSimulation(SHIP_MASS_KG);
 const hudStore = createHudSignalStore();
 hudStore.publish(initialSimulation.snapshot, 0);
@@ -154,6 +167,7 @@ function renderFrame(nowMs: number): void {
     uiEndMs - uiStartMs,
     nowMs,
   );
+  perfPanelStore.publish(nowMs);
   requestAnimationFrame(renderFrame);
 }
 
@@ -165,6 +179,7 @@ async function startApplication(): Promise<void> {
       hardwareWarning,
       hud: hudStore.display,
       hudState: hudStore.signals,
+      perfPanel: perfPanelStore.display,
       session,
     }),
     appRoot,
