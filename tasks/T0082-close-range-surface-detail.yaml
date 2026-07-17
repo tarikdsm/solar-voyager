@@ -26,7 +26,12 @@ handoff_notes: >-
   repeat prominences 0.0496/0.0054, mean luminance delta -0.0248, byte-identical
   far captures, 61 atmosphere limb pixels, and stable 27 programs through first
   frame. RTX 3070 native 1920x1080 GPU p75 is 2.544 ms (<10 ms) at 60 fps on
-  exact implementation/harness SHA a9324e5; paired main was 3.508 ms, with DVFS
-  noise disclosed in docs/bench/T0082-summary.md. All local gates pass (425
+  SHA a9324e5; paired main was 3.508 ms, with DVFS noise disclosed in
+  docs/bench/T0082-summary.md. The exact final SHA 93acf4b was paired with main
+  on the conservative Intel UHD 0x9A60 proxy: GPU p75 14.641 vs 12.106 ms
+  (+2.535 ms), 56.25 vs 60 fps. This older proxy predates the 2023+ reference,
+  misses the 10 ms target at baseline, and its absolute miss is retained.
+  Second-review shader feedback was fixed with a tested vertex uniform branch
+  that skips all procedural waves at zero blend. All local gates pass (425
   Vitest, 50 Python, nine browser regressions, build, budgets, task schema,
   full-range diff check, and Earth assets:verify with 15 byte-identical files).
