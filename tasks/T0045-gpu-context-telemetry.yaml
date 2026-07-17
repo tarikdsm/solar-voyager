@@ -1,6 +1,6 @@
 id: T0045
 title: GPU context policy + render telemetry module
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0045-gpu-telemetry
 depends_on: [T0040]
@@ -58,3 +58,9 @@ handoff_notes: |
   298 passed / 3 skipped; Python tools 49 passed; build PASS; budgets PASS;
   53 task schemas PASS; render-depth, starfield, visual-tier, camera-controls,
   renderer-policy, and telemetry browser regressions all PASS; diff check PASS.
+
+  Independent reviewer approved exact head e0ee671 with zero Critical,
+  Important, or Minor findings after reproducing the strict-throw fallback,
+  consuming disjoint latch, hardware no-warning control, both depth paths, and
+  telemetry overhead. Exact-head CI succeeded before this DONE transition; the
+  merger must require CI to succeed again on this status-only commit.
