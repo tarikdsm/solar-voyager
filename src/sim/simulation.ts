@@ -8,6 +8,11 @@ import {
   type WarpFactor,
 } from '../core/time.js';
 import { evaluateBarycenterInto } from './analysis/barycenter.js';
+import {
+  createOsculatingWorkspace,
+  updateOsculatingElements,
+  type OsculatingWorkspace,
+} from './analysis/osculating.js';
 import { updateSnapshotDerivedState } from './analysis/snapshotDerived.js';
 import {
   createDp54Result,
@@ -153,6 +158,7 @@ export class SimulationCore {
   private readonly integrationResult: Dp54Result;
   private readonly checkpointShipState: Float64Array;
   private readonly railsWorkspace: RailsWorkspace;
+  private readonly osculatingWorkspace: OsculatingWorkspace;
   private readonly gravityRailsState: RailsState;
   private readonly attitudeQuaternion: Float64Array;
   private readonly stepStartAttitudeQuaternion: Float64Array;
@@ -210,6 +216,7 @@ export class SimulationCore {
     this.integrationResult = createDp54Result();
     this.checkpointShipState = new Float64Array(SIMULATION_STATE_DIMENSION);
     this.railsWorkspace = createRailsWorkspace();
+    this.osculatingWorkspace = createOsculatingWorkspace();
     this.gravityRailsState = createRailsState(this.catalog);
     this.attitudeQuaternion = new Float64Array([0, 0, 0, 1]);
     this.stepStartAttitudeQuaternion = new Float64Array([0, 0, 0, 1]);
@@ -453,6 +460,7 @@ export class SimulationCore {
         this.shipMassKg,
       ) - this.initialKineticEnergyJ;
     updateSnapshotDerivedState(snapshot, this.shipMassKg);
+    updateOsculatingElements(snapshot, this.catalog.muKm3S2, this.osculatingWorkspace);
   }
 
   private currentPrivateShipState(): Float64Array {

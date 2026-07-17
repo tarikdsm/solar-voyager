@@ -6,6 +6,7 @@ import {
   createWebGL2Context,
 } from '../../src/render/createRenderer.js';
 import { App } from '../../src/ui/App.js';
+import { createHudSignalStore } from '../../src/ui/hudSignals.js';
 
 const root = document.querySelector('#warning-root');
 if (!(root instanceof HTMLElement)) throw new Error('Hardware warning root is missing.');
@@ -51,4 +52,4 @@ root.dataset.policyReady = 'true';
 root.dataset.rendererName = contextReport.rendererName;
 root.dataset.usedPerformanceCaveatFallback = String(contextReport.usedPerformanceCaveatFallback);
 root.dataset.warningRequired = String(contextReport.warningRequired);
-render(<App hardwareWarning={hardwareWarning} />, root);
+render(<App hardwareWarning={hardwareWarning} hud={createHudSignalStore().display} />, root);
