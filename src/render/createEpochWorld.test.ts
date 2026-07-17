@@ -31,6 +31,11 @@ describe('createEpochWorld', () => {
     const bodyCount = bodiesDocument.bodies.length;
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
+    expect(world.cameraController.focusId).toBe('earth');
+    expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
+    expect(world.cameraController.focusBody('jupiter')).toBe(true);
+    world.cameraController.update(1.5);
+    expect(world.cameraController.focusId).toBe('jupiter');
     expect(world.spaceScene.camera.getWorldDirection(new Vector3()).length()).toBeCloseTo(1, 12);
     const spheres = world.spaceScene.scene.children.filter(
       (child): child is Mesh => child instanceof Mesh,

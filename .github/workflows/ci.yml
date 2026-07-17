@@ -47,6 +47,9 @@ jobs:
       - name: Visual tier fly-in regression
         run: npm run test:visual-tiers
 
+      - name: Camera controls regression
+        run: npm run test:camera-controls
+
       - name: Tool tests
         run: npm run test:tools
 
