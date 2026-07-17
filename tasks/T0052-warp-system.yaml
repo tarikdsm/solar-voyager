@@ -1,6 +1,6 @@
 id: T0052
 title: Time warp with substep-budget auto-clamp
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0052-warp-system
 depends_on: [T0050]
@@ -29,3 +29,11 @@ handoff_notes: |
   and two minor documentation/whitespace issues (fixed next). The remaining acceptance
   requires a nonzero 1x-vs-100x ledger burn, whose implementation is owned by T0053.
   Resume this PR after T0053 is DONE, rebase it, and add that real ledger regression.
+  Rebased onto completed T0053 and replaced the reserved zero-ledger check with a
+  transactional nonzero burn regression: a rejected partial 10x candidate leaves no
+  ledger residue before the accepted 5x retry, while the T0053 multi-frame 1x-vs-100x
+  regression exercises the segmented warp path. Combined exact-head gates pass: 349
+  TypeScript tests + 3 skipped, 49 Python tests, build, lint, typecheck, formatting,
+  task schema, budgets, six browser regressions, simulation benchmark at 0.132 ms/step
+  with two snapshots and negative retained heap growth, plus a live Earth-to-Jupiter
+  browser playtest with zero console warnings/errors. Ready for exact-head re-review.
