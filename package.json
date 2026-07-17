@@ -16,6 +16,7 @@
     "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
+    "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",
     "lint": "eslint .",

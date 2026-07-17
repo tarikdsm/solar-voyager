@@ -29,7 +29,7 @@ function ReadoutValue({ label, value }: ReadoutValueProps) {
   );
 }
 
-function OrbitReadout({ hud }: { readonly hud: HudDisplaySignals }) {
+export function OrbitReadout({ hud }: { readonly hud: HudDisplaySignals }) {
   return (
     <section id="orbit-readout" class="hud-panel orbit-readout" aria-labelledby="orbit-title">
       <header>
@@ -47,7 +47,7 @@ function OrbitReadout({ hud }: { readonly hud: HudDisplaySignals }) {
   );
 }
 
-function DualClock({ hud }: { readonly hud: HudDisplaySignals }) {
+export function DualClock({ hud }: { readonly hud: HudDisplaySignals }) {
   return (
     <section id="dual-clock" class="hud-panel dual-clock" aria-label="Simulation clocks">
       <div class="clock-block">

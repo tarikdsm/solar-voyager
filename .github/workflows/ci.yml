@@ -56,6 +56,9 @@ jobs:
       - name: Telemetry overhead regression
         run: npm run test:telemetry
 
+      - name: HUD signal granularity regression
+        run: npm run test:hud-signals
+
       - name: Tool tests
         run: npm run test:tools
 
