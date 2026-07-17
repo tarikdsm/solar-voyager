@@ -1,6 +1,6 @@
 id: T0052
 title: Time warp with substep-budget auto-clamp
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0052-warp-system
 depends_on: [T0050]
@@ -37,3 +37,8 @@ handoff_notes: |
   task schema, budgets, six browser regressions, simulation benchmark at 0.132 ms/step
   with two snapshots and negative retained heap growth, plus a live Earth-to-Jupiter
   browser playtest with zero console warnings/errors. Ready for exact-head re-review.
+  Independent exact-head re-review approved SHA 475b8a4c with Critical 0,
+  Important 0, Minor 0. The final regression forces a genuinely partial 10x
+  candidate to 7.75 s, proves rollback to the independent 5x ship-state and ledger
+  checkpoint, and fails under a mutation that removes the rollback. Exact-head CI
+  passed all required gates.
