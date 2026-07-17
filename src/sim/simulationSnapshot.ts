@@ -76,6 +76,10 @@ export interface SimSnapshot {
   readonly energySpentJ: number;
   readonly properDeltaVMS: number;
   readonly kineticEnergyChangeJ: number;
+  readonly burnSummaryAvailable: boolean;
+  readonly burnSummaryActive: boolean;
+  readonly burnEnergySpentJ: number;
+  readonly burnProperDeltaVMS: number;
   readonly dominantBodyIndex: number;
   readonly osculatingElements: OsculatingElementsSnapshot;
   readonly warningFlags: number;
@@ -99,6 +103,10 @@ export interface SimulationSnapshotBuffer extends SimSnapshot {
   energySpentJ: number;
   properDeltaVMS: number;
   kineticEnergyChangeJ: number;
+  burnSummaryAvailable: boolean;
+  burnSummaryActive: boolean;
+  burnEnergySpentJ: number;
+  burnProperDeltaVMS: number;
   dominantBodyIndex: number;
   warningFlags: number;
   targetBodyIndex: number;
@@ -184,6 +192,10 @@ export function createSimulationSnapshotBuffer(
     energySpentJ: 0,
     properDeltaVMS: 0,
     kineticEnergyChangeJ: 0,
+    burnSummaryAvailable: false,
+    burnSummaryActive: false,
+    burnEnergySpentJ: 0,
+    burnProperDeltaVMS: 0,
     dominantBodyIndex: -1,
     osculatingElements: createOsculatingElementsStorage(),
     warningFlags: WarningFlag.NONE,

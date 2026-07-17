@@ -35,6 +35,10 @@ describe('simulation snapshot storage', () => {
     expect(snapshot.energySpentJ).toBe(0);
     expect(snapshot.properDeltaVMS).toBe(0);
     expect(snapshot.powerDrawW).toBe(0);
+    expect(snapshot.burnSummaryAvailable).toBe(false);
+    expect(snapshot.burnSummaryActive).toBe(false);
+    expect(snapshot.burnEnergySpentJ).toBe(0);
+    expect(snapshot.burnProperDeltaVMS).toBe(0);
   });
 });
 

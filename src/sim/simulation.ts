@@ -452,6 +452,12 @@ export class SimulationCore {
     snapshot.powerDrawW = photonDrivePowerW(this.endpointProperAccelerationKmS2, this.shipMassKg);
     snapshot.energySpentJ = shipState[STATE_ENERGY_J] as number;
     snapshot.properDeltaVMS = shipState[STATE_PROPER_DELTA_V_MS] as number;
+    const activeBurn = this.burnLog.activeBurn;
+    const burnSummary = activeBurn ?? this.burnLog.get(this.burnLog.count - 1);
+    snapshot.burnSummaryAvailable = burnSummary !== null;
+    snapshot.burnSummaryActive = activeBurn !== null;
+    snapshot.burnEnergySpentJ = burnSummary?.energySpentJ ?? 0;
+    snapshot.burnProperDeltaVMS = burnSummary?.properDeltaVMS ?? 0;
     snapshot.kineticEnergyChangeJ =
       relativisticKineticEnergyJ(
         shipState[3] as number,
