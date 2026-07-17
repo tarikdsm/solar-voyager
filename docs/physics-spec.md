@@ -86,6 +86,37 @@ g(r, t) = Σ_i −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³     # Newtonian n
 
 **Emergent feel (do not script it):** coordinate acceleration parallel to v falls as α/γ³ — the drive feels "heavier" the faster you go; combined with E = c·|Δp| cost (§5), expensive maneuvers (plane changes, near-c pushes, ecliptic escapes) are *felt* as sluggish response, like a power-limited vehicle.
 
+### 3.0.1 Attitude and commanded proper acceleration (ADR-025)
+
+Attitude quaternion order is `[x,y,z,w]`; it rotates the ship-local `+X`
+nose/drive axis into the inertial ecliptic frame. Default maximum proper
+acceleration is standard gravity, `α_max = 9.80665 m/s² = 0.00980665 km/s²`,
+overridable in ship configuration. For throttle fraction `f ∈ [0,1]`:
+
+```
+α_vector = f · α_max · forward
+F_N = m_kg · (1000 · |α_vector|)
+P_W = F_N · (1000 · c_km/s)
+```
+
+Automatic orbital holds use the instantaneous maximum-gravity body
+`argmax_i μ_i/|r-r_i|²` as reference. With `r_rel=r-r_body` and
+`v_rel=v-v_body`: prograde/retrograde are `±normalize(v_rel)`, radial out/in
+are `±normalize(r_rel)`, and normal/antinormal are
+`±normalize(r_rel × v_rel)`. Target hold is `normalize(r_target-r)`.
+Degenerate directions retain the previous finite forward vector.
+
+Manual rates are body-frame angular velocity `ω` in rad/s. Within one
+propagation call they are constant and evaluated exactly at every DP54 stage.
+With `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about `+Z`:
+
+```
+q(t) = normalize(q0 ⊗ [axis(ω)·sin(|ω|Δt/2), cos(|ω|Δt/2)])
+```
+
+The endpoint attitude commits only when the propagation succeeds. Hold-mode
+directions are recomputed at every stage, so thrust follows the curved orbit.
+
 ### 3.1 Integrator: Dormand–Prince 5(4), adaptive (ADR-002)
 
 - Embedded RK5(4) pair, FSAL, standard DP54 tableau (cite Hairer–Nørsett–Wanner; tableau constants in `dp54.ts` must match the published values to full double precision).

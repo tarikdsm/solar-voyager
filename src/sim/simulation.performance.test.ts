@@ -19,6 +19,8 @@ function createCore(): SimulationCore {
 describe('SimulationCore frame storage', () => {
   it('reuses exactly two snapshots and every reachable frame array', () => {
     const core = createCore();
+    core.commands.setAttitudeMode('prograde');
+    core.commands.setThrottle(0.5);
     const first = core.snapshot;
     const second = core.step(1 / 60);
     const frameArrays = [

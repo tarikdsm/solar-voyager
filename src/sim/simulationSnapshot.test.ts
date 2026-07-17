@@ -75,4 +75,35 @@ describe('command controller', () => {
     expect(controller.state.requestedWarp).toBe(10);
     expect(controller.state.targetBodyIndex).toBe(-1);
   });
+
+  it('invalidates prediction exactly once when active thrust intent changes', () => {
+    let invalidations = 0;
+    const controller = createCommandController(Object.freeze(['sun', 'earth']), () => {
+      invalidations += 1;
+    });
+
+    controller.commands.setAttitudeMode('prograde');
+    controller.commands.rotate(0.1, 0.2, 0.3);
+    controller.commands.setTarget('earth');
+    expect(invalidations).toBe(0);
+
+    controller.commands.setThrottle(0.5);
+    controller.commands.setThrottle(0.5);
+    expect(invalidations).toBe(1);
+
+    controller.commands.setAttitudeMode('manual');
+    controller.commands.setAttitudeMode('manual');
+    controller.commands.rotate(0.4, 0.2, 0.3);
+    controller.commands.rotate(0.4, 0.2, 0.3);
+    expect(invalidations).toBe(3);
+
+    controller.commands.setAttitudeMode('target');
+    controller.commands.setTarget(null);
+    controller.commands.setTarget(null);
+    expect(invalidations).toBe(5);
+
+    controller.commands.setThrottle(0);
+    controller.commands.setAttitudeMode('retrograde');
+    expect(invalidations).toBe(6);
+  });
 });
