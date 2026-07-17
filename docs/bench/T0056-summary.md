@@ -1,0 +1,36 @@
+# T0056 Warp, Energy, and Target UI Benchmark
+
+## Method
+
+All captures used the unchanged `npm run bench:scaffold` harness with a
+production build, Playwright Chromium, a 1280x720 viewport, 120 warmup frames,
+and 600 measured frames. The baseline is `main` immediately before T0056. The
+two after captures use the committed implementation head. Every run selected
+SwiftShader, recorded no console/page errors, and released the preview port.
+
+## Before / After
+
+| Metric            | Before (`352c033`) | After (`6581283`) | Repeat (`6581283`) |
+| ----------------- | -----------------: | ----------------: | -----------------: |
+| Median frame time |          149.90 ms |         149.90 ms |          149.90 ms |
+| p75 frame time    |          150.00 ms |         150.00 ms |          150.00 ms |
+| p99 frame time    |          166.70 ms |         166.70 ms |          166.70 ms |
+| JS heap delta     |          -48,245 B |        +723,279 B |         +131,257 B |
+| Draw calls        |                  6 |                 6 |                  6 |
+| Triangles         |             48,564 |            48,564 |             48,564 |
+| Console errors    |                  0 |                 0 |                  0 |
+| Page errors       |                  0 |                 0 |                  0 |
+
+The feature produced no measurable median/p75/p99 regression and preserved the
+renderer counts. The first after sample retained 723,279 bytes and an immediate
+repeat retained 131,257 bytes. This non-GC-forced browser metric is sensitive to
+collection timing and lazy asset activity, so the reports preserve both values
+rather than treating either as a per-frame allocation count.
+
+The hot-path source adds only three primitive signal assignments per frame;
+numeric energy and target telemetry remains gated to 10 Hz. The full signal DOM
+regression confirms that unchanged values do not rerender any HUD component,
+and `bench:sim` retained -175,872 bytes over 10,000 measured steps. Sampled UI
+time was 0.10 ms or less, within the 1 ms HUD budget. Absolute approximately
+7 fps is SwiftShader throughput and is not evidence for the reference-hardware
+60 fps gate.
