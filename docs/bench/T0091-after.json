@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-07-17T20:04:41.769Z",
+  "gitSha": "802ab4e93634c012a92a0e14017bcaab1097a227",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 83.3,
+  "p75Ms": 83.4,
+  "p99Ms": 100.1,
+  "gpu": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "vendor": "Google Inc. (Google)"
+  },
+  "canvas": {
+    "backingHeight": 360,
+    "backingWidth": 640,
+    "cssHeight": 360,
+    "cssWidth": 640
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 83.3,
+    "p75Ms": 83.4,
+    "p99Ms": 100.081,
+    "snapshot": {
+      "averageFps": 11.63219014753495,
+      "context": {
+        "contextFlavor": "webgl2",
+        "depthStrategy": "reversed",
+        "effectiveContextAttributes": {
+          "alpha": false,
+          "antialias": false,
+          "depth": true,
+          "desynchronized": true,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "high-performance",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false
+        },
+        "gpuTimerQueryAvailable": false,
+        "rendererName": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "softwareRasterizer": true,
+        "usedPerformanceCaveatFallback": true,
+        "warningRequired": true
+      },
+      "drawCalls": 9,
+      "frameCount": 743,
+      "frameMs": 100,
+      "frameSampleCount": 120,
+      "geometries": 7,
+      "gpuMs": -1,
+      "lines": 0,
+      "oneSecondAverageFps": 11.250703168948075,
+      "p75FrameMs": 83.40000000000146,
+      "p99FrameMs": 100.09999999999854,
+      "points": 2043,
+      "programs": 29,
+      "qualityActionCount": 14,
+      "renderMs": 0.699999988079071,
+      "simMs": 0.09999999403953552,
+      "textures": 11,
+      "triangles": 65077,
+      "uiMs": 0.20000001788139343
+    }
+  },
+  "heapDeltaBytes": -1906124
+}
