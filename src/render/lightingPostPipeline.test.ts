@@ -109,6 +109,7 @@ describe('LightingPostPipeline', () => {
     expect(fixture.renderer.toneMapping).toBe(ACESFilmicToneMapping);
     expect(fixture.renderer.toneMappingExposure).toBe(1);
     expect(fixture.backend.createComposer).toHaveBeenCalledWith(fixture.renderer);
+    expect(fixture.backend.createComposer).toHaveBeenCalledOnce();
     expect(fixture.backend.createRenderPass).toHaveBeenCalledWith(scene, camera);
     expect(fixture.backend.createBloomPass).toHaveBeenCalledOnce();
     expect(fixture.backend.createOutputPass).toHaveBeenCalledOnce();

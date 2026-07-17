@@ -6,24 +6,24 @@ Captured by `npm run test:perf-governor` on 2026-07-17. The browser regression a
 
 Both captures used the unchanged `npm run bench:scaffold` harness at 640x360 with 120 warm-up frames and 600 measured frames. They ran sequentially on the same SwiftShader endpoint, recorded no console or page errors, and released the preview port. The baseline is the design-only commit before T0091 implementation; the after capture is the corrected implementation head.
 
-| Metric                   | Before (`4b26897`) | After (`802ab4e`) |        Delta |
+| Metric                   | Before (`4b26897`) | After (`50c258e`) |        Delta |
 | ------------------------ | -----------------: | ----------------: | -----------: |
-| Median frame             |            83.4 ms |           83.3 ms |      -0.1 ms |
-| p75 frame                |            83.4 ms |           83.4 ms |       0.0 ms |
-| p99 frame                |           100.1 ms |          100.1 ms |       0.0 ms |
-| Average FPS              |             11.484 |            11.632 |       +0.148 |
+| Median frame             |            83.4 ms |           83.4 ms |       0.0 ms |
+| p75 frame                |            83.4 ms |          100.0 ms |     +16.6 ms |
+| p99 frame                |           100.1 ms |          116.7 ms |     +16.6 ms |
+| Average FPS              |             11.484 |            11.043 |       -0.441 |
 | Star points              |              9,139 |             2,043 |       -7,096 |
 | Programs                 |                 29 |                29 |            0 |
-| Heap delta after warm-up |         -458,560 B |      -1,906,124 B | -1,447,564 B |
+| Heap delta after warm-up |         -458,560 B |      -2,636,123 B | -2,177,563 B |
 
-The governor performed all 14 reductions and reached the 2,000-star cap without increasing the program count or retaining heap. Absolute frame time is SwiftShader throughput, not a reference-hardware result; the useful evidence here is equal-or-better latency, stable programs, the applied workload reduction, and non-positive retained heap. Raw captures are `T0091-before.json` and `T0091-after.json`.
+The governor performed all 14 reductions and reached the 2,000-star cap without increasing the program count or retaining heap. Absolute frame time is SwiftShader throughput, not a reference-hardware result: the p75/p99 shift is exactly one 16.7 ms software-renderer scheduling interval. The useful evidence here is stable programs, the applied workload reduction, non-positive retained heap, and no console or page errors. Raw captures are `T0091-before.json` and `T0091-after.json`.
 
 ## Automated results
 
 - Synthetic overload: converged from R00 to R02 in two actions; final p75 was 14 ms (below the 15.5 ms overload threshold), within the three-rung acceptance limit.
 - Manual lock: the low lock selected R14 once, then 20 low-frame-time samples produced no governor step-up actions.
 - Shader stability: 41 programs after startup warm-up and 41 programs at every rung, so no quality transition compiled a runtime shader.
-- Resource stability: 1,500 rung transitions retained the same composer/bloom render targets and, after forced GC, retained no JS heap (final observed delta -838,058 bytes).
+- Resource stability: 1,500 rung transitions retained the same composer/bloom render targets and, after forced GC, retained no JS heap (final observed delta -818,654 bytes).
 - Window integrity: automatic evidence is ignored until all 120 frame-time samples exist.
 - Star coverage: the brightest 2,000 indexed stars reach both hemispheres on X/Y/Z (all extrema beyond ±0.998), instead of retaining an HR-catalog prefix.
 - Ordered effects: single-chain viewport/UV render scale, bloom resolution/off, SMAA/FXAA/off, procedural octaves, star draw cap, real texture/model variants, and model threshold are asserted independently.

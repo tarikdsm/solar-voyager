@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-07-17T20:04:41.769Z",
-  "gitSha": "802ab4e93634c012a92a0e14017bcaab1097a227",
+  "timestamp": "2026-07-17T20:55:48.942Z",
+  "gitSha": "50c258edee8388d4034caa8afa14fbbea9836924",
   "warmupFrames": 120,
   "sampleFrames": 600,
-  "medianMs": 83.3,
-  "p75Ms": 83.4,
-  "p99Ms": 100.1,
+  "medianMs": 83.4,
+  "p75Ms": 100,
+  "p99Ms": 116.7,
   "gpu": {
     "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
     "vendor": "Google Inc. (Google)"
@@ -20,11 +20,11 @@
   "pageErrors": [],
   "telemetry": {
     "frameSampleCount": 120,
-    "medianMs": 83.3,
-    "p75Ms": 83.4,
-    "p99Ms": 100.081,
+    "medianMs": 83.4,
+    "p75Ms": 100,
+    "p99Ms": 100.1,
     "snapshot": {
-      "averageFps": 11.63219014753495,
+      "averageFps": 11.043419042535572,
       "context": {
         "contextFlavor": "webgl2",
         "depthStrategy": "reversed",
@@ -46,24 +46,24 @@
         "warningRequired": true
       },
       "drawCalls": 9,
-      "frameCount": 743,
+      "frameCount": 746,
       "frameMs": 100,
       "frameSampleCount": 120,
       "geometries": 7,
       "gpuMs": -1,
       "lines": 0,
-      "oneSecondAverageFps": 11.250703168948075,
-      "p75FrameMs": 83.40000000000146,
-      "p99FrameMs": 100.09999999999854,
+      "oneSecondAverageFps": 10.819317399429558,
+      "p75FrameMs": 100,
+      "p99FrameMs": 100.10000000000582,
       "points": 2043,
       "programs": 29,
       "qualityActionCount": 14,
-      "renderMs": 0.699999988079071,
-      "simMs": 0.09999999403953552,
+      "renderMs": 0.8999999761581421,
+      "simMs": 0.29999998211860657,
       "textures": 11,
       "triangles": 65077,
-      "uiMs": 0.20000001788139343
+      "uiMs": 0.30000004172325134
     }
   },
-  "heapDeltaBytes": -1906124
+  "heapDeltaBytes": -2636123
 }
