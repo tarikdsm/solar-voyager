@@ -29,7 +29,7 @@ function summarizeFrameTimes(frameDeltasMs) {
   };
 }
 
-export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 1_800) {
+export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 900) {
   if (!Number.isInteger(seed)) throw new RangeError('Flight seed must be an integer.');
   if (!Number.isInteger(sampleFrames) || sampleFrames <= 0 || sampleFrames % 3 !== 0) {
     throw new RangeError('Flight sample frames must be a positive multiple of three.');
@@ -56,8 +56,9 @@ export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 1_
     Object.freeze({ frame: legFrames * 2, key: 'j' }),
   ]);
   const zoomEvents = [];
+  const zoomIntervalFrames = Math.max(1, Math.round(sampleFrames / 15));
   let state = seed >>> 0;
-  for (let frame = 120; frame < sampleFrames; frame += 120) {
+  for (let frame = zoomIntervalFrames; frame < sampleFrames; frame += zoomIntervalFrames) {
     state = nextRandomState(state);
     let delta = Math.round(((state / 0x1_0000_0000) * 2 - 1) * 80);
     if (delta === 0) delta = 1;

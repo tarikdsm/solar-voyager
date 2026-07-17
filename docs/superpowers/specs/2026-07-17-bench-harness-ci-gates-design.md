@@ -8,7 +8,7 @@ Add a reproducible production-build benchmark and CI gates for the deterministic
 
 `npm run bench` builds the application, starts a strict-port Vite preview, launches Chromium with precise heap metrics, and measures the real production page. It applies the High quality lock before startup so the adaptive governor cannot change the workload during a run.
 
-The scripted path contains 1,800 measured animation frames and represents 180 virtual seconds:
+The scripted path contains 900 measured animation frames (five samples per virtual second) and represents 180 virtual seconds. This keeps software-rasterizer runs practical without changing the route:
 
 1. 0-60 s: low Earth orbit view;
 2. 60-120 s: Moon flyby, selected through the real camera input path;
