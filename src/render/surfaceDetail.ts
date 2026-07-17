@@ -132,7 +132,7 @@ if ( uSurfaceDetailBlend > 0.0 ) {
   vec3 surfaceDetailMacroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMacroUv ).rgb;
   vec3 surfaceDetailMicroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMicroUv ).rgb;
   vec3 surfaceDetailVariation = mix( surfaceDetailMacroAlbedo, surfaceDetailMicroAlbedo, 0.35 ) - vec3( 0.5 );
-  diffuseColor.rgb *= vec3( 1.0 ) + surfaceDetailVariation * ( 0.18 * uSurfaceDetailBlend );
+  diffuseColor.rgb *= vec3( 1.0 ) + surfaceDetailVariation * ( 0.12 * uSurfaceDetailBlend );
 }
 `;
 
@@ -142,12 +142,12 @@ if ( uSurfaceDetailBlend > 0.0 ) {
   vec2 surfaceDetailMicroUv = vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 8.0 ) + vec2( 0.371, 0.619 );
   vec3 surfaceDetailMacroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMacroUv ).xyz * 2.0 - 1.0;
   vec3 surfaceDetailMicroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMicroUv ).xyz * 2.0 - 1.0;
-  vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.55 + surfaceDetailMicroNormal.xy * 0.25;
+  vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.08 + surfaceDetailMicroNormal.xy * 0.03;
   if ( uSurfaceProceduralBlend > 0.0 ) {
     vec3 surfaceDetailNoisePosition = normalize( vSurfaceDetailDirection ) * 96.0;
     float surfaceDetailNoiseX = surfaceDetailFbm( surfaceDetailNoisePosition ) - 0.5;
     float surfaceDetailNoiseY = surfaceDetailFbm( surfaceDetailNoisePosition + vec3( 29.0, 11.0, 47.0 ) ) - 0.5;
-    surfaceDetailNormalXy += vec2( surfaceDetailNoiseX, surfaceDetailNoiseY ) * ( 0.18 * uSurfaceProceduralBlend );
+    surfaceDetailNormalXy += vec2( surfaceDetailNoiseX, surfaceDetailNoiseY ) * ( 0.12 * uSurfaceProceduralBlend );
   }
   surfaceDetailNormalXy *= uSurfaceDetailBlend;
   vec3 surfaceDetailTangentNormal = normalize( vec3(
