@@ -82,6 +82,17 @@ describe('Earth surface layers', () => {
     expect(atmosphere instanceof Mesh ? atmosphere.material : null).toBe(atmosphereMaterial);
   });
 
+  it('bounds cloud rotation across long-running sessions', () => {
+    const fixture = earthFixture();
+    const prepared = prepareEarthSurfaceLayers(fixture.root, fixture.materials);
+    if (prepared === null) throw new Error('Earth layers were not prepared.');
+    const rotationPeriodMs = 6 * 60 * 60 * 1_000;
+
+    prepared.update(rotationPeriodMs * 10_001);
+
+    expect(fixture.clouds.rotation.y).toBeCloseTo(0, 10);
+  });
+
   it('returns null without a cloud shell and disposes only its owned atmosphere', () => {
     const root = new Group();
     expect(prepareEarthSurfaceLayers(root, [])).toBeNull();

@@ -75,7 +75,7 @@ for (const surfaceDetail of [
 
 - [ ] **Step 2: Run the focused parser test and confirm RED**
 
-Run: `npm test -- --run tests/render/assetManifest.test.ts`  
+Run: `npm test -- --run tests/render/assetManifest.test.ts`
 Expected: FAIL because schema version 2 and `surfaceDetail` are not recognized.
 
 - [ ] **Step 3: Implement the strict schema-v2 parser**
@@ -139,7 +139,7 @@ In ingest, locate both emitted detail paths. Throw if configuration and validate
 
 - [ ] **Step 6: Run focused tests and commit**
 
-Run: `npm test -- --run tests/render/assetManifest.test.ts tools/assets/ingest.test.mjs tools/checks/assetBudgets.test.mjs`  
+Run: `npm test -- --run tests/render/assetManifest.test.ts tools/assets/ingest.test.mjs tools/checks/assetBudgets.test.mjs`
 Expected: all focused tests PASS.
 
 ```powershell
@@ -176,7 +176,7 @@ Add a rejection test where detail normal fails: the model resolves with `surface
 
 - [ ] **Step 2: Run focused test and confirm RED**
 
-Run: `npm test -- --run src/render/bodyAssetLoader.test.ts`  
+Run: `npm test -- --run src/render/bodyAssetLoader.test.ts`
 Expected: FAIL because loaded models have no surface-detail result.
 
 - [ ] **Step 3: Implement one cached optional pair per model**
@@ -202,7 +202,7 @@ Inside the existing cached model promise, load the root and optional pair from t
 
 - [ ] **Step 4: Run focused tests and commit**
 
-Run: `npm test -- --run src/render/bodyAssetLoader.test.ts tests/render/assetManifest.test.ts`  
+Run: `npm test -- --run src/render/bodyAssetLoader.test.ts tests/render/assetManifest.test.ts`
 Expected: PASS.
 
 ```powershell
@@ -236,7 +236,7 @@ expect(() => surfaceDetailBlend(Number.NaN, R)).toThrow(RangeError);
 
 - [ ] **Step 2: Run focused test and confirm RED**
 
-Run: `npm test -- --run src/render/surfaceDetail.test.ts`  
+Run: `npm test -- --run src/render/surfaceDetail.test.ts`
 Expected: FAIL because the module does not exist.
 
 - [ ] **Step 3: Implement exact cubic blending**
@@ -267,7 +267,7 @@ Create one uniform record before compilation. Inject an object-space direction v
 
 - [ ] **Step 6: Run focused tests and commit**
 
-Run: `npm test -- --run src/render/surfaceDetail.test.ts src/render/bodyAssetLoader.test.ts`  
+Run: `npm test -- --run src/render/surfaceDetail.test.ts src/render/bodyAssetLoader.test.ts`
 Expected: PASS.
 
 ```powershell
@@ -314,7 +314,7 @@ During model load, prepare eligible materials and Earth layers before opacity ba
 
 - [ ] **Step 5: Run focused tests and commit**
 
-Run: `npm test -- --run src/render/surfaceDetail.test.ts src/render/earthSurfaceLayers.test.ts src/render/bodyVisualSystem.test.ts src/render/createEpochWorld.test.ts`  
+Run: `npm test -- --run src/render/surfaceDetail.test.ts src/render/earthSurfaceLayers.test.ts src/render/bodyVisualSystem.test.ts src/render/createEpochWorld.test.ts`
 Expected: PASS.
 
 ```powershell
@@ -351,7 +351,7 @@ assert.notEqual(clouds.beforeMatrixHash, clouds.afterMatrixHash);
 
 - [ ] **Step 2: Run the browser regression and confirm RED**
 
-Run: `npm run test:surface-detail`  
+Run: `npm run test:surface-detail`
 Expected: FAIL until the production integration and generated manifest/assets are present.
 
 - [ ] **Step 3: Finish deterministic image metrics**
@@ -364,7 +364,7 @@ Add `"test:surface-detail": "node tools/tests/surfaceDetailRegression.mjs"` to `
 
 - [ ] **Step 5: Run regression and commit**
 
-Run: `npm run test:surface-detail && npm run test:lighting-post && npm run test:camera-controls`  
+Run: `npm run test:surface-detail && npm run test:lighting-post && npm run test:camera-controls`
 Expected: all three browser regressions PASS with JSON metrics printed.
 
 ```powershell
@@ -414,7 +414,7 @@ Write `T0082-summary.md` with the incremental GPU p75 cost, absolute render p75,
 
 - [ ] **Step 5: Run budget checks and commit**
 
-Run: `npm run check:budgets && npm run assets:verify && git diff --check`  
+Run: `npm run check:budgets && npm run assets:verify && git diff --check`
 Expected: asset budgets and Earth verification PASS.
 
 ```powershell

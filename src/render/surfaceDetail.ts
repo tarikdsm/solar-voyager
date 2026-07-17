@@ -1,8 +1,9 @@
-import type {
-  IUniform,
-  MeshStandardMaterial,
-  Texture,
-  WebGLProgramParametersWithUniforms,
+import {
+  Vector2,
+  type IUniform,
+  type MeshStandardMaterial,
+  type Texture,
+  type WebGLProgramParametersWithUniforms,
 } from 'three';
 
 import type { LoadedSurfaceDetail } from './bodyAssetLoader.js';
@@ -18,7 +19,7 @@ interface SurfaceDetailUniforms extends Record<string, IUniform> {
   readonly uSurfaceDetailBlend: IUniform<number>;
   readonly uSurfaceProceduralBlend: IUniform<number>;
   readonly uSurfaceTilesPerEquator: IUniform<number>;
-  readonly uSurfaceDetailSeed: IUniform<number>;
+  readonly uSurfaceDetailSeed: IUniform<Vector2>;
 }
 
 export interface PreparedSurfaceDetail {
@@ -80,27 +81,40 @@ uniform sampler2D uSurfaceDetailNormal;
 uniform float uSurfaceDetailBlend;
 uniform float uSurfaceProceduralBlend;
 uniform float uSurfaceTilesPerEquator;
-uniform float uSurfaceDetailSeed;
+uniform vec2 uSurfaceDetailSeed;
+
+vec3 surfaceDetailHash3( vec3 position ) {
+  position = fract( position * vec3( 0.1031, 0.1030, 0.0973 ) );
+  position += dot( position, position.yxz + 33.33 );
+  return fract( ( position.xxy + position.yxx ) * position.zyx );
+}
+
+vec3 surfaceDetailNoise3( vec3 position ) {
+  vec3 cell = floor( position ) + vec3(
+    uSurfaceDetailSeed.x * 13.13 + uSurfaceDetailSeed.y * 37.17,
+    uSurfaceDetailSeed.x * 29.31 + uSurfaceDetailSeed.y * 11.73,
+    uSurfaceDetailSeed.x * 47.19 + uSurfaceDetailSeed.y * 23.57
+  );
+  vec3 local = fract( position );
+  local = local * local * ( vec3( 3.0 ) - 2.0 * local );
+  vec3 n000 = surfaceDetailHash3( cell );
+  vec3 n100 = surfaceDetailHash3( cell + vec3( 1.0, 0.0, 0.0 ) );
+  vec3 n010 = surfaceDetailHash3( cell + vec3( 0.0, 1.0, 0.0 ) );
+  vec3 n110 = surfaceDetailHash3( cell + vec3( 1.0, 1.0, 0.0 ) );
+  vec3 n001 = surfaceDetailHash3( cell + vec3( 0.0, 0.0, 1.0 ) );
+  vec3 n101 = surfaceDetailHash3( cell + vec3( 1.0, 0.0, 1.0 ) );
+  vec3 n011 = surfaceDetailHash3( cell + vec3( 0.0, 1.0, 1.0 ) );
+  vec3 n111 = surfaceDetailHash3( cell + vec3( 1.0, 1.0, 1.0 ) );
+  vec3 nx00 = mix( n000, n100, local.x );
+  vec3 nx10 = mix( n010, n110, local.x );
+  vec3 nx01 = mix( n001, n101, local.x );
+  vec3 nx11 = mix( n011, n111, local.x );
+  return mix( mix( nx00, nx10, local.y ), mix( nx01, nx11, local.y ), local.z );
+}
 
 vec3 surfaceDetailFbm3( vec3 position ) {
-  vec3 seedPhase = fract( uSurfaceDetailSeed * vec3( 0.017, 0.031, 0.047 ) );
-  vec3 octaveOne = fract(
-    vec3(
-      dot( position, vec3( 0.7543, 0.5691, 0.4387 ) ),
-      dot( position, vec3( 0.4171, 0.8377, 0.6133 ) ),
-      dot( position, vec3( 0.6829, 0.3719, 0.9217 ) )
-    ) + seedPhase
-  );
-  vec3 octaveTwo = fract(
-    vec3(
-      dot( position, vec3( 1.3571, 1.1173, 0.9377 ) ),
-      dot( position, vec3( 1.0471, 1.5931, 1.2713 ) ),
-      dot( position, vec3( 1.7393, 0.8191, 1.2137 ) )
-    ) + seedPhase.yzx * 1.71 + vec3( 0.21, 0.43, 0.67 )
-  );
-  octaveOne = octaveOne * octaveOne * ( vec3( 3.0 ) - 2.0 * octaveOne );
-  octaveTwo = octaveTwo * octaveTwo * ( vec3( 3.0 ) - 2.0 * octaveTwo );
-  return octaveOne * 0.6666667 + octaveTwo * 0.3333333;
+  return surfaceDetailNoise3( position ) * 0.6666667 +
+    surfaceDetailNoise3( position * 2.03 + vec3( 17.0 ) ) * 0.3333333;
 }
 
 mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfaceUv ) {
@@ -130,10 +144,12 @@ if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
 const ALBEDO_DETAIL = /* glsl */ `
 if ( uSurfaceDetailBlend > 0.0 ) {
   vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
-  vec2 surfaceDetailMicroUv = vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 8.0 ) + vec2( 0.371, 0.619 );
+  vec2 surfaceDetailMicroUv =
+    mat2( 0.8829, 0.4695, -0.4695, 0.8829 ) *
+    ( vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
   vec3 surfaceDetailMacroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMacroUv ).rgb;
   vec3 surfaceDetailMicroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMicroUv ).rgb;
-  vec3 surfaceDetailVariation = mix( surfaceDetailMacroAlbedo, surfaceDetailMicroAlbedo, 0.35 ) - vec3( 0.5 );
+  vec3 surfaceDetailVariation = mix( surfaceDetailMacroAlbedo, surfaceDetailMicroAlbedo, 0.35 ) - vec3( 0.21404114 );
   diffuseColor.rgb *= vec3( 1.0 ) + surfaceDetailVariation * ( 0.12 * uSurfaceDetailBlend );
 }
 `;
@@ -141,7 +157,9 @@ if ( uSurfaceDetailBlend > 0.0 ) {
 const NORMAL_DETAIL = /* glsl */ `
 if ( uSurfaceDetailBlend > 0.0 ) {
   vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
-  vec2 surfaceDetailMicroUv = vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 8.0 ) + vec2( 0.371, 0.619 );
+  vec2 surfaceDetailMicroUv =
+    mat2( 0.8829, 0.4695, -0.4695, 0.8829 ) *
+    ( vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
   vec3 surfaceDetailMacroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMacroUv ).xyz * 2.0 - 1.0;
   vec3 surfaceDetailMicroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMicroUv ).xyz * 2.0 - 1.0;
   vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.08 + surfaceDetailMicroNormal.xy * 0.03;
@@ -234,7 +252,12 @@ export function prepareSurfaceDetail(
     uSurfaceDetailBlend: { value: 0 },
     uSurfaceProceduralBlend: { value: 0 },
     uSurfaceTilesPerEquator: { value: detail.tilesPerEquator },
-    uSurfaceDetailSeed: { value: detail.seed % 65_536 },
+    uSurfaceDetailSeed: {
+      value: new Vector2(
+        (detail.seed & 0xffff) / 0xffff,
+        Math.floor(detail.seed / 65_536) / 0xffff,
+      ),
+    },
   };
   const previousCompile = material.onBeforeCompile;
   const previousCacheKey = material.customProgramCacheKey.bind(material);

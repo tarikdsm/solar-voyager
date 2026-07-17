@@ -94,7 +94,9 @@ class PreparedEarthSurfaceLayersImpl implements PreparedEarthSurfaceLayers {
 
   update(nowMs: number): void {
     if (!Number.isFinite(nowMs)) throw new RangeError('Earth cloud time must be finite.');
-    this.cloudMesh.rotation.y = this.initialCloudRotationY + nowMs * CLOUD_ANGULAR_SPEED_RAD_PER_MS;
+    this.cloudMesh.rotation.y =
+      this.initialCloudRotationY +
+      (nowMs % CLOUD_ROTATION_PERIOD_MS) * CLOUD_ANGULAR_SPEED_RAD_PER_MS;
     this.cloudMesh.updateMatrix();
   }
 

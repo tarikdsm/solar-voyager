@@ -10,12 +10,12 @@ import {
 
 const RADIUS_KM = 6_371;
 
-function detail(): LoadedSurfaceDetail {
+function detail(seed = 399): LoadedSurfaceDetail {
   return {
     albedo: new Texture(),
     normal: new Texture(),
     tilesPerEquator: 512,
-    seed: 399,
+    seed,
   };
 }
 
@@ -89,8 +89,11 @@ describe('surface detail material extension', () => {
       uSurfaceTilesPerEquator: { value: 512 },
     });
     expect(shader.fragmentShader).toContain('if ( uSurfaceDetailBlend > 0.0 )');
-    expect(shader.fragmentShader).toContain('uSurfaceTilesPerEquator * 8.0');
+    expect(shader.fragmentShader).toContain('uSurfaceTilesPerEquator * 7.73');
+    expect(shader.fragmentShader).toContain('mat2( 0.8829, 0.4695, -0.4695, 0.8829 )');
     expect(shader.fragmentShader).toContain('surfaceDetailFbm3');
+    expect(shader.fragmentShader).toContain('surfaceDetailNoise3');
+    expect(shader.fragmentShader).toContain('vec3( 0.21404114 )');
     expect(shader.fragmentShader).toContain('#include <map_fragment>');
     expect(shader.fragmentShader).toContain('#include <normal_fragment_maps>');
     expect(shader.fragmentShader).toContain('#include <roughnessmap_fragment>');
@@ -98,6 +101,22 @@ describe('surface detail material extension', () => {
     expect(shader.vertexShader).toContain('vSurfaceDetailUv');
 
     prepared.dispose();
+  });
+
+  it('keeps seeds separated by the previous 16-bit truncation distinct', () => {
+    const firstMaterial = new MeshStandardMaterial();
+    const secondMaterial = new MeshStandardMaterial();
+    const firstShader = shaderFixture();
+    const secondShader = shaderFixture();
+    prepareSurfaceDetail(firstMaterial, detail(1));
+    prepareSurfaceDetail(secondMaterial, detail(65_537));
+
+    firstMaterial.onBeforeCompile(firstShader as never, {} as WebGLRenderer);
+    secondMaterial.onBeforeCompile(secondShader as never, {} as WebGLRenderer);
+
+    expect(firstShader.uniforms.uSurfaceDetailSeed).not.toEqual(
+      secondShader.uniforms.uSurfaceDetailSeed,
+    );
   });
 
   it('reuses uniform objects while distance and the control toggle change', () => {

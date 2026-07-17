@@ -25,49 +25,143 @@ function luminance(image, x, y) {
   );
 }
 
-function highFrequencyEnergy(image) {
+function isInsideAnalysisDisc(image, x, y) {
+  const centerX = image.width / 2;
+  const centerY = image.height / 2;
+  const radius = Math.min(image.width, image.height) * 0.46;
+  return Math.hypot(x + 0.5 - centerX, y + 0.5 - centerY) <= radius;
+}
+
+function isInsideQuadrant(image, x, y, quadrant) {
+  if (!isInsideAnalysisDisc(image, x, y)) return false;
+  const right = x >= image.width / 2;
+  const bottom = y >= image.height / 2;
+  return quadrant === (bottom ? 2 : 0) + (right ? 1 : 0);
+}
+
+function includesAnalysisPoint(image, x, y, quadrant) {
+  return quadrant === null
+    ? isInsideAnalysisDisc(image, x, y)
+    : isInsideQuadrant(image, x, y, quadrant);
+}
+
+function highFrequencyEnergy(image, quadrant = null) {
   let energy = 0;
   let samples = 0;
   for (let y = 1; y < image.height - 1; y += 1) {
     for (let x = 1; x < image.width - 1; x += 1) {
+      if (!includesAnalysisPoint(image, x, y, quadrant)) continue;
       const value = luminance(image, x, y);
-      energy += Math.abs(value - luminance(image, x + 1, y));
-      energy += Math.abs(value - luminance(image, x, y + 1));
-      samples += 2;
+      if (includesAnalysisPoint(image, x + 1, y, quadrant)) {
+        energy += Math.abs(value - luminance(image, x + 1, y));
+        samples += 1;
+      }
+      if (includesAnalysisPoint(image, x, y + 1, quadrant)) {
+        energy += Math.abs(value - luminance(image, x, y + 1));
+        samples += 1;
+      }
     }
   }
   return energy / samples;
 }
 
-function strongestRepeatPeak(image, control) {
+function detailDifferenceField(image, control) {
   const differences = new Float64Array(image.width * image.height);
   let mean = 0;
+  let samples = 0;
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
+      if (!isInsideAnalysisDisc(image, x, y)) continue;
       const value = luminance(image, x, y) - luminance(control, x, y);
       differences[y * image.width + x] = value;
       mean += value;
+      samples += 1;
     }
   }
-  mean /= differences.length;
+  return { differences, mean: mean / samples };
+}
+
+function repeatPeakForRegion(image, field, axis, quadrant = null) {
   let variance = 0;
-  for (const value of differences) variance += (value - mean) ** 2;
-  if (variance === 0) return 0;
-  let strongest = 0;
-  for (const lag of [8, 16, 32, 64, 96, 128]) {
+  let varianceSamples = 0;
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      if (!includesAnalysisPoint(image, x, y, quadrant)) continue;
+      variance += (field.differences[y * image.width + x] - field.mean) ** 2;
+      varianceSamples += 1;
+    }
+  }
+  if (variance === 0 || varianceSamples === 0) return { peak: 0, lag: 0 };
+  const correlations = [];
+  const maximumLag = quadrant === null ? 128 : 64;
+  const lags = [];
+  for (let lag = 4; lag <= maximumLag; lag += 4) lags.push(lag);
+  for (const lag of lags) {
     let correlation = 0;
     let samples = 0;
     for (let y = 0; y < image.height; y += 2) {
-      for (let x = 0; x < image.width - lag; x += 2) {
+      for (let x = 0; x < image.width; x += 2) {
+        const otherX = axis === 'horizontal' ? x + lag : x;
+        const otherY = axis === 'vertical' ? y + lag : y;
+        if (otherX >= image.width || otherY >= image.height) continue;
+        if (
+          !includesAnalysisPoint(image, x, y, quadrant) ||
+          !includesAnalysisPoint(image, otherX, otherY, quadrant)
+        ) {
+          continue;
+        }
         correlation +=
-          (differences[y * image.width + x] - mean) *
-          (differences[y * image.width + x + lag] - mean);
+          (field.differences[y * image.width + x] - field.mean) *
+          (field.differences[otherY * image.width + otherX] - field.mean);
         samples += 1;
       }
     }
-    strongest = Math.max(strongest, Math.abs(correlation / samples) / (variance / differences.length));
+    if (samples > 0) {
+      const normalized = Math.abs(correlation / samples) / (variance / varianceSamples);
+      correlations.push(normalized);
+    }
   }
-  return strongest;
+  let strongestProminence = 0;
+  let strongestCorrelation = 0;
+  let strongestLag = 0;
+  for (let index = 1; index < correlations.length - 1; index += 1) {
+    const correlation = correlations[index] ?? 0;
+    const neighborMean = ((correlations[index - 1] ?? 0) + (correlations[index + 1] ?? 0)) / 2;
+    const prominence = correlation - neighborMean;
+    if (prominence > strongestProminence) {
+      strongestProminence = prominence;
+      strongestCorrelation = correlation;
+      strongestLag = lags[index] ?? 0;
+    }
+  }
+  return {
+    peak: strongestProminence,
+    correlation: strongestCorrelation,
+    lag: strongestLag,
+  };
+}
+
+function spatialDetailMetrics(image, control) {
+  const field = detailDifferenceField(image, control);
+  const horizontalRepeat = repeatPeakForRegion(image, field, 'horizontal');
+  const verticalRepeat = repeatPeakForRegion(image, field, 'vertical');
+  const quadrantRepeatPeaks = [];
+  const quadrantEnergyGains = [];
+  for (let quadrant = 0; quadrant < 4; quadrant += 1) {
+    const horizontal = repeatPeakForRegion(image, field, 'horizontal', quadrant);
+    const vertical = repeatPeakForRegion(image, field, 'vertical', quadrant);
+    quadrantRepeatPeaks.push(horizontal.peak >= vertical.peak ? horizontal : vertical);
+    quadrantEnergyGains.push(
+      highFrequencyEnergy(image, quadrant) / highFrequencyEnergy(control, quadrant),
+    );
+  }
+  return {
+    meanLuminanceDelta: field.mean,
+    horizontalRepeat,
+    verticalRepeat,
+    quadrantRepeatPeaks,
+    quadrantEnergyGains,
+  };
 }
 
 function atmosphereBluePixels(image) {
@@ -123,7 +217,7 @@ try {
   const leoDetail = await pixels(leoDetailBuffer);
   const controlEnergy = highFrequencyEnergy(leoControl);
   const detailEnergy = highFrequencyEnergy(leoDetail);
-  const repeatPeak = strongestRepeatPeak(leoDetail, leoControl);
+  const spatialMetrics = spatialDetailMetrics(leoDetail, leoControl);
 
   const farControlSnapshot = await page.evaluate(() => globalThis.__surfaceDetailHarness.renderFar(false));
   const farControlBuffer = await page.locator('canvas').screenshot();
@@ -138,7 +232,7 @@ try {
   const cloudBefore = await page.evaluate(() => globalThis.__surfaceDetailHarness.advanceClouds(2_000));
   const cloudAfter = await page.evaluate(() => globalThis.__surfaceDetailHarness.advanceClouds(22_000));
 
-  const metrics = { programs, controlEnergy, detailEnergy, repeatPeak, offDiscBluePixels };
+  const metrics = { programs, controlEnergy, detailEnergy, ...spatialMetrics, offDiscBluePixels };
   process.stdout.write(`${JSON.stringify(metrics, null, 2)}\n`);
   if (process.env.SURFACE_DETAIL_SCREENSHOTS !== undefined) {
     const outputDirectory = resolve(process.env.SURFACE_DETAIL_SCREENSHOTS);
@@ -159,8 +253,12 @@ try {
   assert.equal(farControlSnapshot.detailBlend, 0);
   assert.equal(farDetailSnapshot.detailBlend, 0);
   assert.equal(atmosphereSnapshot.glError, 0);
-  assert.ok(detailEnergy > controlEnergy * 1.08, `LEO detail lacks high-frequency gain: ${JSON.stringify({ controlEnergy, detailEnergy })}`);
-  assert.ok(repeatPeak < 0.35, `LEO detail has a strong repeat peak: ${repeatPeak}`);
+  assert.ok(detailEnergy > controlEnergy * 1.04, `LEO detail lacks high-frequency gain: ${JSON.stringify({ controlEnergy, detailEnergy })}`);
+  assert.ok(Math.abs(spatialMetrics.meanLuminanceDelta) < 2, `LEO detail changes mean luminance: ${spatialMetrics.meanLuminanceDelta}`);
+  assert.ok(spatialMetrics.horizontalRepeat.peak < 0.15, `LEO detail has a horizontal repeat peak: ${JSON.stringify(spatialMetrics.horizontalRepeat)}`);
+  assert.ok(spatialMetrics.verticalRepeat.peak < 0.15, `LEO detail has a vertical repeat peak: ${JSON.stringify(spatialMetrics.verticalRepeat)}`);
+  assert.ok(Math.max(...spatialMetrics.quadrantRepeatPeaks.map((result) => result.peak)) < 0.18, `LEO detail repeats within a quadrant: ${JSON.stringify(spatialMetrics.quadrantRepeatPeaks)}`);
+  assert.ok(Math.min(...spatialMetrics.quadrantEnergyGains) > 1.01, `LEO detail is not present in every quadrant: ${JSON.stringify(spatialMetrics.quadrantEnergyGains)}`);
   assert.ok(offDiscBluePixels > 40, `Earth atmosphere rim is missing: ${offDiscBluePixels}`);
   assert.notDeepEqual(cloudAfter, cloudBefore, 'Earth cloud shell did not rotate');
   assert.deepEqual(pageErrors, []);

@@ -1,7 +1,8 @@
 # T0082 Close-range surface detail design
 
-**Task:** T0082 — Close-range surface detail shading  
-**Status:** approved under the maintainer's standing authorization to continue autonomously  
+**Task:** T0082 — Close-range surface detail shading
+
+**Status:** approved under the maintainer's standing authorization to continue autonomously
 **Scope:** tier-3 body surfaces, Earth cloud motion, and the v1 Earth atmosphere rim
 
 ## Goals
