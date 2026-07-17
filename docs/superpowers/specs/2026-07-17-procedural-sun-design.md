@@ -150,8 +150,15 @@ A production WebGL regression captures:
 - off-disc warm pixels proving prominence visibility and a smooth corona; and
 - program counts before warm-up, after warm-up, and after first render.
 
-The close-view radial profile must keep the measured limb/centre luminance
-ratio between 0.25 and 0.45 and the half-radius sample between 0.60 and 0.80.
+The close-view radial profile is measured on an isolated photosphere capture
+with the corona and bloom disabled so neither contaminates the disc annuli.
+The shader contract locks the linear
+`I(μ) = 1 - 0.52(1 - μ) - 0.16(1 - μ)²` coefficients directly. After the
+production ACES output transform, the inner-disc (0.45–0.60 projected radius)
+ratio must remain between 0.94 and 1.02 and the inside-limb (0.92–0.98 radius)
+ratio between 0.85 and 0.95. These display-space bands replace the earlier
+0.60–0.80/0.25–0.45 draft bands, which were mathematically inconsistent with
+the approved linear profile and also sampled the off-disc corona.
 The animated capture must change local structure without changing mean disc
 luminance by more than 2%. Spatial autocorrelation and quadrant-local energy
 checks reject obvious stripes, repeated blocks, or dead regions. Human review

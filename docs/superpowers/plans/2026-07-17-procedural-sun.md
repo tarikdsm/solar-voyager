@@ -535,8 +535,8 @@ Create the Node regression first. It must build/serve the production fixture,
 reject console/page/WebGL errors, and assert these metric bands:
 
 ```js
-assert.ok(limbCenterRatio >= 0.25 && limbCenterRatio <= 0.45);
-assert.ok(halfRadiusCenterRatio >= 0.60 && halfRadiusCenterRatio <= 0.80);
+assert.ok(limbCenterRatio >= 0.85 && limbCenterRatio <= 0.95);
+assert.ok(halfRadiusCenterRatio >= 0.94 && halfRadiusCenterRatio <= 1.02);
 assert.ok(animatedChangedFraction >= 0.03);
 assert.ok(Math.abs(animatedMeanDelta) <= closeMeanLuminance * 0.02);
 assert.ok(horizontalRepeatPeak < 0.18);

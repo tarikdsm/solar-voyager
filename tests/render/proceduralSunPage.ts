@@ -41,6 +41,7 @@ interface ProceduralSunHarness {
     enabled: boolean,
   ): SunRenderSnapshot;
   renderDistance(label: SolarDistanceLabel, simTimeSec: number): SunRenderSnapshot;
+  renderCloseProfile(simTimeSec: number): SunRenderSnapshot;
   measureQualityGpu(quality: ProceduralSunQuality, sampleCount: number): Promise<readonly number[]>;
 }
 
@@ -159,11 +160,20 @@ globalThis.__proceduralSunHarness = {
     };
   },
   renderClose(simTimeSec, quality, enabled) {
+    pipeline.setBloomEnabled(true);
     world.proceduralSun.setQuality(quality);
     world.proceduralSun.setEnabled(enabled);
     return renderAt(closeDistanceKm, simTimeSec);
   },
+  renderCloseProfile(simTimeSec) {
+    world.proceduralSun.setQuality('full');
+    world.proceduralSun.setEnabled(true);
+    world.proceduralSun.billboard.visible = false;
+    pipeline.setBloomEnabled(false);
+    return renderAt(closeDistanceKm, simTimeSec);
+  },
   renderDistance(label, simTimeSec) {
+    pipeline.setBloomEnabled(true);
     world.proceduralSun.setEnabled(true);
     const distanceKm =
       label === 'mercury'

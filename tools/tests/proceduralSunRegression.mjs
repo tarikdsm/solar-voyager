@@ -11,6 +11,8 @@ const PORT = 4180;
 const VIEWPORT_SIZE = 512;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/proceduralSun.html`;
 const ANALYSIS_RADIUS_PX = 110;
+const PROJECTED_DISC_RADIUS_PX =
+  ((VIEWPORT_SIZE / 2) * Math.tan(Math.asin(1 / 3))) / Math.tan((75 * Math.PI) / 360);
 
 function outputDirectory() {
   const flagIndex = process.argv.indexOf('--output-dir');
@@ -163,14 +165,29 @@ function warmOffDiscPixels(image) {
   return pixels;
 }
 
-function litPixels(image) {
-  let count = 0;
+function solarRoiMetrics(image) {
+  let litPixels = 0;
+  let peakLuminance = 0;
+  let backgroundTotal = 0;
+  let backgroundSamples = 0;
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
-      if (luminance(image, x, y) >= 8) count += 1;
+      const radius = radiusFromCenter(image, x, y);
+      const value = luminance(image, x, y);
+      if (radius < 16) {
+        if (value >= 8) litPixels += 1;
+        peakLuminance = Math.max(peakLuminance, value);
+      } else if (radius >= 32 && radius < 64) {
+        backgroundTotal += value;
+        backgroundSamples += 1;
+      }
     }
   }
-  return count;
+  return {
+    litPixels,
+    peakLuminance,
+    backgroundMeanLuminance: backgroundTotal / backgroundSamples,
+  };
 }
 
 const server = await createServer({
@@ -207,6 +224,8 @@ try {
     globalThis.__proceduralSunHarness.renderClose(0, 'full', true),
   );
   const closeBuffer = await page.locator('canvas').screenshot();
+  await page.evaluate(() => globalThis.__proceduralSunHarness.renderCloseProfile(0));
+  const profileBuffer = await page.locator('canvas').screenshot();
   await page.evaluate(() => globalThis.__proceduralSunHarness.renderClose(300, 'full', true));
   const animatedBuffer = await page.locator('canvas').screenshot();
   await page.evaluate(() => globalThis.__proceduralSunHarness.renderClose(0, 'full', false));
@@ -219,15 +238,23 @@ try {
   }
 
   const close = await pixels(closeBuffer);
+  const profile = await pixels(profileBuffer);
   const animated = await pixels(animatedBuffer);
   const fallback = await pixels(fallbackBuffer);
   const mercury = await pixels(distanceBuffers.mercury);
   const earth = await pixels(distanceBuffers.earth);
   const neptune = await pixels(distanceBuffers.neptune);
-  const centerMean = annulusMean(close, 0, 24);
-  const halfRadiusMean = annulusMean(close, 54, 72);
-  // The projected photosphere edge is ~120 px at the fixed close-camera pose.
-  const limbMean = annulusMean(close, 118, 122);
+  const centerMean = annulusMean(profile, 0, PROJECTED_DISC_RADIUS_PX * 0.2);
+  const halfRadiusMean = annulusMean(
+    profile,
+    PROJECTED_DISC_RADIUS_PX * 0.45,
+    PROJECTED_DISC_RADIUS_PX * 0.6,
+  );
+  const limbMean = annulusMean(
+    profile,
+    PROJECTED_DISC_RADIUS_PX * 0.92,
+    PROJECTED_DISC_RADIUS_PX * 0.98,
+  );
   const animation = animationMetrics(close, animated);
   const horizontalRepeat = repeatPeak(close, animation.differences, 'horizontal');
   const verticalRepeat = repeatPeak(close, animation.differences, 'vertical');
@@ -253,10 +280,10 @@ try {
     verticalRepeat,
     quadrantEdgeEnergy,
     offDiscWarmPixels: warmOffDiscPixels(close),
-    distanceLitPixels: {
-      mercury: litPixels(mercury),
-      earth: litPixels(earth),
-      neptune: litPixels(neptune),
+    distanceSolarRoi: {
+      mercury: solarRoiMetrics(mercury),
+      earth: solarRoiMetrics(earth),
+      neptune: solarRoiMetrics(neptune),
     },
   };
   process.stdout.write(`${JSON.stringify(metrics, null, 2)}\n`);
@@ -266,6 +293,7 @@ try {
     await mkdir(directory, { recursive: true });
     await Promise.all([
       writeFile(resolve(directory, 'close-0.png'), closeBuffer),
+      writeFile(resolve(directory, 'close-profile.png'), profileBuffer),
       writeFile(resolve(directory, 'close-animated.png'), animatedBuffer),
       writeFile(resolve(directory, 'close-fallback.png'), fallbackBuffer),
       writeFile(resolve(directory, 'mercury.png'), distanceBuffers.mercury),
@@ -279,10 +307,12 @@ try {
   assert.equal(closeSnapshot.sunLoadState, 'ready');
   assert.equal(closeSnapshot.sunTier, 3);
   assert.equal(closeSnapshot.modelOpacity, 1);
-  assert.ok(metrics.radial.limbCenterRatio >= 0.25 && metrics.radial.limbCenterRatio <= 0.75);
+  // These post-ACES bands validate the isolated disc; the shader unit test locks
+  // the approved linear I(mu) coefficients before tone mapping.
+  assert.ok(metrics.radial.limbCenterRatio >= 0.85 && metrics.radial.limbCenterRatio <= 0.95);
   assert.ok(
-    metrics.radial.halfRadiusCenterRatio >= 0.6 &&
-      metrics.radial.halfRadiusCenterRatio <= 1.05,
+    metrics.radial.halfRadiusCenterRatio >= 0.94 &&
+      metrics.radial.halfRadiusCenterRatio <= 1.02,
   );
   assert.ok(animation.changedFraction >= 0.03);
   assert.ok(Math.abs(animation.meanDelta) <= animation.firstMean * 0.02);
@@ -291,9 +321,13 @@ try {
   assert.ok(verticalRepeat.peak < 0.18);
   assert.ok(Math.min(...quadrantEdgeEnergy) >= 0.2);
   assert.ok(metrics.offDiscWarmPixels >= 24);
-  assert.ok(metrics.distanceLitPixels.mercury >= 64);
-  assert.ok(metrics.distanceLitPixels.earth >= 8);
-  assert.ok(metrics.distanceLitPixels.neptune >= 1);
+  assert.ok(metrics.distanceSolarRoi.mercury.litPixels >= 64);
+  assert.ok(metrics.distanceSolarRoi.earth.litPixels >= 8);
+  assert.ok(metrics.distanceSolarRoi.neptune.litPixels >= 1);
+  for (const distance of Object.values(metrics.distanceSolarRoi)) {
+    assert.ok(distance.peakLuminance >= 32);
+    assert.ok(distance.backgroundMeanLuminance < 2);
+  }
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
 } finally {

@@ -194,7 +194,7 @@ export class ProceduralSun implements ProceduralSunMaterialPort {
     for (let index = 0; index < this.preparedMaterials.length; index += 1) {
       this.preparedMaterials[index]?.dispose();
     }
-    this.spaceScene.scene.remove(this.billboard);
+    this.spaceScene.unbindVisual(this.billboard);
     this.billboard.geometry.dispose();
     this.billboard.material.dispose();
   }

@@ -95,6 +95,7 @@ describe('ProceduralSun', () => {
 
   it('disposes owned and prepared resources once', () => {
     const { spaceScene, sun } = createFixture();
+    const unbind = vi.spyOn(spaceScene, 'unbindVisual');
     const material = new MeshLambertMaterial();
     const previousCompile = material.onBeforeCompile;
     sun.prepareMaterial(material);
@@ -106,6 +107,7 @@ describe('ProceduralSun', () => {
 
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+    expect(unbind).toHaveBeenCalledOnce();
     expect(material.onBeforeCompile).toBe(previousCompile);
     expect(spaceScene.scene.getObjectByName('sun-glare')).toBeUndefined();
     expect(() => sun.prepareMaterial(new MeshLambertMaterial())).toThrow(/disposed/iu);

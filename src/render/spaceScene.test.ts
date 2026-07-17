@@ -101,6 +101,21 @@ describe('CameraRelativeSpaceScene', () => {
     expect(first.position.toArray()).toEqual(firstPosition);
   });
 
+  it('unbinds a packed visual without retaining or updating it', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const visual = new Object3D();
+    const positionsKm = new Float64Array([10, 20, 30]);
+    spaceScene.bindPackedVisual(visual, positionsKm, 0);
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+
+    expect(spaceScene.unbindVisual(visual)).toBe(true);
+    expect(spaceScene.scene.getObjectById(visual.id)).toBeUndefined();
+    positionsKm[0] = 99;
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(visual.position.x).toBe(10);
+    expect(spaceScene.unbindVisual(visual)).toBe(false);
+  });
+
   it('updates one packed point attribute in place and marks it dirty', () => {
     const spaceScene = new CameraRelativeSpaceScene();
     const positionsKm = new Float64Array([AU_KM + 10.25, -1, 2, AU_KM - 20.5, 3, -4]);

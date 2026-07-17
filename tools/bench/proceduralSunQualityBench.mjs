@@ -7,10 +7,12 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 import { qualityRunOrder, summarizeQualitySamples } from './proceduralSunQualityBenchUtils.mjs';
+import { hardwareGpuPreferenceArg } from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 4181;
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
+const FORCE_LOW_POWER_GPU = process.argv.includes('--force-low-power-gpu');
 
 function positiveIntegerFlag(flag, fallback) {
   const index = process.argv.indexOf(flag);
@@ -51,7 +53,7 @@ try {
           '--enable-webgl',
           '--ignore-gpu-blocklist',
           '--use-angle=default',
-          '--force_high_performance_gpu',
+          hardwareGpuPreferenceArg(FORCE_LOW_POWER_GPU),
         ]
       : [],
   });
@@ -129,6 +131,7 @@ try {
     adapter: gpu,
     resolution: { width, height, pixelRatio: 1 },
     samplesPerRun,
+    powerPreference: FORCE_LOW_POWER_GPU ? 'low-power' : 'high-performance',
     runOrder,
     rawSamples,
     summary,
