@@ -1,8 +1,8 @@
 id: T0052
 title: Time warp with substep-budget auto-clamp
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0052-warp-system
 depends_on: [T0050]
 milestone: M3
 spec: |
