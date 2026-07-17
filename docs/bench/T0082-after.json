@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-07-17T11:51:39.797Z",
+  "gitSha": "635e0ccfdec62fe5eac79eef6aded5869b1fce47",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 16.7,
+  "p75Ms": 16.7,
+  "p99Ms": 33.664,
+  "gpu": {
+    "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (Intel)"
+  },
+  "canvas": {
+    "backingHeight": 1080,
+    "backingWidth": 1920,
+    "cssHeight": 1080,
+    "cssWidth": 1920
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 16.7,
+    "p75Ms": 16.7,
+    "p99Ms": 33.4,
+    "snapshot": {
+      "averageFps": 52.94506949040371,
+      "context": {
+        "contextFlavor": "webgl2",
+        "depthStrategy": "reversed",
+        "effectiveContextAttributes": {
+          "alpha": false,
+          "antialias": false,
+          "depth": true,
+          "desynchronized": true,
+          "failIfMajorPerformanceCaveat": true,
+          "powerPreference": "high-performance",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false
+        },
+        "gpuTimerQueryAvailable": true,
+        "rendererName": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "softwareRasterizer": false,
+        "usedPerformanceCaveatFallback": false,
+        "warningRequired": false
+      },
+      "drawCalls": 23,
+      "frameCount": 721,
+      "frameMs": 33.30000000000109,
+      "frameSampleCount": 120,
+      "geometries": 8,
+      "gpuMs": 13.585624,
+      "lines": 0,
+      "p75FrameMs": 16.700000000000728,
+      "p99FrameMs": 33.400000000001455,
+      "points": 9139,
+      "programs": 35,
+      "renderMs": 0.6000000089406967,
+      "simMs": 0.19999998807907104,
+      "textures": 24,
+      "triangles": 65091,
+      "uiMs": 0
+    }
+  },
+  "gpuRenderMedianMs": 13.453,
+  "gpuRenderP75Ms": 14.397,
+  "gpuRenderP99Ms": 25.778,
+  "heapDeltaBytes": 186284
+}
