@@ -1,6 +1,6 @@
 id: T0057
 title: Osculating conic overlay
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0057-osculating-overlay
 depends_on: [T0050, T0040]
@@ -26,4 +26,7 @@ handoff_notes: |
   accepted 5x warp, reported glError=0, and logged zero console errors/warnings.
   Same-GPU 1280x720 telemetry: main vs feature p75 remained 12.1 ms and render
   ~0.6 ms; feature adds exactly 1 draw call, 1 program, and 384 rendered
-  triangles. Critical path is 3.90 MiB of the 8 MiB budget.
+  triangles. Critical path is 3.90 MiB of the 8 MiB budget. Independent
+  re-review of exact head 616d8ec approved with Critical 0, Important 0, Minor
+  0 after verifying active frustum culling, stable setup-time bounds, full
+  local gates, and green PR CI.
