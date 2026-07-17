@@ -35,6 +35,9 @@ interface HudSignalsHarness {
   updateAttitude(): Promise<HudSignalsHarnessSnapshot>;
   updateClamp(): Promise<HudSignalsHarnessSnapshot>;
   updateClock(): Promise<HudSignalsHarnessSnapshot>;
+  updateIntermediateHorizon(): Promise<HudSignalsHarnessSnapshot>;
+  updateInvalidFrame(): Promise<HudSignalsHarnessSnapshot>;
+  updateRadialIn(): Promise<HudSignalsHarnessSnapshot>;
 }
 
 interface HudSignalsHarnessSnapshot {
@@ -48,8 +51,14 @@ interface HudSignalsHarnessSnapshot {
   readonly coordinateClock: string;
   readonly counts: RenderCounts;
   readonly navballMode: string;
+  readonly navballGroundCapOpacity: string;
+  readonly navballHemisphereTransform: string;
+  readonly navballHorizonInwardOpacity: string;
+  readonly navballHorizonOutwardOpacity: string;
   readonly navballProgradeTransform: string;
   readonly navballRadialOutTransform: string;
+  readonly navballSkyCapOpacity: string;
+  readonly navballStatus: string;
   readonly navballThrustOpacity: string;
   readonly warpClampStatus: string;
 }
@@ -163,10 +172,20 @@ function readHarnessSnapshot() {
     counts: copyCounts(),
     coordinateClock: document.querySelector('#coordinate-clock')?.textContent ?? '',
     navballMode: document.querySelector('#navball-mode')?.textContent ?? '',
+    navballGroundCapOpacity:
+      document.querySelector('#navball-ground-cap')?.getAttribute('opacity') ?? '',
+    navballHemisphereTransform:
+      document.querySelector('#navball-hemisphere')?.getAttribute('transform') ?? '',
+    navballHorizonInwardOpacity:
+      document.querySelector('#navball-horizon-inward')?.getAttribute('opacity') ?? '',
+    navballHorizonOutwardOpacity:
+      document.querySelector('#navball-horizon-outward')?.getAttribute('opacity') ?? '',
     navballProgradeTransform:
       document.querySelector('#navball-prograde')?.getAttribute('transform') ?? '',
     navballRadialOutTransform:
       document.querySelector('#navball-radial-out')?.getAttribute('transform') ?? '',
+    navballSkyCapOpacity: document.querySelector('#navball-sky-cap')?.getAttribute('opacity') ?? '',
+    navballStatus: document.querySelector('#navball-status')?.textContent ?? '',
     navballThrustOpacity: document.querySelector('#navball-thrust')?.getAttribute('opacity') ?? '',
     warpClampStatus: document.querySelector('#warp-clamp-status')?.textContent ?? '',
   };
@@ -209,6 +228,24 @@ window.__hudSignalsHarness = {
   updateClock: async () => {
     snapshot.utcTimeMs += 1_000;
     store.publish(snapshot, 100);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateIntermediateHorizon: async () => {
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0.5, 0, Math.sqrt(0.75));
+    store.publish(snapshot, 500);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateInvalidFrame: async () => {
+    snapshot.dominantBodyIndex = -1;
+    store.publish(snapshot, 600);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateRadialIn: async () => {
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, -1, 0, 0);
+    store.publish(snapshot, 400);
     await nextFrame();
     return readHarnessSnapshot();
   },

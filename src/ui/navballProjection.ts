@@ -71,11 +71,10 @@ function writeInertialFromLocalMatrix(quaternion: Float64Array): boolean {
   const quaternionNorm = Math.hypot(quaternionX, quaternionY, quaternionZ, quaternionW);
   if (!Number.isFinite(quaternionNorm) || quaternionNorm === 0) return false;
 
-  const inverseNorm = 1 / quaternionNorm;
-  const x = quaternionX * inverseNorm;
-  const y = quaternionY * inverseNorm;
-  const z = quaternionZ * inverseNorm;
-  const w = quaternionW * inverseNorm;
+  const x = quaternionX / quaternionNorm;
+  const y = quaternionY / quaternionNorm;
+  const z = quaternionZ / quaternionNorm;
+  const w = quaternionW / quaternionNorm;
   const xx = x * x;
   const yy = y * y;
   const zz = z * z;
@@ -167,10 +166,9 @@ export function writeNavballProjectionInto(
     (snapshot.shipState[2] as number) - (snapshot.bodyPositionsKm[bodyOffset + 2] as number);
   const radialMagnitude = Math.hypot(radialX, radialY, radialZ);
   if (!Number.isFinite(radialMagnitude) || radialMagnitude === 0) return output;
-  const inverseRadialMagnitude = 1 / radialMagnitude;
-  const radialUnitX = radialX * inverseRadialMagnitude;
-  const radialUnitY = radialY * inverseRadialMagnitude;
-  const radialUnitZ = radialZ * inverseRadialMagnitude;
+  const radialUnitX = radialX / radialMagnitude;
+  const radialUnitY = radialY / radialMagnitude;
+  const radialUnitZ = radialZ / radialMagnitude;
 
   const progradeX =
     (snapshot.shipCoordinateVelocityKmS[0] as number) -
@@ -183,20 +181,18 @@ export function writeNavballProjectionInto(
     (snapshot.bodyVelocitiesKmS[bodyOffset + 2] as number);
   const progradeMagnitude = Math.hypot(progradeX, progradeY, progradeZ);
   const progradeValid = Number.isFinite(progradeMagnitude) && progradeMagnitude > 0;
-  const inverseProgradeMagnitude = progradeValid ? 1 / progradeMagnitude : 0;
-  const progradeUnitX = progradeX * inverseProgradeMagnitude;
-  const progradeUnitY = progradeY * inverseProgradeMagnitude;
-  const progradeUnitZ = progradeZ * inverseProgradeMagnitude;
+  const progradeUnitX = progradeValid ? progradeX / progradeMagnitude : 0;
+  const progradeUnitY = progradeValid ? progradeY / progradeMagnitude : 0;
+  const progradeUnitZ = progradeValid ? progradeZ / progradeMagnitude : 0;
 
   const normalX = radialUnitY * progradeUnitZ - radialUnitZ * progradeUnitY;
   const normalY = radialUnitZ * progradeUnitX - radialUnitX * progradeUnitZ;
   const normalZ = radialUnitX * progradeUnitY - radialUnitY * progradeUnitX;
   const normalMagnitude = Math.hypot(normalX, normalY, normalZ);
   const normalValid = progradeValid && Number.isFinite(normalMagnitude) && normalMagnitude > 0;
-  const inverseNormalMagnitude = normalValid ? 1 / normalMagnitude : 0;
-  const normalUnitX = normalX * inverseNormalMagnitude;
-  const normalUnitY = normalY * inverseNormalMagnitude;
-  const normalUnitZ = normalZ * inverseNormalMagnitude;
+  const normalUnitX = normalValid ? normalX / normalMagnitude : 0;
+  const normalUnitY = normalValid ? normalY / normalMagnitude : 0;
+  const normalUnitZ = normalValid ? normalZ / normalMagnitude : 0;
 
   writeMarker(
     output.markers,
@@ -268,10 +264,9 @@ export function writeNavballProjectionInto(
   const thrustZ = snapshot.shipProperAccelerationKmS2[2] as number;
   const thrustMagnitude = Math.hypot(thrustX, thrustY, thrustZ);
   if (Number.isFinite(thrustMagnitude) && thrustMagnitude > 0) {
-    const inverseThrustMagnitude = 1 / thrustMagnitude;
-    const thrustUnitX = thrustX * inverseThrustMagnitude;
-    const thrustUnitY = thrustY * inverseThrustMagnitude;
-    const thrustUnitZ = thrustZ * inverseThrustMagnitude;
+    const thrustUnitX = thrustX / thrustMagnitude;
+    const thrustUnitY = thrustY / thrustMagnitude;
+    const thrustUnitZ = thrustZ / thrustMagnitude;
     const thrustLocalX =
       inertialFromLocal.xx * thrustUnitX +
       inertialFromLocal.yx * thrustUnitY +

@@ -80,9 +80,14 @@ try {
   const clamped = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClamp());
   const after = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClock());
   const afterAttitude = await page.evaluate(() => globalThis.__hudSignalsHarness.updateAttitude());
+  const afterRadialIn = await page.evaluate(() => globalThis.__hudSignalsHarness.updateRadialIn());
+  const afterIntermediate = await page.evaluate(() =>
+    globalThis.__hudSignalsHarness.updateIntermediateHorizon(),
+  );
   await page.getByRole('button', { name: '100×', exact: true }).click();
   await page.locator('#target-selector').selectOption('mars');
   const afterCommands = await page.evaluate(() => globalThis.__hudSignalsHarness.commitCommands());
+  const afterInvalid = await page.evaluate(() => globalThis.__hudSignalsHarness.updateInvalidFrame());
 
   assert.deepEqual(before.counts, {
     app: 1,
@@ -100,6 +105,12 @@ try {
   assert.equal(before.navballProgradeTransform, 'translate(82.000 0.000)');
   assert.equal(before.navballRadialOutTransform, 'translate(0.000 0.000)');
   assert.equal(before.navballThrustOpacity, '1');
+  assert.equal(before.navballHemisphereTransform, 'rotate(0.000) scale(1 1.000000)');
+  assert.equal(before.navballSkyCapOpacity, '1');
+  assert.equal(before.navballGroundCapOpacity, '0');
+  assert.equal(before.navballHorizonOutwardOpacity, '1');
+  assert.equal(before.navballHorizonInwardOpacity, '0');
+  assert.equal(before.navballStatus, 'Orbital frame available');
   assert.deepEqual(clamped.counts, before.counts, 'same-frame clamp rerendered a HUD component');
   assert.equal(
     clamped.warpClampStatus,
@@ -114,6 +125,24 @@ try {
   assert.equal(afterAttitude.navballMode, 'Prograde hold');
   assert.equal(afterAttitude.navballProgradeTransform, 'translate(0.000 0.000)');
   assert.deepEqual(
+    afterRadialIn.counts,
+    before.counts,
+    'radial-in navball update rerendered a HUD component',
+  );
+  assert.equal(afterRadialIn.navballSkyCapOpacity, '0');
+  assert.equal(afterRadialIn.navballGroundCapOpacity, '1');
+  assert.equal(afterRadialIn.navballHorizonOutwardOpacity, '0');
+  assert.equal(afterRadialIn.navballHorizonInwardOpacity, '1');
+  assert.equal(afterRadialIn.navballHemisphereTransform, 'rotate(0.000) scale(1 1.000000)');
+  assert.deepEqual(
+    afterIntermediate.counts,
+    before.counts,
+    'intermediate horizon update rerendered a HUD component',
+  );
+  assert.match(afterIntermediate.navballHemisphereTransform, /scale\(1 0\.500000\)$/u);
+  assert.equal(afterIntermediate.navballSkyCapOpacity, '1');
+  assert.equal(afterIntermediate.navballGroundCapOpacity, '0');
+  assert.deepEqual(
     afterCommands.counts,
     before.counts,
     'command snapshot rerendered a HUD component',
@@ -123,6 +152,8 @@ try {
   assert.equal(afterCommands.commandedWarp, 100);
   assert.equal(afterCommands.commandedTarget, 'mars');
   assert.equal(await page.locator('#target-title').textContent(), 'Mars');
+  assert.deepEqual(afterInvalid.counts, before.counts, 'invalid navball frame rerendered a HUD component');
+  assert.equal(afterInvalid.navballStatus, 'Orbital frame unavailable');
   assert.equal(await page.getByRole('button', { name: '100×', exact: true }).getAttribute('aria-pressed'), 'true');
   const targetPanelMetrics = await page.locator('#target-panel').evaluate((panel) => ({
     clientHeight: panel.clientHeight,
@@ -133,6 +164,17 @@ try {
     `target panel clips its content: ${JSON.stringify(targetPanelMetrics)}`,
   );
   assert.equal(await page.locator('#navball .navball-marker').count(), 6);
+  assert.equal(await page.getByRole('region', { name: 'Navball' }).count(), 1);
+  assert.equal(await page.getByRole('img', { name: 'Ship attitude navball' }).count(), 0);
+  assert.equal(await page.locator('#navball .navball-sphere').getAttribute('aria-hidden'), 'true');
+  assert.equal(
+    await page.locator('#navball-sky-cap').getAttribute('d'),
+    'M -100 0 A 100 100 0 0 0 100 0 L -100 0 Z',
+  );
+  assert.equal(
+    await page.locator('#navball-ground-cap').getAttribute('d'),
+    'M -100 0 A 100 100 0 0 1 100 0 L -100 0 Z',
+  );
   const navballMetrics = await page.locator('#navball').evaluate((panel) => ({
     clientHeight: panel.clientHeight,
     scrollHeight: panel.scrollHeight,
@@ -205,7 +247,7 @@ try {
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
   process.stdout.write(
-    `${JSON.stringify({ before, after, afterAttitude, afterCommands }, null, 2)}\n`,
+    `${JSON.stringify({ before, after, afterAttitude, afterRadialIn, afterIntermediate, afterCommands, afterInvalid }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();

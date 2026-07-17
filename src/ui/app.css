@@ -4,7 +4,8 @@
   pointer-events: none;
 }
 
-.app-title {
+.app-title,
+.hud-visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -340,7 +341,6 @@
   fill: #713f12;
 }
 
-.navball-grid,
 .navball-horizon,
 .navball-rim,
 .navball-fixed-reticle,
@@ -348,11 +348,6 @@
 .navball-marker {
   fill: none;
   vector-effect: non-scaling-stroke;
-}
-
-.navball-grid {
-  stroke: rgb(254 240 138 / 22%);
-  stroke-width: 1;
 }
 
 .navball-horizon {

@@ -14,6 +14,10 @@ interface MarkerDefinition {
 }
 
 const MARKER_RADIUS = 82;
+const LOWER_HEMISPHERE_PATH = 'M -100 0 A 100 100 0 0 0 100 0 L -100 0 Z';
+const UPPER_HEMISPHERE_PATH = 'M -100 0 A 100 100 0 0 1 100 0 L -100 0 Z';
+const LOWER_HORIZON_PATH = 'M -98 0 A 98 98 0 0 0 98 0';
+const UPPER_HORIZON_PATH = 'M -98 0 A 98 98 0 0 1 98 0';
 const MARKER_DEFINITIONS = Object.freeze([
   {
     id: 'navball-prograde',
@@ -112,14 +116,15 @@ export function Navball({
   readonly hudState: HudSignals;
 }) {
   const navball = hudState.navball;
-  const horizonFillTransform = useComputed(
-    () =>
-      `rotate(${navball.horizonAngleDeg.value.toFixed(3)}) translate(0 ${navball.horizonOffset.value.toFixed(3)})`,
+  const horizonAxisTransform = useComputed(
+    () => `rotate(${navball.horizonAngleDeg.value.toFixed(3)})`,
   );
-  const horizonOutlineTransform = useComputed(
+  const horizonHemisphereTransform = useComputed(
     () =>
       `rotate(${navball.horizonAngleDeg.value.toFixed(3)}) scale(1 ${navball.horizonScaleY.value.toFixed(6)})`,
   );
+  const outwardOpacity = useComputed(() => (navball.horizonOffset.value >= 0 ? 1 : 0));
+  const inwardOpacity = useComputed(() => (navball.horizonOffset.value < 0 ? 1 : 0));
   const thrustTransform = useComputed(
     () =>
       `translate(${(navball.thrustX.value * MARKER_RADIUS).toFixed(3)} ${(navball.thrustY.value * MARKER_RADIUS).toFixed(3)})`,
@@ -127,9 +132,12 @@ export function Navball({
   const thrustOpacity = useComputed(() => (navball.thrustVisible.value ? 1 : 0));
   const validOpacity = useComputed(() => (navball.valid.value ? 1 : 0));
   const invalidOpacity = useComputed(() => (navball.valid.value ? 0 : 1));
+  const frameStatus = useComputed(() =>
+    navball.valid.value ? 'Orbital frame available' : 'Orbital frame unavailable',
+  );
 
   return (
-    <section id="navball" class="hud-panel navball" aria-labelledby="navball-title">
+    <section id="navball" class="hud-panel navball" aria-label="Navball">
       <header>
         <span>
           <span class="hud-kicker">Dominant-body frame</span>
@@ -137,12 +145,7 @@ export function Navball({
         </span>
         <small id="navball-mode">{hud.attitudeMode}</small>
       </header>
-      <svg
-        class="navball-sphere"
-        viewBox="-105 -105 210 210"
-        role="img"
-        aria-label="Ship attitude navball"
-      >
+      <svg class="navball-sphere" viewBox="-105 -105 210 210" aria-hidden="true" focusable="false">
         <defs>
           <clipPath id="navball-sphere-clip">
             <circle r="99" />
@@ -150,11 +153,44 @@ export function Navball({
         </defs>
         <circle r="100" class="navball-sky" />
         <g opacity={validOpacity}>
-          <g clip-path="url(#navball-sphere-clip)" transform={horizonFillTransform}>
-            <rect x="-150" y="0" width="300" height="150" class="navball-ground" />
-            <path d="M -150 28 H 150 M -150 56 H 150 M -150 84 H 150" class="navball-grid" />
+          <g clip-path="url(#navball-sphere-clip)">
+            <g transform={horizonAxisTransform}>
+              <rect
+                id="navball-ground-base"
+                x="-100"
+                y="0"
+                width="200"
+                height="100"
+                class="navball-ground"
+              />
+            </g>
+            <g id="navball-hemisphere" transform={horizonHemisphereTransform}>
+              <path
+                id="navball-sky-cap"
+                d={LOWER_HEMISPHERE_PATH}
+                class="navball-sky"
+                opacity={outwardOpacity}
+              />
+              <path
+                id="navball-ground-cap"
+                d={UPPER_HEMISPHERE_PATH}
+                class="navball-ground"
+                opacity={inwardOpacity}
+              />
+              <path
+                id="navball-horizon-outward"
+                d={LOWER_HORIZON_PATH}
+                class="navball-horizon"
+                opacity={outwardOpacity}
+              />
+              <path
+                id="navball-horizon-inward"
+                d={UPPER_HORIZON_PATH}
+                class="navball-horizon"
+                opacity={inwardOpacity}
+              />
+            </g>
           </g>
-          <circle r="98" class="navball-horizon" transform={horizonOutlineTransform} />
           {MARKER_DEFINITIONS.map((definition) => {
             const marker = navball.markers[definition.index];
             return marker === undefined ? null : (
@@ -179,6 +215,9 @@ export function Navball({
         </text>
         <circle r="100" class="navball-rim" />
       </svg>
+      <span id="navball-status" class="hud-visually-hidden" aria-live="polite">
+        {frameStatus}
+      </span>
       <p class="navball-legend" aria-label="Navball marker legend">
         <span>P/R · prograde</span>
         <span>N/A · normal</span>

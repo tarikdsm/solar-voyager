@@ -94,6 +94,9 @@ The SVG geometry is created once. Snapshot-derived values are written into a
 preallocated projection buffer and sampled with the HUD at 10 Hz; signals mutate
 only marker/horizon `transform` and `opacity`. No canvas drawing, SVG path rebuild,
 or component rerender is allowed in the frame loop.
+The ground/sky boundary uses the visible half of the projected great-circle
+ellipse: a lower sky cap while the radial-out axis faces the viewer, and an upper
+ground cap while radial-in faces the viewer. The hidden back arc is not drawn.
 
 ## 10. Relativistic visual effects (quality-gated, ship near c)
 

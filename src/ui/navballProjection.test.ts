@@ -31,6 +31,18 @@ function expectMarker(
   expect(markers[offset + 2]).toBe(expectedVisible);
 }
 
+function expectProjectionFinite(
+  projection: ReturnType<typeof createNavballProjectionBuffer>,
+): void {
+  expect(Number.isFinite(projection.horizonAngleDeg)).toBe(true);
+  expect(Number.isFinite(projection.horizonOffset)).toBe(true);
+  expect(Number.isFinite(projection.horizonScaleY)).toBe(true);
+  expect(Number.isFinite(projection.thrustX)).toBe(true);
+  expect(Number.isFinite(projection.thrustY)).toBe(true);
+  expect(Number.isFinite(projection.thrustVisible)).toBe(true);
+  for (const component of projection.markers) expect(Number.isFinite(component)).toBe(true);
+}
+
 describe('navball projection — physics-spec §3.0.1 orbital frame', () => {
   it('projects every marker against a known circular equatorial LEO frame', () => {
     const snapshot = createLeoSnapshot();
@@ -62,6 +74,18 @@ describe('navball projection — physics-spec §3.0.1 orbital frame', () => {
     expectMarker(projection.markers, NavballMarkerIndex.PROGRADE, 0, 0, 1);
     expectMarker(projection.markers, NavballMarkerIndex.RETROGRADE, 0, 0, 0);
     expectMarker(projection.markers, NavballMarkerIndex.RADIAL_OUT, -1, 0, 1);
+  });
+
+  it('projects the visible horizon half-ellipse at an intermediate attitude', () => {
+    const snapshot = createLeoSnapshot();
+    const projection = createNavballProjectionBuffer();
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0.5, 0, Math.sqrt(0.75));
+
+    writeNavballProjectionInto(projection, snapshot);
+
+    expect(projection.horizonOffset).toBeCloseTo(50, 12);
+    expect(projection.horizonScaleY).toBeCloseTo(0.5, 12);
+    expect(Math.abs(projection.horizonAngleDeg)).toBeCloseTo(180, 12);
   });
 
   it('projects the proper-acceleration thrust cue through the same frame', () => {
@@ -96,4 +120,31 @@ describe('navball projection — physics-spec §3.0.1 orbital frame', () => {
     writeNavballProjectionInto(projection, snapshot);
     expect(projection.valid).toBe(false);
   });
+
+  it.each(['quaternion', 'radial', 'prograde', 'thrust'] as const)(
+    'normalizes a finite subnormal %s input without producing NaN or Infinity',
+    (input) => {
+      const snapshot = createLeoSnapshot();
+      const projection = createNavballProjectionBuffer();
+
+      if (input === 'quaternion') {
+        snapshot.attitudeQuaternion.fill(0);
+        snapshot.attitudeQuaternion[0] = Number.MIN_VALUE;
+      } else if (input === 'radial') {
+        snapshot.shipState.fill(0);
+        snapshot.shipState[0] = Number.MIN_VALUE;
+      } else if (input === 'prograde') {
+        snapshot.shipCoordinateVelocityKmS.fill(0);
+        snapshot.shipCoordinateVelocityKmS[1] = Number.MIN_VALUE;
+      } else {
+        snapshot.shipProperAccelerationKmS2.fill(0);
+        snapshot.shipProperAccelerationKmS2[0] = Number.MIN_VALUE;
+      }
+
+      writeNavballProjectionInto(projection, snapshot);
+
+      expect(projection.valid).toBe(true);
+      expectProjectionFinite(projection);
+    },
+  );
 });
