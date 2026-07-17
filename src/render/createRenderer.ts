@@ -144,6 +144,27 @@ function copyContextAttributes(
   });
 }
 
+/** Builds the immutable context report consumed by warnings and telemetry. */
+export function createRendererContextReport(
+  context: WebGL2RenderingContext,
+  depthStrategy: DepthStrategy,
+  usedPerformanceCaveatFallback: boolean,
+): RendererContextReport {
+  const rendererName = readRendererName(context);
+  const softwareRasterizer = isSoftwareRendererName(rendererName);
+  return Object.freeze({
+    contextFlavor: 'webgl2',
+    depthStrategy,
+    effectiveContextAttributes: copyContextAttributes(context.getContextAttributes()),
+    gpuTimerQueryAvailable:
+      !softwareRasterizer && context.getExtension('EXT_disjoint_timer_query_webgl2') !== null,
+    rendererName,
+    softwareRasterizer,
+    usedPerformanceCaveatFallback,
+    warningRequired: usedPerformanceCaveatFallback || softwareRasterizer,
+  });
+}
+
 /** Creates the renderer and immutable context telemetry in one bootstrap. */
 export function createRenderer(
   canvas: HTMLCanvasElement,
@@ -159,20 +180,11 @@ export function createRenderer(
     renderer.dispose();
     throw new Error(`Three.js failed to activate the requested ${depthStrategy} depth strategy.`);
   }
-  const rendererName = readRendererName(contextResult.context);
-  const softwareRasterizer = isSoftwareRendererName(rendererName);
-  const contextReport: RendererContextReport = Object.freeze({
-    contextFlavor: 'webgl2',
+  const contextReport = createRendererContextReport(
+    contextResult.context,
     depthStrategy,
-    effectiveContextAttributes: copyContextAttributes(contextResult.context.getContextAttributes()),
-    gpuTimerQueryAvailable:
-      !softwareRasterizer &&
-      contextResult.context.getExtension('EXT_disjoint_timer_query_webgl2') !== null,
-    rendererName,
-    softwareRasterizer,
-    usedPerformanceCaveatFallback: contextResult.usedPerformanceCaveatFallback,
-    warningRequired: contextResult.usedPerformanceCaveatFallback || softwareRasterizer,
-  });
+    contextResult.usedPerformanceCaveatFallback,
+  );
 
   const pixelRatio = options.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
   renderer.setPixelRatio(pixelRatio);

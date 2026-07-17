@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createContextAttributes,
+  createRendererContextReport,
   createRendererParameters,
   createWebGL2Context,
   isSoftwareRendererName,
@@ -14,6 +15,7 @@ interface FakeContextOptions {
   readonly clipControl?: boolean;
   readonly debugRenderer?: string;
   readonly renderer?: string;
+  readonly timerQuery?: boolean;
 }
 
 function fakeContext(options: FakeContextOptions = {}): WebGL2RenderingContext {
@@ -23,6 +25,9 @@ function fakeContext(options: FakeContextOptions = {}): WebGL2RenderingContext {
     getContextAttributes: () => createContextAttributes(false),
     getExtension(name: string) {
       if (name === 'EXT_clip_control') return options.clipControl === true ? {} : null;
+      if (name === 'EXT_disjoint_timer_query_webgl2') {
+        return options.timerQuery === true ? {} : null;
+      }
       if (name === 'WEBGL_debug_renderer_info') {
         return options.debugRenderer === undefined ? null : debugInfo;
       }
@@ -161,5 +166,26 @@ describe('GPU renderer bootstrap policy', () => {
     }
     expect(isSoftwareRendererName('ANGLE (Intel Iris Xe Graphics)')).toBe(false);
     expect(isSoftwareRendererName('NVIDIA GeForce RTX 4060')).toBe(false);
+  });
+
+  it('keeps a strict hardware report warning-free and enables its GPU timer', () => {
+    const report = createRendererContextReport(
+      fakeContext({
+        clipControl: true,
+        debugRenderer: 'ANGLE (Intel Iris Xe Graphics)',
+        timerQuery: true,
+      }),
+      'reversed',
+      false,
+    );
+
+    expect(report).toMatchObject({
+      depthStrategy: 'reversed',
+      gpuTimerQueryAvailable: true,
+      rendererName: 'ANGLE (Intel Iris Xe Graphics)',
+      softwareRasterizer: false,
+      usedPerformanceCaveatFallback: false,
+      warningRequired: false,
+    });
   });
 });

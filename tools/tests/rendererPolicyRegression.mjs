@@ -62,6 +62,23 @@ try {
 
   const controlPage = await browser.newPage({ viewport: { width: 800, height: 600 } });
   await controlPage.goto(CONTROL_URL, { waitUntil: 'domcontentloaded' });
+  await controlPage.waitForSelector('#warning-root[data-policy-ready="true"]', {
+    state: 'attached',
+  });
+  const hardwareState = await controlPage.locator('#warning-root').evaluate((root) => ({
+    contextAttempts: root.dataset.contextAttempts,
+    gpuTimerQueryAvailable: root.dataset.gpuTimerQueryAvailable,
+    rendererName: root.dataset.rendererName,
+    usedPerformanceCaveatFallback: root.dataset.usedPerformanceCaveatFallback,
+    warningRequired: root.dataset.warningRequired,
+  }));
+  assert.deepEqual(hardwareState, {
+    contextAttempts: '1',
+    gpuTimerQueryAvailable: 'true',
+    rendererName: 'ANGLE (Intel Iris Xe Graphics)',
+    usedPerformanceCaveatFallback: 'false',
+    warningRequired: 'false',
+  });
   assert.equal(
     await controlPage.locator('#hardware-acceleration-warning').count(),
     0,

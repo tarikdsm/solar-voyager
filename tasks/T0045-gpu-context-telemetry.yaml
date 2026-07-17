@@ -50,7 +50,11 @@ handoff_notes: |
   captures and caveats are in docs/bench/T0045-{before,after}.json and
   T0045-summary.md.
 
+  Review-driven regressions additionally cover browsers that throw on the strict
+  context attempt, a consuming disjoint latch with multiple pending GPU queries,
+  and a strict-success hardware report flowing into the no-warning App path.
+
   Final local gates: lint PASS; strict typecheck PASS; Prettier PASS; Vitest
-  295 passed / 3 skipped; Python tools 49 passed; build PASS; budgets PASS;
+  298 passed / 3 skipped; Python tools 49 passed; build PASS; budgets PASS;
   53 task schemas PASS; render-depth, starfield, visual-tier, camera-controls,
   renderer-policy, and telemetry browser regressions all PASS; diff check PASS.

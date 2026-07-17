@@ -19,7 +19,7 @@ standard `desynchronized` context attribute. The first attempt uses:
 - antialias, alpha, stencil and preserveDrawingBuffer disabled;
 - depth enabled and `desynchronized: true`.
 
-If that attempt returns null, the same canvas is retried with only
+If that attempt returns null or throws, the same canvas is retried with only
 `failIfMajorPerformanceCaveat: false`. A second failure is fatal. The fallback
 is recorded even when renderer-name inspection is unavailable.
 
@@ -71,12 +71,14 @@ The benchmark waits for renderer, camera, and telemetry readiness before its
 warmup, retains its historical 600-frame comparison metrics, and also records
 the canonical 120-frame ring, renderer counters, and context report.
 
-GPU results are polled only for `QUERY_RESULT_AVAILABLE`; result retrieval
-occurs only after availability and is discarded while `GPU_DISJOINT_EXT` is
-set. No `readPixels`, `finish`, or blocking query is used. Query objects are
-created once and explicitly disposable. Software rasterizers do not create GPU
-queries: their timings do not represent the reference GPU, and omitting them
-keeps CI/Playwright software paths deterministic.
+The consuming `GPU_DISJOINT_EXT` latch is read once per poll. If set, every
+pending slot becomes invalid and remains quarantined until its availability bit
+allows safe reuse; no result from that disjoint interval can update the
+snapshot. Valid result retrieval occurs only after `QUERY_RESULT_AVAILABLE`.
+No `readPixels`, `finish`, or blocking query is used. Query objects are created
+once and explicitly disposable. Software rasterizers do not create GPU queries:
+their timings do not represent the reference GPU, and omitting them keeps
+CI/Playwright software paths deterministic.
 
 Percentiles are computed only at 4 Hz by copying into the preallocated scratch
 array and sorting it in place. Normal frames only write numeric fields and one
@@ -91,6 +93,7 @@ split/info snapshots, and asynchronous/disjoint GPU query behavior.
 The existing real-WebGL depth fixture is expanded to run forced reversed and
 forced logarithmic paths for both 200 km and 1 AU scenes. A browser policy
 regression launches Chromium with SwiftShader, requires the production warning
-and browser instructions, acknowledges it, and checks the no-warning component
-path. A browser microbenchmark measures telemetry calls over a large fixed
-sample and requires average overhead below 0.1 ms/frame.
+and browser instructions, acknowledges it, and checks a strict-success hardware
+policy report flowing into the no-warning App path. A browser microbenchmark
+measures telemetry calls over a large fixed sample and requires average overhead
+below 0.1 ms/frame.

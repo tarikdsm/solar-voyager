@@ -8,6 +8,7 @@ const GPU_QUERY_SLOT_COUNT = 4;
 const GPU_QUERY_FREE = 0;
 const GPU_QUERY_ACTIVE = 1;
 const GPU_QUERY_PENDING = 2;
+const GPU_QUERY_INVALID = 3;
 const MAX_GAME_DELTA_SEC = 0.1;
 
 export const RENDER_TELEMETRY_PROPERTY = 'solarVoyagerTelemetry' as const;
@@ -181,8 +182,24 @@ export class RenderTelemetry {
 
   private pollGpuQueries(): void {
     if (this.timerExtension === null) return;
+    let hasPendingQuery = false;
     for (let index = 0; index < this.gpuQueries.length; index += 1) {
-      if (this.gpuQueryStates[index] !== GPU_QUERY_PENDING) continue;
+      const state = this.gpuQueryStates[index];
+      if (state === GPU_QUERY_PENDING || state === GPU_QUERY_INVALID) {
+        hasPendingQuery = true;
+        break;
+      }
+    }
+    if (!hasPendingQuery) return;
+
+    const disjoint = this.context.getParameter(this.timerExtension.GPU_DISJOINT_EXT) as boolean;
+    for (let index = 0; index < this.gpuQueries.length; index += 1) {
+      let state = this.gpuQueryStates[index];
+      if (state !== GPU_QUERY_PENDING && state !== GPU_QUERY_INVALID) continue;
+      if (disjoint && state === GPU_QUERY_PENDING) {
+        state = GPU_QUERY_INVALID;
+        this.gpuQueryStates[index] = state;
+      }
       const query = this.gpuQueries[index];
       if (query === undefined || query === null) continue;
       const available = this.context.getQueryParameter(
@@ -190,8 +207,7 @@ export class RenderTelemetry {
         this.context.QUERY_RESULT_AVAILABLE,
       ) as boolean;
       if (!available) continue;
-      const disjoint = this.context.getParameter(this.timerExtension.GPU_DISJOINT_EXT) as boolean;
-      if (!disjoint) {
+      if (state === GPU_QUERY_PENDING) {
         const elapsedNanoseconds = this.context.getQueryParameter(
           query,
           this.context.QUERY_RESULT,

@@ -53,6 +53,8 @@ function timerContext() {
   };
   const queries: FakeQuery[] = [];
   let disjoint = false;
+  let disjointReads = 0;
+  let resetDisjointOnRead = false;
   const beginQuery = vi.fn();
   const endQuery = vi.fn();
   const deleteQuery = vi.fn();
@@ -71,7 +73,11 @@ function timerContext() {
       return name === 'EXT_disjoint_timer_query_webgl2' ? extension : null;
     },
     getParameter(parameter: number) {
-      return parameter === extension.GPU_DISJOINT_EXT ? disjoint : null;
+      if (parameter !== extension.GPU_DISJOINT_EXT) return null;
+      disjointReads += 1;
+      const currentValue = disjoint;
+      if (resetDisjointOnRead) disjoint = false;
+      return currentValue;
     },
     getQueryParameter(query: FakeQuery, parameter: number) {
       return parameter === 0x8867 ? query.available : query.resultNs;
@@ -82,9 +88,13 @@ function timerContext() {
     context,
     deleteQuery,
     endQuery,
+    getDisjointReads() {
+      return disjointReads;
+    },
     queries,
-    setDisjoint(value: boolean) {
+    setDisjoint(value: boolean, resetOnRead = false) {
       disjoint = value;
+      resetDisjointOnRead = resetOnRead;
     },
   };
 }
@@ -202,6 +212,31 @@ describe('RenderTelemetry', () => {
 
     telemetry.dispose();
     expect(timer.deleteQuery).toHaveBeenCalledTimes(4);
+  });
+
+  it('invalidates every pending query from one consumed disjoint latch', () => {
+    const timer = timerContext();
+    const report = { ...contextReport(), gpuTimerQueryAvailable: true };
+    const { renderer } = fakeRenderer(timer.context);
+    const telemetry = new RenderTelemetry(renderer, report);
+
+    telemetry.beginFrame(0);
+    telemetry.beginGpuTimer();
+    telemetry.endGpuTimer();
+    telemetry.beginGpuTimer();
+    telemetry.endGpuTimer();
+    for (let index = 0; index < 2; index += 1) {
+      const query = timer.queries[index];
+      if (query === undefined) throw new Error(`Fake query ${String(index)} is missing.`);
+      query.available = true;
+      query.resultNs = (index + 1) * 4_500_000;
+    }
+    timer.setDisjoint(true, true);
+
+    telemetry.beginFrame(16);
+
+    expect(timer.getDisjointReads()).toBe(1);
+    expect(telemetry.snapshot.gpuMs).toBe(-1);
   });
 
   it('makes unavailable GPU timing a no-op', () => {
