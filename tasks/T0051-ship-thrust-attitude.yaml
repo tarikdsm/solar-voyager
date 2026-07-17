@@ -1,8 +1,8 @@
 id: T0051
 title: Ship state, thrust, attitude modes
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0051-ship-thrust-attitude
 depends_on: [T0050]
 milestone: M3
 spec: |
