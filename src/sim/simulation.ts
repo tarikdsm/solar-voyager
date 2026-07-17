@@ -466,7 +466,7 @@ export class SimulationCore {
         this.shipMassKg,
       ) - this.initialKineticEnergyJ;
     updateSnapshotDerivedState(snapshot, this.shipMassKg);
-    updateOsculatingElements(snapshot, this.catalog.muKm3S2, this.osculatingWorkspace);
+    updateOsculatingElements(snapshot, this.catalog, this.osculatingWorkspace);
   }
 
   private currentPrivateShipState(): Float64Array {

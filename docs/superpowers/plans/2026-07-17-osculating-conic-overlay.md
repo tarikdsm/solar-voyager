@@ -32,7 +32,7 @@
 
 **Interfaces:**
 - Consumes: `RailsBodyInput.parentId`, `RailsBodyInput.muKm3S2`, and existing `soiRadiusKm` values from `data/bodies.json`.
-- Produces: `CompiledRailsCatalog.soiRadiiKm: Float64Array` and `selectDominantBodyIndexWithHysteresis(shipState, catalog, previousIndex): number`.
+- Produces: `CompiledRailsCatalog.soiRadiiKm: Float64Array` and `selectDominantBodyIndexWithHysteresis(shipState, bodyPositionsKm, catalog, previousIndex): number`.
 
 - [ ] **Step 1: Write failing catalog and hysteresis tests**
 
@@ -77,6 +77,7 @@ export interface CompiledRailsCatalog {
 
 export function selectDominantBodyIndexWithHysteresis(
   shipState: Float64Array,
+  bodyPositionsKm: Float64Array,
   catalog: CompiledRailsCatalog,
   previousIndex: number,
 ): number {
@@ -107,6 +108,7 @@ export function updateOsculatingElements(
 ): void {
   const selected = selectDominantBodyIndexWithHysteresis(
     snapshot.shipState,
+    snapshot.bodyPositionsKm,
     catalog,
     workspace.dominantBodyIndex,
   );

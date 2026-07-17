@@ -15,6 +15,7 @@ export interface RailsBodyInput {
   readonly id: string;
   readonly parentId: string | null;
   readonly muKm3S2: number;
+  readonly soiRadiusKm?: number | null;
   readonly elements: Readonly<OrbitalElements> | null;
 }
 
@@ -24,6 +25,7 @@ export interface CompiledRailsCatalog {
   readonly bodyIds: readonly string[];
   readonly parentIndices: Int32Array;
   readonly muKm3S2: Float64Array;
+  readonly soiRadiiKm: Float64Array;
   readonly orbitalMuKm3S2: Float64Array;
   readonly meanMotionRadS: Float64Array;
   readonly semiMajorAxisKm: Float64Array;
@@ -77,6 +79,8 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
   const parentIndices = new Int32Array(bodyCount);
   parentIndices.fill(-1);
   const muKm3S2 = new Float64Array(bodyCount);
+  const soiRadiiKm = new Float64Array(bodyCount);
+  soiRadiiKm.fill(Number.POSITIVE_INFINITY);
   const orbitalMuKm3S2 = new Float64Array(bodyCount);
   const meanMotionRadS = new Float64Array(bodyCount);
   const semiMajorAxisKm = new Float64Array(bodyCount);
@@ -98,8 +102,18 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
     if (!Number.isFinite(body.muKm3S2) || body.muKm3S2 <= 0) {
       throw new RangeError(`${body.id} GM must be finite and positive`);
     }
+    if (
+      body.soiRadiusKm !== undefined &&
+      body.soiRadiusKm !== null &&
+      (!Number.isFinite(body.soiRadiusKm) || body.soiRadiusKm <= 0)
+    ) {
+      throw new RangeError(`${body.id} SOI radius must be finite and positive`);
+    }
 
     muKm3S2[index] = body.muKm3S2;
+    if (body.soiRadiusKm !== undefined && body.soiRadiusKm !== null) {
+      soiRadiiKm[index] = body.soiRadiusKm;
+    }
 
     if (index === 0) {
       if (body.parentId !== null) {
@@ -155,6 +169,7 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
     bodyIds,
     parentIndices,
     muKm3S2,
+    soiRadiiKm,
     orbitalMuKm3S2,
     meanMotionRadS,
     semiMajorAxisKm,

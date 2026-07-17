@@ -7,10 +7,20 @@ import {
   elementsToStateInto,
   type OrbitalElements,
 } from '../bodies/orbitalElements.js';
+import { compileRailsCatalog } from '../propagation/rails.js';
 import { createSimulationSnapshotBuffer } from '../simulationSnapshot.js';
 import { createOsculatingWorkspace, updateOsculatingElements } from './osculating.js';
 
 const EARTH_MU_KM3_S2 = 398_600.4418;
+const EARTH_CATALOG = compileRailsCatalog([
+  {
+    id: 'earth',
+    parentId: null,
+    muKm3S2: EARTH_MU_KM3_S2,
+    soiRadiusKm: null,
+    elements: null,
+  },
+]);
 
 function snapshotFromElements(elements: OrbitalElements) {
   const state = elementsToStateInto(
@@ -36,11 +46,7 @@ describe('osculating snapshot — physics-spec.md §6 / §7.1', () => {
     snapshot.shipState[0] = radiusKm;
     snapshot.shipCoordinateVelocityKmS[1] = Math.sqrt(EARTH_MU_KM3_S2 / radiusKm);
 
-    updateOsculatingElements(
-      snapshot,
-      new Float64Array([EARTH_MU_KM3_S2]),
-      createOsculatingWorkspace(),
-    );
+    updateOsculatingElements(snapshot, EARTH_CATALOG, createOsculatingWorkspace());
 
     expect(snapshot.dominantBodyIndex).toBe(0);
     expect(snapshot.osculatingElements.valid).toBe(true);
@@ -67,11 +73,7 @@ describe('osculating snapshot — physics-spec.md §6 / §7.1', () => {
     snapshot.shipState[0] = periapsisRadiusKm;
     snapshot.shipCoordinateVelocityKmS[1] = periapsisSpeedKmS;
 
-    updateOsculatingElements(
-      snapshot,
-      new Float64Array([EARTH_MU_KM3_S2]),
-      createOsculatingWorkspace(),
-    );
+    updateOsculatingElements(snapshot, EARTH_CATALOG, createOsculatingWorkspace());
 
     expect(snapshot.osculatingElements.valid).toBe(true);
     expect(snapshot.osculatingElements.semiMajorAxisKm).toBeCloseTo(semiMajorAxisKm, 10);
@@ -100,11 +102,7 @@ describe('osculating snapshot — physics-spec.md §6 / §7.1', () => {
     elements.meanAnomalyRad = eccentricAnomalyRad - eccentricity * Math.sin(eccentricAnomalyRad);
     const snapshot = snapshotFromElements(elements);
 
-    updateOsculatingElements(
-      snapshot,
-      new Float64Array([EARTH_MU_KM3_S2]),
-      createOsculatingWorkspace(),
-    );
+    updateOsculatingElements(snapshot, EARTH_CATALOG, createOsculatingWorkspace());
 
     expect(snapshot.osculatingElements.valid).toBe(true);
     expect(snapshot.osculatingElements.eccentricity).toBeCloseTo(eccentricity, 14);
@@ -124,11 +122,7 @@ describe('osculating snapshot — physics-spec.md §6 / §7.1', () => {
     elements.meanAnomalyRad = 0.8;
     const snapshot = snapshotFromElements(elements);
 
-    updateOsculatingElements(
-      snapshot,
-      new Float64Array([EARTH_MU_KM3_S2]),
-      createOsculatingWorkspace(),
-    );
+    updateOsculatingElements(snapshot, EARTH_CATALOG, createOsculatingWorkspace());
 
     expect(snapshot.osculatingElements.valid).toBe(true);
     expect(snapshot.osculatingElements.eccentricity).toBe(0);
