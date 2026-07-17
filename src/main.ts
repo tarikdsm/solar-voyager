@@ -1,11 +1,19 @@
 import { h, render } from 'preact';
 
-import { createNewGameSimulation } from './game/createNewGameSimulation.js';
+import {
+  createGameSimulationFromPersistentState,
+  createNewGameSimulation,
+} from './game/createNewGameSimulation.js';
+import { KeyboardCommandMapper, type KeyboardInputTarget } from './game/inputMapping.js';
+import { SaveRepository } from './game/saveLoad.js';
+import { GameSessionController } from './game/sessionController.js';
+import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
+import type { Commands } from './sim/simulationSnapshot.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
@@ -32,9 +40,9 @@ const { contextReport, renderer } = rendererBootstrap;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
-const simulation = createNewGameSimulation(SHIP_MASS_KG);
+const initialSimulation = createNewGameSimulation(SHIP_MASS_KG);
 const hudStore = createHudSignalStore();
-hudStore.publish(simulation.snapshot, 0);
+hudStore.publish(initialSimulation.snapshot, 0);
 const hardwareWarning = contextReport.warningRequired
   ? { rendererName: contextReport.rendererName }
   : null;
@@ -42,6 +50,43 @@ const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
 let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
+let commandInput: KeyboardCommandMapper | null = null;
+const browserStorage: KeyValueStorage = {
+  getItem: (key) => window.localStorage.getItem(key),
+  setItem: (key, value) => window.localStorage.setItem(key, value),
+};
+const session = new GameSessionController({
+  initialSimulation,
+  saveRepository: new SaveRepository(browserStorage),
+  settingsRepository: new SettingsRepository(browserStorage),
+  createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+  onSimulationReplaced: (replacement) => {
+    hudStore.publish(replacement.snapshot, performance.now());
+  },
+  onSettingsChanged: (settings) => {
+    commandInput?.updateBindings(settings.inputBindings);
+  },
+});
+
+function currentInputSnapshot() {
+  return session.simulation.snapshot;
+}
+
+const sessionCommands: Commands = {
+  rotate: (pitchRateRadS, yawRateRadS, rollRateRadS) =>
+    session.simulation.commands.rotate(pitchRateRadS, yawRateRadS, rollRateRadS),
+  setAttitudeMode: (mode) => session.simulation.commands.setAttitudeMode(mode),
+  setTarget: (bodyId) => session.simulation.commands.setTarget(bodyId),
+  setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
+  setWarp: (warp) => session.simulation.commands.setWarp(warp),
+};
+
+commandInput = new KeyboardCommandMapper(
+  window as unknown as KeyboardInputTarget,
+  sessionCommands,
+  currentInputSnapshot,
+  session.settings.inputBindings,
+);
 
 function resizeRenderer(): void {
   const clientWidth = canvas.clientWidth;
@@ -73,7 +118,8 @@ function renderFrame(nowMs: number): void {
   } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
   const simulationStartMs = performance.now();
-  const snapshot = simulation.step(deltaSec);
+  commandInput?.update();
+  const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   proceduralSun.update(snapshot.simTimeSec);
   const simulationEndMs = performance.now();
@@ -113,11 +159,12 @@ function renderFrame(nowMs: number): void {
 async function startApplication(): Promise<void> {
   render(
     h(App, {
-      bodyIds: simulation.snapshot.bodyIds,
-      commands: simulation.commands,
+      bodyIds: session.simulation.snapshot.bodyIds,
+      commands: sessionCommands,
       hardwareWarning,
       hud: hudStore.display,
       hudState: hudStore.signals,
+      session,
     }),
     appRoot,
   );

@@ -29,6 +29,133 @@
   backdrop-filter: blur(0.55rem);
 }
 
+.session-settings {
+  position: absolute;
+  z-index: 8;
+  top: clamp(0.75rem, 2vw, 1.5rem);
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  width: min(18rem, calc(100vw - 1.5rem));
+  border: 1px solid rgb(125 211 252 / 24%);
+  border-radius: 0.7rem;
+  background: rgb(2 6 23 / 92%);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 36%);
+  color: #e0f2fe;
+  pointer-events: auto;
+  backdrop-filter: blur(0.7rem);
+}
+
+.session-settings summary {
+  padding: 0.65rem 0.8rem;
+  color: rgb(224 242 254 / 84%);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.session-settings-content {
+  max-height: calc(100vh - 5rem);
+  padding: 0 0.8rem 0.8rem;
+  overflow-y: auto;
+}
+
+.session-settings section {
+  padding-top: 0.7rem;
+  border-top: 1px solid rgb(125 211 252 / 14%);
+}
+
+.session-settings h2 {
+  margin: 0 0 0.5rem;
+  color: rgb(125 211 252 / 72%);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.session-action-grid,
+.binding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.session-settings button,
+.session-import-label,
+.session-settings select {
+  min-height: 2rem;
+  border: 1px solid rgb(125 211 252 / 22%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 72%);
+  color: #e0f2fe;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.65rem;
+}
+
+.session-settings button:hover,
+.session-settings button:focus-visible,
+.session-import-label:hover,
+.session-import-label:focus-within,
+.session-settings select:focus-visible {
+  border-color: rgb(125 211 252 / 64%);
+  background: rgb(14 116 144 / 42%);
+}
+
+.session-import-label {
+  display: grid;
+  place-items: center;
+}
+
+.session-import-label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.quality-lock-label {
+  display: grid;
+  grid-template-columns: 1fr 7rem;
+  gap: 0.65rem;
+  align-items: center;
+  color: rgb(186 230 253 / 72%);
+  font-size: 0.68rem;
+}
+
+.session-settings select {
+  padding: 0 0.45rem;
+}
+
+.binding-grid {
+  grid-template-columns: 1fr;
+}
+
+.binding-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.binding-button kbd {
+  color: #fde68a;
+  font-size: 0.62rem;
+}
+
+.session-status {
+  min-height: 1rem;
+  margin: 0.65rem 0 0;
+  color: #86efac;
+  font-size: 0.65rem;
+}
+
+.session-status-error {
+  color: #fda4af;
+}
+
 .hud-kicker {
   margin: 0;
   color: rgb(125 211 252 / 72%);
@@ -527,7 +654,8 @@
   }
 
   .hud-panel,
-  .camera-help {
+  .camera-help,
+  .session-settings {
     position: relative;
     inset: auto;
     flex: 0 0 auto;
@@ -535,6 +663,14 @@
     margin: 0;
     pointer-events: auto;
     transform: none;
+  }
+
+  .session-settings {
+    order: 0;
+  }
+
+  .session-settings-content {
+    max-height: none;
   }
 
   .dual-clock {
