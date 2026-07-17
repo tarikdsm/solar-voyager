@@ -96,24 +96,19 @@ async function waitForReady(page) {
 }
 
 async function readEnvironment(page) {
-  return page.locator('#space-canvas').evaluate((element) => {
-    if (!(element instanceof globalThis.HTMLCanvasElement)) {
+  return page.evaluate((telemetryProperty) => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
       throw new Error('Expected the production canvas.');
     }
-    const context = element.getContext('webgl2');
-    const extension = context?.getExtension('WEBGL_debug_renderer_info');
+    const telemetry = canvas[telemetryProperty];
+    if (telemetry === undefined) throw new Error('Expected production telemetry.');
     return {
-      canvas: { height: element.height, width: element.width },
-      renderer:
-        context !== null && extension !== null
-          ? String(context.getParameter(extension.UNMASKED_RENDERER_WEBGL))
-          : 'unavailable',
-      vendor:
-        context !== null && extension !== null
-          ? String(context.getParameter(extension.UNMASKED_VENDOR_WEBGL))
-          : 'unavailable',
+      canvas: { height: canvas.height, width: canvas.width },
+      renderer: telemetry.snapshot.context.rendererName,
+      softwareRasterizer: telemetry.snapshot.context.softwareRasterizer,
     };
-  });
+  }, TELEMETRY_PROPERTY);
 }
 
 async function measureFlight(page, schedule) {
@@ -250,6 +245,7 @@ async function runOnce(browser, schedule, index) {
   await installHighQualitySetting(page);
   try {
     await waitForReady(page);
+    if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     const environment = await readEnvironment(page);
     const raw = await measureFlight(page, schedule);
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
