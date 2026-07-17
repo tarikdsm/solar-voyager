@@ -1,6 +1,6 @@
 id: T0052
 title: Time warp with substep-budget auto-clamp
-status: IN_PROGRESS
+status: BLOCKED
 agent: chatgpt
 branch: task/T0052-warp-system
 depends_on: [T0050]
@@ -11,4 +11,8 @@ spec: |
 acceptance:
   - At 1e7x in LEO warp clamps automatically; in deep space it sustains
   - Ledger integration unaffected by warp changes (test)
-handoff_notes: ""
+handoff_notes: |
+  PR #31 implements the warp clamp and passed local/remote gates. Independent review
+  identified that the remaining ledger-invariance acceptance cannot be validated until
+  T0053 implements a nonzero ledger. Resume after T0053 is DONE, rebase PR #31, add a
+  real 1x-vs-100x burn regression, obtain exact-head review, and merge normally.
