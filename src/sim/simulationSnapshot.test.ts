@@ -106,4 +106,28 @@ describe('command controller', () => {
     controller.commands.setAttitudeMode('retrograde');
     expect(invalidations).toBe(6);
   });
+
+  it('forces coast above physics warp and does not restore stale throttle intent', () => {
+    let invalidations = 0;
+    const controller = createCommandController(Object.freeze(['sun']), () => {
+      invalidations += 1;
+    });
+
+    controller.commands.setThrottle(0.5);
+    controller.commands.setWarp(1e4);
+    expect(controller.state.requestedWarp).toBe(1e4);
+    expect(controller.state.throttle).toBe(0);
+    expect(invalidations).toBe(2);
+
+    controller.commands.setThrottle(0.8);
+    controller.commands.setWarp(1e4);
+    expect(controller.state.throttle).toBe(0);
+    expect(invalidations).toBe(2);
+
+    controller.commands.setWarp(1e3);
+    expect(controller.state.throttle).toBe(0);
+    controller.commands.setThrottle(0.8);
+    expect(controller.state.throttle).toBe(0.8);
+    expect(invalidations).toBe(3);
+  });
 });

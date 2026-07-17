@@ -11,6 +11,9 @@ export const WARP_LADDER = Object.freeze([1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6,
 /** A time-warp factor selected from the canonical ladder. */
 export type WarpFactor = (typeof WARP_LADDER)[number];
 
+/** Highest canonical tier where player thrust may remain active. */
+export const MAX_THRUST_WARP: WarpFactor = 1e3;
+
 /** Mutable float64 simulation time, measured in TDB seconds since J2026. */
 export interface SimClock {
   timeSec: number;
