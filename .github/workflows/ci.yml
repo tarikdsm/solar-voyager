@@ -50,6 +50,12 @@ jobs:
       - name: Camera controls regression
         run: npm run test:camera-controls
 
+      - name: Renderer policy regression
+        run: npm run test:renderer-policy
+
+      - name: Telemetry overhead regression
+        run: npm run test:telemetry
+
       - name: Tool tests
         run: npm run test:tools
 

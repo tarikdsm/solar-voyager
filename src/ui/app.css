@@ -46,3 +46,51 @@
   color: rgb(203 213 225 / 82%);
   font-size: clamp(0.65rem, 1.5vw, 0.78rem);
 }
+
+.hardware-warning {
+  position: absolute;
+  z-index: 10;
+  top: 1rem;
+  left: 1rem;
+  width: min(34rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem;
+  border: 1px solid rgb(251 191 36 / 75%);
+  border-radius: 0.75rem;
+  background: rgb(69 26 3 / 94%);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 45%);
+  color: #fef3c7;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  pointer-events: auto;
+}
+
+.hardware-warning h2,
+.hardware-warning p,
+.hardware-warning ul {
+  margin-top: 0;
+}
+
+.hardware-warning h2 {
+  margin-bottom: 0.35rem;
+  color: #fef9c3;
+  font-size: 1rem;
+}
+
+.hardware-warning ul {
+  padding-left: 1.25rem;
+}
+
+.hardware-warning button {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgb(254 243 199 / 50%);
+  border-radius: 0.4rem;
+  background: rgb(254 243 199 / 12%);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.hardware-warning button:hover,
+.hardware-warning button:focus-visible {
+  background: rgb(254 243 199 / 22%);
+}
