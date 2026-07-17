@@ -53,7 +53,7 @@ try {
 
   assert.equal(assetRequests(requests, /\/models\//u).length, 0, 'model fetched at startup');
   assert.equal(
-    assetRequests(requests, /pluto_albedo_tier2\.ktx2$/u).length,
+    assetRequests(requests, /pluto_albedo(?:_(?:tier2|[12]k))?\.ktx2$/u).length,
     0,
     'non-hero sphere fetched at startup',
   );
@@ -112,7 +112,10 @@ try {
     [1, 2, 3, 2, 1],
   );
 
-  assert.equal(assetRequests(requests, /pluto_albedo_tier2\.ktx2$/u).length, 0);
+  assert.equal(
+    assetRequests(requests, /pluto_albedo(?:_(?:tier2|[12]k))?\.ktx2$/u).length,
+    0,
+  );
   const pluto = await page.evaluate(
     ([distance, now]) => globalThis.__visualTierHarness.stepPlutoDistance(distance, now),
     [PLUTO_APPROACH_KM, 1_500],
@@ -128,7 +131,11 @@ try {
     [PLUTO_APPROACH_KM, 1_750],
   );
   assertVisible(plutoReady, 'pluto ready');
-  assert.equal(assetRequests(requests, /pluto_albedo_tier2\.ktx2$/u).length, 1);
+  assert.equal(
+    assetRequests(requests, /pluto_albedo\.ktx2$/u).length,
+    2,
+    'canonical Pluto albedo must serve both the lazy sphere and detailed model',
+  );
   assert.equal(assetRequests(requests, /\/models\/pluto\.glb$/u).length, 1);
   assert.equal(assetRequests(requests, /\/models\/earth\.glb$/u).length, 1);
 

@@ -11,7 +11,11 @@ import starCatalogUrl from '../../data/stars.bin?url';
 import type { ReadonlyVec3 } from '../../src/core/vec3.js';
 import { CameraRelativeSpaceScene } from '../../src/render/spaceScene.js';
 import { loadStarCatalog } from '../../src/render/starCatalog.js';
-import { STARFIELD_RADIUS_KM, Starfield } from '../../src/render/starfield.js';
+import {
+  STARFIELD_RADIUS_KM,
+  Starfield,
+  createMagnitudeOrderedStarIndices,
+} from '../../src/render/starfield.js';
 
 const VIEWPORT_SIZE = 384;
 const SAMPLE_RADIUS_PX = 4;
@@ -76,6 +80,12 @@ renderer.setClearColor(0x000000, 1);
 
 const catalog = await loadStarCatalog(starCatalogUrl);
 const starfield = new Starfield(catalog, renderer.getPixelRatio());
+const drawOffsetByCatalogIndex = new Uint32Array(catalog.starCount);
+const magnitudeOrder = createMagnitudeOrderedStarIndices(catalog);
+for (let drawOffset = 0; drawOffset < magnitudeOrder.length; drawOffset += 1) {
+  const catalogIndex = magnitudeOrder[drawOffset];
+  if (catalogIndex !== undefined) drawOffsetByCatalogIndex[catalogIndex] = drawOffset;
+}
 const spaceScene = new CameraRelativeSpaceScene();
 spaceScene.scene.add(starfield.points);
 spaceScene.camera.aspect = 1;
@@ -220,7 +230,7 @@ globalThis.__starfieldHarness = {
     const samples: StarSample[] = [];
     try {
       for (const star of ORION_STARS) {
-        starfield.points.geometry.setDrawRange(star.index, 1);
+        starfield.points.geometry.setDrawRange(drawOffsetByCatalogIndex[star.index] as number, 1);
         const snapshot = renderSnapshot(60, origin);
         const sample = snapshot.samples.find((candidate) => candidate.name === star.name);
         if (sample === undefined) throw new Error(`Missing isolated ${star.name} sample.`);
