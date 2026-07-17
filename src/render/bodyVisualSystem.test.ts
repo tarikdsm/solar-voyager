@@ -6,10 +6,11 @@ import {
   MeshStandardMaterial,
   Texture,
   type Material,
+  type Object3D,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { LoadedBodyModel } from './bodyAssetLoader.js';
+import type { LoadedBodyModel, LoadedSurfaceDetail } from './bodyAssetLoader.js';
 import type { BodyVisualAssetLoader, BodyVisualDefinition } from './bodyVisualSystem.js';
 import { BodyVisualSystem, EARTH_NIGHT_EMISSIVE_INTENSITY } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
@@ -46,7 +47,7 @@ function cameraAtEarthDistance(distanceKm: number): { x: number; y: number; z: n
 function loadedModel(material: Material = new MeshBasicMaterial()): LoadedBodyModel {
   const root = new Group();
   root.add(new Mesh(undefined, material));
-  return { root, materials: [material] };
+  return { root, materials: [material], surfaceDetail: null };
 }
 
 describe('BodyVisualSystem structure', () => {
@@ -154,6 +155,7 @@ describe('BodyVisualSystem structure', () => {
     const earthModel: LoadedBodyModel = {
       root: earthRoot,
       materials: [earthMaterial, cloudsMaterial],
+      surfaceDetail: null,
     };
     const loader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
@@ -174,6 +176,59 @@ describe('BodyVisualSystem structure', () => {
     expect(earthMaterial.emissiveIntensity).toBe(EARTH_NIGHT_EMISSIVE_INTENSITY);
     expect(cloudsMaterial.alphaMap).toBe(cloudsMaterial.map);
     expect(cloudsMaterial.depthWrite).toBe(false);
+  });
+
+  it('prepares only the Earth surface detail and atmosphere before model compilation', async () => {
+    const surfaceMaterial = new MeshStandardMaterial({ map: new Texture() });
+    surfaceMaterial.name = 'mat_surface';
+    const cloudsMaterial = new MeshStandardMaterial({ map: new Texture() });
+    cloudsMaterial.name = 'mat_clouds';
+    const earthRoot = new Group();
+    earthRoot.add(new Mesh(undefined, surfaceMaterial), new Mesh(undefined, cloudsMaterial));
+    const surfaceDetail: LoadedSurfaceDetail = {
+      albedo: new Texture(),
+      normal: new Texture(),
+      tilesPerEquator: 512,
+      seed: 399,
+    };
+    const earthModel: LoadedBodyModel = {
+      root: earthRoot,
+      materials: [surfaceMaterial, cloudsMaterial],
+      surfaceDetail,
+    };
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) => (id === 'earth' ? earthModel : null)),
+    };
+    const compileModel = vi.fn(async (root: Object3D) => {
+      expect(root.getObjectByName('earth-atmosphere-rim')).toBeDefined();
+      expect(surfaceMaterial.customProgramCacheKey()).toContain('solar-voyager-surface-detail-v1');
+      expect(cloudsMaterial.customProgramCacheKey()).not.toContain(
+        'solar-voyager-surface-detail-v1',
+      );
+    });
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      loader,
+      compileModel,
+    );
+
+    system.update(cameraAtEarthDistance(5), 1_000, 1, 0);
+    await vi.waitFor(() => expect(system.getLoadState('earth')).toBe('ready'));
+    expect(compileModel).toHaveBeenCalledOnce();
+
+    system.update(cameraAtEarthDistance(6), 1_000, 1, 100);
+    expect(system.getSurfaceDetailBlend('earth')).toBe(0);
+    system.update(cameraAtEarthDistance(3), 1_000, 1, 200);
+    expect(system.getSurfaceDetailBlend('earth')).toBeGreaterThan(0);
+    expect(system.getSurfaceDetailBlend('earth')).toBeLessThan(1);
+    system.update(cameraAtEarthDistance(1.2), 1_000, 1, 300);
+    expect(system.getSurfaceDetailBlend('earth')).toBe(1);
+    system.setSurfaceDetailEnabled('earth', false);
+    expect(system.getSurfaceDetailBlend('earth')).toBe(0);
   });
 });
 

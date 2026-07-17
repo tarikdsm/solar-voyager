@@ -34,7 +34,11 @@ async function writeSparseFile(root, relativePath, sizeBytes) {
 async function writeManifest(root, value) {
   const manifestPath = join(root, 'public', 'assets', 'manifest.json');
   await mkdir(dirname(manifestPath), { recursive: true });
-  const source = typeof value === 'string' ? value : `${JSON.stringify(value)}\n`;
+  const normalized =
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? { schemaVersion: 2, ...value }
+      : value;
+  const source = typeof normalized === 'string' ? normalized : `${JSON.stringify(normalized)}\n`;
   await writeFile(manifestPath, source, 'utf8');
 }
 
@@ -320,6 +324,41 @@ describe('validateBudgets byte limits', () => {
 });
 
 describe('asset manifest validation', () => {
+  it('requires runtime manifest schema version 2', async () => {
+    await withRepository(async (root) => {
+      await writeManifest(root, { schemaVersion: 1, assets: [] });
+      expect(await findingsFor(root)).toContainEqual(
+        expect.stringContaining('schemaVersion must be 2'),
+      );
+    });
+  });
+
+  it('accepts the schema-v2 optional surface-detail descriptor', async () => {
+    await withRepository(async (root) => {
+      await writeManifest(root, {
+        assets: [
+          {
+            id: 'earth',
+            category: 'planet',
+            triangles: 1,
+            files: [
+              'textures/earth_detail_albedo.ktx2',
+              'textures/earth_detail_normal.ktx2',
+            ],
+            surfaceDetail: {
+              albedo: 'textures/earth_detail_albedo.ktx2',
+              normal: 'textures/earth_detail_normal.ktx2',
+              tilesPerEquator: 512,
+              seed: 399,
+            },
+          },
+        ],
+      });
+
+      expect(await findingsFor(root)).toEqual([]);
+    });
+  });
+
   it.each([
     ['planet', 50_000],
     ['sun', 50_000],

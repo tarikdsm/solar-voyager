@@ -1,5 +1,9 @@
 import { createServer } from 'node:net';
 
+export function hardwareGpuPreferenceArg(forceLowPowerGpu) {
+  return forceLowPowerGpu ? '--force_low_power_gpu' : '--force_high_performance_gpu';
+}
+
 export function assertPortAvailable(port, host) {
   return new Promise((resolvePromise, rejectPromise) => {
     const probeServer = createServer();

@@ -3,7 +3,12 @@ import { basename, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { discoverAssets, validateAssetDirectory } from './assetIngest.mjs';
-import { CATEGORY_CONFIG, assetByteBudget, guideReference } from './config.mjs';
+import {
+  CATEGORY_CONFIG,
+  SURFACE_DETAIL_CONFIG,
+  assetByteBudget,
+  guideReference,
+} from './config.mjs';
 import { encodeTexture as encodeKtxTexture } from './ktx.mjs';
 import { compressGlb } from './processAsset.mjs';
 
@@ -59,7 +64,25 @@ async function publishDirectory(stagingRoot, outputRoot) {
 }
 
 function canonicalManifest(assets) {
-  return `${JSON.stringify({ schemaVersion: 1, assets }, null, 2)}\n`;
+  return `${JSON.stringify({ schemaVersion: 2, assets }, null, 2)}\n`;
+}
+
+function surfaceDetailDescriptor(asset, files) {
+  const albedo = `textures/${asset.id}_detail_albedo.ktx2`;
+  const normal = `textures/${asset.id}_detail_normal.ktx2`;
+  const hasAlbedo = files.includes(albedo);
+  const hasNormal = files.includes(normal);
+  const config = SURFACE_DETAIL_CONFIG[asset.id];
+  if (config === undefined) {
+    if (hasAlbedo || hasNormal) {
+      throw new Error(`${asset.id}: surface-detail textures require explicit runtime scale metadata`);
+    }
+    return null;
+  }
+  if (!hasAlbedo || !hasNormal) {
+    throw new Error(`${asset.id}: configured surface detail requires both runtime texture files`);
+  }
+  return { albedo, normal, tilesPerEquator: config.tilesPerEquator, seed: config.seed };
 }
 
 export async function ingestAssets(options) {
@@ -143,12 +166,16 @@ export async function ingestAssets(options) {
         );
       }
 
-      manifestAssets.push({
+      const manifestAsset = {
         id: asset.id,
         category: CATEGORY_CONFIG[asset.category].manifestCategory,
         triangles: asset.triangles,
         files,
-      });
+      };
+      const surfaceDetail = surfaceDetailDescriptor(asset, files);
+      manifestAssets.push(
+        surfaceDetail === null ? manifestAsset : { ...manifestAsset, surfaceDetail },
+      );
     }
     manifestAssets.sort((left, right) => left.id.localeCompare(right.id, 'en'));
     await writeFile(join(stagingRoot, 'manifest.json'), canonicalManifest(manifestAssets));

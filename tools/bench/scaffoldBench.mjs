@@ -5,13 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
 
-import { assertPortAvailable, percentile } from './scaffoldBenchUtils.mjs';
+import {
+  assertPortAvailable,
+  hardwareGpuPreferenceArg,
+  percentile,
+} from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 4174;
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
+const FORCE_LOW_POWER_GPU = process.argv.includes('--force-low-power-gpu');
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const VITE_BIN_PATH = fileURLToPath(
@@ -211,7 +216,12 @@ async function collectBenchmark(pageUrl) {
     args: [
       '--enable-precise-memory-info',
       ...(REQUIRE_HARDWARE_GPU
-        ? ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=default']
+        ? [
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+            '--use-angle=default',
+            hardwareGpuPreferenceArg(FORCE_LOW_POWER_GPU),
+          ]
         : []),
     ],
   });

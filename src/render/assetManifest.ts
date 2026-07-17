@@ -6,10 +6,18 @@ export interface RuntimeAssetEntry {
   readonly category: RuntimeAssetCategory;
   readonly triangles: number;
   readonly files: readonly string[];
+  readonly surfaceDetail?: RuntimeSurfaceDetail;
+}
+
+export interface RuntimeSurfaceDetail {
+  readonly albedo: string;
+  readonly normal: string;
+  readonly tilesPerEquator: number;
+  readonly seed: number;
 }
 
 export interface RuntimeAssetManifest {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly assets: readonly RuntimeAssetEntry[];
 }
 
@@ -39,9 +47,37 @@ function isSafeRuntimePath(path: string): boolean {
   );
 }
 
+function parseSurfaceDetail(
+  value: unknown,
+  files: readonly string[],
+  index: number,
+): RuntimeSurfaceDetail {
+  if (!isRecord(value)) {
+    throw new Error(`asset manifest entry ${index} surface detail must be an object`);
+  }
+  const { albedo, normal, seed, tilesPerEquator } = value;
+  if (typeof albedo !== 'string' || !isSafeRuntimePath(albedo) || !files.includes(albedo)) {
+    throw new Error(`asset manifest entry ${index} surface detail has invalid albedo path`);
+  }
+  if (typeof normal !== 'string' || !isSafeRuntimePath(normal) || !files.includes(normal)) {
+    throw new Error(`asset manifest entry ${index} surface detail has invalid normal path`);
+  }
+  if (
+    typeof tilesPerEquator !== 'number' ||
+    !Number.isFinite(tilesPerEquator) ||
+    tilesPerEquator <= 0
+  ) {
+    throw new Error(`asset manifest entry ${index} surface detail has invalid tile scale`);
+  }
+  if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
+    throw new Error(`asset manifest entry ${index} surface detail has invalid seed`);
+  }
+  return { albedo, normal, tilesPerEquator, seed };
+}
+
 function parseEntry(value: unknown, index: number): RuntimeAssetEntry {
   if (!isRecord(value)) throw new Error(`asset manifest entry ${index} must be an object`);
-  const { category, files, id, triangles } = value;
+  const { category, files, id, surfaceDetail, triangles } = value;
   if (typeof id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) {
     throw new Error(`asset manifest entry ${index} has invalid id`);
   }
@@ -65,17 +101,21 @@ function parseEntry(value: unknown, index: number): RuntimeAssetEntry {
   if (new Set(typedFiles).size !== typedFiles.length) {
     throw new Error(`asset manifest entry ${index} contains duplicate files`);
   }
-  return {
+  const parsed: RuntimeAssetEntry = {
     id,
     category: category as RuntimeAssetCategory,
     triangles: triangles as number,
     files: typedFiles,
   };
+  if (surfaceDetail !== undefined) {
+    return { ...parsed, surfaceDetail: parseSurfaceDetail(surfaceDetail, typedFiles, index) };
+  }
+  return parsed;
 }
 
 export function parseAssetManifest(value: unknown): RuntimeAssetManifest {
-  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.assets)) {
-    throw new Error('asset manifest must use schema version 1 with an assets list');
+  if (!isRecord(value) || value.schemaVersion !== 2 || !Array.isArray(value.assets)) {
+    throw new Error('asset manifest must use schema version 2 with an assets list');
   }
   const assets = value.assets.map((entry, index) => parseEntry(entry, index));
   const ids = new Set<string>();
@@ -83,7 +123,7 @@ export function parseAssetManifest(value: unknown): RuntimeAssetManifest {
     if (ids.has(asset.id)) throw new Error(`asset manifest contains duplicate id "${asset.id}"`);
     ids.add(asset.id);
   }
-  return { schemaVersion: 1, assets };
+  return { schemaVersion: 2, assets };
 }
 
 export async function loadAssetManifest(

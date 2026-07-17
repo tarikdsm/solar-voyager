@@ -50,6 +50,9 @@ jobs:
       - name: Lighting and post-processing regression
         run: npm run test:lighting-post
 
+      - name: Surface detail regression
+        run: npm run test:surface-detail
+
       - name: Camera controls regression
         run: npm run test:camera-controls
 

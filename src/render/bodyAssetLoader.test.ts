@@ -4,12 +4,17 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  RepeatWrapping,
   Texture,
   type WebGLRenderer,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { RuntimeAssetEntry, RuntimeAssetManifest } from './assetManifest.js';
+import type {
+  RuntimeAssetEntry,
+  RuntimeAssetManifest,
+  RuntimeSurfaceDetail,
+} from './assetManifest.js';
 import {
   BodyAssetLoader,
   type BodyAssetBackend,
@@ -20,15 +25,20 @@ function entry(
   id: string,
   category: RuntimeAssetEntry['category'],
   files: string[],
+  surfaceDetail?: RuntimeSurfaceDetail,
 ): RuntimeAssetEntry {
-  return { id, category, triangles: 1, files };
+  return surfaceDetail === undefined
+    ? { id, category, triangles: 1, files }
+    : { id, category, triangles: 1, files, surfaceDetail };
 }
 
 function manifest(...assets: RuntimeAssetEntry[]): RuntimeAssetManifest {
-  return { schemaVersion: 1, assets };
+  return { schemaVersion: 2, assets };
 }
 
-const renderer = {} as WebGLRenderer;
+const renderer = {
+  capabilities: { getMaxAnisotropy: () => 16 },
+} as unknown as WebGLRenderer;
 
 describe('BodyAssetLoader', () => {
   it('returns one cached promise per sphere URL', async () => {
@@ -109,10 +119,98 @@ describe('BodyAssetLoader', () => {
     const second = loader.loadModel('earth');
 
     expect(first).toBe(second);
-    await expect(first).resolves.toEqual({ root, materials: [shared, secondary] });
+    await expect(first).resolves.toEqual({
+      root,
+      materials: [shared, secondary],
+      surfaceDetail: null,
+    });
     expect(loadModel).toHaveBeenCalledOnce();
     expect(loadModel).toHaveBeenCalledWith('/assets/models/earth.glb');
     root.traverse((object) => expect(object.matrixAutoUpdate).toBe(false));
+  });
+
+  it('loads and configures one cached optional surface-detail pair with the model', async () => {
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), new MeshStandardMaterial()));
+    const albedo = new Texture();
+    const normal = new Texture();
+    const loadTexture = vi.fn(async (url: string) => (url.includes('albedo') ? albedo : normal));
+    const loadModel = vi.fn(async () => root);
+    const detail: RuntimeSurfaceDetail = {
+      albedo: 'textures/earth_detail_albedo.ktx2',
+      normal: 'textures/earth_detail_normal.ktx2',
+      tilesPerEquator: 512,
+      seed: 399,
+    };
+    const loader = new BodyAssetLoader(
+      renderer,
+      manifest(
+        entry('earth', 'planet', ['models/earth.glb', detail.albedo, detail.normal], detail),
+      ),
+      async () => ({ loadTexture, loadModel }),
+      '/game/',
+    );
+
+    const first = loader.loadModel('earth');
+    const second = loader.loadModel('earth');
+    expect(first).toBe(second);
+    const result = await first;
+
+    expect(result?.surfaceDetail).toEqual({ albedo, normal, tilesPerEquator: 512, seed: 399 });
+    expect(loadModel).toHaveBeenCalledOnce();
+    expect(loadTexture).toHaveBeenCalledTimes(2);
+    expect(loadTexture).toHaveBeenNthCalledWith(
+      1,
+      '/game/assets/textures/earth_detail_albedo.ktx2',
+    );
+    expect(loadTexture).toHaveBeenNthCalledWith(
+      2,
+      '/game/assets/textures/earth_detail_normal.ktx2',
+    );
+    expect(albedo.wrapS).toBe(RepeatWrapping);
+    expect(albedo.wrapT).toBe(RepeatWrapping);
+    expect(normal.wrapS).toBe(RepeatWrapping);
+    expect(normal.wrapT).toBe(RepeatWrapping);
+    expect(albedo.anisotropy).toBe(4);
+    expect(normal.anisotropy).toBe(4);
+  });
+
+  it('keeps a loaded model when its optional detail pair fails and never retries', async () => {
+    const root = new Group();
+    const loadTexture = vi.fn(async (url: string) => {
+      if (url.includes('normal')) throw new Error('detail decode failed');
+      return new Texture();
+    });
+    const loadModel = vi.fn(async () => root);
+    const reportError = vi.fn();
+    const detail: RuntimeSurfaceDetail = {
+      albedo: 'textures/moon_detail_albedo.ktx2',
+      normal: 'textures/moon_detail_normal.ktx2',
+      tilesPerEquator: 256,
+      seed: 301,
+    };
+    const loader = new BodyAssetLoader(
+      renderer,
+      manifest(entry('moon', 'moon', ['models/moon.glb', detail.albedo, detail.normal], detail)),
+      async () => ({ loadTexture, loadModel }),
+      '/',
+      reportError,
+    );
+
+    await expect(loader.loadModel('moon')).resolves.toEqual({
+      root,
+      materials: [],
+      surfaceDetail: null,
+    });
+    await expect(loader.loadModel('moon')).resolves.toEqual({
+      root,
+      materials: [],
+      surfaceDetail: null,
+    });
+    expect(loadModel).toHaveBeenCalledOnce();
+    expect(loadTexture).toHaveBeenCalledTimes(2);
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportError.mock.calls[0]?.[0]).toContain('surface detail');
   });
 
   it('returns cached null without initializing loaders for absent or mismatched tiers', async () => {
