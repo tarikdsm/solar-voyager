@@ -48,6 +48,23 @@ function validateCount(label, measured, expected, toleranceFraction, findings) {
   }
 }
 
+function compareTimingMetrics(first, second, label, limit, findings) {
+  for (const metric of ['medianMs', 'p75Ms', 'p99Ms']) {
+    const left = first[metric];
+    const right = second[metric];
+    if (!validNonnegativeNumber(left) || !validNonnegativeNumber(right)) {
+      findings.push(`${label} ${metric} values must be finite and nonnegative.`);
+      continue;
+    }
+    const difference = symmetricRelativeDifference(left, right);
+    if (difference >= limit) {
+      findings.push(
+        `${label} ${metric} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
+      );
+    }
+  }
+}
+
 export function validateWorkload(measured, golden) {
   const findings = [];
   if (
@@ -132,19 +149,37 @@ export function compareBenchmarkRuns(first, second, limit = DEFAULT_STABILITY_LI
     return ['Benchmark stability limit is malformed.'];
   }
   const findings = [];
-  for (const metric of ['medianMs', 'p75Ms', 'p99Ms']) {
-    const left = first[metric];
-    const right = second[metric];
-    if (!validNonnegativeNumber(left) || !validNonnegativeNumber(right)) {
-      findings.push(`Benchmark ${metric} values must be finite and nonnegative.`);
-      continue;
+  const firstHasLegs = Array.isArray(first.legs);
+  const secondHasLegs = Array.isArray(second.legs);
+  if (firstHasLegs || secondHasLegs) {
+    if (!firstHasLegs || !secondHasLegs) {
+      findings.push('Benchmark leg summaries must be present in both runs.');
+    } else {
+      if (first.legs.length !== second.legs.length) {
+        findings.push(
+          `Benchmark leg counts differ: ${formatInteger(first.legs.length)} versus ${formatInteger(second.legs.length)}.`,
+        );
+      }
+      const comparedLegs = Math.min(first.legs.length, second.legs.length);
+      for (let index = 0; index < comparedLegs; index += 1) {
+        const firstLeg = first.legs[index];
+        const secondLeg = second.legs[index];
+        if (firstLeg.id !== secondLeg.id) {
+          findings.push(
+            `Benchmark leg identities differ at index ${String(index)}: "${String(firstLeg.id)}" versus "${String(secondLeg.id)}".`,
+          );
+        }
+        compareTimingMetrics(
+          firstLeg,
+          secondLeg,
+          `Benchmark leg "${String(firstLeg.id)}"`,
+          limit,
+          findings,
+        );
+      }
     }
-    const difference = symmetricRelativeDifference(left, right);
-    if (difference >= limit) {
-      findings.push(
-        `Benchmark ${metric} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
-      );
-    }
+  } else {
+    compareTimingMetrics(first, second, 'Benchmark', limit, findings);
   }
   if (first.maxDrawCalls !== second.maxDrawCalls) {
     findings.push(

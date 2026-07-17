@@ -112,6 +112,49 @@ describe('compareBenchmarkRuns', () => {
       'Benchmark triangle counts differ: 65,094 versus 65,095.',
     ]);
   });
+
+  it('compares each scripted-flight leg instead of the mixed aggregate distribution', () => {
+    expect(
+      compareBenchmarkRuns(
+        {
+          ...first,
+          p99Ms: 133.3,
+          legs: [
+            { id: 'leo', medianMs: 100, p75Ms: 116.6, p99Ms: 133.3 },
+            { id: 'moon-flyby', medianMs: 16.7, p75Ms: 16.7, p99Ms: 33.565 },
+            { id: 'jupiter-approach', medianMs: 16.7, p75Ms: 16.7, p99Ms: 16.8 },
+          ],
+        },
+        {
+          ...first,
+          p99Ms: 116.965,
+          legs: [
+            { id: 'leo', medianMs: 100, p75Ms: 116.6, p99Ms: 133.4 },
+            { id: 'moon-flyby', medianMs: 16.7, p75Ms: 16.7, p99Ms: 33.566 },
+            { id: 'jupiter-approach', medianMs: 16.7, p75Ms: 16.7, p99Ms: 16.8 },
+          ],
+        },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects unstable scripted-flight legs and mismatched leg identities', () => {
+    expect(
+      compareBenchmarkRuns(
+        {
+          ...first,
+          legs: [{ id: 'leo', medianMs: 10, p75Ms: 12, p99Ms: 16 }],
+        },
+        {
+          ...first,
+          legs: [{ id: 'moon-flyby', medianMs: 11, p75Ms: 12, p99Ms: 16 }],
+        },
+      ),
+    ).toEqual([
+      'Benchmark leg identities differ at index 0: "leo" versus "moon-flyby".',
+      'Benchmark leg "leo" medianMs variance must be < 5.0%; measured 9.52%.',
+    ]);
+  });
 });
 
 describe('parsePerformanceGolden', () => {

@@ -20,8 +20,8 @@ const PORT = 4177;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const WARMUP_FRAMES = 120;
-const STEADY_HEAP_SETTLE_FRAMES = 300;
-const STEADY_HEAP_MEASURE_FRAMES = 300;
+const STEADY_HEAP_SETTLE_FRAMES = 1_800;
+const STEADY_HEAP_MEASURE_FRAMES = 1_800;
 const DEFAULT_SAMPLE_FRAMES = 1_800;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
 
