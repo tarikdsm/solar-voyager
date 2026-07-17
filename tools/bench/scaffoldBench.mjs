@@ -211,7 +211,12 @@ async function collectBenchmark(pageUrl) {
     args: [
       '--enable-precise-memory-info',
       ...(REQUIRE_HARDWARE_GPU
-        ? ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=default']
+        ? [
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+            '--use-angle=default',
+            '--force_high_performance_gpu',
+          ]
         : []),
     ],
   });
