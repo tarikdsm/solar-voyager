@@ -25,13 +25,14 @@ export interface AppProps {
 interface ReadoutValueProps {
   readonly label: string;
   readonly value: HudDisplaySignals[keyof HudDisplaySignals];
+  readonly valueId?: string;
 }
 
-function ReadoutValue({ label, value }: ReadoutValueProps) {
+function ReadoutValue({ label, value, valueId }: ReadoutValueProps) {
   return (
     <div class="hud-readout-row">
       <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dd id={valueId}>{value}</dd>
     </div>
   );
 }
@@ -143,6 +144,13 @@ export function EnergyPanel({ hud }: { readonly hud: HudDisplaySignals }) {
         <ReadoutValue label="Proper Δv" value={hud.properDeltaV} />
         <ReadoutValue label="ΔE kinetic" value={hud.kineticEnergyChange} />
       </dl>
+      <div class="burn-summary" aria-labelledby="burn-summary-title">
+        <h3 id="burn-summary-title">{hud.burnSummaryLabel}</h3>
+        <dl>
+          <ReadoutValue label="Energy" value={hud.burnEnergy} valueId="burn-energy" />
+          <ReadoutValue label="Proper Δv" value={hud.burnProperDeltaV} valueId="burn-delta-v" />
+        </dl>
+      </div>
     </section>
   );
 }

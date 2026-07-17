@@ -110,7 +110,9 @@ describe('HUD signal store', () => {
     expect(store.signals.warpClampReason.value).toBe(WarpClampReason.INTEGRATION_BUDGET);
     expect(store.display.requestedWarp.value).toBe('1,000×');
     expect(store.display.effectiveWarp.value).toBe('100×');
-    expect(store.display.warpClamp.value).toBe('Gravity well · 100× sustainable');
+    expect(store.display.warpClamp.value).toBe(
+      'Gravity well · integration budget · 100× sustainable',
+    );
   });
 
   it('uses the shared energy formatters and exposes secondary ledger values', () => {
@@ -129,6 +131,42 @@ describe('HUD signal store', () => {
     expect(store.display.powerDraw.value).toBe('3.21 TW');
     expect(store.display.properDeltaV.value).toBe('1.23 km/s');
     expect(store.display.kineticEnergyChange.value).toBe('-678 GJ');
+  });
+
+  it('shows the active or latest burn separately from session totals', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    store.publish(snapshot, 0);
+
+    expect(store.display.burnSummaryLabel.value).toBe('No burns yet');
+    expect(store.display.burnEnergy.value).toBe('—');
+    expect(store.display.burnProperDeltaV.value).toBe('—');
+
+    snapshot.burnSummaryAvailable = true;
+    snapshot.burnSummaryActive = true;
+    snapshot.burnEnergySpentJ = 3_600_000;
+    snapshot.burnProperDeltaVMS = 12.3;
+    store.publish(snapshot, 100);
+
+    expect(store.display.burnSummaryLabel.value).toBe('Active burn');
+    expect(store.display.burnEnergy.value).toBe('1.00 kWh');
+    expect(store.display.burnProperDeltaV.value).toBe('12.3 m/s');
+
+    snapshot.burnSummaryActive = false;
+    store.publish(snapshot, 200);
+    expect(store.display.burnSummaryLabel.value).toBe('Last burn');
+  });
+
+  it('promotes signed kinetic-energy values at rounded SI-prefix boundaries', () => {
+    const snapshot = populatedSnapshot();
+    const store = createHudSignalStore();
+    snapshot.kineticEnergyChangeJ = 999.5;
+    store.publish(snapshot, 0);
+    expect(store.display.kineticEnergyChange.value).toBe('1.00 kJ');
+
+    snapshot.kineticEnergyChangeJ = -999.5;
+    store.publish(snapshot, 100);
+    expect(store.display.kineticEnergyChange.value).toBe('-1.00 kJ');
   });
 
   it('derives selected-target distance and relative speed directly from snapshot arrays', () => {

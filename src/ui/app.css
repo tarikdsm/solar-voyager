@@ -217,7 +217,7 @@
 
 .energy-panel {
   bottom: 6.5rem;
-  height: 10.5rem;
+  height: 17rem;
 }
 
 .energy-panel header,
@@ -237,6 +237,29 @@
 .energy-panel dl,
 .target-panel dl {
   margin: 0.45rem 0 0;
+}
+
+.burn-summary {
+  padding-top: 0.45rem;
+  margin-top: 0.45rem;
+  border-top: 1px solid rgb(125 211 252 / 14%);
+}
+
+.burn-summary h3 {
+  margin: 0;
+  color: rgb(186 230 253 / 72%);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.burn-summary dl {
+  margin-top: 0.2rem;
+}
+
+.burn-summary .hud-readout-row {
+  min-height: 1.75rem;
 }
 
 .target-panel {
@@ -344,13 +367,14 @@
   background: rgb(254 243 199 / 22%);
 }
 
-@media (width <= 720px) {
+@media (width <= 900px), (height <= 700px) {
   .app-overlay {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
     padding: 0.75rem;
     overflow-y: auto;
+    pointer-events: auto;
   }
 
   .hud-panel,
@@ -386,7 +410,7 @@
 
   .energy-panel {
     order: 5;
-    height: 10.5rem;
+    height: 17rem;
   }
 
   .camera-help {

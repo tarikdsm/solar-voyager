@@ -6,6 +6,7 @@ import { createServer } from 'vite';
 const HOST = '127.0.0.1';
 const PORT = 4180;
 const PAGE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/hudSignals.html`;
+const WARP_VALUES = [1, 5, 10, 50, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 
 const server = await createServer({
   root: process.cwd(),
@@ -29,6 +30,7 @@ try {
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => globalThis.__hudSignalsHarness !== undefined);
   const before = await page.evaluate(() => globalThis.__hudSignalsHarness.snapshot());
+  const clamped = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClamp());
   const after = await page.evaluate(() => globalThis.__hudSignalsHarness.updateClock());
   await page.getByRole('button', { name: '100×', exact: true }).click();
   await page.locator('#target-selector').selectOption('mars');
@@ -42,6 +44,14 @@ try {
     targetPanel: 1,
     warpControl: 1,
   });
+  assert.equal(before.burnSummaryLabel, 'Active burn');
+  assert.equal(before.burnEnergy, '1.00 kWh');
+  assert.equal(before.burnProperDeltaV, '12.3 m/s');
+  assert.deepEqual(clamped.counts, before.counts, 'same-frame clamp rerendered a HUD component');
+  assert.equal(
+    clamped.warpClampStatus,
+    'Gravity well · integration budget · 100× sustainable',
+  );
   assert.deepEqual(after.counts, before.counts, 'signal text update rerendered a HUD component');
   assert.deepEqual(
     afterCommands.counts,
@@ -79,6 +89,59 @@ try {
   assert.deepEqual(mobileMetrics.clippedPanelIds, []);
   assert.ok(mobileMetrics.scrollHeight > mobileMetrics.clientHeight, 'mobile HUD does not scroll');
   assert.ok(mobileMetrics.scrollWidth <= mobileMetrics.clientWidth, 'mobile HUD scrolls horizontally');
+  await page.evaluate(() => {
+    const overlay = globalThis.document.querySelector('.app-overlay');
+    if (!(overlay instanceof globalThis.HTMLElement)) throw new Error('app overlay is missing');
+    overlay.scrollTop = 0;
+  });
+  await page.locator('#orbit-readout').hover();
+  await page.mouse.wheel(0, 300);
+  await page.waitForFunction(() => {
+    const overlay = globalThis.document.querySelector('.app-overlay');
+    return overlay instanceof globalThis.HTMLElement && overlay.scrollTop > 0;
+  });
+
+  for (const width of [721, 800, 850]) {
+    await page.setViewportSize({ width, height: 720 });
+    const collisions = await page.evaluate(() => {
+      const overlay = globalThis.document.querySelector('.app-overlay');
+      if (!(overlay instanceof globalThis.HTMLElement)) throw new Error('app overlay is missing');
+      overlay.scrollTop = 0;
+      const panels = [...globalThis.document.querySelectorAll('.hud-panel')];
+      const overlaps = [];
+      for (let leftIndex = 0; leftIndex < panels.length; leftIndex += 1) {
+        const left = panels[leftIndex];
+        if (!(left instanceof globalThis.HTMLElement)) continue;
+        const leftRect = left.getBoundingClientRect();
+        for (let rightIndex = leftIndex + 1; rightIndex < panels.length; rightIndex += 1) {
+          const right = panels[rightIndex];
+          if (!(right instanceof globalThis.HTMLElement)) continue;
+          const rightRect = right.getBoundingClientRect();
+          const overlapWidth = Math.max(
+            0,
+            Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left),
+          );
+          const overlapHeight = Math.max(
+            0,
+            Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top),
+          );
+          if (overlapWidth * overlapHeight > 0) overlaps.push(`${left.id}/${right.id}`);
+        }
+      }
+      return overlaps;
+    });
+    assert.deepEqual(collisions, [], `${width}px HUD panels overlap`);
+
+    const warpButtons = page.locator('#warp-control button');
+    assert.equal(await warpButtons.count(), WARP_VALUES.length);
+    for (const [index, warp] of WARP_VALUES.entries()) {
+      await warpButtons.nth(index).click();
+      const commandedWarp = await page.evaluate(
+        () => globalThis.__hudSignalsHarness.snapshot().commandedWarp,
+      );
+      assert.equal(commandedWarp, warp, `${width}px warp button ${warp} is not clickable`);
+    }
+  }
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
   process.stdout.write(`${JSON.stringify({ before, after, afterCommands }, null, 2)}\n`);

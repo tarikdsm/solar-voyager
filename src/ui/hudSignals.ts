@@ -37,6 +37,10 @@ export interface HudSignals {
   readonly powerDrawW: Signal<number>;
   readonly properDeltaVMS: Signal<number>;
   readonly kineticEnergyChangeJ: Signal<number>;
+  readonly burnSummaryAvailable: Signal<boolean>;
+  readonly burnSummaryActive: Signal<boolean>;
+  readonly burnEnergySpentJ: Signal<number>;
+  readonly burnProperDeltaVMS: Signal<number>;
   readonly targetBodyId: Signal<string | null>;
   readonly targetDistanceKm: Signal<number>;
   readonly targetRelativeSpeedKmS: Signal<number>;
@@ -59,6 +63,9 @@ export interface HudDisplaySignals {
   readonly powerDraw: ReadonlySignal<string>;
   readonly properDeltaV: ReadonlySignal<string>;
   readonly kineticEnergyChange: ReadonlySignal<string>;
+  readonly burnSummaryLabel: ReadonlySignal<string>;
+  readonly burnEnergy: ReadonlySignal<string>;
+  readonly burnProperDeltaV: ReadonlySignal<string>;
   readonly targetBody: ReadonlySignal<string>;
   readonly targetDistance: ReadonlySignal<string>;
   readonly targetRelativeSpeed: ReadonlySignal<string>;
@@ -97,11 +104,15 @@ function formatProperDeltaV(valueMS: number): string {
 function formatSignedEnergyJ(valueJ: number): string {
   if (!Number.isFinite(valueJ)) return '—';
   const absoluteJ = Math.abs(valueJ);
-  const prefixIndex =
+  let prefixIndex =
     absoluteJ === 0
       ? 0
       : Math.min(SIGNED_SI_PREFIXES.length - 1, Math.max(0, Math.floor(Math.log10(absoluteJ) / 3)));
-  const scaled = valueJ / 1_000 ** prefixIndex;
+  let scaled = valueJ / 1_000 ** prefixIndex;
+  if (Math.abs(scaled) >= 999.5 && prefixIndex < SIGNED_SI_PREFIXES.length - 1) {
+    prefixIndex += 1;
+    scaled /= 1_000;
+  }
   const rounded = Number(scaled.toPrecision(3));
   const absoluteRounded = Math.abs(rounded);
   const integerDigits = absoluteRounded < 1 ? 1 : Math.floor(Math.log10(absoluteRounded)) + 1;
@@ -166,6 +177,10 @@ function createSignals(): HudSignals {
     powerDrawW: signal(0),
     properDeltaVMS: signal(0),
     kineticEnergyChangeJ: signal(0),
+    burnSummaryAvailable: signal(false),
+    burnSummaryActive: signal(false),
+    burnEnergySpentJ: signal(0),
+    burnProperDeltaVMS: signal(0),
     targetBodyId: signal<string | null>(null),
     targetDistanceKm: signal(Number.NaN),
     targetRelativeSpeedKmS: signal(Number.NaN),
@@ -179,7 +194,7 @@ function createDisplaySignals(signals: HudSignals): HudDisplaySignals {
     warpClamp: computed(() => {
       switch (signals.warpClampReason.value) {
         case WarpClampReason.INTEGRATION_BUDGET:
-          return `Gravity well · ${formatWarp(signals.effectiveWarp.value)} sustainable`;
+          return `Gravity well · integration budget · ${formatWarp(signals.effectiveWarp.value)} sustainable`;
         case WarpClampReason.THRUST_LOCKOUT:
           return 'Coast only · thrust locked above 1,000×';
         default:
@@ -215,6 +230,18 @@ function createDisplaySignals(signals: HudSignals): HudDisplaySignals {
     powerDraw: computed(() => formatPowerW(signals.powerDrawW.value)),
     properDeltaV: computed(() => formatProperDeltaV(signals.properDeltaVMS.value)),
     kineticEnergyChange: computed(() => formatSignedEnergyJ(signals.kineticEnergyChangeJ.value)),
+    burnSummaryLabel: computed(() => {
+      if (!signals.burnSummaryAvailable.value) return 'No burns yet';
+      return signals.burnSummaryActive.value ? 'Active burn' : 'Last burn';
+    }),
+    burnEnergy: computed(() =>
+      signals.burnSummaryAvailable.value ? formatEnergyWh(signals.burnEnergySpentJ.value) : '—',
+    ),
+    burnProperDeltaV: computed(() =>
+      signals.burnSummaryAvailable.value
+        ? formatProperDeltaV(signals.burnProperDeltaVMS.value)
+        : '—',
+    ),
     targetBody: computed(() => titleCaseBodyId(signals.targetBodyId.value)),
     targetDistance: computed(() => formatOrbitDistanceKm(signals.targetDistanceKm.value)),
     targetRelativeSpeed: computed(() =>
@@ -273,6 +300,10 @@ class SampledHudSignalStore implements HudSignalStore {
     this.signals.powerDrawW.value = snapshot.powerDrawW;
     this.signals.properDeltaVMS.value = snapshot.properDeltaVMS;
     this.signals.kineticEnergyChangeJ.value = snapshot.kineticEnergyChangeJ;
+    this.signals.burnSummaryAvailable.value = snapshot.burnSummaryAvailable;
+    this.signals.burnSummaryActive.value = snapshot.burnSummaryActive;
+    this.signals.burnEnergySpentJ.value = snapshot.burnEnergySpentJ;
+    this.signals.burnProperDeltaVMS.value = snapshot.burnProperDeltaVMS;
     const targetBodyIndex = snapshot.targetBodyIndex;
     if (targetBodyIndex < 0 || targetBodyIndex >= snapshot.bodyIds.length) {
       this.signals.targetBodyId.value = null;

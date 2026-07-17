@@ -2,7 +2,11 @@ import { options, render, type VNode } from 'preact';
 
 import '../../src/style.css';
 import type { WarpFactor } from '../../src/core/time.js';
-import { createSimulationSnapshotBuffer, type Commands } from '../../src/sim/simulationSnapshot.js';
+import {
+  createSimulationSnapshotBuffer,
+  type Commands,
+  WarpClampReason,
+} from '../../src/sim/simulationSnapshot.js';
 import {
   App,
   DualClock,
@@ -25,14 +29,19 @@ interface RenderCounts {
 interface HudSignalsHarness {
   commitCommands(): Promise<HudSignalsHarnessSnapshot>;
   snapshot(): HudSignalsHarnessSnapshot;
+  updateClamp(): Promise<HudSignalsHarnessSnapshot>;
   updateClock(): Promise<HudSignalsHarnessSnapshot>;
 }
 
 interface HudSignalsHarnessSnapshot {
+  readonly burnEnergy: string;
+  readonly burnProperDeltaV: string;
+  readonly burnSummaryLabel: string;
   readonly commandedTarget: string | null;
   readonly commandedWarp: WarpFactor;
   readonly coordinateClock: string;
   readonly counts: RenderCounts;
+  readonly warpClampStatus: string;
 }
 
 declare global {
@@ -54,6 +63,10 @@ snapshot.osculatingElements.inclinationRad = 0;
 snapshot.osculatingElements.periodSec = 5_553.6;
 snapshot.utcTimeMs = Date.UTC(2026, 0, 1);
 snapshot.shipProperTimeSec = 0;
+snapshot.burnSummaryAvailable = true;
+snapshot.burnSummaryActive = true;
+snapshot.burnEnergySpentJ = 3_600_000;
+snapshot.burnProperDeltaVMS = 12.3;
 
 const store = createHudSignalStore();
 store.publish(snapshot, 0);
@@ -112,10 +125,14 @@ function copyCounts(): RenderCounts {
 
 function readHarnessSnapshot() {
   return {
+    burnEnergy: document.querySelector('#burn-energy')?.textContent ?? '',
+    burnProperDeltaV: document.querySelector('#burn-delta-v')?.textContent ?? '',
+    burnSummaryLabel: document.querySelector('#burn-summary-title')?.textContent ?? '',
     commandedTarget,
     commandedWarp,
     counts: copyCounts(),
     coordinateClock: document.querySelector('#coordinate-clock')?.textContent ?? '',
+    warpClampStatus: document.querySelector('#warp-clamp-status')?.textContent ?? '',
   };
 }
 
@@ -129,6 +146,7 @@ window.__hudSignalsHarness = {
   commitCommands: async () => {
     snapshot.requestedWarp = commandedWarp;
     snapshot.effectiveWarp = commandedWarp;
+    snapshot.warpClampReason = WarpClampReason.NONE;
     snapshot.targetBodyId = commandedTarget;
     snapshot.targetBodyIndex =
       commandedTarget === null ? -1 : snapshot.bodyIds.indexOf(commandedTarget);
@@ -137,6 +155,14 @@ window.__hudSignalsHarness = {
     return readHarnessSnapshot();
   },
   snapshot: readHarnessSnapshot,
+  updateClamp: async () => {
+    snapshot.requestedWarp = 1_000;
+    snapshot.effectiveWarp = 100;
+    snapshot.warpClampReason = WarpClampReason.INTEGRATION_BUDGET;
+    store.publish(snapshot, 16);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
   updateClock: async () => {
     snapshot.utcTimeMs += 1_000;
     store.publish(snapshot, 100);
