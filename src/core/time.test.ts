@@ -7,6 +7,7 @@ import {
   createSimClock,
   formatTdbSecondsAsUtc,
   tdbSecondsToUtcDate,
+  tdbSecondsToUtcTimeMs,
   utcDateToTdbSeconds,
   type WarpClampState,
 } from './time.js';
@@ -29,6 +30,11 @@ describe('SimClock — physics-spec.md §1 / §3.2', () => {
   it('formats with an explicit UTC suffix independent of local timezone', () => {
     expect(formatTdbSecondsAsUtc(0)).toBe('2026-01-01 00:00:00.000 UTC');
     expect(formatTdbSecondsAsUtc(3_600)).toBe('2026-01-01 01:00:00.000 UTC');
+  });
+
+  it('maps TDB seconds to allocation-free UTC display milliseconds', () => {
+    expect(tdbSecondsToUtcTimeMs(0)).toBe(Date.UTC(2026, 0, 1));
+    expect(tdbSecondsToUtcTimeMs(12.5)).toBe(Date.UTC(2026, 0, 1) + 12_500);
   });
 
   it('advances caller-owned float64 state using the selected warp', () => {
