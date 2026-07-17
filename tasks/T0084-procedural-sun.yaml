@@ -1,8 +1,8 @@
 id: T0084
 title: Procedural Sun shader (granulation, limb darkening, prominences)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0084-procedural-sun
 depends_on: [T0043]
 milestone: M2
 spec: |
