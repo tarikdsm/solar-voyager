@@ -91,6 +91,22 @@ describe('SimulationCore', () => {
     expect(snapshot.energySpentJ).toBe(0);
   });
 
+  it('does not let a mutated published ship array alter private physical state', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      shipMassKg: SHIP_MASS_KG,
+    });
+    const published = core.snapshot;
+
+    published.shipState[0] = ORBIT_RADIUS_KM * 2;
+    published.shipState[4] = 0;
+    const next = core.step(0);
+
+    expect(next.shipState[0]).toBe(ORBIT_RADIUS_KM);
+    expect(next.shipState[4]).not.toBe(0);
+  });
+
   it('preserves a zero-thrust two-body orbit for ten periods within spec tolerance', () => {
     const periodSec = 2 * Math.PI * Math.sqrt(ORBIT_RADIUS_KM ** 3 / EARTH_MU_KM3_S2);
     const core = new SimulationCore({

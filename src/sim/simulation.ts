@@ -71,6 +71,7 @@ export class SimulationCore {
   private readonly shipMassKg: number;
   private readonly clock: SimClock;
   private readonly snapshots: readonly [SimulationSnapshotBuffer, SimulationSnapshotBuffer];
+  private readonly shipStates: readonly [Float64Array, Float64Array];
   private readonly snapshotRailsStates: readonly [RailsState, RailsState];
   private readonly commandState: CommandState;
   private readonly integrationTolerance: Dp54Tolerance;
@@ -103,6 +104,11 @@ export class SimulationCore {
     const firstSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     const secondSnapshot = createSimulationSnapshotBuffer(this.catalog.bodyIds);
     this.snapshots = [firstSnapshot, secondSnapshot];
+    const firstShipState = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    const secondShipState = new Float64Array(RELATIVISTIC_STATE_DIMENSION);
+    firstShipState.set(options.initialShipState);
+    secondShipState.set(options.initialShipState);
+    this.shipStates = [firstShipState, secondShipState];
     this.snapshotRailsStates = [
       createSnapshotRailsState(firstSnapshot),
       createSnapshotRailsState(secondSnapshot),
@@ -136,8 +142,8 @@ export class SimulationCore {
     };
     this.derivative = createRelativisticDerivative(gravityEvaluator, zeroProperAcceleration);
 
-    this.initializeSnapshot(firstSnapshot, this.snapshotRailsStates[0], options.initialShipState);
-    this.initializeSnapshot(secondSnapshot, this.snapshotRailsStates[1], options.initialShipState);
+    this.initializeSnapshot(firstSnapshot, this.snapshotRailsStates[0], firstShipState);
+    this.initializeSnapshot(secondSnapshot, this.snapshotRailsStates[1], secondShipState);
   }
 
   /** Latest completely published frame. */
@@ -158,11 +164,13 @@ export class SimulationCore {
     }
 
     const nextSnapshotIndex = this.currentSnapshotIndex === 0 ? 1 : 0;
-    const currentSnapshot = this.currentSnapshotIndex === 0 ? this.snapshots[0] : this.snapshots[1];
     const nextSnapshot = nextSnapshotIndex === 0 ? this.snapshots[0] : this.snapshots[1];
+    const currentShipState =
+      this.currentSnapshotIndex === 0 ? this.shipStates[0] : this.shipStates[1];
+    const nextShipState = nextSnapshotIndex === 0 ? this.shipStates[0] : this.shipStates[1];
     propagate(
-      nextSnapshot.shipState,
-      currentSnapshot.shipState,
+      nextShipState,
+      currentShipState,
       this.clock.timeSec,
       targetTimeSec,
       this.derivative,
@@ -184,7 +192,7 @@ export class SimulationCore {
     this.clock.timeSec = targetTimeSec;
     const nextRailsState =
       nextSnapshotIndex === 0 ? this.snapshotRailsStates[0] : this.snapshotRailsStates[1];
-    this.fillSnapshot(nextSnapshot, nextRailsState);
+    this.fillSnapshot(nextSnapshot, nextRailsState, nextShipState);
     this.currentSnapshotIndex = nextSnapshotIndex;
     return nextSnapshot;
   }
@@ -192,13 +200,17 @@ export class SimulationCore {
   private initializeSnapshot(
     snapshot: SimulationSnapshotBuffer,
     railsState: RailsState,
-    initialShipState: Float64Array,
+    shipState: Float64Array,
   ): void {
-    snapshot.shipState.set(initialShipState);
-    this.fillSnapshot(snapshot, railsState);
+    this.fillSnapshot(snapshot, railsState, shipState);
   }
 
-  private fillSnapshot(snapshot: SimulationSnapshotBuffer, railsState: RailsState): void {
+  private fillSnapshot(
+    snapshot: SimulationSnapshotBuffer,
+    railsState: RailsState,
+    shipState: Float64Array,
+  ): void {
+    snapshot.shipState.set(shipState);
     evaluateRailsInto(railsState, this.catalog, this.clock.timeSec, this.railsWorkspace);
     evaluateBarycenterInto(
       snapshot.barycenterPositionKm,

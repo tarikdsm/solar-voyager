@@ -21,7 +21,9 @@ path.
    owns all of its typed arrays and fixed nested records. `step()` writes the
    inactive buffer and publishes it only after successful propagation. A
    consumer may retain the published view through the next `step()` call, but
-   not indefinitely.
+   not indefinitely. Authoritative ship dynamics use separate private buffers,
+   so runtime mutation of a published typed array cannot feed back into physics;
+   TypeScript consumers still receive the readonly interface contract.
 2. Time is exposed as TDB seconds plus numeric UTC epoch milliseconds. UI code
    creates `Date` or strings only at display cadence. Warp exposes requested
    and effective factors plus a closed numeric clamp-reason code.
@@ -36,7 +38,9 @@ path.
    without changing their shape.
 5. `Commands` contains `setThrottle`, `setAttitudeMode`, `rotate`, `setWarp`,
    and `setTarget`. T0050 validates and stores intent in preallocated mutable
-   command state. Physics effects remain assigned to their existing tasks.
+   command state. Canonical warp selections drive the baseline `warp × wallDt`
+   step now; T0052 adds budget clamps and thrust lockout. Other physical effects
+   remain assigned to their existing tasks.
 6. `SimulationCore` receives a compiled catalog and initial ship state. It does
    not import JSON, DOM, Three.js, render, or UI modules. The simulation layer
    therefore remains deterministic and pure apart from mutation of explicitly

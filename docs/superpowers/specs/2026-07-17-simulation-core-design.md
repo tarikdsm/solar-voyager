@@ -39,7 +39,8 @@ allocates:
 
 1. one mutable simulation clock;
 2. two rails states embedded in the two snapshots;
-3. two ship-state buffers;
+3. two private authoritative ship-state buffers, separate from their published
+   snapshot copies;
 4. one DP54 workspace and result record;
 5. fixed gravity and derived-vector scratch arrays;
 6. one mutable command-state object exposed through a stable `Commands`
@@ -53,12 +54,13 @@ with zero proper acceleration, evaluates rails at the exact endpoint, derives
 the snapshot, and publishes it. A propagation failure throws before the buffer
 swap, preserving the last valid published snapshot.
 
-T0050 starts with warp fixed at `1`, zero throttle/thrust/power/ledger totals,
-identity attitude, no target, no warnings, and invalid osculating elements.
-Commands validate and retain requested player intent in preallocated state;
-later tasks connect those values to dynamics and derived analysis. The snapshot
-reports both requested and effective warp so T0052 can add clamps without an
-interface change.
+T0050 starts at warp `1` and applies canonical ladder selections without a
+clamp. T0052 adds substep-budget auto-clamp and thrust lockout. Throttle, thrust,
+power, and ledger totals remain zero; attitude is identity; there is no target,
+warning, or valid osculating solution by default. Commands validate and retain
+player intent in preallocated state; later tasks connect the remaining values
+to dynamics and derived analysis. The snapshot reports both requested and
+effective warp so T0052 can add clamps without an interface change.
 
 ## Barycenter and derived state
 
@@ -113,8 +115,9 @@ Vitest coverage will prove:
    expected 400 km circular Earth-relative component;
 3. a render-shaped stub consumes a snapshot without any `render` or `ui`
    import in `src/sim`;
-4. snapshots alternate between exactly two object/array identities and the
-   prior frame remains unchanged through the next step;
+4. snapshots alternate between exactly two object/array identities, the prior
+   frame remains unchanged through the next step, and mutation of a published
+   typed array cannot alter the private physical state;
 5. zero-thrust propagation preserves a circular two-body orbit within the
    production tolerance contract;
 6. invalid wall deltas and propagation failure cannot publish partial state;
@@ -127,7 +130,7 @@ gates remain mandatory before review.
 ## Non-goals
 
 T0050 does not implement photon-drive force or ledger integration (T0051 and
-T0053), warp selection/clamping (T0052), attitude dynamics (T0054-T0056),
+T0053), warp auto-clamp/lockout (T0052), attitude dynamics (T0054-T0056),
 dominant-body and osculating analysis (T0057), warnings/prediction (T0058), or
 HUD/render integration. Their storage contracts are initialized here only when
 required by `SimSnapshot`.
