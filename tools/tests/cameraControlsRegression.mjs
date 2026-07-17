@@ -114,7 +114,8 @@ try {
   });
   await productionPage.keyboard.press('j');
   await productionPage.waitForFunction(
-    () => document.querySelector('#camera-focus-label')?.textContent === 'Focus: Jupiter',
+    () =>
+      globalThis.document.querySelector('#camera-focus-label')?.textContent === 'Focus: Jupiter',
   );
   assert.deepEqual(productionErrors, []);
 
