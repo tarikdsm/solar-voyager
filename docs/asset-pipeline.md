@@ -31,6 +31,9 @@ scripts whose ids exist in the catalog; pass exactly one of `--all` or one or mo
 `--only <id>` flags. Execution order is stable by id.
 The strict exporter canonicalizes triangle order after Blender writes the GLB,
 removing process-dependent index ordering while preserving triangle winding.
+It also rounds exported texture coordinates to six decimal places, eliminating
+single-ULP variation from evaluated hard-surface modifiers while retaining far
+more precision than the runtime's 12-bit Draco texcoord quantization.
 Oblate planet builders also derive every float32 glTF normal analytically from
 the exported position and catalogued polar ratio; this avoids Blender 5.1's
 process-dependent smooth-normal calculation while preserving ellipsoid shading.
