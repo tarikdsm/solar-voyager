@@ -20,6 +20,7 @@
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
+    "test:perf-panel": "node tools/tests/perfPanelRegression.mjs",
     "test:session-settings": "node tools/tests/sessionSettingsRegression.mjs",
     "test:smoke": "node tools/tests/applicationSmoke.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",

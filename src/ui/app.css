@@ -29,10 +29,144 @@
   backdrop-filter: blur(0.55rem);
 }
 
+.perf-panel {
+  position: absolute;
+  z-index: 9;
+  top: clamp(0.75rem, 2vw, 1.5rem);
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  width: min(40rem, calc(100vw - 1.5rem));
+  height: 3rem;
+  border-radius: 0.65rem;
+  opacity: 0.62;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+.perf-panel:hover,
+.perf-panel:focus-within,
+.perf-panel-expanded {
+  opacity: 0.98;
+}
+
+.perf-panel-expanded {
+  height: 16rem;
+}
+
+.perf-panel-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, 1fr) auto auto auto;
+  gap: 0.7rem;
+  align-items: center;
+  width: 100%;
+  height: 2.9rem;
+  padding: 0.35rem 0.65rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font:
+    600 0.68rem/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.perf-panel-toggle:focus-visible {
+  outline: 1px solid rgb(125 211 252 / 75%);
+  outline-offset: -2px;
+}
+
+.perf-panel-fps {
+  min-width: 4.9rem;
+  color: #e0f2fe;
+  font-size: 0.76rem;
+}
+
+.perf-panel-sparkline {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  overflow: visible;
+}
+
+.perf-panel-resolution {
+  color: rgb(224 242 254 / 72%);
+  white-space: nowrap;
+}
+
+.perf-panel-quality {
+  padding: 0.3rem 0.42rem;
+  border: 1px solid rgb(125 211 252 / 28%);
+  border-radius: 0.3rem;
+  color: #a5f3fc;
+  white-space: nowrap;
+}
+
+.perf-panel-chevron {
+  color: rgb(186 230 253 / 58%);
+  font-size: 1rem;
+}
+
+.perf-panel-details {
+  height: 13rem;
+  padding: 0.4rem 0.75rem 0.75rem;
+  border-top: 1px solid rgb(125 211 252 / 14%);
+  overflow: auto;
+  font:
+    0.65rem/1.35 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-panel-details[hidden] {
+  display: none;
+}
+
+.perf-panel-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.2rem;
+  margin: 0;
+}
+
+.perf-detail-row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: baseline;
+  min-height: 1.55rem;
+  border-bottom: 1px solid rgb(148 163 184 / 9%);
+}
+
+.perf-detail-row dt,
+.perf-detail-row dd {
+  margin: 0;
+}
+
+.perf-detail-row dt {
+  color: rgb(186 230 253 / 54%);
+}
+
+.perf-detail-row dd {
+  overflow: hidden;
+  color: rgb(240 249 255 / 90%);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-settings {
   position: absolute;
   z-index: 8;
-  top: clamp(0.75rem, 2vw, 1.5rem);
+  top: clamp(4.25rem, 7vw, 5rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
   width: min(18rem, calc(100vw - 1.5rem));
   border: 1px solid rgb(125 211 252 / 24%);
@@ -167,7 +301,7 @@
 
 .orbit-readout {
   position: absolute;
-  top: clamp(5.25rem, 13vh, 8rem);
+  top: clamp(8rem, 19vh, 10rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
   width: min(16rem, calc(100vw - 1.5rem));
   height: 15.5rem;
@@ -666,7 +800,37 @@
   }
 
   .session-settings {
+    order: 1;
+  }
+
+  .perf-panel {
     order: 0;
+    height: 3rem;
+    opacity: 0.82;
+  }
+
+  .perf-panel-expanded {
+    height: 25rem;
+  }
+
+  .perf-panel-details {
+    height: 22rem;
+  }
+
+  .perf-panel-toggle {
+    grid-template-columns: auto minmax(5rem, 1fr) auto auto auto;
+    gap: 0.35rem;
+    padding-inline: 0.45rem;
+    font-size: 0.58rem;
+  }
+
+  .perf-panel-fps {
+    min-width: 4.25rem;
+    font-size: 0.65rem;
+  }
+
+  .perf-panel-details dl {
+    grid-template-columns: 1fr;
   }
 
   .session-settings-content {
@@ -674,38 +838,38 @@
   }
 
   .dual-clock {
-    order: 1;
+    order: 2;
     grid-template-columns: 1fr;
     height: 5.65rem;
   }
 
   .warp-control {
-    order: 2;
+    order: 3;
     height: 7.75rem;
   }
 
   .orbit-readout {
-    order: 3;
+    order: 4;
     height: 15.5rem;
   }
 
   .target-panel {
-    order: 4;
+    order: 5;
     height: 13.75rem;
   }
 
   .energy-panel {
-    order: 5;
+    order: 6;
     height: 17rem;
   }
 
   .navball {
-    order: 6;
+    order: 7;
     height: 16rem;
   }
 
   .camera-help {
-    order: 7;
+    order: 8;
   }
 
   .clock-block:last-child {

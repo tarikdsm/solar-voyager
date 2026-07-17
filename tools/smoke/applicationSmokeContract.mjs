@@ -97,6 +97,7 @@ async function runProbe(browser, fixturePath = null) {
     const hud = await page.evaluate(() => ({
       appOverlay: globalThis.document.querySelectorAll('.app-overlay').length,
       orbitReadout: globalThis.document.querySelectorAll('#orbit-readout').length,
+      perfPanel: globalThis.document.querySelectorAll('#perf-panel').length,
       sessionSettings: globalThis.document.querySelectorAll('#session-settings').length,
       simulationClocks: globalThis.document.querySelectorAll('[aria-label="Simulation clocks"]')
         .length,
@@ -105,6 +106,7 @@ async function runProbe(browser, fixturePath = null) {
     assert.deepEqual(hud, {
       appOverlay: 1,
       orbitReadout: 1,
+      perfPanel: 1,
       sessionSettings: 1,
       simulationClocks: 1,
       timeWarp: 1,

@@ -50,7 +50,7 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 
 `ui/hud/PerfPanel.tsx` + `render/telemetry.ts`. Two states:
 
-- **Compact (default):** FPS (1 s average) + a 120-frame **frame-time sparkline** (SVG polyline, budget line at 16.6 ms) + render resolution (e.g. `1920×1080 @0.85`) + quality tier badge. One quiet row, monospace numerals, low-contrast until hovered — elegant, not a debug vomit.
+- **Compact (default):** FPS (1 s average) + a 120-frame **frame-time sparkline** (reused Canvas 2D path, budget line at 16.6 ms) + render resolution (e.g. `1920×1080 @0.85`) + quality tier badge. One quiet row, monospace numerals, low-contrast until hovered — elegant, not a debug vomit.
 - **Expanded (click/hotkey `F3`):** adds 1% low FPS, sim/render/UI ms split, draw calls & triangles (`renderer.info.render`), geometries/textures/programs counts (`renderer.info.memory`), JS heap (`performance.memory` where available), GPU name + context flavor (WebGL2/reversed-depth etc.), governor state and last action.
 - Updates at 4 Hz (not 60) except the sparkline, which appends per frame into a preallocated ring buffer. The panel itself must cost < 0.2 ms/frame — a perf HUD that costs performance is a parody.
 

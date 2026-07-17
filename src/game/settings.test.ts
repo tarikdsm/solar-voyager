@@ -84,7 +84,7 @@ describe('game settings', () => {
     expect(() => parseGameSettings(duplicate)).toThrow(/already bound/u);
 
     const reserved = mutableDocument();
-    (reserved.inputBindings as Record<string, unknown>).pitchUp = 'F5';
+    (reserved.inputBindings as Record<string, unknown>).pitchUp = 'F3';
     expect(() => parseGameSettings(reserved)).toThrow(/reserved/u);
 
     const missing = mutableDocument();

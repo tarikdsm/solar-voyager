@@ -3,6 +3,7 @@ import type { WebGLRenderer } from 'three';
 import type { RendererContextReport } from './createRenderer.js';
 
 const FRAME_WINDOW_SIZE = 120;
+const FPS_TIMESTAMP_WINDOW_SIZE = 256;
 const GPU_TIME_WINDOW_SIZE = 600;
 const SNAPSHOT_INTERVAL_MS = 250;
 const GPU_QUERY_SLOT_COUNT = 4;
@@ -29,6 +30,7 @@ export interface RenderTelemetrySnapshot {
   geometries: number;
   gpuMs: number;
   lines: number;
+  oneSecondAverageFps: number;
   p75FrameMs: number;
   p99FrameMs: number;
   points: number;
@@ -47,12 +49,15 @@ export class RenderTelemetry {
   readonly snapshot: RenderTelemetrySnapshot;
 
   private readonly percentileScratchMs = new Float64Array(FRAME_WINDOW_SIZE);
+  private readonly fpsFrameTimestampsMs = new Float64Array(FPS_TIMESTAMP_WINDOW_SIZE);
   private readonly renderer: WebGLRenderer;
   private readonly context: WebGL2RenderingContext;
   private readonly timerExtension: DisjointTimerQueryExtension | null;
   private readonly gpuQueries: (WebGLQuery | null)[] = [];
   private readonly gpuQueryStates = new Uint8Array(GPU_QUERY_SLOT_COUNT);
   private frameWriteIndex = 0;
+  private fpsTimestampCount = 0;
+  private fpsTimestampWriteIndex = 0;
   private sampleCount = 0;
   private totalFrameCount = 0;
   private previousFrameTimestampMs = -1;
@@ -85,6 +90,7 @@ export class RenderTelemetry {
       geometries: 0,
       gpuMs: -1,
       lines: 0,
+      oneSecondAverageFps: 0,
       p75FrameMs: 0,
       p99FrameMs: 0,
       points: 0,
@@ -124,6 +130,9 @@ export class RenderTelemetry {
   beginFrame(frameTimestampMs: number): number {
     this.renderer.info.reset();
     this.pollGpuQueries();
+    this.fpsFrameTimestampsMs[this.fpsTimestampWriteIndex] = frameTimestampMs;
+    this.fpsTimestampWriteIndex = (this.fpsTimestampWriteIndex + 1) % FPS_TIMESTAMP_WINDOW_SIZE;
+    this.fpsTimestampCount = Math.min(FPS_TIMESTAMP_WINDOW_SIZE, this.fpsTimestampCount + 1);
     if (this.previousFrameTimestampMs < 0) {
       this.pendingFrameMs = 0;
       this.previousFrameTimestampMs = frameTimestampMs;
@@ -271,6 +280,7 @@ export class RenderTelemetry {
     this.snapshot.frameSampleCount = this.sampleCount;
     this.snapshot.geometries = memoryInfo.geometries;
     this.snapshot.lines = renderInfo.lines;
+    this.snapshot.oneSecondAverageFps = this.calculateOneSecondAverageFps();
     this.snapshot.p75FrameMs = this.percentileScratchMs[p75Index] ?? 0;
     this.snapshot.p99FrameMs = this.percentileScratchMs[p99Index] ?? 0;
     this.snapshot.points = renderInfo.points;
@@ -280,6 +290,26 @@ export class RenderTelemetry {
     this.snapshot.textures = memoryInfo.textures;
     this.snapshot.triangles = renderInfo.triangles;
     this.snapshot.uiMs = this.latestUiMs;
+  }
+
+  private calculateOneSecondAverageFps(): number {
+    if (this.fpsTimestampCount < 2) return 0;
+    const newestIndex =
+      (this.fpsTimestampWriteIndex - 1 + FPS_TIMESTAMP_WINDOW_SIZE) % FPS_TIMESTAMP_WINDOW_SIZE;
+    const newestMs = this.fpsFrameTimestampsMs[newestIndex] ?? 0;
+    const cutoffMs = newestMs - 1_000;
+    let intervalCount = 0;
+    let oldestMs = newestMs;
+    for (let age = 1; age < this.fpsTimestampCount; age += 1) {
+      const index =
+        (this.fpsTimestampWriteIndex - 1 - age + FPS_TIMESTAMP_WINDOW_SIZE) %
+        FPS_TIMESTAMP_WINDOW_SIZE;
+      oldestMs = this.fpsFrameTimestampsMs[index] ?? newestMs;
+      intervalCount = age;
+      if (oldestMs <= cutoffMs) break;
+    }
+    const elapsedMs = newestMs - oldestMs;
+    return elapsedMs > 0 ? (intervalCount * 1_000) / elapsedMs : 0;
   }
 }
 
