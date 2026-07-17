@@ -41,6 +41,11 @@ path.
    not import JSON, DOM, Three.js, render, or UI modules. The simulation layer
    therefore remains deterministic and pure apart from mutation of explicitly
    owned state.
+7. Wall-clock performance duration is not part of `SimSnapshot`. The frame
+   orchestrator measures the `step()` call and supplies that scalar to
+   `RenderTelemetry`, the existing single source of performance truth. This
+   keeps physical snapshots deterministic and avoids a clock/global dependency
+   in `src/sim`.
 
 ## Consequences
 
@@ -51,4 +56,6 @@ path.
 - Snapshot immutability is temporal rather than permanent; consumers needing
   history must copy outside the frame loop or use a purpose-built ring buffer.
 - A failed integration leaves the previously published snapshot valid.
+- Simulation timing remains available to the performance HUD without becoming
+  physical state or requiring `performance.now()` inside the pure sim layer.
 - Changing either public interface after this ADR requires a new ADR.

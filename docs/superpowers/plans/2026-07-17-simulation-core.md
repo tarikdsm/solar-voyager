@@ -74,13 +74,13 @@
 ### Task 5: Catalog integration and performance verification
 
 **Files:**
-- Modify: `src/game/createEpochState.ts`
-- Create or modify: `src/game/createEpochState.test.ts`
+- Create: `src/game/createNewGameSimulation.ts`
+- Create: `src/game/createNewGameSimulation.test.ts`
 - Create: `tools/bench/simulationCoreBench.mjs`
 - Modify: `package.json`
 
-- [ ] Write a failing game-layer test proving the committed body catalog can construct the new-game simulation inputs and first snapshot.
-- [ ] Refactor setup to share compiled catalog/LEO initialization while preserving existing camera behavior.
+- [ ] Write a failing game-layer test proving the committed body catalog can construct the new-game simulation and first snapshot.
+- [ ] Add a game-layer bootstrap that compiles JSON and creates the core without coupling pure `sim` to data or render.
 - [ ] Add a benchmark that warms the core, checks snapshot identity alternation, measures step time, and rejects retained heap growth across a fixed frame sample.
 - [ ] Run the benchmark and record the measured result in task handoff notes.
 - [ ] Run focused game and simulation tests, typecheck, lint, and build; commit the integration slice.
