@@ -82,32 +82,25 @@ uniform float uSurfaceProceduralBlend;
 uniform float uSurfaceTilesPerEquator;
 uniform float uSurfaceDetailSeed;
 
-float surfaceDetailHash( vec3 position ) {
-  return fract( sin( dot( position, vec3( 127.1, 311.7, 74.7 ) ) + uSurfaceDetailSeed ) * 43758.5453123 );
-}
-
-float surfaceDetailNoise( vec3 position ) {
-  vec3 cell = floor( position );
-  vec3 local = fract( position );
-  local = local * local * ( 3.0 - 2.0 * local );
-  float n000 = surfaceDetailHash( cell );
-  float n100 = surfaceDetailHash( cell + vec3( 1.0, 0.0, 0.0 ) );
-  float n010 = surfaceDetailHash( cell + vec3( 0.0, 1.0, 0.0 ) );
-  float n110 = surfaceDetailHash( cell + vec3( 1.0, 1.0, 0.0 ) );
-  float n001 = surfaceDetailHash( cell + vec3( 0.0, 0.0, 1.0 ) );
-  float n101 = surfaceDetailHash( cell + vec3( 1.0, 0.0, 1.0 ) );
-  float n011 = surfaceDetailHash( cell + vec3( 0.0, 1.0, 1.0 ) );
-  float n111 = surfaceDetailHash( cell + vec3( 1.0, 1.0, 1.0 ) );
-  float nx00 = mix( n000, n100, local.x );
-  float nx10 = mix( n010, n110, local.x );
-  float nx01 = mix( n001, n101, local.x );
-  float nx11 = mix( n011, n111, local.x );
-  return mix( mix( nx00, nx10, local.y ), mix( nx01, nx11, local.y ), local.z );
-}
-
-float surfaceDetailFbm( vec3 position ) {
-  return surfaceDetailNoise( position ) * 0.6666667 +
-    surfaceDetailNoise( position * 2.03 + vec3( 17.0 ) ) * 0.3333333;
+vec3 surfaceDetailFbm3( vec3 position ) {
+  vec3 seedPhase = fract( uSurfaceDetailSeed * vec3( 0.017, 0.031, 0.047 ) );
+  vec3 octaveOne = fract(
+    vec3(
+      dot( position, vec3( 0.7543, 0.5691, 0.4387 ) ),
+      dot( position, vec3( 0.4171, 0.8377, 0.6133 ) ),
+      dot( position, vec3( 0.6829, 0.3719, 0.9217 ) )
+    ) + seedPhase
+  );
+  vec3 octaveTwo = fract(
+    vec3(
+      dot( position, vec3( 1.3571, 1.1173, 0.9377 ) ),
+      dot( position, vec3( 1.0471, 1.5931, 1.2713 ) ),
+      dot( position, vec3( 1.7393, 0.8191, 1.2137 ) )
+    ) + seedPhase.yzx * 1.71 + vec3( 0.21, 0.43, 0.67 )
+  );
+  octaveOne = octaveOne * octaveOne * ( vec3( 3.0 ) - 2.0 * octaveOne );
+  octaveTwo = octaveTwo * octaveTwo * ( vec3( 3.0 ) - 2.0 * octaveTwo );
+  return octaveOne * 0.6666667 + octaveTwo * 0.3333333;
 }
 
 mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfaceUv ) {
@@ -122,6 +115,15 @@ mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfa
   float determinant = max( dot( tangent, tangent ), dot( bitangent, bitangent ) );
   float scale = determinant == 0.0 ? 0.0 : inversesqrt( determinant );
   return mat3( tangent * scale, bitangent * scale, surfaceNormal );
+}
+`;
+
+const PROCEDURAL_DETAIL = /* glsl */ `
+vec3 surfaceDetailProceduralNoise = vec3( 0.5 );
+if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
+  surfaceDetailProceduralNoise = surfaceDetailFbm3(
+    normalize( vSurfaceDetailDirection ) * 96.0
+  );
 }
 `;
 
@@ -144,28 +146,34 @@ if ( uSurfaceDetailBlend > 0.0 ) {
   vec3 surfaceDetailMicroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMicroUv ).xyz * 2.0 - 1.0;
   vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.08 + surfaceDetailMicroNormal.xy * 0.03;
   if ( uSurfaceProceduralBlend > 0.0 ) {
-    vec3 surfaceDetailNoisePosition = normalize( vSurfaceDetailDirection ) * 96.0;
-    float surfaceDetailNoiseX = surfaceDetailFbm( surfaceDetailNoisePosition ) - 0.5;
-    float surfaceDetailNoiseY = surfaceDetailFbm( surfaceDetailNoisePosition + vec3( 29.0, 11.0, 47.0 ) ) - 0.5;
-    surfaceDetailNormalXy += vec2( surfaceDetailNoiseX, surfaceDetailNoiseY ) * ( 0.12 * uSurfaceProceduralBlend );
+    surfaceDetailNormalXy += ( surfaceDetailProceduralNoise.xy - vec2( 0.5 ) ) *
+      ( 0.12 * uSurfaceProceduralBlend );
   }
   surfaceDetailNormalXy *= uSurfaceDetailBlend;
   vec3 surfaceDetailTangentNormal = normalize( vec3(
     surfaceDetailNormalXy,
     sqrt( max( 0.05, 1.0 - min( 0.95, dot( surfaceDetailNormalXy, surfaceDetailNormalXy ) ) ) )
   ) );
-  mat3 surfaceDetailFrame = surfaceDetailTangentFrame( -vViewPosition, normal, vSurfaceDetailUv );
-  normal = normalize( surfaceDetailFrame * surfaceDetailTangentNormal );
+  #ifdef USE_NORMALMAP_TANGENTSPACE
+    normal = normalize(
+      normal + tbn * vec3( surfaceDetailTangentNormal.xy, 0.0 )
+    );
+  #else
+    mat3 surfaceDetailFrame = surfaceDetailTangentFrame(
+      -vViewPosition,
+      normal,
+      vSurfaceDetailUv
+    );
+    normal = normalize( surfaceDetailFrame * surfaceDetailTangentNormal );
+  #endif
 }
 `;
 
 const ROUGHNESS_DETAIL = /* glsl */ `
 if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
-  float surfaceDetailRoughnessNoise = surfaceDetailFbm(
-    normalize( vSurfaceDetailDirection ) * 64.0 + vec3( 7.0, 19.0, 31.0 )
-  ) - 0.5;
   roughnessFactor = clamp(
-    roughnessFactor + surfaceDetailRoughnessNoise * ( 0.16 * uSurfaceProceduralBlend ),
+    roughnessFactor + ( surfaceDetailProceduralNoise.z - 0.5 ) *
+      ( 0.16 * uSurfaceProceduralBlend ),
     0.04,
     1.0
   );
@@ -245,7 +253,7 @@ export function prepareSurfaceDetail(
       )
       .replace(
         '#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>\n${ROUGHNESS_DETAIL}`,
+        `${PROCEDURAL_DETAIL}\n#include <roughnessmap_fragment>\n${ROUGHNESS_DETAIL}`,
       );
   };
   material.customProgramCacheKey = (): string => `${previousCacheKey()}|${PROGRAM_CACHE_KEY}`;

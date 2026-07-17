@@ -90,7 +90,7 @@ describe('surface detail material extension', () => {
     });
     expect(shader.fragmentShader).toContain('if ( uSurfaceDetailBlend > 0.0 )');
     expect(shader.fragmentShader).toContain('uSurfaceTilesPerEquator * 8.0');
-    expect(shader.fragmentShader).toContain('surfaceDetailFbm');
+    expect(shader.fragmentShader).toContain('surfaceDetailFbm3');
     expect(shader.fragmentShader).toContain('#include <map_fragment>');
     expect(shader.fragmentShader).toContain('#include <normal_fragment_maps>');
     expect(shader.fragmentShader).toContain('#include <roughnessmap_fragment>');
