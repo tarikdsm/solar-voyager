@@ -26,3 +26,10 @@ handoff_notes: |
   desktop and 390x844 playtests with real Earth orbit/UTC/MET values and zero console
   warnings/errors. Simulation benchmark: 0.080 ms/step, two snapshot buffers, negative
   retained heap growth. Ready for independent exact-head review.
+  First independent review of SHA 2d4d886 found Critical 0, Important 1, Minor 3.
+  Addressed all findings: committed identical browser benchmarks for pre-task main and
+  the implementation (p75/p99 unchanged at 150.0/166.6 ms, heap delta improved from
+  +1,222,220 B to +332,265 B); added a real-DOM regression proving App, OrbitReadout,
+  and DualClock each render once while the clock text updates; covered nonzero true
+  anomaly and circular-inclined publication; and removed blank document EOF lines.
+  Awaiting exact-head re-review and CI.
