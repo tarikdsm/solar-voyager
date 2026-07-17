@@ -34,7 +34,18 @@ describe('createNewGameSimulation', () => {
     const dx = (snapshot.shipState[0] as number) - (snapshot.bodyPositionsKm[offset] as number);
     const dy = (snapshot.shipState[1] as number) - (snapshot.bodyPositionsKm[offset + 1] as number);
     const dz = (snapshot.shipState[2] as number) - (snapshot.bodyPositionsKm[offset + 2] as number);
-    expect(Math.hypot(dx, dy, dz)).toBeCloseTo(earth.meanRadiusKm + 400, 6);
+    const expectedOrbitRadiusKm = earth.meanRadiusKm + 400;
+    expect(Math.hypot(dx, dy, dz)).toBeCloseTo(expectedOrbitRadiusKm, 6);
+    expect(snapshot.bodyIds[snapshot.dominantBodyIndex]).toBe('earth');
+    expect(snapshot.osculatingElements.valid).toBe(true);
+    expect(snapshot.osculatingElements.semiMajorAxisKm).toBeCloseTo(expectedOrbitRadiusKm, 6);
+    expect(snapshot.osculatingElements.eccentricity).toBeCloseTo(0, 11);
+    expect(snapshot.osculatingElements.periapsisRadiusKm).toBeCloseTo(expectedOrbitRadiusKm, 6);
+    expect(snapshot.osculatingElements.apoapsisRadiusKm).toBeCloseTo(expectedOrbitRadiusKm, 6);
+    expect(snapshot.osculatingElements.periodSec).toBeCloseTo(
+      2 * Math.PI * Math.sqrt(expectedOrbitRadiusKm ** 3 / earth.muKm3S2),
+      6,
+    );
     expect(core.step(1).simTimeSec).toBe(1);
   });
 });
