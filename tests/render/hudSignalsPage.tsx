@@ -37,6 +37,8 @@ interface HudSignalsHarnessSnapshot {
   readonly burnEnergy: string;
   readonly burnProperDeltaV: string;
   readonly burnSummaryLabel: string;
+  readonly cameraPointerDowns: number;
+  readonly cameraWheels: number;
   readonly commandedTarget: string | null;
   readonly commandedWarp: WarpFactor;
   readonly coordinateClock: string;
@@ -52,6 +54,10 @@ declare global {
 
 const root = document.querySelector('#hud-root');
 if (!(root instanceof HTMLElement)) throw new Error('HUD regression root is missing');
+const cameraSurface = document.querySelector('#hud-camera-surface');
+if (!(cameraSurface instanceof HTMLCanvasElement)) {
+  throw new Error('HUD camera regression surface is missing');
+}
 
 const snapshot = createSimulationSnapshotBuffer(Object.freeze(['earth', 'mars']));
 snapshot.dominantBodyIndex = 0;
@@ -80,6 +86,14 @@ const counts: RenderCounts = {
 };
 let commandedTarget: string | null = null;
 let commandedWarp: WarpFactor = 1;
+let cameraPointerDowns = 0;
+let cameraWheels = 0;
+cameraSurface.addEventListener('pointerdown', () => {
+  cameraPointerDowns += 1;
+});
+cameraSurface.addEventListener('wheel', () => {
+  cameraWheels += 1;
+});
 const commands: Commands = {
   rotate: () => undefined,
   setAttitudeMode: () => undefined,
@@ -128,6 +142,8 @@ function readHarnessSnapshot() {
     burnEnergy: document.querySelector('#burn-energy')?.textContent ?? '',
     burnProperDeltaV: document.querySelector('#burn-delta-v')?.textContent ?? '',
     burnSummaryLabel: document.querySelector('#burn-summary-title')?.textContent ?? '',
+    cameraPointerDowns,
+    cameraWheels,
     commandedTarget,
     commandedWarp,
     counts: copyCounts(),

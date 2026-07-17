@@ -8,6 +8,53 @@ const PORT = 4180;
 const PAGE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/hudSignals.html`;
 const WARP_VALUES = [1, 5, 10, 50, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 
+async function findHudPanelCollisions(page) {
+  return page.evaluate(() => {
+    const panels = [...globalThis.document.querySelectorAll('.hud-panel')];
+    const overlaps = [];
+    for (let leftIndex = 0; leftIndex < panels.length; leftIndex += 1) {
+      const left = panels[leftIndex];
+      if (!(left instanceof globalThis.HTMLElement)) continue;
+      const leftRect = left.getBoundingClientRect();
+      for (let rightIndex = leftIndex + 1; rightIndex < panels.length; rightIndex += 1) {
+        const right = panels[rightIndex];
+        if (!(right instanceof globalThis.HTMLElement)) continue;
+        const rightRect = right.getBoundingClientRect();
+        const overlapWidth = Math.max(
+          0,
+          Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left),
+        );
+        const overlapHeight = Math.max(
+          0,
+          Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top),
+        );
+        if (overlapWidth * overlapHeight > 0) overlaps.push(`${left.id}/${right.id}`);
+      }
+    }
+    return overlaps;
+  });
+}
+
+async function assertCameraSurfaceReceivesInput(page, width, height) {
+  await page.setViewportSize({ width, height });
+  const before = await page.evaluate(() => globalThis.__hudSignalsHarness.snapshot());
+  await page.mouse.move(4, Math.floor(height / 2));
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.mouse.wheel(0, 25);
+  const after = await page.evaluate(() => globalThis.__hudSignalsHarness.snapshot());
+  assert.equal(
+    after.cameraPointerDowns,
+    before.cameraPointerDowns + 1,
+    `${width}x${height} HUD blocks camera pointer input outside panels`,
+  );
+  assert.equal(
+    after.cameraWheels,
+    before.cameraWheels + 1,
+    `${width}x${height} HUD blocks camera wheel input outside panels`,
+  );
+}
+
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -101,35 +148,26 @@ try {
     return overlay instanceof globalThis.HTMLElement && overlay.scrollTop > 0;
   });
 
+  for (const height of [701, 703, 704]) {
+    await page.setViewportSize({ width: 1_280, height });
+    assert.deepEqual(
+      await findHudPanelCollisions(page),
+      [],
+      `1280x${height} HUD panels overlap`,
+    );
+  }
+
+  for (const [width, height] of [
+    [900, 720],
+    [800, 720],
+    [390, 844],
+  ]) {
+    await assertCameraSurfaceReceivesInput(page, width, height);
+  }
+
   for (const width of [721, 800, 850]) {
     await page.setViewportSize({ width, height: 720 });
-    const collisions = await page.evaluate(() => {
-      const overlay = globalThis.document.querySelector('.app-overlay');
-      if (!(overlay instanceof globalThis.HTMLElement)) throw new Error('app overlay is missing');
-      overlay.scrollTop = 0;
-      const panels = [...globalThis.document.querySelectorAll('.hud-panel')];
-      const overlaps = [];
-      for (let leftIndex = 0; leftIndex < panels.length; leftIndex += 1) {
-        const left = panels[leftIndex];
-        if (!(left instanceof globalThis.HTMLElement)) continue;
-        const leftRect = left.getBoundingClientRect();
-        for (let rightIndex = leftIndex + 1; rightIndex < panels.length; rightIndex += 1) {
-          const right = panels[rightIndex];
-          if (!(right instanceof globalThis.HTMLElement)) continue;
-          const rightRect = right.getBoundingClientRect();
-          const overlapWidth = Math.max(
-            0,
-            Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left),
-          );
-          const overlapHeight = Math.max(
-            0,
-            Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top),
-          );
-          if (overlapWidth * overlapHeight > 0) overlaps.push(`${left.id}/${right.id}`);
-        }
-      }
-      return overlaps;
-    });
+    const collisions = await findHudPanelCollisions(page);
     assert.deepEqual(collisions, [], `${width}px HUD panels overlap`);
 
     const warpButtons = page.locator('#warp-control button');
