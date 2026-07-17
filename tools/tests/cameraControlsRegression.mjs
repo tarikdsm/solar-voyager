@@ -160,6 +160,11 @@ try {
       productionJupiter.centerRgb.reduce((sum, channel) => sum + channel, 0) > 30,
     'production Jupiter was not visible at the canvas center',
   );
+  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.centerRgb;
+  assert.ok(
+    jupiterRed > jupiterGreen + 15 && jupiterGreen > jupiterBlue + 15,
+    `production center lacks Jupiter's ochre color signature (${productionJupiter.centerRgb.join(',')})`,
+  );
   assert.deepEqual(productionErrors, []);
 
   process.stdout.write(
