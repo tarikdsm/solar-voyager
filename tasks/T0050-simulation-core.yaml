@@ -1,6 +1,6 @@
 id: T0050
 title: SimulationCore + SimSnapshot + Commands
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0050-simulation-core
 depends_on: [T0013, T0014, T0015, T0017]
@@ -29,3 +29,6 @@ handoff_notes: |
   tests, build, task schema, and asset budgets. The 10,000-step full-catalog
   benchmark averaged 0.0746 ms/step, reused exactly two snapshots, and retained
   no heap growth.
+  Independent review approved implementation head a6dc9bb after the mutable
+  snapshot finding was fixed, then approved final documentation head 314295a
+  with zero Critical, Important, or Minor findings. Exact-head CI passed.
