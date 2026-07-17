@@ -1,6 +1,6 @@
 id: T0045
 title: GPU context policy + render telemetry module
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0045-gpu-telemetry
 depends_on: [T0040]
