@@ -12,6 +12,7 @@ import {
   type BodyVisualDefinition,
 } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
 
@@ -21,6 +22,7 @@ export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
   readonly starfield: Starfield;
+  readonly osculatingConic: OsculatingConicOverlay;
   readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly positionsKm: Float64Array;
@@ -87,6 +89,7 @@ export async function createEpochWorld(
   });
 
   const spaceScene = new CameraRelativeSpaceScene();
+  const osculatingConic = new OsculatingConicOverlay(spaceScene);
   spaceScene.camera.lookAt(
     cameraController.lookDirection.x,
     cameraController.lookDirection.y,
@@ -130,7 +133,9 @@ export async function createEpochWorld(
 
   await visualSystem.initializeEager();
   spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
+  osculatingConic.line.visible = true;
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
+  osculatingConic.line.visible = false;
   visualSystem.initializeView(
     cameraController.cameraPositionKm,
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height),
@@ -141,6 +146,7 @@ export async function createEpochWorld(
     spaceScene,
     visualSystem,
     starfield,
+    osculatingConic,
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,
     positionsKm: epochState.positionsKm,

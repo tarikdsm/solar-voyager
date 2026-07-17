@@ -11,11 +11,12 @@ import {
   solveKeplerHyperbolicInto,
   type KeplerSolution,
 } from '../bodies/kepler.js';
+import type { CompiledRailsCatalog } from '../propagation/rails.js';
 import type {
   OsculatingElementsSnapshot,
   SimulationSnapshotBuffer,
 } from '../simulationSnapshot.js';
-import { selectMaximumGravityBodyIndex } from '../ship/attitude.js';
+import { selectDominantBodyIndexWithHysteresis } from './dominantBody.js';
 
 const FULL_TURN_RAD = 2 * Math.PI;
 
@@ -24,6 +25,7 @@ export interface OsculatingWorkspace {
   readonly relativeState: CartesianState;
   readonly elements: OrbitalElements;
   readonly keplerSolution: KeplerSolution;
+  dominantBodyIndex: number;
 }
 
 /** Allocates the osculating conversion scratch once during simulation setup. */
@@ -32,6 +34,7 @@ export function createOsculatingWorkspace(): OsculatingWorkspace {
     relativeState: createCartesianState(),
     elements: createOrbitalElements(),
     keplerSolution: createKeplerSolution(),
+    dominantBodyIndex: -1,
   };
 }
 
@@ -81,14 +84,16 @@ function trueAnomalyFromMean(elements: OrbitalElements, solution: KeplerSolution
 /** Writes physics-spec.md §6 osculating elements relative to maximum local gravity. */
 export function updateOsculatingElements(
   snapshot: SimulationSnapshotBuffer,
-  bodyMuKm3S2: Float64Array,
+  catalog: CompiledRailsCatalog,
   workspace: OsculatingWorkspace,
 ): void {
-  const dominantBodyIndex = selectMaximumGravityBodyIndex(
+  const dominantBodyIndex = selectDominantBodyIndexWithHysteresis(
     snapshot.shipState,
-    bodyMuKm3S2,
     snapshot.bodyPositionsKm,
+    catalog,
+    workspace.dominantBodyIndex,
   );
+  workspace.dominantBodyIndex = dominantBodyIndex;
   snapshot.dominantBodyIndex = dominantBodyIndex;
   const output = snapshot.osculatingElements;
   if (dominantBodyIndex < 0) {
@@ -116,7 +121,7 @@ export function updateOsculatingElements(
 
   const radiusKm = Math.hypot(state.positionKm.x, state.positionKm.y, state.positionKm.z);
   const speedKmS = Math.hypot(state.velocityKmS.x, state.velocityKmS.y, state.velocityKmS.z);
-  const muKm3S2 = bodyMuKm3S2[dominantBodyIndex] as number;
+  const muKm3S2 = catalog.muKm3S2[dominantBodyIndex] as number;
   if (
     !Number.isFinite(radiusKm) ||
     radiusKm <= 0 ||

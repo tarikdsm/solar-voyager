@@ -28,9 +28,9 @@ function orbit(semiMajorAxisKm = 100, eccentricity = 0.1): OrbitalElements {
 
 function nestedBodies(): RailsBodyInput[] {
   return [
-    { id: 'sun', parentId: null, muKm3S2: 1_000, elements: null },
-    { id: 'planet', parentId: 'sun', muKm3S2: 10, elements: orbit(100) },
-    { id: 'moon', parentId: 'planet', muKm3S2: 1, elements: orbit(10, 0.01) },
+    { id: 'sun', parentId: null, muKm3S2: 1_000, soiRadiusKm: null, elements: null },
+    { id: 'planet', parentId: 'sun', muKm3S2: 10, soiRadiusKm: 40, elements: orbit(100) },
+    { id: 'moon', parentId: 'planet', muKm3S2: 1, soiRadiusKm: 4, elements: orbit(10, 0.01) },
   ];
 }
 
@@ -44,6 +44,8 @@ describe('rails catalog compiler — physics-spec.md §2', () => {
     expect([...catalog.parentIndices]).toEqual([-1, 0, 1]);
     expect(catalog.muKm3S2).toBeInstanceOf(Float64Array);
     expect([...catalog.muKm3S2]).toEqual([1_000, 10, 1]);
+    expect(catalog.soiRadiiKm).toBeInstanceOf(Float64Array);
+    expect([...catalog.soiRadiiKm]).toEqual([Number.POSITIVE_INFINITY, 40, 4]);
     expect([...catalog.orbitalMuKm3S2]).toEqual([0, 1_010, 11]);
     expect(catalog.semiMajorAxisKm[2]).toBe(10);
     expect(catalog.eccentricity[2]).toBe(0.01);
@@ -118,6 +120,15 @@ describe('rails catalog compiler — physics-spec.md §2', () => {
         return bodies;
       },
       /planet GM must be finite and positive/u,
+    ],
+    [
+      'a non-positive SOI radius',
+      (): RailsBodyInput[] => {
+        const bodies = nestedBodies();
+        bodies[1] = { ...bodies[1], soiRadiusKm: 0 } as RailsBodyInput;
+        return bodies;
+      },
+      /planet SOI radius must be finite and positive/u,
     ],
     [
       'a non-finite angle',
