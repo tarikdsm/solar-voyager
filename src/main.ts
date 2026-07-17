@@ -56,7 +56,7 @@ function resizeRenderer(): void {
 
 function renderFrame(nowMs: number): void {
   if (world === null) return;
-  const { spaceScene, visualSystem, cameraController, cameraPositionKm } = world;
+  const { spaceScene, visualSystem, osculatingConic, cameraController, cameraPositionKm } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
   const simulationStartMs = performance.now();
   const snapshot = simulation.step(deltaSec);
@@ -79,6 +79,7 @@ function renderFrame(nowMs: number): void {
     spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
   );
+  osculatingConic.update(snapshot, canvas.width, canvas.height);
   spaceScene.updateCameraRelative(cameraPositionKm);
   telemetry.beginGpuTimer();
   renderer.render(spaceScene.scene, spaceScene.camera);

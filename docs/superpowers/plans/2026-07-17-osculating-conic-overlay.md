@@ -292,7 +292,6 @@ git commit -m "feat(render): [T0057] render one camera-relative conic line"
 - Modify: `src/render/createEpochWorld.ts`
 - Modify: `src/render/createEpochWorld.test.ts`
 - Modify: `src/main.ts`
-- Modify: `tools/tests/renderDepthRegression.mjs`
 
 **Interfaces:**
 - Consumes: `new OsculatingConicOverlay(spaceScene)` and its `update()` method.
@@ -323,9 +322,9 @@ osculatingConic.update(snapshot, canvas.width, canvas.height);
 ```
 
 Keep construction before the final `renderer.compileAsync()` so `LineMaterial`
-is compiled during loading. Extend the render-depth regression's scene
-assertions so the new visible line is accepted without weakening its depth
-checks.
+is compiled during loading. Run the unchanged render-depth regression as a
+compatibility gate; its isolated fixture intentionally does not build
+`EpochWorld`.
 
 - [ ] **Step 4: Run focused integration and browser regression tests**
 
@@ -338,7 +337,7 @@ Expected: unit integration passes and both depth strategies retain clean occlusi
 - [ ] **Step 5: Commit runtime integration**
 
 ```bash
-git add src/render/createEpochWorld.ts src/render/createEpochWorld.test.ts src/main.ts tools/tests/renderDepthRegression.mjs
+git add src/render/createEpochWorld.ts src/render/createEpochWorld.test.ts src/main.ts
 git commit -m "feat(game): [T0057] integrate live osculating overlay"
 ```
 

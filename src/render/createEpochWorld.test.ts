@@ -54,6 +54,11 @@ describe('createEpochWorld', () => {
       starCatalog.starCount,
     );
     expect(world.starfield.points.material.uniforms.uPixelRatio?.value).toBe(2);
+    expect(world.osculatingConic.line.name).toBe('osculating-conic');
+    expect(world.osculatingConic.line.parent?.name).toBe('osculating-conic-anchor');
+    expect(world.spaceScene.scene.getObjectByName('osculating-conic')).toBe(
+      world.osculatingConic.line,
+    );
     expect(spheres.every((sphere) => sphere.geometry === spheres[0]?.geometry)).toBe(true);
     expect(world.visualSystem.getTier('sun')).toBe(2);
     expect(world.visualSystem.getTier('earth')).toBe(3);
