@@ -14,11 +14,12 @@ acceptance:
   - No flicker crossing SOI boundaries (hysteresis works)
 handoff_notes: |
   Implemented one setup-time, camera-relative Line2 with 64/128/256 analytic
-  ellipse/hyperbola sampling and no frame-loop resource creation. The rotated
+  ellipse/hyperbola sampling, active frustum culling through an in-place
+  setup-time bounding sphere, and no frame-loop resource creation. The rotated
   ellipse test matches the canonical two-body Cartesian converter to 1e-8;
   hyperbolic branches remain finite and open. ADR-029 formalizes hierarchical
   SOI hysteresis: tested child entry at 0.9 SOI, retention through 1.1 SOI, and
-  parent reclaim outside the exit band. Full verification: 387 Vitest tests
+  parent reclaim outside the exit band. Full verification: 388 Vitest tests
   passed (3 skipped), 50 Python tests passed, lint, typecheck, Prettier, build,
   all render/HUD/camera regressions, budgets, and 53-task schema passed. A real
   Intel UHD WebGL2 reversed-depth playtest showed the cyan conic around Earth,

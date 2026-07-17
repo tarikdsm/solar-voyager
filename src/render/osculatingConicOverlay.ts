@@ -1,4 +1,9 @@
-import { Group, InterleavedBufferAttribute, type InstancedInterleavedBuffer } from 'three';
+import {
+  Group,
+  InterleavedBufferAttribute,
+  type InstancedInterleavedBuffer,
+  type Sphere,
+} from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
@@ -20,6 +25,7 @@ export class OsculatingConicOverlay {
   private readonly anchorPositionKm = { x: 0, y: 0, z: 0 };
   private readonly pointsKm = new Float64Array(POINT_COMPONENT_COUNT);
   private readonly geometry: LineGeometry;
+  private readonly boundingSphere: Sphere;
   private readonly material: LineMaterial;
   private readonly segmentBuffer: InstancedInterleavedBuffer;
   private readonly segmentComponents: Float32Array;
@@ -37,6 +43,10 @@ export class OsculatingConicOverlay {
     }
     this.segmentBuffer = startAttribute.data as InstancedInterleavedBuffer;
     this.segmentComponents = startAttribute.data.array;
+    if (this.geometry.boundingSphere === null) {
+      throw new Error('Line2 setup must create one reusable bounding sphere.');
+    }
+    this.boundingSphere = this.geometry.boundingSphere;
     this.geometry.instanceCount = 0;
 
     this.material = new LineMaterial({
@@ -52,7 +62,7 @@ export class OsculatingConicOverlay {
     this.line = new Line2(this.geometry, this.material);
     this.line.name = 'osculating-conic';
     this.line.visible = false;
-    this.line.frustumCulled = false;
+    this.line.frustumCulled = true;
     this.line.matrixAutoUpdate = false;
     this.line.updateMatrix();
     this.anchor.name = 'osculating-conic-anchor';
@@ -94,6 +104,7 @@ export class OsculatingConicOverlay {
     this.anchorPositionKm.y = anchorYKm;
     this.anchorPositionKm.z = anchorZKm;
     const segmentCount = pointCount - 1;
+    let maxRadiusSquaredKm = 0;
     for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
       const pointOffset = segmentIndex * 3;
       const segmentOffset = segmentIndex * 6;
@@ -103,7 +114,24 @@ export class OsculatingConicOverlay {
       this.segmentComponents[segmentOffset + 3] = this.pointsKm[pointOffset + 3] as number;
       this.segmentComponents[segmentOffset + 4] = this.pointsKm[pointOffset + 4] as number;
       this.segmentComponents[segmentOffset + 5] = this.pointsKm[pointOffset + 5] as number;
+
+      const startXKm = this.segmentComponents[segmentOffset] as number;
+      const startYKm = this.segmentComponents[segmentOffset + 1] as number;
+      const startZKm = this.segmentComponents[segmentOffset + 2] as number;
+      const startRadiusSquaredKm = startXKm * startXKm + startYKm * startYKm + startZKm * startZKm;
+      if (startRadiusSquaredKm > maxRadiusSquaredKm) {
+        maxRadiusSquaredKm = startRadiusSquaredKm;
+      }
+      const endXKm = this.segmentComponents[segmentOffset + 3] as number;
+      const endYKm = this.segmentComponents[segmentOffset + 4] as number;
+      const endZKm = this.segmentComponents[segmentOffset + 5] as number;
+      const endRadiusSquaredKm = endXKm * endXKm + endYKm * endYKm + endZKm * endZKm;
+      if (endRadiusSquaredKm > maxRadiusSquaredKm) {
+        maxRadiusSquaredKm = endRadiusSquaredKm;
+      }
     }
+    this.boundingSphere.center.set(0, 0, 0);
+    this.boundingSphere.radius = Math.sqrt(maxRadiusSquaredKm);
     this.geometry.instanceCount = segmentCount;
     this.segmentBuffer.needsUpdate = true;
     this.material.resolution.set(viewportWidthPx, viewportHeightPx);

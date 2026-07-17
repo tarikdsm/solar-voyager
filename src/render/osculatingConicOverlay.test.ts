@@ -1,3 +1,4 @@
+import { Frustum, Matrix4, PerspectiveCamera } from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { createSimulationSnapshotBuffer } from '../sim/simulationSnapshot.js';
@@ -50,6 +51,40 @@ describe('OsculatingConicOverlay', () => {
     expect(overlay.line.visible).toBe(true);
     expect(anchor?.position.toArray()).toEqual([Math.fround(-10_000), 0, 0]);
     expect(overlay.line.material.resolution.toArray()).toEqual([1_280, 720]);
+  });
+
+  it('keeps a stable bound so an off-camera conic can be frustum culled', () => {
+    const overlay = new OsculatingConicOverlay(new CameraRelativeSpaceScene());
+    const snapshot = validSnapshot();
+    const geometry = overlay.line.geometry;
+    const boundingSphere = geometry.boundingSphere;
+    const anchor = overlay.line.parent;
+    const camera = new PerspectiveCamera(60, 16 / 9, 1, 100_000);
+    camera.updateMatrixWorld(true);
+    const frustum = new Frustum().setFromProjectionMatrix(
+      new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+
+    overlay.update(snapshot, 1_920, 1_080);
+
+    expect(overlay.line.frustumCulled).toBe(true);
+    expect(geometry.boundingSphere).toBe(boundingSphere);
+    expect(geometry.boundingSphere?.center.toArray()).toEqual([0, 0, 0]);
+    expect(geometry.boundingSphere?.radius).toBeGreaterThanOrEqual(
+      snapshot.osculatingElements.apoapsisRadiusKm,
+    );
+
+    anchor?.position.set(0, 0, -20_000);
+    anchor?.updateMatrix();
+    anchor?.updateMatrixWorld(true);
+    expect(frustum.intersectsObject(overlay.line)).toBe(true);
+
+    anchor?.position.set(1_000_000, 0, -20_000);
+    anchor?.updateMatrix();
+    anchor?.updateMatrixWorld(true);
+    expect(geometry.boundingSphere?.radius).toBeLessThan(10_000);
+    expect(overlay.line.matrixWorld.elements[12]).toBe(1_000_000);
+    expect(frustum.intersectsObject(overlay.line)).toBe(false);
   });
 
   it('hides invalid solutions without replacing setup-time resources', () => {

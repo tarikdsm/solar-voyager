@@ -64,9 +64,10 @@ snapshot is published and before camera-relative positions are updated,
 
 The line is cyan, translucent, depth-tested, and depth-write disabled. Its
 width is expressed in screen pixels through `LineMaterial`, so it remains
-legible across camera distances. It costs one draw call only while visible and
-is excluded from frustum-bound recomputation because its dynamic geometry is
-already deliberately bounded and visibility-controlled.
+legible across camera distances. Frustum culling remains enabled. The overlay
+retains the setup-time bounding sphere and updates its body-relative radius in
+place from the rendered float32 points, so an off-camera conic adds no draw call
+and bound maintenance adds no frame allocation.
 
 ## Error handling
 
@@ -83,9 +84,9 @@ or tests remains an explicit error.
   segment.
 - Hysteresis tests oscillate inputs across child SOI entry/exit boundaries and
   verify stable ownership.
-- Renderer tests verify stable geometry/attribute identities, bounded
-  `instanceCount`, visibility on invalid snapshots, and unchanged anchor
-  storage across repeated updates.
+- Renderer tests verify stable geometry/attribute/bounding-sphere identities,
+  bounded `instanceCount`, culling outside the camera frustum, visibility on
+  invalid snapshots, and unchanged anchor storage across repeated updates.
 - Full lint, typecheck, Vitest, production build, budgets, and task schema run.
 - A real-browser playtest checks the visible conic, console cleanliness, and
   frame behavior after the render-path change.

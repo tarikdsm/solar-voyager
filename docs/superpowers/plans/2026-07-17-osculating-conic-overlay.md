@@ -261,12 +261,16 @@ export class OsculatingConicOverlay {
     const geometry = new LineGeometry().setPositions(setupPositions);
     const material = new LineMaterial({ color: 0x55ddff, linewidth: 1.5, transparent: true, opacity: 0.72, depthWrite: false });
     this.line = new Line2(geometry, material);
-    this.line.frustumCulled = false;
+    this.line.frustumCulled = true;
     this.anchor.add(this.line);
     spaceScene.bindVisual(this.anchor, this.anchorPositionKm);
   }
 }
 ```
+
+Retain `geometry.boundingSphere` after setup and update its center/radius in
+place from the active float32 segment endpoints. This preserves frustum culling
+without calling Three.js bound recomputation or allocating in the frame loop.
 
 After construction, cache the shared `InstancedInterleavedBuffer` backing
 `instanceStart`/`instanceEnd`. `update()` writes consecutive start/end pairs,
