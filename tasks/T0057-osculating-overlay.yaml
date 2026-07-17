@@ -1,8 +1,8 @@
 id: T0057
 title: Osculating conic overlay
-status: TODO
-agent: ""
-branch: ""
+status: DONE
+agent: chatgpt
+branch: task/T0057-osculating-overlay
 depends_on: [T0050, T0040]
 milestone: M3
 spec: |
@@ -12,4 +12,21 @@ spec: |
 acceptance:
   - Ellipse matches propagated path in a two-body test scene
   - No flicker crossing SOI boundaries (hysteresis works)
-handoff_notes: ""
+handoff_notes: |
+  Implemented one setup-time, camera-relative Line2 with 64/128/256 analytic
+  ellipse/hyperbola sampling, active frustum culling through an in-place
+  setup-time bounding sphere, and no frame-loop resource creation. The rotated
+  ellipse test matches the canonical two-body Cartesian converter to 1e-8;
+  hyperbolic branches remain finite and open. ADR-029 formalizes hierarchical
+  SOI hysteresis: tested child entry at 0.9 SOI, retention through 1.1 SOI, and
+  parent reclaim outside the exit band. Full verification: 388 Vitest tests
+  passed (3 skipped), 50 Python tests passed, lint, typecheck, Prettier, build,
+  all render/HUD/camera regressions, budgets, and 53-task schema passed. A real
+  Intel UHD WebGL2 reversed-depth playtest showed the cyan conic around Earth,
+  accepted 5x warp, reported glError=0, and logged zero console errors/warnings.
+  Same-GPU 1280x720 telemetry: main vs feature p75 remained 12.1 ms and render
+  ~0.6 ms; feature adds exactly 1 draw call, 1 program, and 384 rendered
+  triangles. Critical path is 3.90 MiB of the 8 MiB budget. Independent
+  re-review of exact head 616d8ec approved with Critical 0, Important 0, Minor
+  0 after verifying active frustum culling, stable setup-time bounds, full
+  local gates, and green PR CI.

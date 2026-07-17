@@ -3,7 +3,17 @@ export function pad4(buffer, byte = 0) {
   return remainder === 0 ? buffer : Buffer.concat([buffer, Buffer.alloc(4 - remainder, byte)]);
 }
 
-export function createGlb({ embeddedImage = false, externalImageUri, materialName, nodeName, parentMatrix, radius = 1, rootMatrix } = {}) {
+export function createGlb({
+  embeddedImage = false,
+  externalImageUri,
+  materialName,
+  materialNames,
+  namedNodes,
+  nodeName,
+  parentMatrix,
+  radius = 1,
+  rootMatrix,
+} = {}) {
   const positions = new Float32Array([
     radius, 0, 0, -radius, 0, 0, 0, radius, 0,
     0, -radius, 0, 0, 0, radius, 0, 0, -radius,
@@ -16,14 +26,30 @@ export function createGlb({ embeddedImage = false, externalImageUri, materialNam
   const indexBytes = Buffer.from(indices.buffer);
   const imageBytes = embeddedImage ? Buffer.from([0x89, 0x50, 0x4e, 0x47]) : Buffer.alloc(0);
   const binary = pad4(Buffer.concat([positionBytes, indexBytes, imageBytes]));
-  const json = {
-    asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }],
-    nodes: parentMatrix === undefined
+  const names = materialNames ?? (materialName === undefined ? [] : [materialName]);
+  const primitives = names.length === 0
+    ? [{ attributes: { POSITION: 0 }, indices: 1 }]
+    : names.map((name, index) => ({
+      attributes: { POSITION: 0 },
+      indices: 1,
+      material: index,
+    }));
+  const nodes = namedNodes === undefined
+    ? parentMatrix === undefined
       ? [{ mesh: 0, ...(nodeName === undefined ? {} : { name: nodeName }), ...(rootMatrix === undefined ? {} : { matrix: rootMatrix }) }]
-      : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }],
-    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, ...(materialName === undefined ? {} : { material: 0 }) }] }],
-    ...(materialName === undefined ? {} : {
-      materials: [{ name: materialName, ...(externalImageUri === undefined ? {} : { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }) }],
+      : [{ children: [1], matrix: parentMatrix }, { mesh: 0, name: nodeName }]
+    : namedNodes.map(({ name, translation }) => ({ mesh: 0, name, translation }));
+  const json = {
+    asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: namedNodes === undefined ? [0] : nodes.map((_, index) => index) }],
+    nodes,
+    meshes: [{ primitives }],
+    ...(names.length === 0 ? {} : {
+      materials: names.map((name, index) => ({
+        name,
+        ...(externalImageUri === undefined || index !== 0
+          ? {}
+          : { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }),
+      })),
     }),
     accessors: [
       { bufferView: 0, componentType: 5126, count: 6, max: [radius, radius, radius], min: [-radius, -radius, -radius], type: 'VEC3' },

@@ -48,3 +48,20 @@ Endpoint heap delta differed by 62,639 bytes, but this harness does not force
 collection and therefore is not a leak measurement. Lighting and post
 resources are setup-owned, the application frame path creates none, and the
 future T0092 mechanical heap-growth gate remains authoritative.
+
+## Revalidation after current-main integration (2026-07-17)
+
+After merging the current camera, telemetry, HUD, simulation, ship, and
+osculating-overlay work into the branch, the native 1920×1080 hardware run was
+repeated on the same Intel UHD. The integrated game sustained 60.003 fps with
+rAF p75 16.7 ms, GPU render p75 11.140 ms, 22 accumulated draw calls, 48,963
+triangles, zero console/page errors, and a negative endpoint heap delta. The
+raw capture is `T0043-resume-hardware.json`.
+
+The integrated benchmark now consumes the single setup-time
+`RenderTelemetry` GPU query ring instead of opening a nested timer query. It
+also disables bloom only for the explicit software-rasterizer fallback; the
+hardware path and the dedicated lighting regression retain the complete
+half-float bloom + ACES chain. The full lighting regression remained at 81.0%
+dark Earth pixels with 12.9% localized night-light emission and a clean solar
+halo.

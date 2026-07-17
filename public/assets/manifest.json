@@ -57,9 +57,13 @@
     {
       "id": "ship",
       "category": "ship",
-      "triangles": 6174,
+      "triangles": 5538,
       "files": [
-        "models/ship.glb"
+        "models/ship.glb",
+        "textures/ship_mat_engine_glow__emissive.ktx2",
+        "textures/ship_mat_hull__albedo.ktx2",
+        "textures/ship_mat_hull__metallic.ktx2",
+        "textures/ship_mat_hull__normal.ktx2"
       ]
     },
     {

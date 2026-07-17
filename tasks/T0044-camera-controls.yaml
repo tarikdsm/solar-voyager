@@ -1,8 +1,8 @@
 id: T0044
 title: Free camera + body focus controls
-status: TODO
-agent: ""
-branch: ""
+status: DONE
+agent: chatgpt
+branch: task/T0044-free-camera
 depends_on: [T0040]
 milestone: M2
 spec: |
@@ -11,4 +11,13 @@ spec: |
   camera-relative math.
 acceptance:
   - Focus Earth -> Jupiter transfer smooth; no float jitter at min zoom
-handoff_notes: ""
+handoff_notes: >-
+  Float64 allocation-free orbit controller, disposable pointer/wheel/keyboard
+  input adapter, HUD focus label, and production integration implemented. Real
+  WebGL regression verifies 31 pixel-stable surface frames, a smooth 90-step
+  Earth-to-Jupiter transfer with mid-flight zoom, and a completed production
+  transfer with visible Jupiter. Full Vitest (284 passed), render regressions,
+  tools, lint, typecheck, format, build, budgets, and task schema pass.
+  Benchmark: unchanged 150/150/166.7 ms headless median/p75/p99 versus base;
+  see docs/bench/T0044-summary.md. Independently reviewed and approved on
+  1666e36 with zero Critical, Important, or Minor findings; exact-head CI passed.

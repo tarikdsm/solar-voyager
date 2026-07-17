@@ -14,6 +14,10 @@
     "test:starfield": "node tools/tests/starfieldRegression.mjs",
     "test:visual-tiers": "node tools/tests/visualTierFlyIn.mjs",
     "test:lighting-post": "node tools/tests/lightingPostRegression.mjs",
+    "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
+    "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
+    "test:telemetry": "node tools/tests/telemetryRegression.mjs",
+    "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",
     "lint": "eslint .",
@@ -25,6 +29,7 @@
     "check:tasks": "node tools/checks/taskSchema.mjs",
     "check:budgets": "node tools/checks/assetBudgets.mjs",
     "bench:scaffold": "node tools/bench/scaffoldBench.mjs",
+    "bench:sim": "node --expose-gc tools/bench/simulationCoreBench.mjs",
     "golden:regen": "node tools/generateGoldenTrajectories.mjs"
   },
   "dependencies": {

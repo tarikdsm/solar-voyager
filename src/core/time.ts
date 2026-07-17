@@ -11,6 +11,9 @@ export const WARP_LADDER = Object.freeze([1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6,
 /** A time-warp factor selected from the canonical ladder. */
 export type WarpFactor = (typeof WARP_LADDER)[number];
 
+/** Highest canonical tier where player thrust may remain active. */
+export const MAX_THRUST_WARP: WarpFactor = 1e3;
+
 /** Mutable float64 simulation time, measured in TDB seconds since J2026. */
 export interface SimClock {
   timeSec: number;
@@ -42,7 +45,12 @@ export function advanceSimClock(clock: SimClock, wallDeltaSec: number, warp: War
  * UTC and must not be used for orbital calculations.
  */
 export function tdbSecondsToUtcDate(timeSec: number): Date {
-  return new Date(J2026_DISPLAY_EPOCH_MS + timeSec * 1_000);
+  return new Date(tdbSecondsToUtcTimeMs(timeSec));
+}
+
+/** Maps TDB seconds to the UTC display timestamp without allocating a Date. */
+export function tdbSecondsToUtcTimeMs(timeSec: number): number {
+  return J2026_DISPLAY_EPOCH_MS + timeSec * 1_000;
 }
 
 /** Inverts the UTC-only display mapping at JavaScript Date's millisecond precision. */

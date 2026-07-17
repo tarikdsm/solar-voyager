@@ -155,6 +155,34 @@ function validateTextureTier(textures, identity, findings) {
   }
 }
 
+function validateShipAxis(document, file, findings) {
+  const nodes = document.getRoot().listNodes();
+  const tip = nodes.find((node) => node.getName() === 'hull_tip');
+  const nozzle = nodes.find((node) => node.getName() === 'engine_nozzle');
+  if (tip === undefined || nozzle === undefined) {
+    findings.push(finding(file, 3, 'ship requires named hull_tip and engine_nozzle nodes'));
+    return;
+  }
+  const tipMatrix = tip.getWorldMatrix();
+  const nozzleMatrix = nozzle.getWorldMatrix();
+  const delta = [
+    tipMatrix[12] - nozzleMatrix[12],
+    tipMatrix[13] - nozzleMatrix[13],
+    tipMatrix[14] - nozzleMatrix[14],
+  ];
+  const length = Math.hypot(...delta);
+  if (length <= 1e-6 || delta[0] / length < 0.999) {
+    findings.push(
+      finding(
+        file,
+        3,
+        `ship nose must align with local +X; hull_tip - engine_nozzle measured [${delta
+          .map((value) => value.toFixed(6)).join(', ')}]`,
+      ),
+    );
+  }
+}
+
 export async function validateAssetDirectory(directory, identity) {
   const findings = [];
   const config = CATEGORY_CONFIG[identity.category];
@@ -191,9 +219,11 @@ export async function validateAssetDirectory(directory, identity) {
     return { findings, triangles: 0 };
   }
 
+  let document;
   let measurement;
   try {
-    measurement = measureDocument(await readGlbDocument(glbPath), identity.id);
+    document = await readGlbDocument(glbPath);
+    measurement = measureDocument(document, identity.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     findings.push(finding(glbFile, 2, `could not decode GLB: ${message}`));
@@ -223,6 +253,7 @@ export async function validateAssetDirectory(directory, identity) {
       );
     }
   }
+  if (identity.category === 'ship') validateShipAxis(document, glbFile, findings);
   const triangleLimit = triangleLimitFor(identity.category, identity.id);
   if (measurement.triangles > triangleLimit) {
     findings.push(

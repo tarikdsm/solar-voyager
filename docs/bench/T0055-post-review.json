@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-07-17T07:46:48.298Z",
+  "gitSha": "430327d4989e43df335a8e2b967c5b56035480c6",
+  "warmupFrames": 120,
+  "sampleFrames": 600,
+  "medianMs": 150,
+  "p75Ms": 150,
+  "p99Ms": 183.3,
+  "canvas": {
+    "backingHeight": 720,
+    "backingWidth": 1280,
+    "cssHeight": 720,
+    "cssWidth": 1280
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "telemetry": {
+    "frameSampleCount": 120,
+    "medianMs": 150,
+    "p75Ms": 150,
+    "p99Ms": 180.227,
+    "snapshot": {
+      "averageFps": 6.805576035298252,
+      "context": {
+        "contextFlavor": "webgl2",
+        "depthStrategy": "reversed",
+        "effectiveContextAttributes": {
+          "alpha": false,
+          "antialias": false,
+          "depth": true,
+          "desynchronized": true,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "high-performance",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false
+        },
+        "gpuTimerQueryAvailable": false,
+        "rendererName": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+        "softwareRasterizer": true,
+        "usedPerformanceCaveatFallback": true,
+        "warningRequired": true
+      },
+      "drawCalls": 6,
+      "frameCount": 737,
+      "frameMs": 133.40000000000873,
+      "frameSampleCount": 120,
+      "geometries": 5,
+      "gpuMs": -1,
+      "lines": 0,
+      "p75FrameMs": 150,
+      "p99FrameMs": 183.39999999999418,
+      "points": 9139,
+      "programs": 10,
+      "renderMs": 0.4000000059604645,
+      "simMs": 0.19999998807907104,
+      "textures": 7,
+      "triangles": 48564,
+      "uiMs": 0
+    }
+  },
+  "heapDeltaBytes": 718161
+}

@@ -7,6 +7,7 @@ import struct
 
 
 _COMPONENT_FORMATS = {5121: "B", 5123: "H", 5125: "I"}
+_TEXCOORD_DECIMALS = 6
 
 
 def _read_chunks(payload):
@@ -50,6 +51,41 @@ def _canonicalize_primitive_indices(document, binary, primitive):
         raise ValueError("Triangle index accessor exceeds the GLB binary chunk")
 
 
+def _canonicalize_primitive_texcoords(document, binary, primitive):
+    for semantic, accessor_index in primitive.get("attributes", {}).items():
+        if not semantic.startswith("TEXCOORD_"):
+            continue
+        accessor = document["accessors"][accessor_index]
+        if (
+            accessor.get("componentType") != 5126
+            or accessor.get("type") != "VEC2"
+            or accessor.get("sparse") is not None
+        ):
+            raise ValueError("Texcoord canonicalization requires non-sparse float32 VEC2 accessors")
+        view = document["bufferViews"][accessor["bufferView"]]
+        if view.get("buffer", 0) != 0:
+            raise ValueError("Texcoord canonicalization requires the GLB binary buffer")
+        stride = view.get("byteStride", 8)
+        if stride < 8:
+            raise ValueError("Texcoord VEC2 byte stride must be at least 8")
+        offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+        final_byte = offset + (accessor["count"] - 1) * stride + 8
+        if accessor["count"] < 1 or final_byte > len(binary):
+            raise ValueError("Texcoord accessor exceeds the GLB binary chunk")
+        for index in range(accessor["count"]):
+            element_offset = offset + index * stride
+            u, v = struct.unpack_from("<2f", binary, element_offset)
+            if not math.isfinite(u) or not math.isfinite(v):
+                raise ValueError("Texcoord values must be finite")
+            struct.pack_into(
+                "<2f",
+                binary,
+                element_offset,
+                round(u, _TEXCOORD_DECIMALS),
+                round(v, _TEXCOORD_DECIMALS),
+            )
+
+
 def canonicalize_triangle_indices(path):
     path = pathlib.Path(path)
     chunks = _read_chunks(path.read_bytes())
@@ -62,6 +98,7 @@ def canonicalize_triangle_indices(path):
     for mesh in document.get("meshes", ()):
         for primitive in mesh.get("primitives", ()):
             _canonicalize_primitive_indices(document, binary, primitive)
+            _canonicalize_primitive_texcoords(document, binary, primitive)
 
     output = bytearray(struct.pack("<4sII", b"glTF", 2, 0))
     for chunk_type, data in chunks:

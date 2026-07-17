@@ -13,6 +13,7 @@ const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),
 );
@@ -217,76 +218,6 @@ async function collectBenchmark(pageUrl) {
   const page = await browser.newPage({
     viewport: { width: viewportWidth, height: viewportHeight },
   });
-  if (REQUIRE_HARDWARE_GPU) {
-    await page.addInitScript(() => {
-      const nativeRequestAnimationFrame = globalThis.requestAnimationFrame.bind(globalThis);
-      const pendingQueries = [];
-      const samplesNs = [];
-      let pendingIndex = 0;
-      let targetCallback;
-      let context;
-      let extension;
-      let initializationAttempted = false;
-
-      globalThis.__solarVoyagerGpuTiming = { error: null, samplesNs };
-
-      function initializeTimerQuery() {
-        if (initializationAttempted) return;
-        initializationAttempted = true;
-        const canvas = globalThis.document.querySelector('#space-canvas');
-        if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
-          globalThis.__solarVoyagerGpuTiming.error = 'Space canvas unavailable.';
-          return;
-        }
-        context = canvas.getContext('webgl2');
-        extension = context?.getExtension('EXT_disjoint_timer_query_webgl2');
-        if (context === null || extension === null) {
-          globalThis.__solarVoyagerGpuTiming.error = 'EXT_disjoint_timer_query_webgl2 unavailable.';
-        }
-      }
-
-      function collectAvailableQueries() {
-        while (pendingIndex < pendingQueries.length) {
-          const query = pendingQueries[pendingIndex];
-          if (!context.getQueryParameter(query, context.QUERY_RESULT_AVAILABLE)) return;
-          const disjoint = context.getParameter(extension.GPU_DISJOINT_EXT);
-          const elapsedNs = context.getQueryParameter(query, context.QUERY_RESULT);
-          context.deleteQuery(query);
-          pendingIndex += 1;
-          if (!disjoint) samplesNs.push(elapsedNs);
-        }
-      }
-
-      globalThis.requestAnimationFrame = (callback) => {
-        targetCallback ??= callback;
-        return nativeRequestAnimationFrame((timeMs) => {
-          if (callback !== targetCallback) {
-            callback(timeMs);
-            return;
-          }
-          initializeTimerQuery();
-          if (context === undefined || extension === undefined) {
-            callback(timeMs);
-            return;
-          }
-          collectAvailableQueries();
-          const query = context.createQuery();
-          if (query === null) {
-            globalThis.__solarVoyagerGpuTiming.error = 'Unable to create GPU timer query.';
-            callback(timeMs);
-            return;
-          }
-          context.beginQuery(extension.TIME_ELAPSED_EXT, query);
-          try {
-            callback(timeMs);
-          } finally {
-            context.endQuery(extension.TIME_ELAPSED_EXT);
-            pendingQueries.push(query);
-          }
-        });
-      };
-    });
-  }
   const consoleErrors = [];
   const pageErrors = [];
 
@@ -298,9 +229,40 @@ async function collectBenchmark(pageUrl) {
   page.on('pageerror', (error) => {
     pageErrors.push(error.message);
   });
+  page.on('crash', () => {
+    pageErrors.push('Benchmark page crashed.');
+  });
 
   try {
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(
+      '#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]',
+      { state: 'attached', timeout: 30_000 },
+    );
+    await page.waitForFunction(
+      (telemetryProperty) => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) return false;
+        const telemetry = canvas[telemetryProperty];
+        return telemetry !== undefined && telemetry.frameSampleCount > 0;
+      },
+      TELEMETRY_PROPERTY,
+      { timeout: 30_000 },
+    );
+
+    const canvas = await page.locator('#space-canvas').evaluate((element) => {
+      if (!(element instanceof globalThis.HTMLCanvasElement)) {
+        throw new Error('Expected #space-canvas to be a canvas element.');
+      }
+
+      const bounds = element.getBoundingClientRect();
+      return {
+        backingHeight: element.height,
+        backingWidth: element.width,
+        cssHeight: bounds.height,
+        cssWidth: bounds.width,
+      };
+    });
 
     const gpu = await page.locator('#space-canvas').evaluate((element) => {
       if (!(element instanceof globalThis.HTMLCanvasElement)) {
@@ -324,8 +286,8 @@ async function collectBenchmark(pageUrl) {
     }
 
     const measurement = await page.evaluate(
-      ({ sampleFrames, warmupFrames }) =>
-        new Promise((resolvePromise) => {
+      ({ sampleFrames, telemetryProperty, warmupFrames }) =>
+        new Promise((resolvePromise, rejectPromise) => {
           const frameDeltasMs = new Float64Array(sampleFrames);
           let framesToWarm = warmupFrames;
           let previousFrameTimeMs = 0;
@@ -363,51 +325,55 @@ async function collectBenchmark(pageUrl) {
             }
 
             const heapAfterBytes = readHeapBytes();
+            const telemetryHost = globalThis.document.querySelector('#space-canvas');
+            if (!(telemetryHost instanceof globalThis.HTMLCanvasElement)) {
+              rejectPromise(new Error('Telemetry canvas disappeared during the benchmark.'));
+              return;
+            }
+            const telemetry = telemetryHost[telemetryProperty];
+            if (telemetry === undefined) {
+              rejectPromise(new Error('Render telemetry is not exposed to the benchmark.'));
+              return;
+            }
+            const telemetryFrameDeltasMs = new Array(telemetry.frameSampleCount);
+            for (let age = 0; age < telemetry.frameSampleCount; age += 1) {
+              telemetryFrameDeltasMs[age] = telemetry.getFrameTimeByAge(age);
+            }
+            const telemetryGpuTimesMs = new Array(telemetry.gpuTimeSampleCount);
+            for (let age = 0; age < telemetry.gpuTimeSampleCount; age += 1) {
+              telemetryGpuTimesMs[age] = telemetry.getGpuTimeByAge(age);
+            }
             resolvePromise({
               frameDeltasMs: Array.from(frameDeltasMs),
               heapAfterBytes,
               heapBeforeBytes,
+              telemetryFrameDeltasMs,
+              telemetryGpuTimesMs,
+              telemetrySnapshot: globalThis.structuredClone(telemetry.snapshot),
             });
           }
 
           globalThis.requestAnimationFrame(measureFrame);
         }),
-      { sampleFrames: SAMPLE_FRAMES, warmupFrames: WARMUP_FRAMES },
+      {
+        sampleFrames: SAMPLE_FRAMES,
+        telemetryProperty: TELEMETRY_PROPERTY,
+        warmupFrames: WARMUP_FRAMES,
+      },
     );
 
-    const canvas = await page.locator('#space-canvas').evaluate((element) => {
-      if (!(element instanceof globalThis.HTMLCanvasElement)) {
-        throw new Error('Expected #space-canvas to be a canvas element.');
-      }
-
-      const bounds = element.getBoundingClientRect();
-      return {
-        backingHeight: element.height,
-        backingWidth: element.width,
-        cssHeight: bounds.height,
-        cssWidth: bounds.width,
-      };
-    });
-
     const sortedFrameDeltasMs = measurement.frameDeltasMs.toSorted((left, right) => left - right);
-    const gpuTiming = REQUIRE_HARDWARE_GPU
-      ? await page.evaluate(() => globalThis.__solarVoyagerGpuTiming)
-      : null;
-    if (gpuTiming?.error !== null && gpuTiming?.error !== undefined) {
-      throw new Error(`GPU timing failed: ${gpuTiming.error}`);
-    }
-    const sortedGpuRenderMs =
-      gpuTiming === null
-        ? []
-        : gpuTiming.samplesNs
-            .slice(-SAMPLE_FRAMES)
-            .map((elapsedNs) => elapsedNs / 1_000_000)
-            .toSorted((left, right) => left - right);
+    const sortedGpuRenderMs = measurement.telemetryGpuTimesMs.toSorted(
+      (left, right) => left - right,
+    );
     if (REQUIRE_HARDWARE_GPU && sortedGpuRenderMs.length < SAMPLE_FRAMES) {
       throw new Error(
         `GPU timing returned ${String(sortedGpuRenderMs.length)} samples; expected ${String(SAMPLE_FRAMES)}.`,
       );
     }
+    const sortedTelemetryFrameDeltasMs = measurement.telemetryFrameDeltasMs.toSorted(
+      (left, right) => left - right,
+    );
     const result = {
       timestamp: new Date().toISOString(),
       gitSha: readGitSha(),
@@ -420,6 +386,13 @@ async function collectBenchmark(pageUrl) {
       canvas,
       consoleErrors,
       pageErrors,
+      telemetry: {
+        frameSampleCount: sortedTelemetryFrameDeltasMs.length,
+        medianMs: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.5)),
+        p75Ms: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.75)),
+        p99Ms: roundMilliseconds(percentile(sortedTelemetryFrameDeltasMs, 0.99)),
+        snapshot: measurement.telemetrySnapshot,
+      },
     };
 
     if (sortedGpuRenderMs.length > 0) {

@@ -1,8 +1,8 @@
 id: T0054
 title: HUD framework (Preact overlay) + orbit readout + clock
-status: TODO
-agent: ""
-branch: ""
+status: DONE
+agent: chatgpt
+branch: task/T0054-hud-framework
 depends_on: [T0050]
 milestone: M3
 spec: |
@@ -12,4 +12,29 @@ spec: |
 acceptance:
   - HUD updates at 60 fps without full re-renders (signals granularity)
   - Values match sim-side osculating elements exactly
-handoff_notes: ""
+handoff_notes: |
+  Implemented a stable 10 Hz @preact/signals graph whose raw scalar leaves copy
+  SimSnapshot values exactly and whose computed presentation signals patch DOM text
+  without application render cascades. Added responsive orbit and dual-clock panels,
+  wired the canonical new-game SimulationCore into the measured rAF loop, and kept the
+  render/camera body-position buffer stable. During live playtest, found that the
+  reserved osculating snapshot fields were never populated; added allocation-free
+  dominant-body circular/hyperbolic conversion with setup-time scratch and analytic
+  tests under physics-spec §6/§7.1. No SimSnapshot interface change was required.
+  Local gates: 355 TypeScript tests + 3 skipped, 49 Python tests, lint, typecheck,
+  formatting, build, task schema, asset budgets, all six browser regressions, live
+  desktop and 390x844 playtests with real Earth orbit/UTC/MET values and zero console
+  warnings/errors. Simulation benchmark: 0.080 ms/step, two snapshot buffers, negative
+  retained heap growth. Ready for independent exact-head review.
+  First independent review of SHA 2d4d886 found Critical 0, Important 1, Minor 3.
+  Addressed all findings: committed identical browser benchmarks for pre-task main and
+  the implementation (p75/p99 unchanged at 150.0/166.6 ms, heap delta improved from
+  +1,222,220 B to +332,265 B); added a real-DOM regression proving App, OrbitReadout,
+  and DualClock each render once while the clock text updates; covered nonzero true
+  anomaly and circular-inclined publication; and removed blank document EOF lines.
+  Awaiting exact-head re-review and CI.
+  Re-review of SHA 4335a9f confirmed Critical 0, Important 0, Minor 1; all
+  substantive findings are resolved. The sole minor was one blank EOF line in the
+  new Chromium regression script, removed in the following mechanical fix.
+  Final exact-head review approved SHA e92c3f8 with Critical 0, Important 0,
+  Minor 0. Exact-head CI passed every gate, including the HUD signal regression.

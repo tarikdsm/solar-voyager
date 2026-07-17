@@ -18,10 +18,12 @@ afterEach(async () => {
   })));
 });
 
-async function createAssetDirectory(id = 'earth') {
+async function createAssetDirectory(id = 'earth', category = 'planets') {
   const root = await mkdtemp(join(tmpdir(), 'solar-voyager-ingest-'));
   temporaryDirectories.push(root);
-  const directory = join(root, 'assets', 'models', 'planets', id);
+  const directory = category === 'ship'
+    ? join(root, 'assets', 'models', 'ship')
+    : join(root, 'assets', 'models', category, id);
   await mkdir(directory, { recursive: true });
   return directory;
 }
@@ -78,6 +80,21 @@ describe('asset ingest validation', () => {
     const result = await validateAssetDirectory(directory, { category: 'planets', id: 'venus' });
 
     expect(result.findings.join('\n')).toContain('primary body transform must preserve the +Y-up');
+  });
+
+  it('rejects a ship whose authored nose is not aligned to local +X', async () => {
+    const directory = await createAssetDirectory('ship', 'ship');
+    await writeFile(join(directory, 'ship.glb'), createGlb({
+      namedNodes: [
+        { name: 'hull_tip', translation: [0, 0, -12] },
+        { name: 'engine_nozzle', translation: [0, 0, 11.5] },
+      ],
+    }));
+    await writeFile(join(directory, 'SOURCES.md'), '- ship.glb — fixture\n');
+
+    const result = await validateAssetDirectory(directory, { category: 'ship', id: 'ship' });
+
+    expect(result.findings.join('\n')).toContain('ship nose must align with local +X');
   });
 
   it('reports normal format, aspect ratio, and missing attribution', async () => {

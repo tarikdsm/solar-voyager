@@ -86,6 +86,37 @@ g(r, t) = Σ_i −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³     # Newtonian n
 
 **Emergent feel (do not script it):** coordinate acceleration parallel to v falls as α/γ³ — the drive feels "heavier" the faster you go; combined with E = c·|Δp| cost (§5), expensive maneuvers (plane changes, near-c pushes, ecliptic escapes) are *felt* as sluggish response, like a power-limited vehicle.
 
+### 3.0.1 Attitude and commanded proper acceleration (ADR-025)
+
+Attitude quaternion order is `[x,y,z,w]`; it rotates the ship-local `+X`
+nose/drive axis into the inertial ecliptic frame. Default maximum proper
+acceleration is standard gravity, `α_max = 9.80665 m/s² = 0.00980665 km/s²`,
+overridable in ship configuration. For throttle fraction `f ∈ [0,1]`:
+
+```
+α_vector = f · α_max · forward
+F_N = m_kg · (1000 · |α_vector|)
+P_W = F_N · (1000 · c_km/s)
+```
+
+Automatic orbital holds use the instantaneous maximum-gravity body
+`argmax_i μ_i/|r-r_i|²` as reference. With `r_rel=r-r_body` and
+`v_rel=v-v_body`: prograde/retrograde are `±normalize(v_rel)`, radial out/in
+are `±normalize(r_rel)`, and normal/antinormal are
+`±normalize(r_rel × v_rel)`. Target hold is `normalize(r_target-r)`.
+Degenerate directions retain the previous finite forward vector.
+
+Manual rates are body-frame angular velocity `ω` in rad/s. Within one
+propagation call they are constant and evaluated exactly at every DP54 stage.
+With `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about `+Z`:
+
+```
+q(t) = normalize(q0 ⊗ [axis(ω)·sin(|ω|Δt/2), cos(|ω|Δt/2)])
+```
+
+The endpoint attitude commits only when the propagation succeeds. Hold-mode
+directions are recomputed at every stage, so thrust follows the curved orbit.
+
 ### 3.1 Integrator: Dormand–Prince 5(4), adaptive (ADR-002)
 
 - Embedded RK5(4) pair, FSAL, standard DP54 tableau (cite Hairer–Nørsett–Wanner; tableau constants in `dp54.ts` must match the published values to full double precision).
@@ -99,6 +130,20 @@ Ladder: `1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6, 1e7`. Per frame the sim advances
 
 - **Thrust allowed at warp ≤ 1000** ("physics warp"). Above 1000x throttle is forced to 0 (coast).
 - **Substep budget:** 4,000 accepted DP54 steps per frame. If the controller cannot cover `Δt` within budget (deep in a gravity well at high warp), warp auto-clamps to the highest sustainable tier; HUD shows the clamp and reason. Never trade accuracy for speed silently.
+
+The highest sustainable tier is selected by integrating ascending canonical
+tier endpoints with one cumulative accepted-step budget. Every completed tier
+is a rollback checkpoint; a partially completed next tier is discarded. The
+published `effectiveWarp` is therefore always a ladder member and coordinate
+time advances by exactly `wallDt · effectiveWarp`. If 1x itself cannot finish,
+the frame fails without publishing. DP54 tolerances are never relaxed.
+
+Entering a requested tier above 1000x clears active throttle and invalidates
+the thrust trajectory once. Positive throttle commands remain forced to zero
+until the requested tier returns to 1000x or below; lowering warp does not
+restore prior throttle intent. `INTEGRATION_BUDGET` takes reason priority when
+the effective tier is reduced; otherwise sustainable coast-only warp reports
+`THRUST_LOCKOUT`.
 
 ### 3.3 Optional mutual n-body mode ("dynamic bodies", default OFF)
 
@@ -165,19 +210,44 @@ P = F·c            (drive power for thrust F; braking and turning cost the same
 E_spent = ∫ P dt   (coordinate time; integrated inside the same substeps as motion — warp-invariant)
 ```
 
+`SimulationCore` integrates five private ledger quadratures alongside
+`(r,u,τ)` without expanding the public seven-component ship state. For
+`α_vector` in km/s²:
+
+```
+dE/dt = m · (1000·|α_vector|) · (1000·c)
+d(proper Δv)/dt = (1000·|α_vector|)/γ
+d(proper Δv_vector)/dt = (1000·α_vector)/γ
+```
+
+Ledger components use the same accepted/rejected DP54 stages and transactional
+rollback as motion. The vector is an inertial signed integral; scalar proper
+Δv is its non-negative path integral.
+
 - **Headline HUD metric: cumulative E_spent, displayed in Wh** (1 Wh = 3600 J; internal unit J). Formatter uses SI prefixes k, M, G, T, P, E, Z, Y — values are astronomically large by design (a LEO plane change is TWh-scale; pushing toward c diverges as (γ−1)mc²). 3 significant digits, e.g. `4.82 PWh`.
 - **Current power draw** `P = F·c` (W, same prefix formatter) shown live while thrusting.
 - Secondary readouts:
   - **Proper Δv** `= ∫ α dτ` (m/s) — what the crew experiences; the orbital-mechanics currency at low speed.
   - **Kinetic energy change** `ΔE_kin`, with `E_kin = (γ−1)·m·c²` — exposes both the Oberth effect and the relativistic divergence near c.
-- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, τ_start, τ_end, E_spent, proper Δv, peak power, dominant body, prograde/normal/radial decomposition}`.
+- **Burn log entry** per contiguous thrust interval: `{t_start, t_end, τ_start, τ_end, E_spent, proper Δv, peak power, dominant body, prograde/normal/radial decomposition}`. The dominant body and normalized local axes are captured at burn start: `prograde = normalize(v_rel)`, `normal = normalize(r_rel × v_rel)`, `radial = normalize(r_rel)`. Components are signed dot products of the integrated inertial proper-Δv vector with those start axes. History is a preallocated 256-entry ring; oldest entries are overwritten.
 - **Why plane changes hurt (verify in tests):** E = c·|Δp| for any momentum change; leaving the ecliptic plane inherited from the solar system's angular momentum requires rotating a ~30 km/s momentum vector — the ledger must price that honestly (§7.8).
 - **Launch losses** (deferred launch phase only): gravity loss `= ∫ (μ⊕/r²)·sin γ_fp dt`, drag loss `= ∫ (D/m) dt`.
 
 ## 6. Analysis
 
 - **Solar-system barycenter (CM):** `r_cm = Σ mᵢrᵢ / Σ mᵢ`, `v_cm = Σ mᵢvᵢ / Σ mᵢ` over the whole catalog (masses from GM/G), evaluated per frame from rails. The HUD state-vector widget displays, **relative to the CM**: ship velocity `v − v_cm` (this starts at ~30 km/s in LEO — Earth's real orbital velocity, deliberately visible from the first frame), proper acceleration vector, **relativistic linear momentum** `p = γ·m·(v − v_cm)` and **angular momentum** `L = (r − r_cm) × p`. Also derived: speed as % of c, and γ.
-- **Dominant body:** argmax over bodies of `μᵢ/|r − rᵢ|²`; SOI radii (`r_SOI = a·(m/M)^(2/5)`, precomputed in bodies.json) as tie-break/hysteresis (10% band to avoid flicker).
+- **Dominant body:** start from the instantaneous argmax over bodies of
+  `gᵢ = μᵢ/|r − rᵢ|²`, then apply the catalogued SOI hierarchy and a 10% band
+  (ADR-029). With previous dominant `D` and raw challenger `C`:
+  - no valid `D` publishes `C` immediately;
+  - a descendant `C` replaces its ancestor `D` only when
+    `g_C > 1.1·g_D` and `|r-r_C| ≤ 0.9·r_SOI,C`;
+  - an ancestor `C` cannot reclaim dominance while
+    `|r-r_D| ≤ 1.1·r_SOI,D`, and afterward still requires
+    `g_C > 1.1·g_D`;
+  - unrelated contenders require `g_C > 1.1·g_D`.
+  SOI radii use `r_SOI = a·(m/M)^(2/5)` and are precomputed in bodies.json;
+  the root's null SOI is compiled as infinity.
 - **Osculating elements** wrt dominant body from state vectors (standard conversion via h, e, n vectors; handle e→0 and i→0 degeneracies explicitly). Computed every frame for the HUD; it is an *approximation* in an n-body field — the worker prediction is the truth.
 - **Trajectory prediction:** worker propagates thrust-free with §3.1 over max(2 osculating periods, 90 days, user-extended); downsampled polyline ≤ 2000 points; events: SOI transitions, closest approach to target, **impact** (path crosses body radius + atmosphere top) with time-to-impact.
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.

@@ -1,0 +1,83 @@
+# T0055 Navball Benchmark
+
+## Method
+
+All scaffold captures used the unchanged `npm run bench:scaffold` harness with
+a production build, Playwright Chromium, a 1280x720 viewport, 120 warmup frames,
+and 600 measured frames. The baseline is `main` immediately before T0055. Three
+after captures exercise the same exact implementation head. Every scaffold run
+selected SwiftShader, recorded no console/page errors, and released its preview
+port.
+
+## Before / After
+
+| Metric            | Before (`2cfd14c`) | After (`13d5219`) | Repeat (`13d5219`) | Third (`13d5219`) |
+| ----------------- | -----------------: | ----------------: | -----------------: | ----------------: |
+| Median frame time |          149.90 ms |         150.00 ms |          150.00 ms |         150.00 ms |
+| p75 frame time    |          150.00 ms |         150.10 ms |          150.00 ms |         150.00 ms |
+| p99 frame time    |          166.70 ms |         183.30 ms |          183.30 ms |         183.40 ms |
+| Internal p99      |          166.68 ms |         166.70 ms |          166.70 ms |         166.70 ms |
+| JS heap delta     |         +858,453 B |        +695,776 B |         -358,946 B |        +679,301 B |
+| Draw calls        |                  6 |                 6 |                  6 |                 6 |
+| Triangles         |             48,564 |            48,564 |             48,564 |            48,564 |
+| Sampled UI time   |            0.00 ms |           0.00 ms |            0.00 ms |           0.10 ms |
+| Console errors    |                  0 |                 0 |                  0 |                 0 |
+| Page errors       |                  0 |                 0 |                  0 |                 0 |
+
+The exact-head captures preserve the median, p75, draw calls, and triangle
+count. The outer requestAnimationFrame collector consistently observed one
+additional SwiftShader scheduling interval at p99, while the independent
+in-loop telemetry remained 166.70 ms in all three after captures. The navball
+publisher is included in the measured UI interval and sampled at 0.10 ms or
+less, within the 1 ms HUD budget.
+
+## Post-review exact head
+
+| Metric            | Final (`430327d`) | Final repeat (`430327d`) |
+| ----------------- | ----------------: | -----------------------: |
+| Median frame time |         150.00 ms |                150.00 ms |
+| p75 frame time    |         150.00 ms |                150.00 ms |
+| p99 frame time    |         183.30 ms |                183.30 ms |
+| Internal p99      |         180.23 ms |                183.40 ms |
+| JS heap delta     |        +718,161 B |               +340,212 B |
+| Draw calls        |                 6 |                        6 |
+| Triangles         |            48,564 |                   48,564 |
+| Sampled UI time   |           0.00 ms |                  0.00 ms |
+| Console errors    |                 0 |                        0 |
+| Page errors       |                 0 |                        0 |
+
+The exact post-review implementation replaces the incorrect straight ground
+fill with static visible half-ellipse caps. Median/p75 and renderer counts remain
+unchanged. Both rolling telemetry windows contained the same approximately one
+SwiftShader scheduling-interval tail seen by the outer collector; synchronous UI
+publication remained 0.00 ms in both final snapshots.
+
+## Hardware composition A/B
+
+To isolate browser composition from the software-renderer scheduler, each A/B
+capture measured 600 frames with the production navball visible, required
+`#navball` to exist, removed it, asserted that zero matching elements remained,
+then measured 600 more frames. Simulation and signal publication remained active.
+
+| Viewport / capture | Visible median/p75/p99 | Removed median/p75/p99 | Visible/removed max |
+| ------------------ | ---------------------: | ---------------------: | ------------------: |
+| 1280x720           |     6.10/6.10/12.20 ms |      6.10/6.10/6.30 ms |      12.70/12.20 ms |
+| 1280x720 repeat    |     6.10/6.10/12.30 ms |      6.10/6.10/6.50 ms |      72.80/12.20 ms |
+| 1920x1080          |     6.10/6.10/12.40 ms |      6.10/6.10/6.30 ms |      54.50/12.20 ms |
+
+The corrected Intel UHD D3D11 A/B shows a repeatable approximately 6 ms p99
+composition tail from the navball, consistent with the software-renderer tail.
+Median and p75 remained 6.10 ms, and visible p99 stayed below the 16.67 ms floor
+at both benchmark sizes. Two visible captures contained isolated maximum outliers;
+they are retained rather than filtered. Exact removal proof and results are in
+`T0055-hardware-ab.json`.
+
+The first and third after samples retained about 0.7 MB, while the immediate
+repeat ended with a negative heap delta. This non-GC-forced browser metric is
+sensitive to collection timing and does not indicate consistent retained
+growth. The static SVG adds no WebGL work, signal publication remains gated to
+10 Hz, and all six marker updates preserve component render count at one.
+
+Absolute approximately 7 fps scaffold throughput is SwiftShader performance.
+The corrected hardware captures sustain substantial median/p75 headroom and
+remain below a 16.67 ms interval at p99, including at 1920x1080.

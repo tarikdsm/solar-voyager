@@ -1,8 +1,8 @@
 id: T0056
 title: Warp control, energy panel, target panel UI
-status: TODO
-agent: ""
-branch: ""
+status: DONE
+agent: chatgpt
+branch: task/T0056-warp-dv-target-ui
 depends_on: [T0054, T0052, T0053]
 milestone: M3
 spec: |
@@ -16,4 +16,75 @@ acceptance:
   - Clamp reason string surfaces within one frame of clamping
   - Energy figures use the shared prefix formatter (4.82 PWh style, 3 sig figs)
   - Dual clock visibly diverges during a gamma > 1.1 cruise
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review on task/T0056-warp-dv-target-ui. The HUD now
+  exposes all ten canonical warp tiers through Commands.setWarp, shows requested
+  selection versus effective warp, and publishes integration-budget/thrust-lockout
+  reasons on every frame. Numeric orbit, energy, and target telemetry remains on
+  the existing 10 Hz sampled signal graph. Energy and power delegate to the shared
+  core formatters; proper delta-v and signed kinetic-energy change are secondary
+  session readouts. A snapshot-backed subsection now reports the active burn, or
+  the latest completed burn, with energy and proper delta-v without allocating in
+  the frame loop. The target selector writes only through Commands.setTarget and derives
+  current distance/relative speed directly from snapshot arrays. Closest approach
+  explicitly remains unavailable until the authoritative T0070 predictor exists.
+
+  Acceptance evidence: the clamp regression publishes a 1,000x request, 100x
+  effective tier, and INTEGRATION_BUDGET at 16 ms while the 10 Hz sampler returns
+  false, then observes the reason immediately. Shared-format tests produce exactly
+  4.82 PWh and 3.21 TW. A gamma=1.25 fixture renders coordinate 00:00:10 versus
+  proper 00:00:08 plus the gamma label. Focused HUD coverage is 10/10 tests.
+
+  Chromium DOM regression clicks 100x, selects Mars, verifies all six HUD component
+  functions stay at one render, and checks both commands, aria-pressed state, and
+  target text. It also verifies the exact same-frame clamp DOM text. Its 721, 800,
+  and 850 px regressions click every warp tier, reject panel intersections, and
+  exercise wheel scrolling over a non-control panel. The 1280x720 and 390x844
+  assertions prevent clipping, require vertical scrolling, and reject horizontal
+  overflow. Live playtest
+  requested 10,000,000x in LEO, observed an effective 1,000,000x with a gravity-well
+  reason, selected Mars, inspected desktop/mobile screenshots, and recorded zero
+  console errors or warnings. Test artifacts and the server were cleaned afterward.
+
+  The independent review's two Important and two Minor findings are resolved:
+  intermediate-width overlap is eliminated; per-burn accounting is published via
+  the ADR-028 snapshot contract; the clamp names the integration budget explicitly;
+  and signed energy promotes 999.5 J to 1.00 kJ.
+
+  Fresh full gates after those fixes: lint PASS; strict typecheck PASS; Prettier PASS; Vitest 364
+  passed / 3 skipped; Python 49/49; production build PASS; budgets PASS; 53 task
+  files PASS; all seven Chromium regressions PASS; simulation bench averaged
+  0.137037 ms and retained fewer bytes over 10,000 steps; diff check PASS.
+
+  Browser benchmark baseline 352c033 versus implementation 6581283 was identical
+  at median/p75/p99 149.9/150.0/166.7 ms with 6 draw calls and 48,564 triangles.
+  Sampled UI time was at most 0.10 ms. Heap deltas were -48,245 bytes before,
+  +723,279 bytes after, and +131,257 bytes on an immediate repeat; all raw reports
+  and a transparent GC-timing interpretation are committed under docs/bench/.
+
+  Post-review exact-head captures preserved the same frame distribution and render
+  counts: 150.0/150.0/166.7 ms and 149.9/150.0/166.7 ms on repeat, with zero
+  console/page errors. Heap deltas were +825,820 bytes and -71,068 bytes on the
+  immediate repeat, providing no evidence of consistent retained growth.
+
+  A second independent review confirmed all four original findings closed, then
+  found that the stacked overlay captured camera input and that the enlarged
+  energy panel still collided at 701-703 px tall. Both regressions were reproduced
+  before the fix. The overlay is transparent to hit-testing again, individual
+  panels remain interactive/scrollable, and the height breakpoint now derives from
+  the 44 rem layout boundary. Chromium covers real pointer/wheel delivery to a
+  backing canvas at 900x720, 800x720, and 390x844 plus collision checks at
+  1280x701/703/704.
+
+  Production live playtest independently delivered pointer and wheel events to
+  #space-canvas at tablet/mobile widths, scrolled the HUD 300/252 px over a panel,
+  found zero collisions in the height boundary cases, and recorded zero console
+  errors or warnings. The final exact-code benchmark repeat returned to
+  149.9/150.0/166.7 ms with 6 draws and 48,564 triangles; raw samples, including
+  the first sample's documented outer-harness p99 excursion, are retained under
+  docs/bench/. Same-head simulation benchmark averaged 0.080992 ms and retained
+  -182,304 bytes.
+
+  Independent final re-review approved exact SHA
+  bf57c1fc2f4ce74a192b77d35e8f2ba0d0d98801 with Critical 0, Important 0,
+  Minor 0. Exact-head GitHub CI passed before the transition to DONE.

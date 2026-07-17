@@ -1,8 +1,8 @@
 id: T0053
 title: Energy ledger (photon drive, Wh) + burn log
-status: TODO
-agent: ""
-branch: ""
+status: DONE
+agent: chatgpt
+branch: task/T0053-deltav-ledger
 depends_on: [T0051]
 milestone: M3
 spec: |
@@ -15,4 +15,18 @@ acceptance:
   - Hohmann LEO->GEO proper dv within 1% of 3.90 km/s AND E_spent within 1% of c*m*dv (spec 7.7)
   - Plane-change pricing test passes (spec 7.10)
   - Same burn at 1x and 100x warp yields identical ledger (test)
-handoff_notes: ""
+handoff_notes: |
+  Implemented five passive DP54 ledger quadratures without expanding the public
+  seven-component shipState, numeric snapshot totals/kinetic delta, a preallocated
+  256-entry burn log with signed start-frame decomposition, and 3-significant-digit
+  Wh/W formatters. ADR-027 and physics-spec section 5 define the contract.
+  Acceptance evidence: canonical 3.90 km/s Hohmann cost and c*m*dv energy are within
+  1%; continuous 90-degree/30 km/s plane turn matches integral(F*c dt) within 2% and
+  exceeds the impulsive momentum lower bound; nonzero 1x/100x burns match.
+  Local gates: 344 TypeScript tests + 3 skipped, 49 Python tests, format/lint/typecheck,
+  build, schema, budgets, six browser regressions, live Earth-to-Jupiter playtest with
+  zero console warnings/errors, and 0.121 ms/step benchmark with two snapshots and
+  negative retained heap growth. After merge, resume blocked T0052 PR #31 and add its
+  segmented-warp nonzero ledger regression.
+  Independent re-review approved exact implementation SHA d299833 with zero Critical,
+  Important, or Minor findings after 33 focused tests and typecheck. Exact-head CI passed.

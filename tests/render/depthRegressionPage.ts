@@ -1,7 +1,12 @@
 import { CircleGeometry, LessDepth, Mesh, MeshBasicMaterial, WebGLRenderer } from 'three';
 
 import type { ReadonlyVec3 } from '../../src/core/vec3.js';
-import { createRenderer, createRendererParameters } from '../../src/render/createRenderer.js';
+import {
+  createRenderer,
+  createRendererParameters,
+  createWebGL2Context,
+  type DepthStrategy,
+} from '../../src/render/createRenderer.js';
 import { CameraRelativeSpaceScene } from '../../src/render/spaceScene.js';
 
 const AU_KM = 149_597_870.7;
@@ -26,7 +31,7 @@ interface DepthCaseResult {
 }
 
 interface DepthRegressionResult {
-  readonly mode: 'logarithmic' | 'standard-control';
+  readonly mode: DepthStrategy | 'standard-control';
   readonly cases: readonly DepthCaseResult[];
   readonly glError: number;
 }
@@ -145,13 +150,20 @@ if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error('Depth regression canvas was not found.');
 }
 
-const isStandardControl = new URLSearchParams(window.location.search).has('standard-control');
-const renderer = isStandardControl
-  ? new WebGLRenderer({
-      ...createRendererParameters(canvas),
-      logarithmicDepthBuffer: false,
-    })
-  : createRenderer(canvas);
+const searchParameters = new URLSearchParams(window.location.search);
+const isStandardControl = searchParameters.has('standard-control');
+const requestedDepth = searchParameters.get('depth');
+const depthStrategy: DepthStrategy = requestedDepth === 'reversed' ? 'reversed' : 'logarithmic';
+let renderer: WebGLRenderer;
+if (isStandardControl) {
+  const context = createWebGL2Context(canvas).context;
+  renderer = new WebGLRenderer({
+    ...createRendererParameters(canvas, context, 'logarithmic'),
+    logarithmicDepthBuffer: false,
+  });
+} else {
+  renderer = createRenderer(canvas, { depthStrategy, pixelRatio: 1 }).renderer;
+}
 renderer.setPixelRatio(1);
 renderer.setSize(CANVAS_SIZE, CANVAS_SIZE, false);
 renderer.setClearColor(0x000000, 1);
@@ -165,7 +177,7 @@ for (let index = 0; index < cases.length; index += 1) {
 }
 
 window.__depthRegressionResult = {
-  mode: isStandardControl ? 'standard-control' : 'logarithmic',
+  mode: isStandardControl ? 'standard-control' : depthStrategy,
   cases: results,
   glError: renderer.getContext().getError(),
 };

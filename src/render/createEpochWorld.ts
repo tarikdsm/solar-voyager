@@ -2,6 +2,7 @@ import type { WebGLRenderer } from 'three';
 
 import type { ReadonlyVec3 } from '../core/vec3.js';
 import { createEpochState } from '../game/createEpochState.js';
+import { OrbitCameraController, type CameraFocusTarget } from '../game/orbitCameraController.js';
 import { loadAssetManifest } from './assetManifest.js';
 import { BodyAssetLoader } from './bodyAssetLoader.js';
 import {
@@ -12,6 +13,7 @@ import {
 } from './bodyVisualSystem.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 import { SolarLighting } from './solarLighting.js';
+import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
 
@@ -22,6 +24,8 @@ export interface EpochWorld {
   readonly visualSystem: BodyVisualSystem;
   readonly starfield: Starfield;
   readonly lighting: SolarLighting;
+  readonly osculatingConic: OsculatingConicOverlay;
+  readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly positionsKm: Float64Array;
 }
@@ -61,12 +65,13 @@ export async function createEpochWorld(
 ): Promise<EpochWorld> {
   const epochState = createEpochState();
   const definitions: BodyVisualDefinition[] = [];
+  const cameraTargets: CameraFocusTarget[] = [];
   let sunIndex = -1;
   let earthIndex = -1;
   let solarRadiusKm = 0;
-  for (let bodyIndex = 0; bodyIndex < epochState.bodies.length; bodyIndex += 1) {
-    const body = epochState.bodies[bodyIndex];
-    if (body === undefined) throw new Error('Epoch body definition array is sparse.');
+  for (let index = 0; index < epochState.bodies.length; index += 1) {
+    const body = epochState.bodies[index];
+    if (body === undefined) throw new Error('Epoch body array is sparse.');
     definitions.push({
       id: body.id,
       category: runtimeCategory(body.kind),
@@ -75,20 +80,33 @@ export async function createEpochWorld(
       albedoColor: parseAlbedoColor(body.albedoColor),
     });
     if (body.id === 'sun') {
-      sunIndex = bodyIndex;
+      sunIndex = index;
       solarRadiusKm = body.meanRadiusKm;
     }
-    if (body.id === 'earth') earthIndex = bodyIndex;
+    if (body.id === 'earth') earthIndex = index;
+    cameraTargets.push({
+      id: body.id,
+      positionOffset: index * 3,
+      meanRadiusKm: body.meanRadiusKm,
+    });
   }
   if (sunIndex < 0 || earthIndex < 0 || solarRadiusKm <= 0) {
     throw new Error('Epoch lighting requires catalogued Sun and Earth definitions.');
   }
 
+  const cameraController = new OrbitCameraController({
+    positionsKm: epochState.positionsKm,
+    targets: cameraTargets,
+    initialFocusId: 'earth',
+    initialCameraPositionKm: epochState.cameraPositionKm,
+  });
+
   const spaceScene = new CameraRelativeSpaceScene();
+  const osculatingConic = new OsculatingConicOverlay(spaceScene);
   spaceScene.camera.lookAt(
-    epochState.cameraLookDirection.x,
-    epochState.cameraLookDirection.y,
-    epochState.cameraLookDirection.z,
+    cameraController.lookDirection.x,
+    cameraController.lookDirection.y,
+    cameraController.lookDirection.z,
   );
   spaceScene.camera.updateMatrix();
 
@@ -122,10 +140,12 @@ export async function createEpochWorld(
   );
 
   await visualSystem.initializeEager();
-  spaceScene.updateCameraRelative(epochState.cameraPositionKm);
+  spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
+  osculatingConic.line.visible = true;
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
+  osculatingConic.line.visible = false;
   visualSystem.initializeView(
-    epochState.cameraPositionKm,
+    cameraController.cameraPositionKm,
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height),
     spaceScene.camera.fov * (Math.PI / 180),
   );
@@ -135,7 +155,9 @@ export async function createEpochWorld(
     visualSystem,
     starfield,
     lighting,
-    cameraPositionKm: epochState.cameraPositionKm,
+    osculatingConic,
+    cameraController,
+    cameraPositionKm: cameraController.cameraPositionKm,
     positionsKm: epochState.positionsKm,
   };
 }

@@ -50,6 +50,18 @@ jobs:
       - name: Lighting and post-processing regression
         run: npm run test:lighting-post
 
+      - name: Camera controls regression
+        run: npm run test:camera-controls
+
+      - name: Renderer policy regression
+        run: npm run test:renderer-policy
+
+      - name: Telemetry overhead regression
+        run: npm run test:telemetry
+
+      - name: HUD signal granularity regression
+        run: npm run test:hud-signals
+
       - name: Tool tests
         run: npm run test:tools
 

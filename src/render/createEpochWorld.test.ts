@@ -42,6 +42,11 @@ describe('createEpochWorld', () => {
     const bodyCount = bodiesDocument.bodies.length;
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
+    expect(world.cameraController.focusId).toBe('earth');
+    expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
+    expect(world.cameraController.focusBody('jupiter')).toBe(true);
+    world.cameraController.update(1.5);
+    expect(world.cameraController.focusId).toBe('jupiter');
     expect(world.spaceScene.camera.getWorldDirection(new Vector3()).length()).toBeCloseTo(1, 12);
     const spheres = world.spaceScene.scene.children.filter(
       (child): child is Mesh => child instanceof Mesh,
@@ -74,6 +79,11 @@ describe('createEpochWorld', () => {
       starCatalog.starCount,
     );
     expect(world.starfield.points.material.uniforms.uPixelRatio?.value).toBe(2);
+    expect(world.osculatingConic.line.name).toBe('osculating-conic');
+    expect(world.osculatingConic.line.parent?.name).toBe('osculating-conic-anchor');
+    expect(world.spaceScene.scene.getObjectByName('osculating-conic')).toBe(
+      world.osculatingConic.line,
+    );
     expect(spheres.every((sphere) => sphere.geometry === spheres[0]?.geometry)).toBe(true);
     expect(world.visualSystem.getTier('sun')).toBe(2);
     expect(world.visualSystem.getTier('earth')).toBe(3);
