@@ -5,7 +5,14 @@ import { createEpochWorld } from '../../src/render/createEpochWorld.js';
 import { LightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
 import type { ProceduralSunQuality } from '../../src/render/proceduralSunState.js';
 
-const VIEWPORT_SIZE = 512;
+function viewportDimension(name: string, fallback: number): number {
+  const value = Number(new URLSearchParams(globalThis.location.search).get(name) ?? fallback);
+  if (!Number.isInteger(value) || value <= 0) throw new RangeError(`${name} must be positive.`);
+  return value;
+}
+
+const VIEWPORT_WIDTH = viewportDimension('width', 512);
+const VIEWPORT_HEIGHT = viewportDimension('height', 512);
 const MODEL_LOAD_START_MS = 1_000;
 const MODEL_FADE_END_MS = 1_600;
 const CLOSE_CAMERA_RADII = 3;
@@ -34,6 +41,10 @@ interface ProceduralSunHarness {
     enabled: boolean,
   ): SunRenderSnapshot;
   renderDistance(label: SolarDistanceLabel, simTimeSec: number): SunRenderSnapshot;
+  measureQualityGpu(
+    quality: ProceduralSunQuality,
+    sampleCount: number,
+  ): Promise<readonly number[]>;
 }
 
 declare global {
@@ -50,10 +61,10 @@ const renderer = new WebGLRenderer({
   logarithmicDepthBuffer: true,
 });
 renderer.setPixelRatio(1);
-renderer.setSize(VIEWPORT_SIZE, VIEWPORT_SIZE, false);
+renderer.setSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, false);
 renderer.setClearColor(0x000000, 1);
 
-const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_SIZE });
+const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_HEIGHT });
 const sunIndex = bodiesDocument.bodies.findIndex((body) => body.id === 'sun');
 if (sunIndex < 0) throw new Error('Sun is missing from the procedural fixture.');
 const sunDefinition = bodiesDocument.bodies[sunIndex];
@@ -93,7 +104,7 @@ function updateView(distanceKm: number, simTimeSec: number): void {
   world.proceduralSun.update(simTimeSec);
   world.visualSystem.update(
     cameraPositionKm,
-    VIEWPORT_SIZE,
+    VIEWPORT_HEIGHT,
     world.spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
   );
@@ -115,7 +126,7 @@ const pipeline = new LightingPostPipeline(
   world.spaceScene.scene,
   world.spaceScene.camera,
 );
-pipeline.resize(VIEWPORT_SIZE, VIEWPORT_SIZE, 1);
+pipeline.resize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, 1);
 const programsBeforeWarmUp = renderer.info.programs?.length ?? 0;
 pipeline.warmUp();
 const programsAfterWarmUp = renderer.info.programs?.length ?? 0;
@@ -164,5 +175,48 @@ globalThis.__proceduralSunHarness = {
           ? earthDistanceKm
           : neptuneDistanceKm;
     return renderAt(distanceKm, simTimeSec);
+  },
+  async measureQualityGpu(quality, sampleCount) {
+    if (!Number.isInteger(sampleCount) || sampleCount <= 0) {
+      throw new RangeError('GPU sample count must be a positive integer.');
+    }
+    const context = renderer.getContext();
+    if (!(context instanceof WebGL2RenderingContext)) {
+      throw new Error('Procedural Sun GPU benchmark requires WebGL2.');
+    }
+    const extension = context.getExtension('EXT_disjoint_timer_query_webgl2');
+    if (extension === null) throw new Error('EXT_disjoint_timer_query_webgl2 is unavailable.');
+
+    world.proceduralSun.setQuality(quality);
+    world.proceduralSun.setEnabled(true);
+    renderAt(closeDistanceKm, 0);
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+    for (let frame = 0; frame < 60; frame += 1) {
+      await nextFrame();
+      pipeline.render();
+    }
+
+    const samples: number[] = [];
+    while (samples.length < sampleCount) {
+      const query = context.createQuery();
+      if (query === null) throw new Error('Unable to allocate a GPU timer query.');
+      context.beginQuery(extension.TIME_ELAPSED_EXT, query);
+      pipeline.render();
+      context.endQuery(extension.TIME_ELAPSED_EXT);
+      while (!context.getQueryParameter(query, context.QUERY_RESULT_AVAILABLE)) {
+        await nextFrame();
+      }
+      const disjoint = context.getParameter(extension.GPU_DISJOINT_EXT) as boolean;
+      const elapsedNanoseconds = context.getQueryParameter(query, context.QUERY_RESULT) as number;
+      context.deleteQuery(query);
+      if (disjoint) continue;
+      const elapsedMilliseconds = elapsedNanoseconds / 1_000_000;
+      if (Number.isFinite(elapsedMilliseconds) && elapsedMilliseconds > 0) {
+        samples.push(elapsedMilliseconds);
+      }
+      await nextFrame();
+    }
+    return samples;
   },
 };

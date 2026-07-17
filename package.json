@@ -31,6 +31,7 @@
     "check:tasks": "node tools/checks/taskSchema.mjs",
     "check:budgets": "node tools/checks/assetBudgets.mjs",
     "bench:scaffold": "node tools/bench/scaffoldBench.mjs",
+    "bench:sun-quality": "node tools/bench/proceduralSunQualityBench.mjs",
     "bench:sim": "node --expose-gc tools/bench/simulationCoreBench.mjs",
     "golden:regen": "node tools/generateGoldenTrajectories.mjs"
   },
