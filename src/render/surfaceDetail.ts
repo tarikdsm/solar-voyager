@@ -83,43 +83,24 @@ uniform float uSurfaceProceduralBlend;
 uniform float uSurfaceTilesPerEquator;
 uniform vec2 uSurfaceDetailSeed;
 
-float surfaceDetailHash3( vec3 position ) {
-  position = fract( position * vec3( 0.1031, 0.1030, 0.0973 ) );
-  position += dot( position, position.yxz + 33.33 );
-  return fract( ( position.x + position.y ) * position.z );
-}
-
-float surfaceDetailNoise3( vec3 position ) {
-  vec3 cell = floor( position ) + vec3(
+vec3 surfaceDetailPeriodicWave3( vec3 position ) {
+  vec3 seedPhase = vec3(
     uSurfaceDetailSeed.x * 13.13 + uSurfaceDetailSeed.y * 37.17,
     uSurfaceDetailSeed.x * 29.31 + uSurfaceDetailSeed.y * 11.73,
     uSurfaceDetailSeed.x * 47.19 + uSurfaceDetailSeed.y * 23.57
   );
-  vec3 local = fract( position );
-  local = local * local * ( vec3( 3.0 ) - 2.0 * local );
-  float n000 = surfaceDetailHash3( cell );
-  float n100 = surfaceDetailHash3( cell + vec3( 1.0, 0.0, 0.0 ) );
-  float n010 = surfaceDetailHash3( cell + vec3( 0.0, 1.0, 0.0 ) );
-  float n110 = surfaceDetailHash3( cell + vec3( 1.0, 1.0, 0.0 ) );
-  float n001 = surfaceDetailHash3( cell + vec3( 0.0, 0.0, 1.0 ) );
-  float n101 = surfaceDetailHash3( cell + vec3( 1.0, 0.0, 1.0 ) );
-  float n011 = surfaceDetailHash3( cell + vec3( 0.0, 1.0, 1.0 ) );
-  float n111 = surfaceDetailHash3( cell + vec3( 1.0, 1.0, 1.0 ) );
-  float nx00 = mix( n000, n100, local.x );
-  float nx10 = mix( n010, n110, local.x );
-  float nx01 = mix( n001, n101, local.x );
-  float nx11 = mix( n011, n111, local.x );
-  return mix( mix( nx00, nx10, local.y ), mix( nx01, nx11, local.y ), local.z );
+  vec3 phase = fract( vec3(
+    dot( position, vec3( 0.7543, 0.5691, 0.4387 ) ),
+    dot( position, vec3( 0.4171, 0.8377, 0.6133 ) ),
+    dot( position, vec3( 0.6829, 0.3719, 0.9217 ) )
+  ) + seedPhase );
+  vec3 wave = abs( phase * 2.0 - vec3( 1.0 ) );
+  return wave * wave * ( vec3( 3.0 ) - 2.0 * wave );
 }
 
 vec3 surfaceDetailFbm3( vec3 position ) {
-  float octaveOne = surfaceDetailNoise3( position );
-  float octaveTwo = surfaceDetailNoise3( position * 2.03 + vec3( 17.0 ) );
-  return vec3(
-    octaveOne * 0.6666667 + octaveTwo * 0.3333333,
-    octaveTwo * 0.6666667 + octaveOne * 0.3333333,
-    octaveOne * 0.43 + octaveTwo * 0.57
-  );
+  return surfaceDetailPeriodicWave3( position ) * 0.6666667 +
+    surfaceDetailPeriodicWave3( position * 2.03 + vec3( 17.0 ) ) * 0.3333333;
 }
 
 mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfaceUv ) {
