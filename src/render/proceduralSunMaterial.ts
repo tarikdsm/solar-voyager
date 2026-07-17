@@ -111,8 +111,8 @@ if ( uSunEnabled > 0.5 ) {
     smoothstep( 0.30, 0.70, sunGranulation )
   );
   sunContrast = mix( 1.0, sunContrast, smoothstep( 0.0, 0.35, sunMu ) );
-  vec3 sunLane = vec3( 4.8, 2.0, 0.55 );
-  vec3 sunCell = vec3( 7.2, 4.5, 1.8 );
+  vec3 sunLane = vec3( 1.6, 0.65, 0.105 );
+  vec3 sunCell = vec3( 2.8, 1.52, 0.36 );
   vec3 sunHdrColor = mix( sunLane, sunCell, sunGranulation ) * sunLimb * sunContrast;
   outgoingLight = sunHdrColor;
 }
@@ -123,6 +123,13 @@ function injectAfter(source: string, marker: string, addition: string): string {
     throw new Error(`Procedural Sun shader requires ${marker}.`);
   }
   return source.replace(marker, `${marker}\n${addition}`);
+}
+
+function injectBefore(source: string, marker: string, addition: string): string {
+  if (!source.includes(marker)) {
+    throw new Error(`Procedural Sun shader requires ${marker}.`);
+  }
+  return source.replace(marker, `${addition}\n${marker}`);
 }
 
 /** Extends one lit Three material while retaining its authored fallback path. */
@@ -147,7 +154,7 @@ export function prepareProceduralSunMaterial(
       '#include <begin_vertex>',
       VERTEX_ASSIGNMENTS,
     );
-    shader.fragmentShader = injectAfter(
+    shader.fragmentShader = injectBefore(
       injectAfter(shader.fragmentShader, '#include <common>', FRAGMENT_DECLARATIONS),
       '#include <opaque_fragment>',
       FRAGMENT_OUTPUT,

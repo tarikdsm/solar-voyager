@@ -90,7 +90,7 @@ void main() {
   float prominences = max( arc0, max( arc1, arc2 ) ) * limbMask;
   float corona = sunCorona( point );
   vec3 color = corona * vec3( 1.8, 0.75, 0.18 ) +
-    prominences * vec3( 8.0, 1.6, 0.25 );
+    prominences * vec3( 3.8, 0.65, 0.08 );
   float alpha = clamp( corona * 0.45 + prominences, 0.0, 1.0 );
   if ( alpha < 0.002 ) discard;
   gl_FragColor = vec4( color, alpha );

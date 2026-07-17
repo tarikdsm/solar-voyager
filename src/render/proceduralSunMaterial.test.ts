@@ -50,6 +50,9 @@ describe.each([
     expect(shader.fragmentShader).toContain('1.0 - 0.52 * sunOneMinusMu');
     expect(shader.fragmentShader).toContain('if ( uSunEnabled > 0.5 )');
     expect(shader.fragmentShader).toContain('outgoingLight = sunHdrColor');
+    expect(shader.fragmentShader.indexOf('outgoingLight = sunHdrColor')).toBeLessThan(
+      shader.fragmentShader.indexOf('#include <opaque_fragment>'),
+    );
     expect(shader.fragmentShader).not.toContain('vSunUv');
     expect(shader.fragmentShader).toContain('#include <opaque_fragment>');
 

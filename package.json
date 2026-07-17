@@ -15,6 +15,7 @@
     "test:visual-tiers": "node tools/tests/visualTierFlyIn.mjs",
     "test:lighting-post": "node tools/tests/lightingPostRegression.mjs",
     "test:surface-detail": "node tools/tests/surfaceDetailRegression.mjs",
+    "test:procedural-sun": "node tools/tests/proceduralSunRegression.mjs",
     "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
