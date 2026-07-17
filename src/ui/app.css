@@ -4,7 +4,8 @@
   pointer-events: none;
 }
 
-.app-title {
+.app-title,
+.hud-visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -286,6 +287,155 @@
   font-size: 0.62rem;
 }
 
+.navball {
+  position: absolute;
+  bottom: 5.75rem;
+  left: 50%;
+  width: 14.5rem;
+  height: 16rem;
+  padding: 0.65rem 0.8rem 0.55rem;
+  border-radius: 0.9rem;
+  transform: translateX(-50%);
+}
+
+.navball header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.navball header > span {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.navball header strong {
+  color: #f0f9ff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.navball header small {
+  max-width: 6.5rem;
+  color: rgb(186 230 253 / 68%);
+  font-size: 0.58rem;
+  line-height: 1.25;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.navball-sphere {
+  display: block;
+  width: 10.6rem;
+  height: 10.6rem;
+  margin: 0.15rem auto 0;
+  filter: drop-shadow(0 0.4rem 0.9rem rgb(0 0 0 / 45%));
+}
+
+.navball-sky {
+  fill: #075985;
+}
+
+.navball-ground {
+  fill: #713f12;
+}
+
+.navball-horizon,
+.navball-rim,
+.navball-fixed-reticle,
+.navball-thrust,
+.navball-marker {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.navball-horizon {
+  stroke: rgb(254 240 138 / 82%);
+  stroke-width: 1.5;
+}
+
+.navball-rim {
+  stroke: rgb(186 230 253 / 72%);
+  stroke-width: 2;
+}
+
+.navball-marker,
+.navball-thrust {
+  transition:
+    transform 100ms linear,
+    opacity 80ms linear;
+}
+
+.navball-marker {
+  stroke-width: 2;
+}
+
+.navball-marker-prograde,
+.navball-marker-normal,
+.navball-marker-radialOut {
+  stroke: #86efac;
+}
+
+.navball-marker-retrograde,
+.navball-marker-antinormal,
+.navball-marker-radialIn {
+  stroke: #fda4af;
+}
+
+.navball-marker-fill {
+  fill: currentcolor;
+  stroke: none;
+}
+
+.navball-marker-prograde .navball-marker-fill {
+  color: #86efac;
+}
+
+.navball-marker text {
+  fill: currentcolor;
+  stroke: none;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.navball-marker-normal,
+.navball-marker-radialOut {
+  color: #86efac;
+}
+
+.navball-marker-antinormal,
+.navball-marker-radialIn {
+  color: #fda4af;
+}
+
+.navball-thrust {
+  stroke: #5eead4;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 0.2rem rgb(45 212 191 / 82%));
+}
+
+.navball-fixed-reticle {
+  stroke: rgb(240 249 255 / 88%);
+  stroke-width: 1.5;
+}
+
+.navball-invalid {
+  fill: rgb(254 202 202 / 82%);
+  font-size: 7px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.navball-legend {
+  display: flex;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0.1rem 0 0;
+  color: rgb(186 230 253 / 55%);
+  font-size: 0.55rem;
+}
+
 .camera-help {
   position: absolute;
   bottom: clamp(1rem, 3vh, 2rem);
@@ -413,8 +563,13 @@
     height: 17rem;
   }
 
-  .camera-help {
+  .navball {
     order: 6;
+    height: 16rem;
+  }
+
+  .camera-help {
+    order: 7;
   }
 
   .clock-block:last-child {

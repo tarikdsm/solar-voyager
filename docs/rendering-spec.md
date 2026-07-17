@@ -79,6 +79,25 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
 
 A miniature 3D axis triad in its own small viewport (same WebGL renderer, scissor test), rendering the CM-relative vectors from the snapshot (physics-spec §6): velocity, proper acceleration, linear momentum p = γmv, angular momentum L. Design goals: *elegant* — thin anti-aliased lines, soft glow tips, subtle grid disc for the ecliptic plane, magnitude labels with SI-prefix formatting, logarithmic vector-length scaling (linear would be useless across 30 km/s → 0.99c). Orientation follows the main camera by default; pinnable to fixed ecliptic axes. Adjacent energy panel (DOM, Preact) shows Wh/W figures. Budget: the widget viewport must cost < 1 ms/frame.
 
+### 9.1 HUD navball (bottom-center)
+
+The navball consumes the existing float64 snapshot and uses the dominant body's
+instantaneous orbital frame from physics-spec §3.0.1. The ship-local `+X` nose is
+the instrument center, local `+Y` is screen-right, and local `+Z` is screen-up.
+Prograde/retrograde, normal/antinormal, and radial-out/radial-in markers are
+inverse-rotated by the attitude quaternion and orthographically projected onto
+the front hemisphere. The proper-acceleration vector uses the same projection
+for the thrust indicator. Degenerate axes are hidden rather than publishing
+non-finite geometry.
+
+The SVG geometry is created once. Snapshot-derived values are written into a
+preallocated projection buffer and sampled with the HUD at 10 Hz; signals mutate
+only marker/horizon `transform` and `opacity`. No canvas drawing, SVG path rebuild,
+or component rerender is allowed in the frame loop.
+The ground/sky boundary uses the visible half of the projected great-circle
+ellipse: a lower sky cap while the radial-out axis faces the viewer, and an upper
+ground cap while radial-in faces the viewer. The hidden back arc is not drawn.
+
 ## 10. Relativistic visual effects (quality-gated, ship near c)
 
 When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.

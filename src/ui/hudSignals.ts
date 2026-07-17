@@ -7,6 +7,13 @@ import {
   type SimSnapshot,
   type WarpClampReason as WarpClampReasonCode,
 } from '../sim/simulationSnapshot.js';
+import { createNavballProjectionBuffer } from './navballProjection.js';
+import {
+  commitNavballSignals,
+  createNavballSignals,
+  formatAttitudeMode,
+  type NavballSignals,
+} from './navballSignals.js';
 
 const HUD_UPDATE_INTERVAL_MS = 100;
 const ORBIT_NUMBER_FORMAT = new Intl.NumberFormat('en-US', {
@@ -44,6 +51,7 @@ export interface HudSignals {
   readonly targetBodyId: Signal<string | null>;
   readonly targetDistanceKm: Signal<number>;
   readonly targetRelativeSpeedKmS: Signal<number>;
+  readonly navball: NavballSignals;
 }
 
 export interface HudDisplaySignals {
@@ -70,6 +78,7 @@ export interface HudDisplaySignals {
   readonly targetDistance: ReadonlySignal<string>;
   readonly targetRelativeSpeed: ReadonlySignal<string>;
   readonly nextClosestApproach: ReadonlySignal<string>;
+  readonly attitudeMode: ReadonlySignal<string>;
 }
 
 export interface HudSignalStore {
@@ -184,6 +193,7 @@ function createSignals(): HudSignals {
     targetBodyId: signal<string | null>(null),
     targetDistanceKm: signal(Number.NaN),
     targetRelativeSpeedKmS: signal(Number.NaN),
+    navball: createNavballSignals(),
   };
 }
 
@@ -250,6 +260,7 @@ function createDisplaySignals(signals: HudSignals): HudDisplaySignals {
     nextClosestApproach: computed(() =>
       signals.targetBodyId.value === null ? '—' : 'Awaiting trajectory predictor',
     ),
+    attitudeMode: computed(() => formatAttitudeMode(signals.navball.attitudeMode.value)),
   };
 }
 
@@ -260,6 +271,7 @@ class SampledHudSignalStore implements HudSignalStore {
   private lastPublishMs = Number.NEGATIVE_INFINITY;
   private pendingSnapshot: SimSnapshot | null = null;
   private readonly commitCallback: () => void;
+  private readonly navballProjection = createNavballProjectionBuffer();
 
   constructor() {
     this.commitCallback = this.commitPendingSnapshot.bind(this);
@@ -288,6 +300,7 @@ class SampledHudSignalStore implements HudSignalStore {
     this.signals.orbitValid.value = elements.valid;
     this.signals.dominantBodyId.value =
       dominantBodyIndex < 0 ? null : (snapshot.bodyIds[dominantBodyIndex] ?? null);
+    commitNavballSignals(this.signals.navball, this.navballProjection, snapshot);
     this.signals.apoapsisRadiusKm.value = elements.apoapsisRadiusKm;
     this.signals.periapsisRadiusKm.value = elements.periapsisRadiusKm;
     this.signals.eccentricity.value = elements.eccentricity;

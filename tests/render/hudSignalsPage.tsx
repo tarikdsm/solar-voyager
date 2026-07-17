@@ -2,6 +2,7 @@ import { options, render, type VNode } from 'preact';
 
 import '../../src/style.css';
 import type { WarpFactor } from '../../src/core/time.js';
+import { writeQuaternionFromForwardInto } from '../../src/sim/ship/attitude.js';
 import {
   createSimulationSnapshotBuffer,
   type Commands,
@@ -16,11 +17,13 @@ import {
   WarpControl,
 } from '../../src/ui/App.js';
 import { createHudSignalStore } from '../../src/ui/hudSignals.js';
+import { Navball } from '../../src/ui/Navball.js';
 
 interface RenderCounts {
   app: number;
   dualClock: number;
   energyPanel: number;
+  navball: number;
   orbitReadout: number;
   targetPanel: number;
   warpControl: number;
@@ -29,8 +32,12 @@ interface RenderCounts {
 interface HudSignalsHarness {
   commitCommands(): Promise<HudSignalsHarnessSnapshot>;
   snapshot(): HudSignalsHarnessSnapshot;
+  updateAttitude(): Promise<HudSignalsHarnessSnapshot>;
   updateClamp(): Promise<HudSignalsHarnessSnapshot>;
   updateClock(): Promise<HudSignalsHarnessSnapshot>;
+  updateIntermediateHorizon(): Promise<HudSignalsHarnessSnapshot>;
+  updateInvalidFrame(): Promise<HudSignalsHarnessSnapshot>;
+  updateRadialIn(): Promise<HudSignalsHarnessSnapshot>;
 }
 
 interface HudSignalsHarnessSnapshot {
@@ -43,6 +50,16 @@ interface HudSignalsHarnessSnapshot {
   readonly commandedWarp: WarpFactor;
   readonly coordinateClock: string;
   readonly counts: RenderCounts;
+  readonly navballMode: string;
+  readonly navballGroundCapOpacity: string;
+  readonly navballHemisphereTransform: string;
+  readonly navballHorizonInwardOpacity: string;
+  readonly navballHorizonOutwardOpacity: string;
+  readonly navballProgradeTransform: string;
+  readonly navballRadialOutTransform: string;
+  readonly navballSkyCapOpacity: string;
+  readonly navballStatus: string;
+  readonly navballThrustOpacity: string;
   readonly warpClampStatus: string;
 }
 
@@ -73,6 +90,9 @@ snapshot.burnSummaryAvailable = true;
 snapshot.burnSummaryActive = true;
 snapshot.burnEnergySpentJ = 3_600_000;
 snapshot.burnProperDeltaVMS = 12.3;
+snapshot.shipState.set([6_778.137, 0, 0]);
+snapshot.shipCoordinateVelocityKmS.set([0, 7.668_558, 0]);
+snapshot.shipProperAccelerationKmS2.set([0.009_806_65, 0, 0]);
 
 const store = createHudSignalStore();
 store.publish(snapshot, 0);
@@ -80,6 +100,7 @@ const counts: RenderCounts = {
   app: 0,
   dualClock: 0,
   energyPanel: 0,
+  navball: 0,
   orbitReadout: 0,
   targetPanel: 0,
   warpControl: 0,
@@ -111,6 +132,7 @@ options.diffed = (vnode: VNode): void => {
   if (vnode.type === App) counts.app += 1;
   if (vnode.type === DualClock) counts.dualClock += 1;
   if (vnode.type === EnergyPanel) counts.energyPanel += 1;
+  if (vnode.type === Navball) counts.navball += 1;
   if (vnode.type === OrbitReadout) counts.orbitReadout += 1;
   if (vnode.type === TargetPanel) counts.targetPanel += 1;
   if (vnode.type === WarpControl) counts.warpControl += 1;
@@ -131,6 +153,7 @@ function copyCounts(): RenderCounts {
     app: counts.app,
     dualClock: counts.dualClock,
     energyPanel: counts.energyPanel,
+    navball: counts.navball,
     orbitReadout: counts.orbitReadout,
     targetPanel: counts.targetPanel,
     warpControl: counts.warpControl,
@@ -148,6 +171,22 @@ function readHarnessSnapshot() {
     commandedWarp,
     counts: copyCounts(),
     coordinateClock: document.querySelector('#coordinate-clock')?.textContent ?? '',
+    navballMode: document.querySelector('#navball-mode')?.textContent ?? '',
+    navballGroundCapOpacity:
+      document.querySelector('#navball-ground-cap')?.getAttribute('opacity') ?? '',
+    navballHemisphereTransform:
+      document.querySelector('#navball-hemisphere')?.getAttribute('transform') ?? '',
+    navballHorizonInwardOpacity:
+      document.querySelector('#navball-horizon-inward')?.getAttribute('opacity') ?? '',
+    navballHorizonOutwardOpacity:
+      document.querySelector('#navball-horizon-outward')?.getAttribute('opacity') ?? '',
+    navballProgradeTransform:
+      document.querySelector('#navball-prograde')?.getAttribute('transform') ?? '',
+    navballRadialOutTransform:
+      document.querySelector('#navball-radial-out')?.getAttribute('transform') ?? '',
+    navballSkyCapOpacity: document.querySelector('#navball-sky-cap')?.getAttribute('opacity') ?? '',
+    navballStatus: document.querySelector('#navball-status')?.textContent ?? '',
+    navballThrustOpacity: document.querySelector('#navball-thrust')?.getAttribute('opacity') ?? '',
     warpClampStatus: document.querySelector('#warp-clamp-status')?.textContent ?? '',
   };
 }
@@ -166,11 +205,18 @@ window.__hudSignalsHarness = {
     snapshot.targetBodyId = commandedTarget;
     snapshot.targetBodyIndex =
       commandedTarget === null ? -1 : snapshot.bodyIds.indexOf(commandedTarget);
-    store.publish(snapshot, 200);
+    store.publish(snapshot, 300);
     await nextFrame();
     return readHarnessSnapshot();
   },
   snapshot: readHarnessSnapshot,
+  updateAttitude: async () => {
+    snapshot.attitudeMode = 'prograde';
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0, 1, 0);
+    store.publish(snapshot, 200);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
   updateClamp: async () => {
     snapshot.requestedWarp = 1_000;
     snapshot.effectiveWarp = 100;
@@ -182,6 +228,24 @@ window.__hudSignalsHarness = {
   updateClock: async () => {
     snapshot.utcTimeMs += 1_000;
     store.publish(snapshot, 100);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateIntermediateHorizon: async () => {
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, 0.5, 0, Math.sqrt(0.75));
+    store.publish(snapshot, 500);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateInvalidFrame: async () => {
+    snapshot.dominantBodyIndex = -1;
+    store.publish(snapshot, 600);
+    await nextFrame();
+    return readHarnessSnapshot();
+  },
+  updateRadialIn: async () => {
+    writeQuaternionFromForwardInto(snapshot.attitudeQuaternion, -1, 0, 0);
+    store.publish(snapshot, 400);
     await nextFrame();
     return readHarnessSnapshot();
   },

@@ -6,6 +6,7 @@ import { createScaffoldState } from '../game/createScaffoldState.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
+import { Navball } from './Navball.js';
 
 const scaffoldState = createScaffoldState();
 const WARP_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -230,6 +231,7 @@ export function App({ bodyIds, commands, hud, hudState, hardwareWarning = null }
       <WarpControl commands={commands} hud={hud} hudState={hudState} />
       <EnergyPanel hud={hud} />
       <TargetPanel bodyIds={bodyIds} commands={commands} hud={hud} hudState={hudState} />
+      <Navball hud={hud} hudState={hudState} />
       <section class="camera-help" aria-label="Camera controls">
         <p id="camera-focus-label" class="camera-focus" aria-live="polite">
           Focus: Earth
