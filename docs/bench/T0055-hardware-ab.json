@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-07-17T07:49:54.353Z",
+  "gitSha": "430327d4989e43df335a8e2b967c5b56035480c6",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "warmupFramesPerVariant": 60,
+  "sampleFramesPerVariant": 600,
+  "rendererName": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "softwareRasterizer": false,
+  "method": "The visible variant used the production DOM unchanged. The removed variant deleted .navball-panel after load, leaving the simulation and signal publisher active while removing navball composition.",
+  "visible": {
+    "medianMs": 6.1,
+    "p75Ms": 6.1,
+    "p99Ms": 6.2,
+    "maxMs": 6.3
+  },
+  "removed": {
+    "medianMs": 6.1,
+    "p75Ms": 6.1,
+    "p99Ms": 6.2,
+    "maxMs": 6.5
+  }
+}

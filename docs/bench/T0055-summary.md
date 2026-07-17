@@ -31,12 +31,45 @@ in-loop telemetry remained 166.70 ms in all three after captures. The navball
 publisher is included in the measured UI interval and sampled at 0.10 ms or
 less, within the 1 ms HUD budget.
 
-To isolate browser composition from the software-renderer scheduler, an A/B
-diagnostic on the same production build measured 120 frames with the navball
-visible and 120 frames after removing its panel. On the machine's Intel UHD
-D3D11 renderer, both variants measured 6.20 ms at p99; maxima were 6.40 ms with
-the navball and 6.50 ms without it. This rules out the SVG/CSS panel as the cause
-of the external SwiftShader tail.
+## Post-review exact head
+
+| Metric            | Final (`430327d`) | Final repeat (`430327d`) |
+| ----------------- | ----------------: | -----------------------: |
+| Median frame time |         150.00 ms |                150.00 ms |
+| p75 frame time    |         150.00 ms |                150.00 ms |
+| p99 frame time    |         183.30 ms |                183.30 ms |
+| Internal p99      |         180.23 ms |                183.40 ms |
+| JS heap delta     |        +718,161 B |               +340,212 B |
+| Draw calls        |                 6 |                        6 |
+| Triangles         |            48,564 |                   48,564 |
+| Sampled UI time   |           0.00 ms |                  0.00 ms |
+| Console errors    |                 0 |                        0 |
+| Page errors       |                 0 |                        0 |
+
+The exact post-review implementation replaces the incorrect straight ground
+fill with static visible half-ellipse caps. Median/p75 and renderer counts remain
+unchanged. Both rolling telemetry windows contained the same approximately one
+SwiftShader scheduling-interval tail seen by the outer collector; synchronous UI
+publication remained 0.00 ms in both final snapshots.
+
+## Hardware composition A/B
+
+To isolate browser composition from the software-renderer scheduler, an A/B on
+the exact final code measured 600 frames with the production navball visible and
+600 frames after removing its panel. The simulation and signal publisher remained
+active in both variants.
+
+| Metric            | Navball visible | Panel removed |
+| ----------------- | --------------: | ------------: |
+| Median frame time |         6.10 ms |       6.10 ms |
+| p75 frame time    |         6.10 ms |       6.10 ms |
+| p99 frame time    |         6.20 ms |       6.20 ms |
+| Maximum           |         6.30 ms |       6.50 ms |
+
+The Intel UHD D3D11 renderer produced identical p99 with and without navball
+composition, and both variants stayed below the 16.67 ms reference interval.
+The exact collector metadata and result are preserved in
+`T0055-hardware-ab.json`.
 
 The first and third after samples retained about 0.7 MB, while the immediate
 repeat ended with a negative heap delta. This non-GC-forced browser metric is
@@ -44,6 +77,6 @@ sensitive to collection timing and does not indicate consistent retained
 growth. The static SVG adds no WebGL work, signal publication remains gated to
 10 Hz, and all six marker updates preserve component render count at one.
 
-Absolute approximately 7 fps scaffold throughput is SwiftShader performance
-and is not evidence for the reference-hardware 60 fps gate. The hardware A/B
-diagnostic remained comfortably below a 16.67 ms frame interval.
+Absolute approximately 7 fps scaffold throughput is SwiftShader performance.
+The hardware A/B directly exercises the 60 fps floor and remained comfortably
+below a 16.67 ms frame interval.
