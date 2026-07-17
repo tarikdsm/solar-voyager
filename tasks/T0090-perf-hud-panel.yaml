@@ -1,6 +1,6 @@
 id: T0090
 title: Top-left perf panel (FPS, sparkline, resolution, tier)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0090-perf-hud-panel
 depends_on: [T0045, T0054]
@@ -26,4 +26,7 @@ handoff_notes: >-
   browser matrix ran concurrently); full-game playtest measured 0.018 ms/frame,
   85.0 FPS, 0.30 ms UI/HUD, and no warnings/errors. Responsive 1280/1024/390 px
   layout, production smoke, 492 Vitest tests, 50 Python tests, build, budgets,
-  and the complete sequential browser matrix pass.
+  and the complete sequential browser matrix pass. Independent re-review of
+  SHA 9db589ed approved with zero Critical, Important, or Minor findings after
+  reproducing 13 focused Vitest tests, Chromium perf regression at
+  0.027 ms/frame, production smoke, and the green exact-head CI run.
