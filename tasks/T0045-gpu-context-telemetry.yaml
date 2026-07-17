@@ -1,6 +1,6 @@
 id: T0045
 title: GPU context policy + render telemetry module
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0045-gpu-telemetry
 depends_on: [T0040]
@@ -18,4 +18,39 @@ acceptance:
   - Forcing a software context (browser flag) shows the banner; hardware path does not
   - Both depth paths pass the z-artifact scenes (Earth from 200 km and 1 AU)
   - Telemetry overhead < 0.1 ms/frame; exposed to HUD/governor consumers
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review on task/T0045-gpu-telemetry. The renderer now
+  creates WebGL2 explicitly with strict failIfMajorPerformanceCaveat first,
+  retries permissively only when required, records effective attributes and
+  renderer identity, classifies software rasterizers, selects reversed depth
+  through EXT_clip_control with logarithmic fallback, and preserves the
+  HalfFloat HDR output contract. The production warning includes Chrome and
+  Firefox instructions and only explicit acknowledgement dismisses it.
+
+  RenderTelemetry provides a stable 120-frame Float64 ring, 4 Hz stable-identity
+  snapshots, sim/render/UI splits, renderer.info counters, and asynchronous
+  disjoint-safe GPU query slots. Software renderers intentionally skip GPU
+  queries. The single instance is exposed once through a non-enumerable,
+  non-configurable, non-writable canvas property for HUD/governor/benchmark
+  readers. The production benchmark waits for renderer, camera, and telemetry
+  readiness and records the canonical ring/context/counters.
+
+  Acceptance evidence: the software-policy production regression detected
+  SwiftShader, rendered the warning and instructions, rejected Escape/outside
+  dismissal, accepted the acknowledgement button, and kept the hardware fixture
+  warning-free. Forced logarithmic and reversed depth both passed the 200 km and
+  1 AU pixel scenes with glError 0; the standard-depth control failed both front
+  probes, proving sensitivity. The 100,000-iteration telemetry gate measured
+  0.000053 ms/frame overhead (repeat 0.000100), versus the <0.1 ms limit, with
+  stable snapshot identity and 120 samples.
+
+  Production before/after at 1280x720 SwiftShader: median 150.0 -> 149.9 ms,
+  p75 150.0 -> 150.0 ms, p99 166.7 -> 166.7 ms, main JS gzip 165.61 ->
+  169.05 kB. Absolute software fps is not reference-hardware evidence. Raw
+  captures and caveats are in docs/bench/T0045-{before,after}.json and
+  T0045-summary.md.
+
+  Final local gates: lint PASS; strict typecheck PASS; Prettier PASS; Vitest
+  295 passed / 3 skipped; Python tools 49 passed; build PASS; budgets PASS;
+  53 task schemas PASS; render-depth, starfield, visual-tier, camera-controls,
+  renderer-policy, and telemetry browser regressions all PASS; diff check PASS.
