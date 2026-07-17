@@ -87,7 +87,7 @@ describe('complete asset ingest', () => {
         id: 'vesta',
         triangles: 8,
       }],
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
     expect(Object.keys(first)).toEqual(expect.arrayContaining([
       'codecs/THREE-LICENSE.txt',
@@ -101,6 +101,48 @@ describe('complete asset ingest', () => {
       expect.stringMatching(/vesta_albedo_tier2\.ktx2$/),
       expect.objectContaining({ width: 1024, height: 512 }),
     );
+  });
+
+  it('publishes explicit deterministic surface-detail metadata', async () => {
+    const paths = await createSourceTree();
+    const vesta = join(paths.modelsRoot, 'asteroids', 'vesta');
+    await rm(vesta, { recursive: true });
+    const pluto = join(paths.modelsRoot, 'dwarfs', 'pluto');
+    await mkdir(pluto, { recursive: true });
+    await writeFile(join(pluto, 'pluto.glb'), createGlb());
+    await sharp({ create: { width: 1024, height: 512, channels: 3, background: '#806a55' } })
+      .jpeg()
+      .toFile(join(pluto, 'pluto_albedo.jpg'));
+    await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#888888' } })
+      .jpeg()
+      .toFile(join(pluto, 'pluto_detail_albedo.jpg'));
+    await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#8080ff' } })
+      .png()
+      .toFile(join(pluto, 'pluto_detail_normal.png'));
+    await writeFile(
+      join(pluto, 'SOURCES.md'),
+      [
+        '- pluto.glb — fixture — test',
+        '- pluto_albedo.jpg — fixture — test',
+        '- pluto_detail_albedo.jpg — fixture — test',
+        '- pluto_detail_normal.png — fixture — test',
+        '',
+      ].join('\n'),
+    );
+
+    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    const first = await hashTree(paths.outputRoot);
+    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    expect(await hashTree(paths.outputRoot)).toEqual(first);
+
+    const manifest = JSON.parse(await readFile(join(paths.outputRoot, 'manifest.json'), 'utf8'));
+    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.assets[0].surfaceDetail).toEqual({
+      albedo: 'textures/pluto_detail_albedo.ktx2',
+      normal: 'textures/pluto_detail_normal.ktx2',
+      tilesPerEquator: 192,
+      seed: 999,
+    });
   });
 
   it('preserves the prior published tree when validation fails', async () => {

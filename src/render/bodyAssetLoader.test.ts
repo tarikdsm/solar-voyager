@@ -25,7 +25,7 @@ function entry(
 }
 
 function manifest(...assets: RuntimeAssetEntry[]): RuntimeAssetManifest {
-  return { schemaVersion: 1, assets };
+  return { schemaVersion: 2, assets };
 }
 
 const renderer = {} as WebGLRenderer;

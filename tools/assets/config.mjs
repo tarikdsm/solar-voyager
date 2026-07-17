@@ -16,6 +16,12 @@ export const ORIGIN_TOLERANCE = 1e-4;
 const MIB = 1024 * 1024;
 export const HERO_IDS = new Set(['earth', 'mars', 'moon']);
 export const MAJOR_MOON_IDS = new Set(['moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'triton']);
+export const SURFACE_DETAIL_CONFIG = Object.freeze({
+  earth: Object.freeze({ tilesPerEquator: 512, seed: 399 }),
+  moon: Object.freeze({ tilesPerEquator: 256, seed: 301 }),
+  pluto: Object.freeze({ tilesPerEquator: 192, seed: 999 }),
+  saturn: Object.freeze({ tilesPerEquator: 512, seed: 699 }),
+});
 
 export function triangleLimitFor(category, id) {
   if (category === 'moons' && MAJOR_MOON_IDS.has(id)) return 50_000;

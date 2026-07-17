@@ -438,6 +438,9 @@ function validateManifest(manifest, findings) {
     findings.push(`${MANIFEST_RELATIVE_PATH}: root must be an object with an assets list`);
     return;
   }
+  if (manifest.value.schemaVersion !== 2) {
+    findings.push(`${MANIFEST_RELATIVE_PATH}: schemaVersion must be 2`);
+  }
   if (!Array.isArray(manifest.value.assets)) {
     findings.push(`${MANIFEST_RELATIVE_PATH}: field "assets" must be a list`);
     return;
