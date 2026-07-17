@@ -26,15 +26,15 @@ The double underscore separates an exact glTF material name from the standard te
 - One Blender unit equals one metre.
 - The ship is approximately 26 m long and remains centered around the approved origin.
 - The Blender longitudinal axis is +Y toward the nose; Blender's glTF export yields the existing three.js-facing orientation.
-- `engine_nozzle` remains a separate mesh node and is named exactly for the renderer attachment contract.
+- `engine_nozzle` remains a separate open mesh node, is named exactly for the renderer attachment contract, and exposes the recessed emissive engine disc.
 - Export contains only selected mesh objects: no camera, light, or animation.
 - Applied geometry stays below 30,000 triangles; the target is close to the approved 6,174-triangle source.
 
 ## Materials and maps
 
-The scene uses the approved material names: `mat_hull`, `mat_hull_dark`, `mat_radiator`, `mat_canopy`, `mat_nozzle`, and `mat_engine_glow`. The main hull receives albedo, tangent-space normal, and metallic/roughness input; the engine disc receives the emissive map and retains an emissive strength of 8. Other components use deterministic Principled BSDF factors.
+The scene uses the approved material names: `mat_hull`, `mat_hull_dark`, `mat_radiator`, `mat_canopy`, `mat_nozzle`, and `mat_engine_glow`. The main hull receives albedo, tangent-space normal, and metallic/roughness input; the engine disc receives the emissive map at strength 2 so it remains bloom-ready without crushing the ship's dynamic range. Other components use deterministic Principled BSDF factors.
 
-Maps are generated from fixed mathematical patterns without randomness, timestamps, machine paths, or network inputs. The authored GLB references external images; ingest replaces those references with external KTX2 images and marks `KHR_texture_basisu` required.
+Maps are generated from fixed mathematical patterns without randomness, timestamps, machine paths, or network inputs. They remain external authoring deliverables; ingest binds their KTX2 derivatives to the named runtime materials and marks `KHR_texture_basisu` required.
 
 ## Verification
 
@@ -44,4 +44,3 @@ Maps are generated from fixed mathematical patterns without randomness, timestam
 4. Focused ingest proves all four KTX2 files are present and total ship bytes remain below 8 MiB.
 5. Full ingest regenerates `public/assets/` so the committed manifest and runtime files are canonical.
 6. Blender renders a review image from the regenerated source, and the game asset is smoke-tested without console errors.
-

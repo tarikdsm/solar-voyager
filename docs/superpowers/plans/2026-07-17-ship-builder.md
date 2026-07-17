@@ -89,7 +89,7 @@ Add focused primitive helpers for cones/cylinders, UV spheres, torus, and bevell
 
 - [ ] **Step 4: Generate and wire deterministic PBR maps**
 
-Generate 1024×512 PNG pixel buffers with fixed panel bands and seam-safe edges: silver hull albedo, tangent-space normal around `(128,128,255)` with shallow panel variation, metallic/roughness channels compatible with glTF, and cyan-blue engine emission. Wire the first three to `mat_hull` and the last to `mat_engine_glow`; keep all six approved material names and factor values.
+Generate 1024×512 PNG pixel buffers with fixed panel bands and seam-safe edges: silver hull albedo, tangent-space normal around `(128,128,255)` with shallow panel variation, metallic/roughness channels compatible with glTF, and cyan-blue engine emission. Wire the first three to `mat_hull` and the last to `mat_engine_glow` at strength 2; keep all six approved material names and the other approved factor values.
 
 - [ ] **Step 5: Export, validate builder invariants, and update attribution**
 
