@@ -1,8 +1,8 @@
 id: T0090
 title: Top-left perf panel (FPS, sparkline, resolution, tier)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0090-perf-hud-panel
 depends_on: [T0045, T0054]
 milestone: M3
 spec: |
