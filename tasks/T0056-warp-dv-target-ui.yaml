@@ -66,3 +66,21 @@ handoff_notes: |
   counts: 150.0/150.0/166.7 ms and 149.9/150.0/166.7 ms on repeat, with zero
   console/page errors. Heap deltas were +825,820 bytes and -71,068 bytes on the
   immediate repeat, providing no evidence of consistent retained growth.
+
+  A second independent review confirmed all four original findings closed, then
+  found that the stacked overlay captured camera input and that the enlarged
+  energy panel still collided at 701-703 px tall. Both regressions were reproduced
+  before the fix. The overlay is transparent to hit-testing again, individual
+  panels remain interactive/scrollable, and the height breakpoint now derives from
+  the 44 rem layout boundary. Chromium covers real pointer/wheel delivery to a
+  backing canvas at 900x720, 800x720, and 390x844 plus collision checks at
+  1280x701/703/704.
+
+  Production live playtest independently delivered pointer and wheel events to
+  #space-canvas at tablet/mobile widths, scrolled the HUD 300/252 px over a panel,
+  found zero collisions in the height boundary cases, and recorded zero console
+  errors or warnings. The final exact-code benchmark repeat returned to
+  149.9/150.0/166.7 ms with 6 draws and 48,564 triangles; raw samples, including
+  the first sample's documented outer-harness p99 excursion, are retained under
+  docs/bench/. Same-head simulation benchmark averaged 0.080992 ms and retained
+  -182,304 bytes.
