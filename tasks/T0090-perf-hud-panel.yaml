@@ -1,6 +1,6 @@
 id: T0090
 title: Top-left perf panel (FPS, sparkline, resolution, tier)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0090-perf-hud-panel
 depends_on: [T0045, T0054]
@@ -16,4 +16,10 @@ acceptance:
   - Panel total cost < 0.2 ms/frame (measured by its own telemetry)
   - Values cross-checked against browser devtools FPS meter
   - Zero allocations per frame in the sparkline path
-handoff_notes: ""
+handoff_notes: >-
+  Added the compact/expanded 4 Hz signal-driven perf HUD using RenderTelemetry's
+  existing allocation-free 120-frame ring. Focused Chromium measured 60.0 FPS
+  against an independent 60.0 FPS rAF meter and 0.013-0.027 ms/frame panel cost;
+  full-game playtest measured 0.013-0.040 ms/frame with no console errors. F3,
+  responsive layout, production smoke integration, 491 Vitest tests, 50 Python
+  tests, build, budgets, and the complete browser regression matrix pass.
