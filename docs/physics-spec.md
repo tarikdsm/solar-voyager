@@ -131,6 +131,20 @@ Ladder: `1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6, 1e7`. Per frame the sim advances
 - **Thrust allowed at warp ≤ 1000** ("physics warp"). Above 1000x throttle is forced to 0 (coast).
 - **Substep budget:** 4,000 accepted DP54 steps per frame. If the controller cannot cover `Δt` within budget (deep in a gravity well at high warp), warp auto-clamps to the highest sustainable tier; HUD shows the clamp and reason. Never trade accuracy for speed silently.
 
+The highest sustainable tier is selected by integrating ascending canonical
+tier endpoints with one cumulative accepted-step budget. Every completed tier
+is a rollback checkpoint; a partially completed next tier is discarded. The
+published `effectiveWarp` is therefore always a ladder member and coordinate
+time advances by exactly `wallDt · effectiveWarp`. If 1x itself cannot finish,
+the frame fails without publishing. DP54 tolerances are never relaxed.
+
+Entering a requested tier above 1000x clears active throttle and invalidates
+the thrust trajectory once. Positive throttle commands remain forced to zero
+until the requested tier returns to 1000x or below; lowering warp does not
+restore prior throttle intent. `INTEGRATION_BUDGET` takes reason priority when
+the effective tier is reduced; otherwise sustainable coast-only warp reports
+`THRUST_LOCKOUT`.
+
 ### 3.3 Optional mutual n-body mode ("dynamic bodies", default OFF)
 
 Bodies integrated mutually with velocity-Verlet (leapfrog), fixed 300 s step, on a worker; warp capped at 1e5x. Symplectic ⇒ bounded energy error. Regression: 1-year inner-system integration, relative energy drift < 1e-9.
