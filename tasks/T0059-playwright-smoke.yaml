@@ -13,6 +13,6 @@ acceptance:
 handoff_notes: >-
   Production-dist smoke starts Vite preview at the GitHub Pages base path, probes
   live WebGL framebuffer pixels and HUD anchors, and rejects console/page errors
-  and crashes. The committed init fixture proves the runtime-error path fails;
-  npm run test:smoke proves the fixture rejection and clean-page success. Full
-  local CI matrix passed on 2026-07-17.
+  and crashes. Committed immediate and framebuffer-timed init fixtures prove
+  both runtime-error paths fail; npm run test:smoke proves both fixture
+  rejections and clean-page success. Full local CI matrix passed on 2026-07-17.

@@ -13,19 +13,19 @@ const RUNTIME_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_SMOKE_RUNTIME_ERROR';
 const RUNTIME_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/runtimeError.fixture.js', import.meta.url),
 );
+const FRAMEBUFFER_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_FRAMEBUFFER_RUNTIME_ERROR';
+const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
+  new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
+);
 
 function describeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function closePreview(server) {
-  server.httpServer.closeAllConnections?.();
-  await new Promise((resolvePromise, rejectPromise) => {
-    server.httpServer.close((error) => {
-      if (error === undefined || error === null) resolvePromise();
-      else rejectPromise(error);
-    });
-  });
+function assertNoBrowserErrors(browserErrors) {
+  if (browserErrors.length > 0) {
+    throw new Error(`browser errors detected: ${browserErrors.join(' | ')}`);
+  }
 }
 
 async function probeCanvasPixels(page) {
@@ -92,9 +92,7 @@ async function runProbe(browser, fixturePath = null) {
     await page.waitForSelector('.app-overlay', { state: 'attached', timeout: 30_000 });
     await page.waitForTimeout(250);
 
-    if (browserErrors.length > 0) {
-      throw new Error(`browser errors detected: ${browserErrors.join(' | ')}`);
-    }
+    assertNoBrowserErrors(browserErrors);
 
     const hud = await page.evaluate(() => ({
       appOverlay: globalThis.document.querySelectorAll('.app-overlay').length,
@@ -112,24 +110,26 @@ async function runProbe(browser, fixturePath = null) {
       timeWarp: 1,
     });
     const canvas = await probeCanvasPixels(page);
+    await page.waitForTimeout(0);
+    assertNoBrowserErrors(browserErrors);
     return { canvas, hud };
   } finally {
     await page.close();
   }
 }
 
-async function expectRuntimeFixtureFailure(browser) {
+async function expectRuntimeFixtureFailure(browser, fixturePath, marker) {
   try {
-    await runProbe(browser, RUNTIME_ERROR_FIXTURE);
+    await runProbe(browser, fixturePath);
   } catch (error) {
     const message = describeError(error);
-    assert.match(message, new RegExp(RUNTIME_ERROR_MARKER, 'u'));
+    assert.match(message, new RegExp(marker, 'u'));
     return message;
   }
-  throw new Error('runtime-error smoke fixture did not make the probe fail');
+  throw new Error(`${marker} fixture did not make the probe fail`);
 }
 
-export async function runApplicationSmokeContract({ fixtureOnly = false } = {}) {
+export async function runApplicationSmokeContract({ delayedFixtureOnly = false, fixtureOnly = false } = {}) {
   await assertPortAvailable(PORT, HOST);
   const server = await preview({
     root: process.cwd(),
@@ -141,11 +141,21 @@ export async function runApplicationSmokeContract({ fixtureOnly = false } = {}) 
   try {
     browser = await chromium.launch({ headless: true });
     if (fixtureOnly) return await runProbe(browser, RUNTIME_ERROR_FIXTURE);
-    const rejectedFixture = await expectRuntimeFixtureFailure(browser);
+    if (delayedFixtureOnly) return await runProbe(browser, FRAMEBUFFER_ERROR_FIXTURE);
+    const rejectedFixture = await expectRuntimeFixtureFailure(
+      browser,
+      RUNTIME_ERROR_FIXTURE,
+      RUNTIME_ERROR_MARKER,
+    );
+    const rejectedFramebufferFixture = await expectRuntimeFixtureFailure(
+      browser,
+      FRAMEBUFFER_ERROR_FIXTURE,
+      FRAMEBUFFER_ERROR_MARKER,
+    );
     const production = await runProbe(browser);
-    return { production, rejectedFixture };
+    return { production, rejectedFixture, rejectedFramebufferFixture };
   } finally {
     if (browser !== undefined) await browser.close();
-    await closePreview(server);
+    await server.close();
   }
 }

@@ -13,8 +13,8 @@ a committed fixture injects a runtime error.
   Existing render regressions keep their focused development-server fixtures;
   this smoke covers the assembled production application.
 - Keep the runner as a small Node script using the repository's existing
-  `playwright`, `vite`, and `sharp` dependencies. Do not add a second Playwright
-  test framework or browser installation path.
+  `playwright` and `vite` dependencies. Do not add a second Playwright test
+  framework or browser installation path.
 - Wait for the production readiness contract already published by `main.ts`:
   `#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]`.
 - Verify pixels directly from the live WebGL framebuffer after a rendered frame.
@@ -25,10 +25,10 @@ a committed fixture injects a runtime error.
   simulation clocks, time-warp controls, and the session/settings panel.
 - Collect `pageerror`, error-level console messages, and page crashes from before
   navigation until after the readiness and pixel probes.
-- Commit a browser init-script fixture that throws a unique runtime error. The
-  default smoke first proves this injected page is rejected, then probes a clean
-  page. A CLI flag runs only the injected fixture and exits nonzero for direct
-  red-path verification.
+- Commit browser init-script fixtures for both immediate and framebuffer-probe
+  runtime errors. The default smoke first proves both injected pages are
+  rejected, then probes a clean page. CLI flags run either injected fixture and
+  exit nonzero for direct red-path verification.
 
 ## CI order
 
@@ -39,7 +39,7 @@ order, with no duplicate build step.
 
 ## Failure behavior
 
-The runner owns preview/browser cleanup in `finally`. A failure reports the
+The runner owns browser and Vite preview lifecycle cleanup in `finally`. A failure reports the
 collected browser errors or the specific missing readiness, HUD, or pixel
 contract. The negative-control pass is accepted only when the unique fixture
 message is present; unrelated failures are never swallowed.
