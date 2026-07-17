@@ -1,6 +1,6 @@
 id: T0054
 title: HUD framework (Preact overlay) + orbit readout + clock
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0054-hud-framework
 depends_on: [T0050]
