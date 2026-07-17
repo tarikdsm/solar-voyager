@@ -1,0 +1,244 @@
+import type {
+  IUniform,
+  MeshStandardMaterial,
+  Texture,
+  WebGLProgramParametersWithUniforms,
+} from 'three';
+
+import type { LoadedSurfaceDetail } from './bodyAssetLoader.js';
+
+const DETAIL_START_RADII = 5;
+const DETAIL_FULL_RADII = 1.2;
+const PROCEDURAL_START_RADII = 1.5;
+const PROGRAM_CACHE_KEY = 'solar-voyager-surface-detail-v1';
+
+interface SurfaceDetailUniforms extends Record<string, IUniform> {
+  readonly uSurfaceDetailAlbedo: IUniform<Texture>;
+  readonly uSurfaceDetailNormal: IUniform<Texture>;
+  readonly uSurfaceDetailBlend: IUniform<number>;
+  readonly uSurfaceProceduralBlend: IUniform<number>;
+  readonly uSurfaceTilesPerEquator: IUniform<number>;
+  readonly uSurfaceDetailSeed: IUniform<number>;
+}
+
+export interface PreparedSurfaceDetail {
+  setDistance(distanceKm: number, radiusKm: number): void;
+  setEnabled(enabled: boolean): void;
+  dispose(): void;
+}
+
+function assertPhysicalDistance(distanceKm: number, radiusKm: number): number {
+  if (
+    !Number.isFinite(distanceKm) ||
+    distanceKm < 0 ||
+    !Number.isFinite(radiusKm) ||
+    radiusKm <= 0
+  ) {
+    throw new RangeError('Surface-detail distance and radius must be finite and physical.');
+  }
+  return distanceKm / radiusKm;
+}
+
+function cubicBlend(ratio: number, startRadii: number, fullRadii: number): number {
+  const linear = Math.min(1, Math.max(0, (startRadii - ratio) / (startRadii - fullRadii)));
+  return linear * linear * (3 - 2 * linear);
+}
+
+export function surfaceDetailBlend(distanceKm: number, radiusKm: number): number {
+  return cubicBlend(
+    assertPhysicalDistance(distanceKm, radiusKm),
+    DETAIL_START_RADII,
+    DETAIL_FULL_RADII,
+  );
+}
+
+export function surfaceDetailProceduralBlend(distanceKm: number, radiusKm: number): number {
+  return cubicBlend(
+    assertPhysicalDistance(distanceKm, radiusKm),
+    PROCEDURAL_START_RADII,
+    DETAIL_FULL_RADII,
+  );
+}
+
+const VERTEX_DECLARATIONS = /* glsl */ `
+varying vec2 vSurfaceDetailUv;
+varying vec3 vSurfaceDetailDirection;
+`;
+
+const VERTEX_ASSIGNMENTS = /* glsl */ `
+vSurfaceDetailUv = uv;
+vSurfaceDetailDirection = normalize( position );
+`;
+
+const FRAGMENT_DECLARATIONS = /* glsl */ `
+varying vec2 vSurfaceDetailUv;
+varying vec3 vSurfaceDetailDirection;
+uniform sampler2D uSurfaceDetailAlbedo;
+uniform sampler2D uSurfaceDetailNormal;
+uniform float uSurfaceDetailBlend;
+uniform float uSurfaceProceduralBlend;
+uniform float uSurfaceTilesPerEquator;
+uniform float uSurfaceDetailSeed;
+
+float surfaceDetailHash( vec3 position ) {
+  return fract( sin( dot( position, vec3( 127.1, 311.7, 74.7 ) ) + uSurfaceDetailSeed ) * 43758.5453123 );
+}
+
+float surfaceDetailNoise( vec3 position ) {
+  vec3 cell = floor( position );
+  vec3 local = fract( position );
+  local = local * local * ( 3.0 - 2.0 * local );
+  float n000 = surfaceDetailHash( cell );
+  float n100 = surfaceDetailHash( cell + vec3( 1.0, 0.0, 0.0 ) );
+  float n010 = surfaceDetailHash( cell + vec3( 0.0, 1.0, 0.0 ) );
+  float n110 = surfaceDetailHash( cell + vec3( 1.0, 1.0, 0.0 ) );
+  float n001 = surfaceDetailHash( cell + vec3( 0.0, 0.0, 1.0 ) );
+  float n101 = surfaceDetailHash( cell + vec3( 1.0, 0.0, 1.0 ) );
+  float n011 = surfaceDetailHash( cell + vec3( 0.0, 1.0, 1.0 ) );
+  float n111 = surfaceDetailHash( cell + vec3( 1.0, 1.0, 1.0 ) );
+  float nx00 = mix( n000, n100, local.x );
+  float nx10 = mix( n010, n110, local.x );
+  float nx01 = mix( n001, n101, local.x );
+  float nx11 = mix( n011, n111, local.x );
+  return mix( mix( nx00, nx10, local.y ), mix( nx01, nx11, local.y ), local.z );
+}
+
+float surfaceDetailFbm( vec3 position ) {
+  return surfaceDetailNoise( position ) * 0.6666667 +
+    surfaceDetailNoise( position * 2.03 + vec3( 17.0 ) ) * 0.3333333;
+}
+
+mat3 surfaceDetailTangentFrame( vec3 eyePosition, vec3 surfaceNormal, vec2 surfaceUv ) {
+  vec3 q0 = dFdx( eyePosition );
+  vec3 q1 = dFdy( eyePosition );
+  vec2 st0 = dFdx( surfaceUv );
+  vec2 st1 = dFdy( surfaceUv );
+  vec3 q1Perpendicular = cross( q1, surfaceNormal );
+  vec3 q0Perpendicular = cross( surfaceNormal, q0 );
+  vec3 tangent = q1Perpendicular * st0.x + q0Perpendicular * st1.x;
+  vec3 bitangent = q1Perpendicular * st0.y + q0Perpendicular * st1.y;
+  float determinant = max( dot( tangent, tangent ), dot( bitangent, bitangent ) );
+  float scale = determinant == 0.0 ? 0.0 : inversesqrt( determinant );
+  return mat3( tangent * scale, bitangent * scale, surfaceNormal );
+}
+`;
+
+const ALBEDO_DETAIL = /* glsl */ `
+if ( uSurfaceDetailBlend > 0.0 ) {
+  vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
+  vec2 surfaceDetailMicroUv = vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 8.0 ) + vec2( 0.371, 0.619 );
+  vec3 surfaceDetailMacroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMacroUv ).rgb;
+  vec3 surfaceDetailMicroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMicroUv ).rgb;
+  vec3 surfaceDetailVariation = mix( surfaceDetailMacroAlbedo, surfaceDetailMicroAlbedo, 0.35 ) - vec3( 0.5 );
+  diffuseColor.rgb *= vec3( 1.0 ) + surfaceDetailVariation * ( 0.18 * uSurfaceDetailBlend );
+}
+`;
+
+const NORMAL_DETAIL = /* glsl */ `
+if ( uSurfaceDetailBlend > 0.0 ) {
+  vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
+  vec2 surfaceDetailMicroUv = vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 8.0 ) + vec2( 0.371, 0.619 );
+  vec3 surfaceDetailMacroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMacroUv ).xyz * 2.0 - 1.0;
+  vec3 surfaceDetailMicroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMicroUv ).xyz * 2.0 - 1.0;
+  vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.55 + surfaceDetailMicroNormal.xy * 0.25;
+  if ( uSurfaceProceduralBlend > 0.0 ) {
+    vec3 surfaceDetailNoisePosition = normalize( vSurfaceDetailDirection ) * 96.0;
+    float surfaceDetailNoiseX = surfaceDetailFbm( surfaceDetailNoisePosition ) - 0.5;
+    float surfaceDetailNoiseY = surfaceDetailFbm( surfaceDetailNoisePosition + vec3( 29.0, 11.0, 47.0 ) ) - 0.5;
+    surfaceDetailNormalXy += vec2( surfaceDetailNoiseX, surfaceDetailNoiseY ) * ( 0.18 * uSurfaceProceduralBlend );
+  }
+  surfaceDetailNormalXy *= uSurfaceDetailBlend;
+  vec3 surfaceDetailTangentNormal = normalize( vec3(
+    surfaceDetailNormalXy,
+    sqrt( max( 0.05, 1.0 - min( 0.95, dot( surfaceDetailNormalXy, surfaceDetailNormalXy ) ) ) )
+  ) );
+  mat3 surfaceDetailFrame = surfaceDetailTangentFrame( -vViewPosition, normal, vSurfaceDetailUv );
+  normal = normalize( surfaceDetailFrame * surfaceDetailTangentNormal );
+}
+`;
+
+const ROUGHNESS_DETAIL = /* glsl */ `
+if ( uSurfaceDetailBlend > 0.0 && uSurfaceProceduralBlend > 0.0 ) {
+  float surfaceDetailRoughnessNoise = surfaceDetailFbm(
+    normalize( vSurfaceDetailDirection ) * 64.0 + vec3( 7.0, 19.0, 31.0 )
+  ) - 0.5;
+  roughnessFactor = clamp(
+    roughnessFactor + surfaceDetailRoughnessNoise * ( 0.16 * uSurfaceProceduralBlend ),
+    0.04,
+    1.0
+  );
+}
+`;
+
+class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
+  private enabled = true;
+  private detailBlend = 0;
+  private proceduralBlend = 0;
+  private disposed = false;
+
+  constructor(
+    private readonly uniforms: SurfaceDetailUniforms,
+    private readonly albedo: Texture,
+    private readonly normal: Texture,
+  ) {}
+
+  setDistance(distanceKm: number, radiusKm: number): void {
+    this.detailBlend = surfaceDetailBlend(distanceKm, radiusKm);
+    this.proceduralBlend = surfaceDetailProceduralBlend(distanceKm, radiusKm);
+    this.applyBlends();
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.applyBlends();
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.albedo.dispose();
+    this.normal.dispose();
+  }
+
+  private applyBlends(): void {
+    this.uniforms.uSurfaceDetailBlend.value = this.enabled ? this.detailBlend : 0;
+    this.uniforms.uSurfaceProceduralBlend.value = this.enabled ? this.proceduralBlend : 0;
+  }
+}
+
+export function prepareSurfaceDetail(
+  material: MeshStandardMaterial,
+  detail: LoadedSurfaceDetail,
+): PreparedSurfaceDetail {
+  const uniforms: SurfaceDetailUniforms = {
+    uSurfaceDetailAlbedo: { value: detail.albedo },
+    uSurfaceDetailNormal: { value: detail.normal },
+    uSurfaceDetailBlend: { value: 0 },
+    uSurfaceProceduralBlend: { value: 0 },
+    uSurfaceTilesPerEquator: { value: detail.tilesPerEquator },
+    uSurfaceDetailSeed: { value: detail.seed % 65_536 },
+  };
+  const previousCompile = material.onBeforeCompile;
+  const previousCacheKey = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer): void => {
+    previousCompile.call(material, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${VERTEX_DECLARATIONS}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERTEX_ASSIGNMENTS}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${FRAGMENT_DECLARATIONS}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${ALBEDO_DETAIL}`)
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>\n${NORMAL_DETAIL}`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>\n${ROUGHNESS_DETAIL}`,
+      );
+  };
+  material.customProgramCacheKey = (): string => `${previousCacheKey()}|${PROGRAM_CACHE_KEY}`;
+  material.needsUpdate = true;
+  return new PreparedSurfaceDetailImpl(uniforms, detail.albedo, detail.normal);
+}
