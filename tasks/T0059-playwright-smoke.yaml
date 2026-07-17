@@ -1,6 +1,6 @@
 id: T0059
 title: Playwright smoke test in CI
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0059-playwright-smoke
 depends_on: [T0054]
@@ -16,3 +16,5 @@ handoff_notes: >-
   and crashes. Committed immediate and framebuffer-timed init fixtures prove
   both runtime-error paths fail; npm run test:smoke proves both fixture
   rejections and clean-page success. Full local CI matrix passed on 2026-07-17.
+  Independent review approved exact head 5bcb1e2 after verifying both negative
+  modes, the post-probe error check, Vite lifecycle cleanup, and green CI.
