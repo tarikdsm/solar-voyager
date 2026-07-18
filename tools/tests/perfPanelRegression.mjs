@@ -187,6 +187,26 @@ try {
   assert.equal(intermediateLayout.panelClockOverlap, false);
   assert.equal(intermediateLayout.clockWarpOverlap, false);
 
+  const stateVectorLayoutBefore = await page.evaluate(() =>
+    globalThis.__perfPanelHarness.snapshot(),
+  );
+  await page.locator('#perf-panel-toggle').click();
+  await page.waitForFunction(
+    (before) => {
+      const current = globalThis.__perfPanelHarness.snapshot();
+      return (
+        current.layoutRefreshCount > before.layoutRefreshCount &&
+        current.stateVectorViewportTop > before.stateVectorViewportTop + 300
+      );
+    },
+    stateVectorLayoutBefore,
+  );
+  const stateVectorLayoutAfter = await page.evaluate(() =>
+    globalThis.__perfPanelHarness.snapshot(),
+  );
+  await page.locator('#perf-panel-toggle').click();
+  await page.waitForSelector('#perf-panel-details', { state: 'hidden' });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   const mobile = await page.evaluate(() => {
@@ -205,7 +225,7 @@ try {
   assert.deepEqual(browserErrors, []);
 
   process.stdout.write(
-    `${JSON.stringify({ compact, expanded, independentFps, intermediateLayout, mobile }, null, 2)}\n`,
+    `${JSON.stringify({ compact, expanded, independentFps, intermediateLayout, mobile, stateVectorLayoutAfter, stateVectorLayoutBefore }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();

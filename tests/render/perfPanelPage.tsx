@@ -6,11 +6,14 @@ import type { RendererContextReport } from '../../src/render/createRenderer.js';
 import { RenderTelemetry } from '../../src/render/telemetry.js';
 import { PerfPanel } from '../../src/ui/hud/PerfPanel.js';
 import { createPerfPanelStore } from '../../src/ui/hud/perfPanelStore.js';
+import { observeStateVectorLayout } from '../../src/ui/stateVectorLayoutObserver.js';
 
 interface PerfPanelHarnessSnapshot {
+  readonly layoutRefreshCount: number;
   readonly measuredCostMsPerFrame: number;
   readonly renderCount: number;
   readonly sampleCount: number;
+  readonly stateVectorViewportTop: number;
 }
 
 declare global {
@@ -71,9 +74,24 @@ render(
     <section id="dual-clock" class="hud-panel dual-clock" aria-label="Clock placeholder" />
     <section id="warp-control" class="hud-panel warp-control" aria-label="Warp placeholder" />
     <section id="orbit-readout" class="hud-panel orbit-readout" aria-label="Orbit placeholder" />
+    <section id="state-vector-panel" class="hud-panel state-vector-panel">
+      <div id="state-vector-viewport" class="state-vector-viewport" />
+    </section>
   </main>,
   root,
 );
+
+const overlay = root.querySelector('.app-overlay');
+const stateVectorViewport = root.querySelector('#state-vector-viewport');
+if (!(overlay instanceof HTMLElement) || !(stateVectorViewport instanceof HTMLElement)) {
+  throw new Error('State-vector layout regression elements are missing');
+}
+let layoutRefreshCount = 0;
+let stateVectorViewportTop = stateVectorViewport.getBoundingClientRect().top;
+observeStateVectorLayout(overlay, () => {
+  layoutRefreshCount += 1;
+  stateVectorViewportTop = stateVectorViewport.getBoundingClientRect().top;
+});
 
 function frame(timestampMs: number): void {
   telemetry.beginFrame(timestampMs);
@@ -84,9 +102,11 @@ function frame(timestampMs: number): void {
 
 window.__perfPanelHarness = {
   snapshot: () => ({
+    layoutRefreshCount,
     measuredCostMsPerFrame: store.measuredCostMsPerFrame,
     renderCount,
     sampleCount: telemetry.frameSampleCount,
+    stateVectorViewportTop,
   }),
 };
 requestAnimationFrame(frame);

@@ -10,6 +10,8 @@ import type { PerfPanelStore } from './hud/perfPanelStore.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
 import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
+import { StateVectorPanel } from './StateVectorPanel.js';
+import type { StateVectorSignalStore } from './stateVectorSignals.js';
 
 const scaffoldState = createScaffoldState();
 const WARP_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -26,6 +28,8 @@ export interface AppProps {
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
   readonly perfPanel?: PerfPanelStore | null;
   readonly session?: SessionSettingsPort | null;
+  readonly stateVectors?: StateVectorSignalStore | null;
+  readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
 }
 
 interface ReadoutValueProps {
@@ -232,6 +236,8 @@ export function App({
   hardwareWarning = null,
   perfPanel = null,
   session = null,
+  stateVectors = null,
+  stateVectorViewportRef = null,
 }: AppProps) {
   return (
     <main class="app-overlay">
@@ -246,6 +252,14 @@ export function App({
       <WarpControl commands={commands} hud={hud} hudState={hudState} />
       <EnergyPanel hud={hud} />
       <TargetPanel bodyIds={bodyIds} commands={commands} hud={hud} hudState={hudState} />
+      {stateVectors === null || stateVectorViewportRef === null ? null : (
+        <StateVectorPanel
+          display={stateVectors.display}
+          pinnedToEcliptic={stateVectors.signals.pinnedToEcliptic}
+          setPinnedToEcliptic={stateVectors.setPinnedToEcliptic.bind(stateVectors)}
+          viewportRef={stateVectorViewportRef}
+        />
+      )}
       <Navball hud={hud} hudState={hudState} />
       <section class="camera-help" aria-label="Camera controls">
         <p id="camera-focus-label" class="camera-focus" aria-live="polite">

@@ -1,6 +1,6 @@
 id: T0080
 title: Bottom-right 3D state-vector widget (v, a, p, L relative to CM)
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0080-state-vector-widget
 depends_on: [T0040, T0054]
@@ -16,4 +16,38 @@ acceptance:
   - In the LEO start state the velocity vector reads ~30 km/s (Earth's real barycentric velocity)
   - Widget viewport costs < 1 ms/frame on reference hardware
   - Vectors remain readable from 30 km/s to 0.99c (log scaling verified)
-handoff_notes: ""
+handoff_notes: |
+  Delivery candidate verified at feature head 69eda23 (base 64c9306).
+  Implements the four-vector model, scissored Three.js inset, 10 Hz DOM signals,
+  camera-linked/ecliptic orientation toggle, responsive layout observation, and
+  telemetry integration without changing SimSnapshot, Commands, physics formulas,
+  or data schemas; no ADR was required.
+
+  Independent review /root/review_t0080 found no Critical issues. Its Important
+  findings were fixed in 69eda23: the compiled production app is now covered by
+  Playwright, responsive perf-panel expansion triggers viewport refresh, and a
+  clipped viewport resets lastRenderMs to zero. The focused responsive regression
+  observed refresh count 3 -> 4 while the viewport moved 62 -> 640 CSS px.
+  Follow-up CI diagnosis replaced two flaky Playwright selector-actionability waits
+  with a direct DOM readiness predicate after GitHub's SwiftShader found the ready,
+  visible canvas but timed out the selector; the complete smoke and both injected
+  runtime-error fixtures pass locally with the focused fix.
+
+  Fresh verification on 69eda23: lint, typecheck, format, git diff check, build,
+  550 Vitest tests passed (3 skipped), 50 Python tool tests passed, asset budgets,
+  all 53 task schemas, test:state-vectors, test:perf-panel, test:smoke, and
+  test:perf-gates. Production smoke read 37.9 km/s, gamma 1.000000, 0.0127% c,
+  both orientation states, and 51 chromatic pixels in the visible 144x144 inset;
+  the focused SwiftShader fixture retained all four vectors and 1,345 chromatic
+  pixels. Production retained-heap delta was -50,319 B and bundle gates passed.
+
+  Reference-hardware acceptance evidence (RTX 3070 Laptop, 1920x1080): active
+  widget p75 0.10 ms, p99/max 0.20 ms (<1 ms); zero console errors. Paired
+  canonical benchmark versus 64c9306 preserved 6.1/6.1/6.2 ms frame
+  median/p75/p99, with route heap -1,176 B. The literal monotonic 30 km/s to
+  0.99c logarithmic domain is unit tested; the live prograde LEO total is the
+  physically correct 37.9 km/s CM-relative speed.
+
+  Final independent reviewer approval: exact code head 356cb96 was reviewed with
+  no Critical or Important findings. GitHub Actions run 29632072949 completed
+  green in 4m42s. T0080 remains approved as DONE; merge is a maintainer action.

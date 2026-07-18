@@ -33,6 +33,21 @@ async function screenshotEvidence(buffer) {
   };
 }
 
+async function capturePageClip(page, clip) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const screenshot = await session.send('Page.captureScreenshot', {
+      captureBeyondViewport: false,
+      clip: { ...clip, scale: 1 },
+      format: 'png',
+      fromSurface: true,
+    });
+    return Buffer.from(screenshot.data, 'base64');
+  } finally {
+    await session.detach();
+  }
+}
+
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -141,9 +156,12 @@ try {
     waitUntil: 'domcontentloaded',
   });
   try {
-    await productionPage.waitForSelector('#space-canvas[data-camera-ready="true"]', {
-      timeout: 60_000,
-    });
+    await productionPage.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas[data-camera-ready="true"]') !== null,
+      undefined,
+      { timeout: 60_000 },
+    );
   } catch (error) {
     const content = await productionPage.content();
     const canvasState = await productionPage.locator('#space-canvas').count();
@@ -163,7 +181,7 @@ try {
   }
   const productionClip = { x: 320, y: 140, width: 640, height: 440 };
   const productionEarth = await screenshotEvidence(
-    await productionPage.screenshot({ clip: productionClip }),
+    await capturePageClip(productionPage, productionClip),
   );
   await productionPage.keyboard.press('j');
   await productionPage.waitForFunction(
@@ -171,8 +189,20 @@ try {
       globalThis.document.querySelector('#camera-focus-label')?.textContent === 'Focus: Jupiter',
   );
   await productionPage.waitForTimeout(1_800);
+  const completedFrames = await productionPage.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0;
+  });
+  await productionPage.waitForFunction(
+    (previousFrames) => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > previousFrames;
+    },
+    completedFrames,
+    { timeout: 60_000 },
+  );
   const productionJupiter = await screenshotEvidence(
-    await productionPage.screenshot({ clip: productionClip }),
+    await capturePageClip(productionPage, productionClip),
   );
   assert.notEqual(
     productionJupiter.sha256,

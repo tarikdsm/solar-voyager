@@ -20,6 +20,7 @@
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
+    "test:state-vectors": "node tools/tests/stateVectorWidgetRegression.mjs",
     "test:perf-panel": "node tools/tests/perfPanelRegression.mjs",
     "test:perf-governor": "node tools/tests/perfGovernorRegression.mjs",
     "test:perf-gates": "node tools/perf/performanceGate.mjs",
