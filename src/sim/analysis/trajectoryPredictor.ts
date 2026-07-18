@@ -6,7 +6,6 @@ import {
   PREDICTOR_EVENT_STRIDE,
   PREDICTOR_EVENT_TIME_SEC_OFFSET,
   PREDICTOR_EVENT_TIME_TO_IMPACT_SEC_OFFSET,
-  PREDICTOR_MAX_POINTS,
   PREDICTOR_POINT_STRIDE,
   PREDICTOR_POINT_TIME_SEC_OFFSET,
   PREDICTOR_POINT_X_KM_OFFSET,
@@ -22,98 +21,26 @@ import {
   propagate,
 } from '../propagation/dp54.js';
 import { evaluateNBodyAccelerationInto } from '../propagation/nbodyForces.js';
-import {
-  createRailsState,
-  createRailsWorkspace,
-  evaluateRailsInto,
-  type CompiledRailsCatalog,
-} from '../propagation/rails.js';
+import { createRailsState, createRailsWorkspace, evaluateRailsInto } from '../propagation/rails.js';
 import { createRelativisticDerivative, STATE_RX, STATE_RY, STATE_RZ } from '../ship/relativity.js';
 import { selectDominantBodyIndexWithHysteresis } from './dominantBody.js';
+import {
+  captureTrajectoryImpactStepStart,
+  createTrajectoryImpactWorkspace,
+  findFirstTrajectoryImpactInto,
+  interpolateTrajectoryImpactPositionInto,
+  trajectoryDistanceToBodyKm,
+} from './trajectoryImpact.js';
+import {
+  type ThrustFreeTrajectoryOptions,
+  validateTrajectoryPredictionOptions,
+} from './trajectoryPredictorSetup.js';
 
-export interface ThrustFreeTrajectoryOptions {
-  readonly catalog: CompiledRailsCatalog;
-  readonly collisionRadiiKm: Float64Array;
-  readonly startTimeSec: number;
-  readonly horizonSec: number;
-  readonly shipState: Float64Array;
-  readonly dominantBodyIndex: number;
-  readonly targetBodyIndex?: number;
-  readonly outputPointCount?: number;
-}
+export type { ThrustFreeTrajectoryOptions } from './trajectoryPredictorSetup.js';
 
 export interface ThrustFreeTrajectory {
   readonly points: Float64Array<ArrayBuffer>;
   readonly events: Float64Array<ArrayBuffer>;
-}
-
-interface ValidatedPrediction {
-  readonly pointCount: number;
-  readonly endTimeSec: number;
-  readonly targetBodyIndex: number;
-}
-
-function isBodyIndex(value: number, bodyCount: number): boolean {
-  return Number.isInteger(value) && value >= -1 && value < bodyCount;
-}
-
-function validateOptions(options: ThrustFreeTrajectoryOptions): ValidatedPrediction {
-  const { catalog, collisionRadiiKm, shipState } = options;
-  if (!(collisionRadiiKm instanceof Float64Array)) {
-    throw new TypeError('collision radii must use float64 storage');
-  }
-  if (collisionRadiiKm.length !== catalog.bodyCount) {
-    throw new RangeError(`collision radii must contain ${catalog.bodyCount} values`);
-  }
-  for (let bodyIndex = 0; bodyIndex < collisionRadiiKm.length; bodyIndex += 1) {
-    const radiusKm = collisionRadiiKm[bodyIndex] as number;
-    if (!Number.isFinite(radiusKm) || radiusKm < 0) {
-      throw new RangeError('collision radii must be finite and non-negative');
-    }
-  }
-  if (!(shipState instanceof Float64Array) || shipState.length !== PREDICTOR_STATE_LENGTH) {
-    throw new RangeError(`ship state must contain ${PREDICTOR_STATE_LENGTH} float64 values`);
-  }
-  for (let index = 0; index < shipState.length; index += 1) {
-    if (!Number.isFinite(shipState[index])) throw new RangeError('ship state must be finite');
-  }
-  if (!Number.isFinite(options.startTimeSec)) {
-    throw new RangeError('prediction start time must be finite');
-  }
-  if (!Number.isFinite(options.horizonSec) || options.horizonSec <= 0) {
-    throw new RangeError('prediction horizon must be positive and finite');
-  }
-  const endTimeSec = options.startTimeSec + options.horizonSec;
-  if (!Number.isFinite(endTimeSec)) throw new RangeError('prediction endpoint must be finite');
-  if (!isBodyIndex(options.dominantBodyIndex, catalog.bodyCount)) {
-    throw new RangeError('dominant body index is outside the catalog');
-  }
-  const targetBodyIndex = options.targetBodyIndex ?? -1;
-  if (!isBodyIndex(targetBodyIndex, catalog.bodyCount)) {
-    throw new RangeError('target body index is outside the catalog');
-  }
-  const requestedPointCount = options.outputPointCount ?? PREDICTOR_MAX_POINTS;
-  if (!Number.isInteger(requestedPointCount) || requestedPointCount < 2) {
-    throw new RangeError('prediction output must request at least two points');
-  }
-  return {
-    pointCount: Math.min(requestedPointCount, PREDICTOR_MAX_POINTS),
-    endTimeSec,
-    targetBodyIndex,
-  };
-}
-
-function distanceToBodyKm(
-  shipState: Float64Array,
-  bodyPositionsKm: Float64Array,
-  bodyIndex: number,
-): number {
-  const bodyOffset = bodyIndex * 3;
-  return Math.hypot(
-    (shipState[STATE_RX] as number) - (bodyPositionsKm[bodyOffset] as number),
-    (shipState[STATE_RY] as number) - (bodyPositionsKm[bodyOffset + 1] as number),
-    (shipState[STATE_RZ] as number) - (bodyPositionsKm[bodyOffset + 2] as number),
-  );
 }
 
 function writePoint(
@@ -155,7 +82,7 @@ function writeEvent(
 export function predictThrustFreeTrajectory(
   options: ThrustFreeTrajectoryOptions,
 ): ThrustFreeTrajectory {
-  const validated = validateOptions(options);
+  const validated = validateTrajectoryPredictionOptions(options);
   const { catalog, collisionRadiiKm, startTimeSec } = options;
   const railsState = createRailsState(catalog);
   const railsWorkspace = createRailsWorkspace();
@@ -176,10 +103,12 @@ export function predictThrustFreeTrajectory(
     },
   );
   const tolerance = createShipDp54Tolerance();
+  const maxAcceptedStepsPerOutput = tolerance.maxAcceptedSteps;
+  tolerance.maxAcceptedSteps = 1;
   const workspace = createDp54Workspace(PREDICTOR_STATE_LENGTH);
   const propagationResult = createDp54Result();
+  const impactWorkspace = createTrajectoryImpactWorkspace(catalog.bodyCount);
   const state = new Float64Array(options.shipState);
-  const previousDistancesKm = new Float64Array(catalog.bodyCount);
   const points = new Float64Array(validated.pointCount * PREDICTOR_POINT_STRIDE);
   const events = new Float64Array((validated.pointCount + 2) * PREDICTOR_EVENT_STRIDE);
   const sampleIntervalSec = options.horizonSec / (validated.pointCount - 1);
@@ -192,11 +121,12 @@ export function predictThrustFreeTrajectory(
 
   evaluateRailsInto(railsState, catalog, startTimeSec, railsWorkspace);
   writePoint(points, 0, startTimeSec, state);
-  for (let bodyIndex = 0; bodyIndex < catalog.bodyCount; bodyIndex += 1) {
-    previousDistancesKm[bodyIndex] = distanceToBodyKm(state, railsState.positionsKm, bodyIndex);
-  }
   if (validated.targetBodyIndex >= 0) {
-    closestDistanceKm = previousDistancesKm[validated.targetBodyIndex] as number;
+    closestDistanceKm = trajectoryDistanceToBodyKm(
+      state,
+      railsState.positionsKm,
+      validated.targetBodyIndex,
+    );
   }
 
   const initialDominantBodyIndex = selectDominantBodyIndexWithHysteresis(
@@ -225,53 +155,65 @@ export function predictThrustFreeTrajectory(
       sampleIndex === validated.pointCount - 1
         ? validated.endTimeSec
         : startTimeSec + sampleIndex * sampleIntervalSec;
-    const previousXKm = state[STATE_RX] as number;
-    const previousYKm = state[STATE_RY] as number;
-    const previousZKm = state[STATE_RZ] as number;
-    propagate(
-      state,
-      state,
-      previousTimeSec,
-      sampleTimeSec,
-      derivative,
-      tolerance,
-      workspace,
-      propagationResult,
-    );
-    if (!propagationResult.reachedEnd) {
-      throw new Error(
-        `trajectory propagation failed at ${sampleTimeSec}: budgetExhausted=${propagationResult.budgetExhausted}, stepUnderflow=${propagationResult.stepUnderflow}, nonFiniteError=${propagationResult.nonFiniteError}`,
-      );
-    }
-    if (propagationResult.nextStepSec !== 0) {
-      tolerance.initialStepSec = propagationResult.nextStepSec;
-    }
-    evaluateRailsInto(railsState, catalog, sampleTimeSec, railsWorkspace);
-
-    let impactBodyIndex = -1;
-    let impactFraction = Number.POSITIVE_INFINITY;
-    for (let bodyIndex = 0; bodyIndex < catalog.bodyCount; bodyIndex += 1) {
-      const currentDistanceKm = distanceToBodyKm(state, railsState.positionsKm, bodyIndex);
-      const radiusKm = collisionRadiiKm[bodyIndex] as number;
-      const previousClearanceKm = (previousDistancesKm[bodyIndex] as number) - radiusKm;
-      const currentClearanceKm = currentDistanceKm - radiusKm;
-      if (previousClearanceKm > 0 && currentClearanceKm <= 0) {
-        const crossingFraction = previousClearanceKm / (previousClearanceKm - currentClearanceKm);
-        if (crossingFraction < impactFraction) {
-          impactFraction = crossingFraction;
-          impactBodyIndex = bodyIndex;
-        }
-      }
-      previousDistancesKm[bodyIndex] = currentDistanceKm;
-    }
-
+    let acceptedSteps = 0;
+    let integrationTimeSec = previousTimeSec;
     let outputTimeSec = sampleTimeSec;
-    if (impactBodyIndex >= 0) {
-      outputTimeSec = previousTimeSec + impactFraction * (sampleTimeSec - previousTimeSec);
-      state[STATE_RX] = previousXKm + impactFraction * ((state[STATE_RX] as number) - previousXKm);
-      state[STATE_RY] = previousYKm + impactFraction * ((state[STATE_RY] as number) - previousYKm);
-      state[STATE_RZ] = previousZKm + impactFraction * ((state[STATE_RZ] as number) - previousZKm);
-      evaluateRailsInto(railsState, catalog, outputTimeSec, railsWorkspace);
+    let impactBodyIndex = -1;
+
+    while (integrationTimeSec !== sampleTimeSec) {
+      if (acceptedSteps >= maxAcceptedStepsPerOutput) {
+        throw new Error(`trajectory propagation exhausted step budget at ${sampleTimeSec}`);
+      }
+      const stepStartXKm = state[STATE_RX] as number;
+      const stepStartYKm = state[STATE_RY] as number;
+      const stepStartZKm = state[STATE_RZ] as number;
+      evaluateRailsInto(railsState, catalog, integrationTimeSec, railsWorkspace);
+      captureTrajectoryImpactStepStart(impactWorkspace, railsState.positionsKm);
+      propagate(
+        state,
+        state,
+        integrationTimeSec,
+        sampleTimeSec,
+        derivative,
+        tolerance,
+        workspace,
+        propagationResult,
+      );
+      if (propagationResult.acceptedSteps !== 1) {
+        throw new Error(
+          `trajectory propagation failed at ${sampleTimeSec}: stepUnderflow=${propagationResult.stepUnderflow}, nonFiniteError=${propagationResult.nonFiniteError}`,
+        );
+      }
+      acceptedSteps += 1;
+      if (propagationResult.nextStepSec !== 0) {
+        tolerance.initialStepSec = propagationResult.nextStepSec;
+      }
+      const stepEndTimeSec = propagationResult.reachedTimeSec;
+      evaluateRailsInto(railsState, catalog, stepEndTimeSec, railsWorkspace);
+      const impact = findFirstTrajectoryImpactInto(
+        impactWorkspace,
+        stepStartXKm,
+        stepStartYKm,
+        stepStartZKm,
+        state,
+        railsState.positionsKm,
+        collisionRadiiKm,
+      );
+      if (impact.bodyIndex >= 0) {
+        outputTimeSec =
+          integrationTimeSec + impact.fraction * (stepEndTimeSec - integrationTimeSec);
+        interpolateTrajectoryImpactPositionInto(
+          state,
+          stepStartXKm,
+          stepStartYKm,
+          stepStartZKm,
+          impact.fraction,
+        );
+        impactBodyIndex = impact.bodyIndex;
+        evaluateRailsInto(railsState, catalog, outputTimeSec, railsWorkspace);
+        break;
+      }
+      integrationTimeSec = stepEndTimeSec;
     }
 
     writePoint(points, writtenPointCount, outputTimeSec, state);
@@ -297,7 +239,7 @@ export function predictThrustFreeTrajectory(
       dominantBodyIndex = selectedDominantBodyIndex;
     }
     if (validated.targetBodyIndex >= 0) {
-      const targetDistanceKm = distanceToBodyKm(
+      const targetDistanceKm = trajectoryDistanceToBodyKm(
         state,
         railsState.positionsKm,
         validated.targetBodyIndex,

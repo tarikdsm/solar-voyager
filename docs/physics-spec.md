@@ -256,20 +256,22 @@ rollback as motion. The vector is an inertial signed integral; scalar proper
   and horizon endpoints are included at uniform coordinate-time spacing. The seven-component
   state is propagated sequentially between adjacent output times with the
   production DP54 tolerance, rails, full n-body field, relativistic derivative,
-  and zero proper acceleration.
-- Predictor events are evaluated at each emitted point. SOI changes reuse the
+  and zero proper acceleration. Each propagation call is limited to exactly one
+  accepted DP54 step, carries `nextStepSec` into the next call, and repeats until
+  the output time is reached; the production 4,000-step budget applies per
+  output interval.
+- SOI and target events are evaluated at each emitted point. SOI changes reuse the
   §6 hysteretic selector and encode the previous and next body. Target closest
   approach is the earliest minimum sampled target-centre distance. Collision
   radius is `meanRadiusKm + atmosphereTopKm`, with absent atmosphere top treated
-  as zero. An impact requires a bracket whose previous clearance is strictly
-  positive and whose next clearance is non-positive. Crossing time is the
-  linear interpolation of endpoint clearances. If several bodies cross within
-  one interval, the earliest interpolated crossing wins (catalog order breaks
-  exact ties). The crossing position is linearly interpolated, replaces the
-  inside sample as the final polyline point, and propagation stops. Impact
-  time-to-impact is crossing time minus prediction start time. A complete
-  outside-to-inside-to-outside passage between adjacent samples is not detected;
-  this is a known consequence of the bounded sampling contract (ADR-030).
+  as zero. Impact is tested across every accepted DP54 step in each body's
+  linearly interpolated relative frame. With `r0 = ship0 - body0`,
+  `r1 = ship1 - body1`, and `d = r1 - r0`, solve `|r0 + f·d|² = R²`; when
+  `|r0| > R`, the smallest root `f ∈ [0,1]` is the entry crossing. The earliest
+  crossing in coordinate time wins, with catalog order breaking an exact tie.
+  Its ship position and time are linearly interpolated, replace the pending
+  output sample as the final polyline point, and stop both propagation loops.
+  Impact time-to-impact is crossing time minus prediction start time (ADR-030).
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.
 
 ## 7. Regression & validation tests (must exist before v1)

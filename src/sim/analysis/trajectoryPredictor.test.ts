@@ -183,7 +183,7 @@ describe('thrust-free trajectory predictor — physics-spec.md §6', () => {
       collisionRadiiKm: new Float64Array([0.1, 0.1]),
       startTimeSec: 0,
       horizonSec: 18,
-      shipState: new Float64Array([90, 0, 0, 1, 0, 0, 0]),
+      shipState: new Float64Array([90, 10, 0, 1, 0, 0, 0]),
       dominantBodyIndex: 0,
       targetBodyIndex: 1,
       outputPointCount: 7,
@@ -195,7 +195,7 @@ describe('thrust-free trajectory predictor — physics-spec.md §6', () => {
     expect(result.events[offset + PREDICTOR_EVENT_BODY_INDEX_OFFSET]).toBe(1);
     expect(result.events[offset + PREDICTOR_EVENT_SECONDARY_BODY_INDEX_OFFSET]).toBe(-1);
     expect(result.events[offset + PREDICTOR_EVENT_DISTANCE_KM_OFFSET]).toBeCloseTo(
-      10 - 9 * coordinateVelocityKmS,
+      Math.hypot(10 - 9 * coordinateVelocityKmS, 10),
       12,
     );
     expect(result.events[offset + PREDICTOR_EVENT_TIME_TO_IMPACT_SEC_OFFSET]).toBeNaN();
@@ -207,10 +207,10 @@ describe('thrust-free trajectory predictor — physics-spec.md §6', () => {
       catalog: staticCatalog(),
       collisionRadiiKm: new Float64Array([5]),
       startTimeSec: 0,
-      horizonSec: 4,
+      horizonSec: 10,
       shipState: new Float64Array([-10, 0, 0, 2, 0, 0, 0]),
       dominantBodyIndex: 0,
-      outputPointCount: 3,
+      outputPointCount: 6,
     });
 
     expect(result.points.length).toBe(3 * PREDICTOR_POINT_STRIDE);
@@ -228,6 +228,28 @@ describe('thrust-free trajectory predictor — physics-spec.md §6', () => {
     expect(result.events[offset + PREDICTOR_EVENT_DISTANCE_KM_OFFSET]).toBe(5);
     expect(result.events[offset + PREDICTOR_EVENT_TIME_TO_IMPACT_SEC_OFFSET]).toBeCloseTo(
       5 / coordinateVelocityKmS,
+      12,
+    );
+  });
+
+  it('detects an outside-to-outside segment that passes through a body', () => {
+    const coordinateVelocityKmS = coordinateVelocityInto(new Float64Array(3), 4, 0, 0)[0] as number;
+    const result = predictThrustFreeTrajectory({
+      catalog: staticCatalog(),
+      collisionRadiiKm: new Float64Array([5]),
+      startTimeSec: 0,
+      horizonSec: 10,
+      shipState: new Float64Array([-20, 0, 0, 4, 0, 0, 0]),
+      dominantBodyIndex: 0,
+      outputPointCount: 2,
+    });
+
+    const offset = eventOffset(result.events, PredictorEventCode.Impact);
+    expect(offset).toBeGreaterThanOrEqual(0);
+    expect(result.points[PREDICTOR_POINT_STRIDE]).toBeCloseTo(15 / coordinateVelocityKmS, 12);
+    expect(result.points[PREDICTOR_POINT_STRIDE + 1]).toBeCloseTo(-5, 12);
+    expect(result.events[offset + PREDICTOR_EVENT_TIME_SEC_OFFSET]).toBeCloseTo(
+      15 / coordinateVelocityKmS,
       12,
     );
   });
