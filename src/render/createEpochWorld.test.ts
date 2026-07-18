@@ -61,7 +61,7 @@ describe('createEpochWorld', () => {
     );
     expect(spheres).toHaveLength(bodyCount * 2);
     expect(spheres.every((sphere) => sphere.material instanceof MeshLambertMaterial)).toBe(true);
-    expect(points).toHaveLength(2);
+    expect(points).toHaveLength(3);
     expect(ambientLights).toEqual([world.lighting.ambientLight]);
     expect(directionalLights).toEqual([world.lighting.directionalLight]);
     expect(world.proceduralSun.seed).toBe(10);
@@ -81,6 +81,14 @@ describe('createEpochWorld', () => {
     expect(world.osculatingConic.line.parent?.name).toBe('osculating-conic-anchor');
     expect(world.spaceScene.scene.getObjectByName('osculating-conic')).toBe(
       world.osculatingConic.line,
+    );
+    expect(world.trajectoryOverlay.line.parent).toBe(world.spaceScene.scene);
+    expect(world.trajectoryOverlay.markers.parent).toBe(world.spaceScene.scene);
+    expect(world.spaceScene.scene.getObjectByName('predicted-trajectory')).toBe(
+      world.trajectoryOverlay.line,
+    );
+    expect(world.spaceScene.scene.getObjectByName('trajectory-event-markers')).toBe(
+      world.trajectoryOverlay.markers,
     );
     expect(spheres.every((sphere) => sphere.geometry === spheres[0]?.geometry)).toBe(true);
     expect(world.visualSystem.getTier('sun')).toBe(2);

@@ -17,6 +17,7 @@ import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { ProceduralSun } from './proceduralSun.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
+import { TrajectoryOverlay } from './trajectoryOverlay.js';
 
 import starCatalogUrl from '../../data/stars.bin?url';
 
@@ -27,6 +28,7 @@ export interface EpochWorld {
   readonly lighting: SolarLighting;
   readonly proceduralSun: ProceduralSun;
   readonly osculatingConic: OsculatingConicOverlay;
+  readonly trajectoryOverlay: TrajectoryOverlay;
   readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly positionsKm: Float64Array;
@@ -113,6 +115,13 @@ export async function createEpochWorld(
 
   const spaceScene = new CameraRelativeSpaceScene();
   const osculatingConic = new OsculatingConicOverlay(spaceScene);
+  const trajectoryBodyIds: string[] = [];
+  for (let index = 0; index < epochState.bodies.length; index += 1) {
+    const body = epochState.bodies[index];
+    if (body === undefined) throw new Error('Epoch body array is sparse.');
+    trajectoryBodyIds.push(body.id);
+  }
+  const trajectoryOverlay = new TrajectoryOverlay(spaceScene, trajectoryBodyIds);
   spaceScene.camera.lookAt(
     cameraController.lookDirection.x,
     cameraController.lookDirection.y,
@@ -160,8 +169,12 @@ export async function createEpochWorld(
   await visualSystem.initializeEager();
   spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
   osculatingConic.line.visible = true;
+  trajectoryOverlay.line.visible = true;
+  trajectoryOverlay.markers.visible = true;
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   osculatingConic.line.visible = false;
+  trajectoryOverlay.line.visible = false;
+  trajectoryOverlay.markers.visible = false;
   visualSystem.initializeView(
     cameraController.cameraPositionKm,
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height),
@@ -175,6 +188,7 @@ export async function createEpochWorld(
     lighting,
     proceduralSun,
     osculatingConic,
+    trajectoryOverlay,
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,
     positionsKm: epochState.positionsKm,
