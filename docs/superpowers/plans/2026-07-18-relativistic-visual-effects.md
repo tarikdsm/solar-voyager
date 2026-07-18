@@ -197,27 +197,27 @@ export interface RelativisticPostPassPort extends AdaptivePostPassPort {
 `relativisticPass` and orders passes as render -> relativistic -> bloom -> AA
 -> output.
 
-- [ ] **Step 1: Write failing shader and pipeline tests**
+- [x] **Step 1: Write failing shader and pipeline tests**
 
   Assert stable uniforms, view-ray FOV/aspect values, camera-space beta without
   normalization, exact RGB/beaming constants, render-scale UV reuse, and
   disposal. Assert ordered composer registration, active/inactive enablement,
   resize propagation, and warm-up restoration.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run `npx vitest run src/render/relativisticPostPass.test.ts
   src/render/lightingPostPipeline.test.ts`. Expected: FAIL because the pass is
   absent.
 
-- [ ] **Step 3: Implement one reusable ShaderPass**
+- [x] **Step 3: Implement one reusable ShaderPass**
 
   Allocate all uniforms, vectors, and shader resources in the constructor.
   Reconstruct the observed view ray, evaluate `D`, apply the specified mapping,
   and use the composer's existing half-float targets. Disable the pass when
   activation is zero.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
   Run focused tests and commit
   `feat(render): [T0081] add relativistic spectral post pass`.

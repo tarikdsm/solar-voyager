@@ -17,6 +17,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 import type { AntiAliasingQuality, BloomQuality, RenderQualityProfile } from './perfGovernor.js';
+import { RelativisticPostPass, type RelativisticPostPassPort } from './relativisticPostPass.js';
 
 export const BLOOM_THRESHOLD = 1;
 export const BLOOM_STRENGTH = 0.15;
@@ -68,6 +69,7 @@ export interface LightingPostBackend {
   createBloomPass(): UnrealBloomPassPort;
   createFxaaPass(): FxaaPassPort;
   createOutputPass(): AdaptivePostPassPort;
+  createRelativisticPass(): RelativisticPostPassPort;
   createSmaaPass(): AdaptivePostPassPort;
 }
 
@@ -223,6 +225,7 @@ const THREE_POST_BACKEND: LightingPostBackend = {
   createBloomPass: () => new AdaptiveBloomPass(),
   createFxaaPass: () => new AdaptiveFxaaPass(),
   createOutputPass: () => new AdaptiveOutputPass(),
+  createRelativisticPass: () => new RelativisticPostPass(),
   createSmaaPass: () => new AdaptiveSmaaPass(),
 };
 
@@ -236,6 +239,7 @@ function assertPositiveFinite(label: string, value: number): void {
 export class LightingPostPipeline {
   readonly composer: PostComposerPort;
   readonly renderPass: PostPassPort;
+  readonly relativisticPass: RelativisticPostPassPort;
   readonly bloomPass: UnrealBloomPassPort;
   readonly fxaaPass: FxaaPassPort;
   readonly outputPass: AdaptivePostPassPort;
@@ -257,6 +261,7 @@ export class LightingPostPipeline {
 
     this.composer = backend.createComposer(renderer);
     this.renderPass = backend.createRenderPass(scene, camera);
+    this.relativisticPass = backend.createRelativisticPass();
     this.bloomPass = backend.createBloomPass();
     this.smaaPass = backend.createSmaaPass();
     this.fxaaPass = backend.createFxaaPass();
@@ -267,6 +272,7 @@ export class LightingPostPipeline {
     this.smaaPass.enabled = true;
     this.fxaaPass.enabled = false;
     this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.relativisticPass);
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(this.smaaPass);
     this.composer.addPass(this.fxaaPass);
@@ -327,13 +333,16 @@ export class LightingPostPipeline {
   warmUp(postProcessingEnabled = true): void {
     if (postProcessingEnabled) {
       const bloomEnabled = this.bloomPass.enabled;
+      const relativisticEnabled = this.relativisticPass.enabled;
       const smaaEnabled = this.smaaPass.enabled;
       const fxaaEnabled = this.fxaaPass.enabled;
       this.bloomPass.enabled = true;
+      this.relativisticPass.enabled = true;
       this.smaaPass.enabled = true;
       this.fxaaPass.enabled = true;
       this.composer.render(0);
       this.bloomPass.enabled = bloomEnabled;
+      this.relativisticPass.enabled = relativisticEnabled;
       this.smaaPass.enabled = smaaEnabled;
       this.fxaaPass.enabled = fxaaEnabled;
       return;
@@ -352,6 +361,7 @@ export class LightingPostPipeline {
 
   dispose(): void {
     this.renderPass.dispose();
+    this.relativisticPass.dispose();
     this.bloomPass.dispose();
     this.smaaPass.dispose();
     this.fxaaPass.dispose();
@@ -365,6 +375,7 @@ export class LightingPostPipeline {
     setTargetViewportScale(readBuffer, this.renderScale);
     setTargetViewportScale(writeBuffer, this.renderScale);
     this.smaaPass.setRenderScale(this.renderScale);
+    this.relativisticPass.setRenderScale(this.renderScale);
     this.fxaaPass.setRenderScale(this.renderScale);
     this.outputPass.setRenderScale(this.renderScale);
     this.bloomPass.setQualityScale(this.renderScale, this.bloomResolution === 'half' ? 0.5 : 1);
