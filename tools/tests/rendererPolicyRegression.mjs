@@ -36,9 +36,12 @@ try {
   });
 
   await page.goto(PRODUCTION_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#space-canvas[data-renderer-ready="true"]', {
-    timeout: 60_000,
-  });
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('#space-canvas[data-renderer-ready="true"]') !== null,
+    undefined,
+    { timeout: 60_000 },
+  );
   const contextState = await page.locator('#space-canvas').evaluate((canvas) => ({
     depthStrategy: canvas.dataset.depthStrategy,
     rendererName: canvas.dataset.rendererName,

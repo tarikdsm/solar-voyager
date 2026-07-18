@@ -141,9 +141,12 @@ try {
     waitUntil: 'domcontentloaded',
   });
   try {
-    await productionPage.waitForSelector('#space-canvas[data-camera-ready="true"]', {
-      timeout: 60_000,
-    });
+    await productionPage.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas[data-camera-ready="true"]') !== null,
+      undefined,
+      { timeout: 60_000 },
+    );
   } catch (error) {
     const content = await productionPage.content();
     const canvasState = await productionPage.locator('#space-canvas').count();
