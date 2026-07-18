@@ -44,6 +44,8 @@ export interface PredictorRequestMessage {
   readonly userHorizonSec?: number;
   /** Test harness override; production requests omit this field. */
   readonly testHorizonSec?: number;
+  /** Test harness output-size override; production requests omit this field. */
+  readonly testPointCount?: number;
   readonly dominantBodyIndex: number;
   readonly targetBodyIndex?: number;
 }
@@ -145,6 +147,7 @@ export function isPredictorRequestMessage(
       'osculatingPeriodSec',
       'userHorizonSec',
       'testHorizonSec',
+      'testPointCount',
       'dominantBodyIndex',
       'targetBodyIndex',
     ]) ||
@@ -176,6 +179,15 @@ export function isPredictorRequestMessage(
       !Number.isFinite(value.testHorizonSec) ||
       value.testHorizonSec <= 0 ||
       value.testHorizonSec > PREDICTOR_BASE_HORIZON_SEC)
+  ) {
+    return false;
+  }
+  if (
+    'testPointCount' in value &&
+    (typeof value.testPointCount !== 'number' ||
+      !Number.isInteger(value.testPointCount) ||
+      value.testPointCount < 2 ||
+      value.testPointCount > PREDICTOR_MAX_POINTS)
   ) {
     return false;
   }

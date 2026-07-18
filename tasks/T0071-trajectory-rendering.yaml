@@ -104,6 +104,24 @@ handoff_notes: |
   intentionally stays REVIEW until a later exact-head CI is green and the
   normal merge can mark it DONE.
 
+  Continuation diagnosis found the six-hour override was propagated correctly,
+  but the worker still generated the fixed production maximum of 2,000 output
+  points. Because the predictor performs at least one DP54 propagation per
+  output point, shortening only the horizon did not reduce the sampling floor
+  that competed with SwiftShader. The dedicated browser regression now also
+  injects a validated test-only 128-point limit across init property, main,
+  client, protocol, and worker executor. Production requests still omit both
+  test overrides and retain the canonical horizon plus 2,000 points.
+
+  RED failed at all four intended boundaries; GREEN passes 28/28 focused tests.
+  The real Vite worker regression completes locally in 5.9 s with ready=true,
+  two draw calls, three markers/segments, and 0 px alignment at both FOVs.
+  Lint, strict typecheck, Prettier, build, task schema, asset budgets, smoke,
+  611 Vitest tests (3 skipped), and 50 Python tests pass. The production
+  performance gate remains 10 calls / 77,071 triangles, +69,540 B retained
+  heap, and 267,797 / 539,129 B entry/total gzip. A fresh exact-head CI run is
+  the only remaining delivery gate.
+
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
   to add the browser regression to CI and move this task to REVIEW; both are

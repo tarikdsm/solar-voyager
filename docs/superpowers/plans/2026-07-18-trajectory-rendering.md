@@ -397,3 +397,60 @@ export class TrajectoryPredictionRefresh {
   independent whole-branch review, fix every finding through RED/GREEN cycles,
   push, open PR `[T0071] Trajectory polyline + event markers rendering`, wait
   for green CI, then mark DONE and merge normally.
+
+### Task 7: Bound the real-worker browser contract on shared CI
+
+**Files:**
+
+- Modify: `src/game/trajectoryPredictionRuntimePolicy.ts`
+- Modify: `src/game/trajectoryPredictionRuntimePolicy.test.ts`
+- Modify: `src/game/trajectoryPredictorClient.ts`
+- Modify: `src/game/trajectoryPredictorClient.test.ts`
+- Modify: `src/workers/predictorProtocol.ts`
+- Modify: `src/workers/predictorProtocol.test.ts`
+- Modify: `src/workers/predictorWorkerRuntime.ts`
+- Modify: `src/workers/predictorWorkerRuntime.test.ts`
+- Modify: `tools/tests/trajectoryPredictionTestIsolation.mjs`
+- Modify: `tools/tests/trajectoryOverlayRegression.mjs`
+- Modify: `tasks/T0071-trajectory-rendering.yaml`
+
+**Root cause:** The six-hour browser-test horizon still requests the production
+maximum of 2,000 output points. The predictor performs at least one propagation
+per output point, so shortening only the horizon does not reduce its minimum
+work. On the shared runner, SwiftShader competes with that fixed workload and
+the real worker remains pending past the 90-second assertion.
+
+- [x] **Step 1: Write failing point-count propagation tests**
+
+  Extend the runtime-policy, client, protocol, and worker-runtime tests to
+  require an integer browser-test override in `[2, PREDICTOR_MAX_POINTS]`, copy
+  it into the request, reject invalid values, and pass it to
+  `predictThrustFreeTrajectory()` as `outputPointCount`.
+
+- [x] **Step 2: Verify RED**
+
+  Run `npx vitest run src/game/trajectoryPredictionRuntimePolicy.test.ts
+  src/game/trajectoryPredictorClient.test.ts src/workers/predictorProtocol.test.ts
+  src/workers/predictorWorkerRuntime.test.ts`. Expected: FAIL because the
+  point-count override is absent.
+
+- [x] **Step 3: Implement the minimum test-only path**
+
+  Add one exact init property, validate it without coercion, carry it through
+  the existing client options and request protocol, and default the worker
+  executor to `PREDICTOR_MAX_POINTS` when it is absent. Configure only the
+  dedicated production browser regression with 128 points; normal gameplay,
+  benchmark, and performance gates continue to request 2,000.
+
+- [x] **Step 4: Verify GREEN and browser behavior**
+
+  Re-run the four focused Vitest files, then run
+  `npm run test:trajectory-overlay`. Require the real Vite module worker,
+  `data-trajectory-ready="true"`, zero browser errors, and the unchanged 0 px
+  deterministic marker-alignment assertions.
+
+- [ ] **Step 5: Run proportional gates and deliver**
+
+  Run lint, typecheck, formatting, build, task schema, the affected focused
+  tests, and the production performance gate. Update the task handoff with the
+  root cause and exact evidence, commit, push, and obtain a fresh PR CI run.

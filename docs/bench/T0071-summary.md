@@ -73,7 +73,7 @@ are the deterministic feature workload, remain far below the 150-call / 500k-
 triangle typical-view budgets, and retain the existing +/-10% regression
 tolerance for later changes.
 
-## Paused CI status
+## CI continuation status
 
 CI run `29642564311` on head `cf3f1a6` passed Vitest, build, the production
 performance gate, application smoke, and every browser regression before the
@@ -84,3 +84,16 @@ override is therefore not yet proven at the CI worker boundary. Development is
 paused before another fix: the next investigation should instrument the
 init-property, main-thread request, protocol payload, and worker executor
 horizon in sequence rather than extend the timeout.
+
+That investigation found the test horizon was propagated correctly, but the
+worker still requested the production maximum of 2,000 output points. The
+predictor performs at least one DP54 propagation per output point, so reducing
+only the horizon did not reduce the fixed sampling floor. A second validated
+test-only override now requests 128 points in this one browser contract while
+normal gameplay, the benchmark, and the production performance gate retain
+2,000. The real-worker browser regression completes locally in 5.9 seconds,
+reports `data-trajectory-ready="true"`, two prediction draw calls, and 0 px
+marker alignment error at both tested FOVs. The production gate remains exactly
+10 calls / 77,071 triangles with +69,540 B retained heap and bundle sizes of
+267,797 / 539,129 gzip bytes, all within their committed limits. A fresh PR CI
+run is still required to validate the bounded workload on SwiftShader.

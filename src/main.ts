@@ -17,6 +17,7 @@ import { TrajectoryPredictionRefresh } from './game/trajectoryPredictionRefresh.
 import {
   isTrajectoryPredictionRuntimeEnabled,
   readTrajectoryPredictionTestHorizonSec,
+  readTrajectoryPredictionTestPointCount,
 } from './game/trajectoryPredictionRuntimePolicy.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
@@ -153,6 +154,7 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
 
 if (isTrajectoryPredictionRuntimeEnabled(window)) {
   const testHorizonSec = readTrajectoryPredictionTestHorizonSec(window);
+  const testPointCount = readTrajectoryPredictionTestPointCount(window);
   const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
     type: 'module',
   });
@@ -163,6 +165,7 @@ if (isTrajectoryPredictionRuntimeEnabled(window)) {
     {
       ownsPort: true,
       ...(testHorizonSec === undefined ? {} : { testHorizonSec }),
+      ...(testPointCount === undefined ? {} : { testPointCount }),
     },
   );
 }

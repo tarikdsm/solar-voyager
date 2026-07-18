@@ -81,7 +81,7 @@ export function createPredictorWorkerRuntime(
         shipState: payload.shipState,
         dominantBodyIndex: payload.dominantBodyIndex,
         targetBodyIndex: payload.targetBodyIndex,
-        outputPointCount: PREDICTOR_MAX_POINTS,
+        outputPointCount: payload.testPointCount ?? PREDICTOR_MAX_POINTS,
       });
       const response: PredictorSuccessMessage = {
         type: 'success',

@@ -355,6 +355,7 @@ describe('trajectory predictor client', () => {
     const client = createTrajectoryPredictorClient(port, 9, () => {}, {
       now: () => nowMs,
       testHorizonSec: 21_600,
+      testPointCount: 128,
     });
     const snapshot = createSnapshot();
 
@@ -364,6 +365,7 @@ describe('trajectory predictor client', () => {
     const first = port.posted[0]?.message;
     expect(first === undefined ? true : 'userHorizonSec' in first).toBe(false);
     expect(first?.testHorizonSec).toBe(21_600);
+    expect(first?.testPointCount).toBe(128);
     port.respond(createSuccess(first?.requestId ?? -1));
 
     client.invalidate();
@@ -371,6 +373,7 @@ describe('trajectory predictor client', () => {
     client.update(snapshot, 10_000_000);
     expect(port.posted[1]?.message.userHorizonSec).toBe(10_000_000);
     expect(port.posted[1]?.message.testHorizonSec).toBe(21_600);
+    expect(port.posted[1]?.message.testPointCount).toBe(128);
   });
 
   it('removes its listener and terminates only an owned port on disposal', () => {

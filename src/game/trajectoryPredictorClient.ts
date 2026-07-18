@@ -3,6 +3,7 @@ import {
   isPredictorErrorMessage,
   isPredictorSuccessMessage,
   PREDICTOR_BASE_HORIZON_SEC,
+  PREDICTOR_MAX_POINTS,
   PREDICTOR_STATE_LENGTH,
   type PredictorRequestMessage,
   type PredictorResponseMessage,
@@ -40,6 +41,7 @@ export interface TrajectoryPredictorClientOptions {
   readonly now?: () => number;
   readonly ownsPort?: boolean;
   readonly testHorizonSec?: number;
+  readonly testPointCount?: number;
 }
 
 /** Allocation-free frame-loop facade around debounced trajectory worker jobs. */
@@ -64,6 +66,7 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
   private readonly now: () => number;
   private readonly ownsPort: boolean;
   private readonly testHorizonSec: number | undefined;
+  private readonly testPointCount: number | undefined;
   private readonly messageListener: (event: MessageEvent<unknown>) => void;
   private readonly errorListener: (event: ErrorEvent) => void;
   private readonly messageErrorListener: (event: MessageEvent<unknown>) => void;
@@ -88,6 +91,15 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
       throw new RangeError('test horizon must be positive, finite, and at most the base horizon');
     }
     this.testHorizonSec = options.testHorizonSec;
+    if (
+      options.testPointCount !== undefined &&
+      (!Number.isInteger(options.testPointCount) ||
+        options.testPointCount < 2 ||
+        options.testPointCount > PREDICTOR_MAX_POINTS)
+    ) {
+      throw new RangeError('test point count must be an integer in the predictor bounds');
+    }
+    this.testPointCount = options.testPointCount;
     this.messageListener = (event) => {
       this.handleMessage(event.data);
     };
@@ -157,6 +169,7 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
       osculatingPeriodSec: snapshot.osculatingElements.periodSec,
       ...(userHorizonSec === undefined ? {} : { userHorizonSec }),
       ...(this.testHorizonSec === undefined ? {} : { testHorizonSec: this.testHorizonSec }),
+      ...(this.testPointCount === undefined ? {} : { testPointCount: this.testPointCount }),
       dominantBodyIndex: snapshot.dominantBodyIndex,
       targetBodyIndex: snapshot.targetBodyIndex,
     };
