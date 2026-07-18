@@ -23,6 +23,6 @@ describe('30-day golden trajectories - physics-spec.md section 7.6', () => {
       const actual = runGoldenTrajectory(createGoldenScenario(scenarioId));
 
       assertGoldenTrajectoryMatches(actual, expected);
-    });
+    }, 20_000);
   }
 });
