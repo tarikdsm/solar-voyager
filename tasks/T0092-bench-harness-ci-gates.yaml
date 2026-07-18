@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -27,10 +27,11 @@ handoff_notes: |
     docs/bench/T0092-flight.json measured 6.1/6.1/6.2 and 6.1/6.1/6.3 ms,
     identical 26-call/66,246-triangle workloads, and empty findings.
   - The gate now leaves rAF-based warmup to `npm run bench`, waits for the first
-    valid CI telemetry frame with timed polling, then retains its mandatory 60 s
-    settle and 30 s measurement. Fresh local production retained +23,027 bytes;
-    the allocation fixture was rejected at +887,412 bytes and extra-draw fixture
-    at 27 calls versus golden 9. All 14 browser regressions, build, format, lint,
+    valid CI telemetry frame with timed polling, and yields its single callback
+    through a preallocated macrotask so SwiftShader cannot starve control commands.
+    It retains the mandatory 60 s settle and 30 s measurement. Fresh local
+    production retained +44,220 bytes; allocation was rejected at +768,744 bytes
+    and extra draws at 27 calls versus golden 9. All 14 browser regressions, build, format, lint,
     typecheck, 531 Vitest assertions, 50 Python tests, budgets, and 53 task schemas
     passed during the correction cycle. Exact-head CI and re-review remain gates;
     the merger flips DONE only after both approve.
