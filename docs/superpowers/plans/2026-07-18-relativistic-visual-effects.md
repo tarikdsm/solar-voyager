@@ -284,25 +284,25 @@ export class RelativisticVisualController {
 - Create: `docs/bench/T0081-summary.md`
 - Modify: `tasks/T0081-relativistic-visuals.yaml`
 
-- [ ] **Step 1: Capture unchanged-feature benchmark baseline**
+- [x] **Step 1: Capture unchanged-feature benchmark baseline**
 
   Run `npm run bench -- --output output/T0081-baseline.json` at the design head
   and record exact frame/GPU percentiles, workload, heap, and bundle figures.
 
-- [ ] **Step 2: Write the failing browser contract**
+- [x] **Step 2: Write the failing browser contract**
 
   Add the package command before the page/script exist and prove it fails.
   The eventual script must use Stable Chrome, fail on console/page errors, and
   measure projection/color pixels at beta zero, gamma 1.049/1.051, and 0.9c.
 
-- [ ] **Step 3: Implement deterministic acceptance metrics**
+- [x] **Step 3: Implement deterministic acceptance metrics**
 
   Require analytic forward compression within 0.5 CSS px, forward blue/red
   ratio greater than baseline and aft lower than baseline, forward luminance
   greater than aft, threshold-pair normalized image delta below 1%, baseline
   workload unchanged, and active workload increase of at most one draw call.
 
-- [ ] **Step 4: Add the regression permanently to CI**
+- [x] **Step 4: Add the regression permanently to CI**
 
   Add a named workflow step and a structural test proving the exact package
   command occurs once.

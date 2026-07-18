@@ -22,6 +22,7 @@
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
     "test:state-vectors": "node tools/tests/stateVectorWidgetRegression.mjs",
     "test:trajectory-overlay": "node tools/tests/trajectoryOverlayRegression.mjs",
+    "test:relativistic-visuals": "node tools/tests/relativisticVisualsRegression.mjs",
     "test:perf-panel": "node tools/tests/perfPanelRegression.mjs",
     "test:perf-governor": "node tools/tests/perfGovernorRegression.mjs",
     "test:perf-gates": "node tools/perf/performanceGate.mjs",
