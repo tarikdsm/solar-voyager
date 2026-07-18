@@ -127,28 +127,28 @@ git commit -m "feat(assets): [T0083] define scientific ring catalog"
 - Produces: `create_ring_annulus(name, inner_radius, outer_radius, segments=256, radial_segments=4)`.
 - Produces: four normalized planet GLBs with `mat_surface` and `mat_rings`.
 
-- [ ] **Step 1: Write failing pure-Python contract tests**
+- [x] **Step 1: Write failing pure-Python contract tests**
 
 Assert four configs, source paths, polar ratios, normalized radii, band containment, 256 angular segments, material names, and actionable missing-file errors. Pin Saturn 1.110–2.320, Jupiter 100000/71492–270000/71492, Uranus 39600/25559–106200/25559, and Neptune 41000/24764–62940/24764.
 
-- [ ] **Step 2: Run focused Python tests red**
+- [x] **Step 2: Run focused Python tests red**
 
 Run: `python -m unittest tools.tests.test_blender_ring_config -v`
 Expected: FAIL because `ring_config.py` is absent.
 
-- [ ] **Step 3: Implement shared config and annulus helper**
+- [x] **Step 3: Implement shared config and annulus helper**
 
 The helper builds an XY-plane Blender annulus (glTF XZ plane after export), uses radial U and angular V, smooth normals, no n-gons, and returns one object named `<body>_rings`. Four radial segments are sufficient because texture U carries structure; 256 angular segments produce 2,048 triangles.
 
-- [ ] **Step 4: Generalize the planet builder**
+- [x] **Step 4: Generalize the planet builder**
 
 Extend `PlanetConfig` for the four giants, use a 128×64 surface, apply catalog polar ratios, attach `mat_rings`, publish albedo/detail/ring files, and assert surface plus ring triangles independently. Wrappers delegate to `build_planet.build('<id>', output_root)`.
 
-- [ ] **Step 5: Acquire and verify approved albedos**
+- [x] **Step 5: Acquire and verify approved albedos**
 
 Fetch the official Solar System Scope CC BY 4.0 URLs, record SHA-256, normalize to 4096×2048 JPEG where required, and document modifications. Generate the project-authored 1k gas detail pair and ring strips deterministically. Never commit an unverified network response.
 
-- [ ] **Step 6: Build twice in isolated roots**
+- [x] **Step 6: Build twice in isolated roots**
 
 Run Blender 5.1 once per planet into `build/T0083-authoring-a` and `build/T0083-authoring-b`; compare normalized GLB and texture SHA-256. Expected: all corresponding files match and each manifest reports ring triangles ≤5,000.
 
@@ -156,7 +156,7 @@ Run Blender 5.1 once per planet into `build/T0083-authoring-a` and `build/T0083-
 
 Render lit, edge-on, and backlit authoring views for each planet with review-only cameras/lights excluded from export. Confirm true proportions, no UV seam, no embedded images, and no cameras/lights/animations in GLB.
 
-- [ ] **Step 8: Run tool tests and commit sources**
+- [x] **Step 8: Run tool tests and commit sources**
 
 Run: `npm run test:tools && npm run test:blender`
 Expected: PASS.
@@ -178,24 +178,24 @@ git commit -m "feat(assets): [T0083] author four ringed giant models"
 - `PreparedRingMaterials.setRepresentationBlend(value: number): void`
 - `PreparedRingMaterials.dispose(): void`
 
-- [ ] **Step 1: Write shader-injection tests**
+- [x] **Step 1: Write shader-injection tests**
 
 Use fake shader records and assert stable uniforms, cache key suffix, planet-ellipsoid occlusion in ring fragment code, ring-plane intersection in surface code, radial texture sample, bounded transmission, Neptune arc loop constants, and chained existing hooks.
 
-- [ ] **Step 2: Run the focused test red**
+- [x] **Step 2: Run the focused test red**
 
 Run: `npx vitest run src/render/ringMaterial.test.ts`
 Expected: FAIL because `ringMaterial.ts` is absent.
 
-- [ ] **Step 3: Implement one-time preparation**
+- [x] **Step 3: Implement one-time preparation**
 
 Validate `mat_rings.map`, set `DoubleSide`, transparent true, depthWrite false, and reuse its texture as the surface shader's ring-opacity sampler. Inject object-local position varying once. Normalize Sun vectors into preallocated `Vector3` values only in the prepared object, never inside `onBeforeCompile` after setup.
 
-- [ ] **Step 4: Implement analytic cues**
+- [x] **Step 4: Implement analytic cues**
 
 Use a ray/oblate-spheroid quadratic for planet shadow, ray/`y=0` intersection for ring shadow, `smoothstep` edge feathering, and a maximum 0.22 transmitted-light contribution. Multiply annulus opacity by `1 - representationBlend * 0.65`, leaving enough distant context during flythrough.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 Run: `npx vitest run src/render/ringMaterial.test.ts && npm run typecheck`
 Expected: PASS.
