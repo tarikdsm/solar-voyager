@@ -23,6 +23,7 @@ const STEADY_HEAP_SETTLE_MS = 30_000;
 const STEADY_HEAP_MEASURE_MS = 30_000;
 const DEFAULT_SAMPLE_FRAMES = 900;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
+const PRIMING_RUNS = 2;
 
 function readPositiveIntegerFlag(flag, fallback) {
   const index = process.argv.indexOf(flag);
@@ -227,8 +228,8 @@ async function runOnce(browser, schedule, index) {
   }
 }
 
-async function primeBrowser(browser, schedule) {
-  console.log('Flight benchmark cache priming');
+async function primeBrowser(browser, schedule, index) {
+  console.log(`Flight benchmark cache priming ${String(index + 1)}/${String(PRIMING_RUNS)}`);
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const errors = [];
   addBrowserErrorListeners(page, errors);
@@ -279,7 +280,9 @@ async function main() {
   let browser;
   try {
     browser = await launchBenchmarkBrowser();
-    await primeBrowser(browser, schedule);
+    for (let index = 0; index < PRIMING_RUNS; index += 1) {
+      await primeBrowser(browser, schedule, index);
+    }
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
       runs.push(await runOnce(browser, schedule, index));
