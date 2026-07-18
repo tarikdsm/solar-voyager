@@ -181,10 +181,10 @@ export class TrajectoryOverlay {
   readonly markers: Points;
   readonly startTimeSec: number;
   readonly sampleIntervalSec: number;
+  constructor(spaceScene: CameraRelativeSpaceScene, bodyIds: readonly string[]);
   applyPrediction(
     result: PredictorSuccessMessage,
     fallbackDominantBodyIndex: number,
-    bodyIds: readonly string[],
   ): void;
   hide(): void;
   setViewport(widthPx: number, heightPx: number, pixelRatio: number): void;
@@ -218,8 +218,8 @@ export class TrajectoryOverlay {
   `BufferGeometry` with 2,002 position/code/body attributes and a shader that
   uses `gl_PointCoord` for ring, diamond, and warning-triangle silhouettes.
   Bind marker positions through `bindPackedPointPositions`, set draw ranges
-  instead of replacing attributes, and use deterministic body-ID palette
-  colors.
+  instead of replacing attributes, and precompute deterministic body-ID palette
+  colors in the constructor rather than during the first worker response.
 
 - [ ] **Step 4: Verify GREEN and commit**
 
