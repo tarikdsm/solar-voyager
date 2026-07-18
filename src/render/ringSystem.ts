@@ -114,15 +114,13 @@ class PreparedRingSystemImpl implements PreparedRingSystem {
     simTimeSec: number,
   ): void {
     if (
-      ![
-        cameraBodyXKm,
-        cameraBodyYKm,
-        cameraBodyZKm,
-        sunBodyXKm,
-        sunBodyYKm,
-        sunBodyZKm,
-        simTimeSec,
-      ].every(Number.isFinite)
+      !Number.isFinite(cameraBodyXKm) ||
+      !Number.isFinite(cameraBodyYKm) ||
+      !Number.isFinite(cameraBodyZKm) ||
+      !Number.isFinite(sunBodyXKm) ||
+      !Number.isFinite(sunBodyYKm) ||
+      !Number.isFinite(sunBodyZKm) ||
+      !Number.isFinite(simTimeSec)
     ) {
       throw new RangeError('Ring-system camera, Sun, and simulation values must be finite.');
     }

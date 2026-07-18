@@ -38,6 +38,8 @@ interface ParticleUniforms extends Record<string, IUniform> {
 const VERTEX_SHADER = /* glsl */ `
 precision highp float;
 
+#define RING_MINIMUM_ANGULAR_RADIUS 0.0012
+
 attribute vec4 aRingParticle;
 
 uniform vec3 uRingPatchOrigin;
@@ -80,7 +82,14 @@ void main() {
     1.0
   );
   vRingIceVariation = aRingParticle.x * 0.35 + aRingParticle.z * 0.25;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4( particleCenter + particleVertex, 1.0 );
+  vec4 viewCenter = modelViewMatrix * vec4( particleCenter, 1.0 );
+  vec3 viewOffset = mat3( modelViewMatrix ) * particleVertex;
+  float physicalViewRadius = length( viewOffset );
+  float minimumViewRadius = max( 0.0, -viewCenter.z ) * RING_MINIMUM_ANGULAR_RADIUS;
+  if ( physicalViewRadius > 0.0 && physicalViewRadius < minimumViewRadius ) {
+    viewOffset *= minimumViewRadius / physicalViewRadius;
+  }
+  gl_Position = projectionMatrix * ( viewCenter + vec4( viewOffset, 0.0 ) );
 }
 `;
 
@@ -262,7 +271,11 @@ export class RingParticleField {
     cameraLocalZ: number,
     simTimeSec: number,
   ): number {
-    if (![cameraLocalX, cameraLocalY, cameraLocalZ].every(Number.isFinite)) {
+    if (
+      !Number.isFinite(cameraLocalX) ||
+      !Number.isFinite(cameraLocalY) ||
+      !Number.isFinite(cameraLocalZ)
+    ) {
       throw new RangeError('Ring particle camera coordinates must be finite.');
     }
     if (!Number.isFinite(simTimeSec)) {

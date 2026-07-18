@@ -174,7 +174,12 @@ class PreparedRingMaterialsImpl implements PreparedRingMaterials {
   }
 
   updateSunDirection(x: number, y: number, z: number): void {
-    if (![x, y, z].every(Number.isFinite) || (x === 0 && y === 0 && z === 0)) {
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(z) ||
+      (x === 0 && y === 0 && z === 0)
+    ) {
       throw new RangeError('Sun direction must be finite and non-zero.');
     }
     const length = Math.hypot(x, y, z);

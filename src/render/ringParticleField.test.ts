@@ -37,6 +37,9 @@ describe('RingParticleField', () => {
     );
     expect(Array.from(leftSeeds.array)).toEqual(Array.from(rightSeeds.array));
     expect((left.mesh.material as ShaderMaterial).vertexShader).toContain('sqrt( uParentMuKm3S2');
+    expect((left.mesh.material as ShaderMaterial).vertexShader).toContain(
+      'RING_MINIMUM_ANGULAR_RADIUS 0.0012',
+    );
 
     left.dispose();
     right.dispose();

@@ -310,31 +310,31 @@ git commit -m "feat(render): [T0083] integrate ring systems and quality"
 **Interfaces:**
 - Produces npm scripts `test:ring-systems` and `test:ring-flythrough`.
 
-- [ ] **Step 1: Write browser regressions before fixture implementation**
+- [x] **Step 1: Write browser regressions before fixture implementation**
 
 Require four loaded tier-3 models, zero WebGL error, stable program count after warm-up, visible radial variance, shadow-sector contrast, planet ring-shadow contrast, bounded backlight gain, Neptune arc localization, and no unexpected network requests.
 
 The flythrough test requires a continuous combined alpha metric, moving particle centroid/parallax, one added draw call, exact quality counts, and stable heap after warm-up.
 
-- [ ] **Step 2: Run red**
+- [x] **Step 2: Run red**
 
 Run: `npm run test:ring-systems && npm run test:ring-flythrough`
 Expected: FAIL because fixture pages are absent.
 
-- [ ] **Step 3: Run canonical ingest twice**
+- [x] **Step 3: Run canonical ingest twice**
 
 Run: `npm run assets:ingest -- --ktx "C:\Program Files\KTX-Software\bin\ktx.exe"`, hash `public/assets`, repeat, and compare. Expected: identical hashes; four planet entries; each planet <12 MB; measured ring subset <2 MB.
 
-- [ ] **Step 4: Implement deterministic fixtures**
+- [x] **Step 4: Implement deterministic fixtures**
 
 Use fixed cameras, Sun vectors, quality locks, and frame counts. Expose scalar metrics via `window.__ringSystemsTest` / `window.__ringFlythroughTest`; keep test-only control behind `import.meta.env.DEV` pages, not production globals.
 
-- [ ] **Step 5: Run browser acceptance and neighbors**
+- [x] **Step 5: Run browser acceptance and neighbors**
 
 Run: `npm run test:ring-systems && npm run test:ring-flythrough && npm run test:visual-tiers && npm run test:lighting-post && npm run test:surface-detail && npm run test:perf-governor && npm run test:renderer-policy`
 Expected: PASS with WebGL error 0.
 
-- [ ] **Step 6: Commit runtime artifacts and regressions**
+- [x] **Step 6: Commit runtime artifacts and regressions**
 
 ```powershell
 git add public/assets tests/render tools/tests package.json
