@@ -1,4 +1,5 @@
 const DEFAULT_STABILITY_LIMIT = 0.05;
+const REFERENCE_FRAME_BUDGET_MS = 1_000 / 60;
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -60,10 +61,13 @@ function compareTimingMetrics(first, second, label, limit, findings) {
       findings.push(`${label} ${metric} values must be finite and nonnegative.`);
       continue;
     }
-    const difference = symmetricRelativeDifference(left, right);
+    const isWorkMetric = metric.startsWith('work');
+    const difference = isWorkMetric
+      ? Math.abs(left - right) / REFERENCE_FRAME_BUDGET_MS
+      : symmetricRelativeDifference(left, right);
     if (difference >= limit) {
       findings.push(
-        `${label} ${metric} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
+        `${label} ${metric}${isWorkMetric ? ' frame-budget' : ''} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
       );
     }
   }

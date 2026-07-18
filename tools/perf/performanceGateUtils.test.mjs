@@ -190,6 +190,43 @@ describe('compareBenchmarkRuns', () => {
       ),
     ).toEqual([]);
   });
+
+  it('rejects game-work drift beyond five percent of the 60-fps frame budget', () => {
+    expect(
+      compareBenchmarkRuns(
+        {
+          ...first,
+          legs: [
+            {
+              id: 'leo',
+              medianMs: 6,
+              p75Ms: 6,
+              p99Ms: 6,
+              workMedianMs: 4,
+              workP75Ms: 4,
+              workP99Ms: 4,
+            },
+          ],
+        },
+        {
+          ...first,
+          legs: [
+            {
+              id: 'leo',
+              medianMs: 6,
+              p75Ms: 6,
+              p99Ms: 6,
+              workMedianMs: 5,
+              workP75Ms: 4,
+              workP99Ms: 4,
+            },
+          ],
+        },
+      ),
+    ).toEqual([
+      'Benchmark leg "leo" workMedianMs frame-budget variance must be < 5.0%; measured 6.00%.',
+    ]);
+  });
 });
 
 describe('parsePerformanceGolden', () => {
