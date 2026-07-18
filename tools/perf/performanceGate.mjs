@@ -190,13 +190,17 @@ async function measurePage(browser, durationMs, allocationFixture, label) {
 }
 
 async function runDrawFixture(browser, productionWorkload, golden) {
+  console.log('Performance gate page: draw fixture');
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const browserErrors = [];
   addBrowserErrorListeners(page, browserErrors);
+  await installCooperativeFrameLoop(page, false);
   await installHighQualitySetting(page);
   try {
     await waitForReady(page);
+    console.log('Performance gate ready: draw fixture');
     await waitForStableWorkload(page);
+    console.log('Performance gate workload stable: draw fixture');
     const injected = await page.evaluate(
       ({ drawCallOffset, telemetryProperty }) => {
         const canvas = globalThis.document.querySelector('#space-canvas');
@@ -213,6 +217,7 @@ async function runDrawFixture(browser, productionWorkload, golden) {
       { drawCallOffset: golden.workload.drawCalls * 2, telemetryProperty: TELEMETRY_PROPERTY },
     );
     assert.deepEqual(browserErrors, []);
+    console.log('Performance gate measured: draw fixture');
     const findings = validateWorkload(injected, golden.workload);
     assert.ok(
       findings.some((finding) => finding.startsWith('Draw calls must stay within')),
