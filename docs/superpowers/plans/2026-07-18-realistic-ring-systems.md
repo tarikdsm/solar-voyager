@@ -217,24 +217,24 @@ git commit -m "feat(render): [T0083] shade ring light transport cues"
 - `setCountCap(count: number): void`.
 - Readonly `mesh: InstancedMesh` and `blend: number`.
 
-- [ ] **Step 1: Write deterministic state tests**
+- [x] **Step 1: Write deterministic state tests**
 
 Assert identical seed attributes across constructions, one mesh/material/geometry, maximum count from catalog, zero blend outside radial/vertical windows, continuous 0→1→0 plane crossing, exact quality caps, bounded modulo phase, and unchanged object identities over 10,000 updates.
 
-- [ ] **Step 2: Run red**
+- [x] **Step 2: Run red**
 
 Run: `npx vitest run src/render/ringParticleField.test.ts`
 Expected: FAIL because the module is absent.
 
-- [ ] **Step 3: Build setup resources**
+- [x] **Step 3: Build setup resources**
 
 Create one low-detail `IcosahedronGeometry`, one `ShaderMaterial`, one maximum-capacity `InstancedMesh`, seeded scalar attributes, and static instance transforms. Set `frustumCulled = false`, `matrixAutoUpdate = false`, and `count = 0` until activated.
 
-- [ ] **Step 4: Implement allocation-free GPU patch update**
+- [x] **Step 4: Implement allocation-free GPU patch update**
 
 Write camera-local radial/tangent basis and reduced simulation phase into stable uniforms. The vertex shader combines seeded patch offsets, samples radial band influence, and advances tangent position at `sqrt(mu/r³)`. The fragment shader shades irregular ice with catalog color and blend alpha.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 Run: `npx vitest run src/render/ringParticleField.test.ts && npm run lint && npm run typecheck`
 Expected: PASS.
