@@ -80,6 +80,9 @@ jobs:
       - name: State-vector widget regression
         run: npm run test:state-vectors
 
+      - name: Trajectory overlay regression
+        run: npm run test:trajectory-overlay
+
       - name: Performance panel regression
         run: npm run test:perf-panel
       - name: Adaptive quality governor regression
