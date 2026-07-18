@@ -6,7 +6,7 @@ Add a reproducible production-build benchmark and CI gates for the deterministic
 
 ## Production benchmark
 
-`npm run bench` builds the application, starts a strict-port Vite preview, launches Chromium with precise heap metrics, and measures the real production page. It applies the High quality lock before startup so the adaptive governor cannot change the workload during a run.
+`npm run bench` builds the application, starts a strict-port Vite preview, prefers the installed stable Chrome with hardware acceleration and precise heap metrics, and measures the real production page. On Windows it requests ANGLE/D3D11 explicitly; if stable Chrome is unavailable it falls back visibly to bundled Chromium, whose software-renderer identity remains recorded in the report. It applies the High quality lock before startup so the adaptive governor cannot change the workload during a run.
 
 The scripted path contains 900 measured animation frames (300 percentile samples per leg) and represents 180 virtual seconds. This makes p99 robust to individual transition frames while keeping software-rasterizer runs practical without changing the route:
 

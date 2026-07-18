@@ -241,6 +241,22 @@ async function primeBrowser(browser, schedule) {
   }
 }
 
+async function launchBenchmarkBrowser() {
+  const sharedArgs = ['--enable-precise-memory-info', '--js-flags=--expose-gc'];
+  try {
+    const hardwareArgs =
+      process.platform === 'win32'
+        ? [...sharedArgs, '--ignore-gpu-blocklist', '--use-angle=d3d11']
+        : sharedArgs;
+    return await chromium.launch({ channel: 'chrome', headless: true, args: hardwareArgs });
+  } catch (error) {
+    console.warn(
+      `Stable Chrome is unavailable; falling back to bundled Chromium: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return chromium.launch({ headless: true, args: sharedArgs });
+  }
+}
+
 async function main() {
   const runsRequested = readPositiveIntegerFlag('--runs', 1);
   if (runsRequested > 2) throw new RangeError('--runs supports one or two benchmark runs.');
@@ -258,10 +274,7 @@ async function main() {
   });
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
-    });
+    browser = await launchBenchmarkBrowser();
     await primeBrowser(browser, schedule);
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
