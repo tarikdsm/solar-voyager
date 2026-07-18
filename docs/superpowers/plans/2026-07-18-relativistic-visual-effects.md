@@ -102,26 +102,26 @@ export function writeAberratedPositionInto(
 ): void;
 ```
 
-- [ ] **Step 1: Write failing math/state tests**
+- [x] **Step 1: Write failing math/state tests**
 
   Test gamma-one and quality-off identity, beta validation below one,
   transactional rejection of inconsistent/non-finite snapshots, the analytic
   0.9c perpendicular result `(1/gamma, 0, 0.9)` at unit radius, forward/aft
   collinearity, radius preservation, and continuity at gamma 1 and 1.05.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run `npx vitest run src/render/relativisticVisualState.test.ts`. Expected:
   FAIL because the module is absent.
 
-- [ ] **Step 3: Implement the minimum math owner**
+- [x] **Step 3: Implement the minimum math owner**
 
   Validate all inputs before mutating `output`. Use
   `((gamma - 1) / betaSquared) * dot + gamma`, normalize only the partially
   blended direction, preserve radius, and write three existing array slots.
   Cite physics-spec section 6 above the aberration and activation formulas.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
   Run the focused test and commit
   `feat(render): [T0081] add relativistic visual state`.
