@@ -118,8 +118,7 @@ export function writeAberratedPositionInto(
   }
 
   // physics-spec.md section 6.1: Lorentz-transform the source direction.
-  const dot =
-    state.betaX * directionX + state.betaY * directionY + state.betaZ * directionZ;
+  const dot = state.betaX * directionX + state.betaY * directionY + state.betaZ * directionZ;
   const boostCoefficient = ((state.gamma - 1) / betaSquared) * dot + state.gamma;
   const inverseDenominator = 1 / (state.gamma * (1 + dot));
   const observedX = (directionX + boostCoefficient * state.betaX) * inverseDenominator;

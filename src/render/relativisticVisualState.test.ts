@@ -92,7 +92,10 @@ describe('relativistic visual state', () => {
   });
 
   it.each([
-    ['non-finite velocity', { ...snapshotAtBeta(0.5), shipCoordinateVelocityKmS: new Float64Array([NaN, 0, 0]) }],
+    [
+      'non-finite velocity',
+      { ...snapshotAtBeta(0.5), shipCoordinateVelocityKmS: new Float64Array([NaN, 0, 0]) },
+    ],
     ['light-speed beta', { ...snapshotAtBeta(0.5), speedFractionOfLight: 1 }],
     ['inconsistent beta', { ...snapshotAtBeta(0.5), speedFractionOfLight: 0.6 }],
     ['inconsistent gamma', { ...snapshotAtBeta(0.5), gamma: 8 }],
