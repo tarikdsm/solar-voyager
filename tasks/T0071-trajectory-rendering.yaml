@@ -67,6 +67,12 @@ handoff_notes: |
   already-rendered Next approach row on Linux. The regression now finds the
   semantic dt label and reads its adjacent dd, and passes locally with the real
   worker and 0 px alignment. A fourth PR CI run is required.
+  The fourth run again reached the trajectory step after all prior gates, and
+  the semantic read no longer failed; the successful page instead remained
+  alive with its worker after assertions. The harness now navigates the
+  production page to about:blank to trigger pagehide/client disposal, closes it
+  explicitly, and has a structurally tested four-minute CI timeout. The full
+  regression passes locally in about 28 s; a fifth PR CI run is required.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
