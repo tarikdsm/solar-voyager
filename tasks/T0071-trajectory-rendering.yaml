@@ -54,6 +54,13 @@ handoff_notes: |
   worker remains mandatory in the trajectory regression, performance gate,
   benchmark, and normal application. Focused isolation tests plus all three
   affected browser contracts pass locally; a fresh PR CI run is required.
+  A second run again passed the performance gate but confirmed the block inside
+  Playwright's Chromium Headless Shell smoke process itself, with no leaked
+  performance-gate process. It was cancelled after log
+  capture. Application smoke now uses the GitHub-hosted runner's preinstalled
+  Stable Chrome (the same channel as the successful trajectory E2E) and has a
+  structurally tested five-minute CI timeout. The full Stable-Chrome smoke
+  contract passes locally in about 10 s; a third PR CI run is required.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
