@@ -8,7 +8,7 @@
 - Canonical flight benchmark: 640×360 canvas, high-quality lock, 900 deterministic
   frames, two cache-priming runs, identical route and 30-second heap settle/measure windows
 - Baseline head: `cd51f0f89649468333c2bdf05a284bfdb6f1f30e`
-- Measured feature head: `7ed72e0a8757636f5e85c88d8ce6bdc305d5aac5`
+- Measured feature head: `8f74b7faa55441f09c3a506e30ea446e94ef391a`
 
 The repository's unchanged `npm run bench` harness fixes its canvas at 640×360.
 This machine has a discrete GPU, not the integrated-GPU 1080p reference class in
@@ -24,39 +24,54 @@ main-thread work distributions rather than inventing GPU percentiles.
 | ----------------------- | --------: | -----------: | ------------: |
 | Frame median            |    6.1 ms |       6.1 ms |        0.0 ms |
 | Frame p75               |    6.1 ms |       6.1 ms |        0.0 ms |
-| Frame p99               | 11.404 ms |    12.001 ms |     +0.597 ms |
-| Main-thread work median |    2.8 ms |       2.7 ms |       −0.1 ms |
-| Main-thread work p75    |    3.6 ms |       3.5 ms |       −0.1 ms |
-| Main-thread work p99    |  7.901 ms |       9.7 ms |     +1.799 ms |
+| Frame p99               | 11.404 ms |      12.0 ms |     +0.596 ms |
+| Main-thread work median |    2.8 ms |       2.6 ms |       −0.2 ms |
+| Main-thread work p75    |    3.6 ms |     3.425 ms |     −0.175 ms |
+| Main-thread work p99    |  7.901 ms |     8.805 ms |     +0.904 ms |
 | Maximum draw calls      |        26 |           26 |             0 |
 | Maximum triangles       |    66,246 |       66,246 |             0 |
-| Steady retained heap    | 104,636 B |     90,168 B |     −14,468 B |
-| Route heap delta        | 830,112 B | 26,639,340 B | +25,809,228 B |
-| Entry gzip              | 269,983 B |    276,761 B |      +6,778 B |
-| Total gzip              | 541,310 B |    548,136 B |      +6,826 B |
+| Steady retained heap    | 104,636 B |    147,077 B |     +42,441 B |
+| Route heap delta        | 830,112 B | 26,614,172 B | +25,784,060 B |
+| Entry gzip              | 269,983 B |    276,926 B |      +6,943 B |
+| Total gzip              | 541,310 B |    548,301 B |      +6,991 B |
 | Browser/page errors     |         0 |            0 |             0 |
 
 The 6.1 ms median/p75 cadence remains well below the 16.6 ms floor and the
 canonical route adds no draw calls or triangles. The route heap increase is setup
 retention from the newly lazy-loaded Jupiter hero model and KTX2 textures; it is not
-per-frame growth. The post-warmup retained heap is lower in the after capture, while
-the dedicated active-particle interval retains only 9,848 B after forced GC.
+per-frame growth. The post-warmup retained heap remains bounded, while the
+dedicated active-particle interval retains only 9,904 B after forced GC. The
+unchanged CI performance gate also passes at 195,209 B retained versus its
+196,608 B ceiling, with exact 10 draw calls and 77,071 triangles.
 
 ## Dedicated Saturn-plane evidence
 
 `npm run test:ring-flythrough` uses the real shaders and renderer at 512×512:
 
-- stable program count: 4;
+- four programs compiled before activation and stable through first use and warmup;
 - exactly one particle draw call when active (4 total calls, 1 particle-only);
 - quality caps: 4,096 / 2,048 / 1,024 / 0 instances;
-- particle-only lit pixels: 702 → 703 and centroid x: 254.949 → 255.232 over
+- particle-only lit pixels: 701 → 703 and centroid x: 254.688 → 255.237 over
   simulation time 0 → 0.001, proving visible orbital motion/parallax;
 - symmetric plane-crossing blend:
   `0, 0.259259, 0.740741, 1, 1, 1, 0.740741, 0.259259, 0`;
-- measured retained heap after forced GC: 9,848 B, below the 65,536 B gate;
+- measured retained heap after forced GC: 9,904 B, below the 65,536 B gate;
 - no WebGL, console, request, or page errors.
 
 `npm run test:ring-systems` additionally loads all four production tier-3 assets.
 It holds 13 programs after warmup and renders 3 calls / 20,224 triangles per scene.
-Planet/ring shadow angular contrast is 2.290 (Jupiter), 2.368 (Saturn), 2.972
-(Uranus), and 21.599 (Neptune); Neptune's localized arc contrast is 4.256.
+Neptune's Adams-window arc contrast is 1.268, while the Le Verrier control is
+1.023, proving the azimuthal gain does not leak into inner bands. Saturn's
+ring-shadowed planet disc measures 20.508 mean luminance versus 27.406 for the
+otherwise identical no-ring-shader control (25.2% darker).
+
+## Ring subset budgets and reproducibility
+
+Two clean Saturn Blender builds produced six byte-identical files; two clean
+canonical ingests produced 23 byte-identical files. The regenerated Saturn GLB
+has SHA-256 `747846184f73b4fa46f75082844a552ed6ac51d9c74549856fe309cb4f24b45b`;
+its radial strip has SHA-256
+`adf74e0e05052b2fe470d06849e717692c8fd0150651ad996029448e15f6e1cd`.
+The complete named runtime ring-texture variants are 6,655 B (Jupiter), 8,974 B
+(Saturn), 10,551 B (Uranus), and 6,807 B (Neptune), each far below the 2 MiB
+per-planet ring-subset limit. Particles remain procedural and add zero asset bytes.

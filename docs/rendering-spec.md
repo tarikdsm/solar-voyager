@@ -177,10 +177,11 @@ Ring systems (Saturn, Uranus, Jupiter, Neptune) are driven by the versioned
 `data/rings.json` catalog. Each tier-3 model uses the catalog's equatorial
 reference radius, a 256×4-segment annulus at the exact inner/outer ratios, and a
 2048×64 radial strip whose alpha is exposed optical depth. Runtime applies the
-catalogued axial tilt, samples radial structure, localizes Neptune's four named
-arcs, casts the oblate planet's shadow across the annulus, casts the ring shadow
-onto the planet, and permits at most 0.22 backlit transmission. Material shader
-hooks and program-cache keys are stable and are installed during model setup.
+catalogued axial tilt, samples radial structure, and localizes Neptune's four
+named arc sectors only inside the narrow Adams band. It casts the oblate
+planet's shadow across the annulus, casts the ring shadow onto the planet, and
+permits at most 0.22 backlit transmission. Material shader hooks and
+program-cache keys are stable and are installed during model setup.
 
 Saturn alone has a close-plane particle representation. One seeded icosahedron
 `InstancedMesh` covers a 2,400 km camera-local patch, samples the same radial

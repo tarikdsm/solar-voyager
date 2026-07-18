@@ -363,7 +363,7 @@ Run the unchanged native 1920×1080 benchmark route before/after with identical 
 
 Update rendering spec §11 with catalog/shader/cross-fade/quality behavior, asset pipeline with `rings.json` and strip generation, and modeling guide with the shared annulus helper. Record sources and the reference-hardware limitation honestly.
 
-- [ ] **Step 3: Run the full local gate set**
+- [x] **Step 3: Run the full local gate set**
 
 Run: `npm test`, `npm run test:tools`, `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm run build`, `npm run check:tasks`, `npm run check:budgets`, all browser regressions, `npm run test:smoke`, and `git diff --check`.
 Expected: every command exits 0; only documented skips remain.

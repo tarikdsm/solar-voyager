@@ -113,11 +113,14 @@ pair for planets, moons, and dwarfs.
 
 **Licenses:** Solar System Scope textures are **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
 
-Ring structure is transcribed with source URLs in `data/rings.json`: NASA NSSDC
-for Saturn and the SETI/PDS Rings Node tables for Jupiter, Uranus, and Neptune.
-`tools/generateRingTextures.mjs` deterministically turns those band/arc records
-into the four project-authored 2048×64 RGBA strips; `SOURCES.md` records the
-scientific inputs, texture-albedo license, hashes, and modifications per body.
+Ring structure is transcribed with stable SETI/PDS Rings Node table URLs in
+`data/rings.json` for Saturn, Jupiter, Uranus, and Neptune. The Saturn table is
+the source of record for the D-through-F boundaries; Neptune's named arcs are
+runtime masks constrained radially to the Adams ring.
+`tools/textures/generateRingTextures.mjs` deterministically turns the band
+records into the four project-authored 2048×64 RGBA strips; `SOURCES.md` records
+the scientific inputs, texture-albedo license, hashes, and modifications per
+body.
 
 The reproducible Earth albedo recipe uses Solar System Scope's official
 `8k_earth_daymap.jpg`, pins source SHA-256
