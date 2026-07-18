@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "systems": [
+    {
+      "bodyId": "jupiter",
+      "referenceRadiusKm": 71492,
+      "innerRadiusKm": 100000,
+      "outerRadiusKm": 270000,
+      "exposure": 120000,
+      "baseColor": "#9c7860",
+      "bands": [
+        { "name": "Halo", "innerRadiusKm": 100000, "outerRadiusKm": 122400, "opticalDepth": 0.000001, "color": "#8c6c58" },
+        { "name": "Main", "innerRadiusKm": 122400, "outerRadiusKm": 129100, "opticalDepth": 0.000008, "color": "#d0a47c" },
+        { "name": "Amalthea", "innerRadiusKm": 129100, "outerRadiusKm": 181350, "opticalDepth": 0.0000005, "color": "#a47c64" },
+        { "name": "Thebe", "innerRadiusKm": 181350, "outerRadiusKm": 221900, "opticalDepth": 0.0000001, "color": "#866454" },
+        { "name": "Thebe extension", "innerRadiusKm": 221900, "outerRadiusKm": 270000, "opticalDepth": 0.000000001, "color": "#705448" }
+      ],
+      "arcs": [],
+      "particles": null,
+      "sources": ["https://pds-rings.seti.org/jupiter/jupiter_rings_table.html"]
+    },
+    {
+      "bodyId": "neptune",
+      "referenceRadiusKm": 24764,
+      "innerRadiusKm": 41000,
+      "outerRadiusKm": 62940,
+      "exposure": 220,
+      "baseColor": "#718096",
+      "bands": [
+        { "name": "Galle", "innerRadiusKm": 41000, "outerRadiusKm": 43000, "opticalDepth": 0.0001, "color": "#69788c" },
+        { "name": "Le Verrier", "innerRadiusKm": 53150, "outerRadiusKm": 53250, "opticalDepth": 0.003, "color": "#9aa6b4" },
+        { "name": "Lassell", "innerRadiusKm": 53250, "outerRadiusKm": 57200, "opticalDepth": 0.0001, "color": "#78889a" },
+        { "name": "Adams", "innerRadiusKm": 62925, "outerRadiusKm": 62940, "opticalDepth": 0.003, "color": "#aab4c0" }
+      ],
+      "arcs": [
+        { "name": "Fraternite", "centerDeg": 0, "widthDeg": 8, "gain": 8 },
+        { "name": "Egalite", "centerDeg": 10.7, "widthDeg": 5, "gain": 7 },
+        { "name": "Liberte", "centerDeg": 22.7, "widthDeg": 4, "gain": 6 },
+        { "name": "Courage", "centerDeg": 30, "widthDeg": 3, "gain": 4 }
+      ],
+      "particles": null,
+      "sources": ["https://pds-rings.seti.org/neptune/neptune_rings_table.html"]
+    },
+    {
+      "bodyId": "saturn",
+      "referenceRadiusKm": 60268,
+      "innerRadiusKm": 66900,
+      "outerRadiusKm": 140224,
+      "exposure": 2.2,
+      "baseColor": "#d8c49a",
+      "bands": [
+        { "name": "D", "innerRadiusKm": 66900, "outerRadiusKm": 74510, "opticalDepth": 0.00001, "color": "#91836d" },
+        { "name": "C", "innerRadiusKm": 74658, "outerRadiusKm": 91975, "opticalDepth": 0.2, "color": "#b9aa8d" },
+        { "name": "B", "innerRadiusKm": 91975, "outerRadiusKm": 117507, "opticalDepth": 1.5, "color": "#ead8ad" },
+        { "name": "A", "innerRadiusKm": 122340, "outerRadiusKm": 136780, "opticalDepth": 0.7, "color": "#d7c49d" },
+        { "name": "F", "innerRadiusKm": 139724, "outerRadiusKm": 140224, "opticalDepth": 0.1, "color": "#c8b58f" }
+      ],
+      "arcs": [],
+      "particles": { "seed": 699, "maxCount": 4096, "patchRadiusKm": 2400, "verticalThicknessKm": 0.12, "minSizeM": 0.15, "maxSizeM": 8 },
+      "sources": ["https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html"]
+    },
+    {
+      "bodyId": "uranus",
+      "referenceRadiusKm": 25559,
+      "innerRadiusKm": 36100,
+      "outerRadiusKm": 106200,
+      "exposure": 4,
+      "baseColor": "#6e7779",
+      "bands": [
+        { "name": "Zeta", "innerRadiusKm": 36100, "outerRadiusKm": 41350, "opticalDepth": 0.0045, "color": "#60696b" },
+        { "name": "6", "innerRadiusKm": 41836, "outerRadiusKm": 41839, "opticalDepth": 0.3, "color": "#899092" },
+        { "name": "5", "innerRadiusKm": 42233, "outerRadiusKm": 42236, "opticalDepth": 0.5, "color": "#92999a" },
+        { "name": "4", "innerRadiusKm": 42570, "outerRadiusKm": 42573, "opticalDepth": 0.3, "color": "#858d8e" },
+        { "name": "Alpha", "innerRadiusKm": 44713, "outerRadiusKm": 44723, "opticalDepth": 0.4, "color": "#8c9495" },
+        { "name": "Beta", "innerRadiusKm": 45655, "outerRadiusKm": 45667, "opticalDepth": 0.3, "color": "#858d8e" },
+        { "name": "Eta", "innerRadiusKm": 47175, "outerRadiusKm": 47177, "opticalDepth": 0.4, "color": "#969d9e" },
+        { "name": "Gamma", "innerRadiusKm": 47625, "outerRadiusKm": 47629, "opticalDepth": 0.3, "color": "#8b9293" },
+        { "name": "Delta", "innerRadiusKm": 48297, "outerRadiusKm": 48303, "opticalDepth": 0.5, "color": "#9ca2a3" },
+        { "name": "Lambda", "innerRadiusKm": 50022, "outerRadiusKm": 50026, "opticalDepth": 0.1, "color": "#777f80" },
+        { "name": "Epsilon", "innerRadiusKm": 51100, "outerRadiusKm": 51200, "opticalDepth": 1.4, "color": "#aeb4b4" },
+        { "name": "Nu", "innerRadiusKm": 65400, "outerRadiusKm": 69200, "opticalDepth": 0.0000056, "color": "#626b6d" },
+        { "name": "Mu", "innerRadiusKm": 89200, "outerRadiusKm": 106200, "opticalDepth": 0.0000085, "color": "#667174" }
+      ],
+      "arcs": [],
+      "particles": null,
+      "sources": ["https://pds-rings.seti.org/uranus/uranus_rings_table.html"]
+    }
+  ]
+}

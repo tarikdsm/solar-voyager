@@ -51,7 +51,7 @@
 - Produces: `ringDefinitionFor(id: string): RingDefinition | null`
 - Produces: CLI `node tools/textures/generateRingTextures.mjs --body <id> --output <path>`
 
-- [ ] **Step 1: Write catalog validation tests**
+- [x] **Step 1: Write catalog validation tests**
 
 ```ts
 expect(RING_DEFINITIONS.map((ring) => ring.bodyId)).toEqual([
@@ -65,12 +65,12 @@ expect(ringDefinitionFor('neptune')?.arcs).toHaveLength(4);
 expect(() => loadRingCatalog({ schemaVersion: 1, systems: [] })).toThrow(/schemaVersion/u);
 ```
 
-- [ ] **Step 2: Run the focused test and observe the missing-module failure**
+- [x] **Step 2: Run the focused test and observe the missing-module failure**
 
 Run: `npx vitest run src/render/ringCatalog.test.ts`
 Expected: FAIL because `ringCatalog.ts` does not exist.
 
-- [ ] **Step 3: Add schema v1 data and strict parser**
+- [x] **Step 3: Add schema v1 data and strict parser**
 
 Use PDS/NASA kilometer radii, normalize by each catalog equatorial reference, sort systems by body id in the parser, freeze every nested array/object, and reject non-finite/inverted/out-of-annulus bands. Keep display exposure explicit per system instead of mutating physical optical depth.
 
@@ -86,20 +86,20 @@ export interface RingDefinition {
 }
 ```
 
-- [ ] **Step 4: Write generator tests before implementation**
+- [x] **Step 4: Write generator tests before implementation**
 
 Generate Saturn twice into temporary directories; assert byte identity, 2048×64 RGBA, first/last column transparency, row identity for axisymmetric bodies, alpha ordering across named bands, and a stable seam for Neptune's arc metadata (arcs remain runtime masks, not baked rows).
 
-- [ ] **Step 5: Implement the strip generator**
+- [x] **Step 5: Implement the strip generator**
 
 Sample each output column at pixel center, combine overlapping bands with `1 - exp(-opticalDepth * exposure)`, feather each band by two pixels, write premultiplied-safe RGB with straight alpha, and duplicate the radial profile through all 64 rows. Use `sharp(...).png({ compressionLevel: 9, adaptiveFiltering: false })`.
 
-- [ ] **Step 6: Run focused tests and formatting**
+- [x] **Step 6: Run focused tests and formatting**
 
 Run: `npx vitest run src/render/ringCatalog.test.ts tools/textures/generateRingTextures.test.mjs && npx prettier --check data/rings.json data/rings.schema.json src/render/ringCatalog.ts tools/textures/generateRingTextures.mjs`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add data/rings.json data/rings.schema.json src/render/ringCatalog.ts src/render/ringCatalog.test.ts tools/textures/generateRingTextures.mjs tools/textures/generateRingTextures.test.mjs package.json
