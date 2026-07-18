@@ -98,9 +98,16 @@ try {
     'true',
     `production prediction did not complete: ${JSON.stringify({ productionErrors, productionState })}`,
   );
-  const nextApproach = await productionPage
-    .locator('#target-panel .hud-readout-row:nth-child(3) dd')
-    .textContent();
+  const nextApproach = await productionPage.evaluate(() => {
+    const labels = globalThis.document.querySelectorAll('#target-panel dt');
+    for (const label of labels) {
+      if (label.textContent?.trim() === 'Next approach') {
+        return label.nextElementSibling?.textContent?.trim() ?? null;
+      }
+    }
+    return null;
+  });
+  assert.notEqual(nextApproach, null, 'production Next approach readout is missing');
   assert.equal(nextApproach, '—');
   assert.deepEqual(productionErrors, []);
 
