@@ -11,6 +11,11 @@ import {
 } from 'three';
 import type { Line2 } from 'three/addons/lines/Line2.js';
 
+import {
+  writeAberratedPositionInto,
+  type RelativisticVisualState,
+} from './relativisticVisualState.js';
+
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
 
@@ -104,11 +109,17 @@ export class CameraRelativeSpaceScene {
   private readonly packedPointAttributes: BufferAttribute[] = [];
   private readonly packedPolylines: CameraRelativePackedPolylineBinding[] = [];
   private readonly boundVisuals = new Set<Object3D>();
+  private readonly aberratedPosition = new Float64Array(3);
+  private relativisticObserver: Readonly<RelativisticVisualState> | null = null;
 
   constructor() {
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
     this.camera.updateMatrix();
+  }
+
+  setRelativisticObserver(state: Readonly<RelativisticVisualState>): void {
+    this.relativisticObserver = state;
   }
 
   /** Binds a setup-time visual to a caller-owned float64 physics position. */
@@ -203,6 +214,8 @@ export class CameraRelativeSpaceScene {
   /** Recomputes render coordinates from float64 inputs without frame allocations. */
   updateCameraRelative(cameraPositionKm: ReadonlyVec3): void {
     assertFinitePosition('camera position', cameraPositionKm);
+    const observer = this.relativisticObserver;
+    const aberrationActive = observer !== null && observer.activation !== 0;
 
     for (let index = 0; index < this.visuals.length; index += 1) {
       const visual = this.visuals[index];
@@ -214,11 +227,25 @@ export class CameraRelativeSpaceScene {
 
       assertFinitePosition('visual position', positionKm);
 
-      visual.position.set(
-        Math.fround(positionKm.x - cameraPositionKm.x),
-        Math.fround(positionKm.y - cameraPositionKm.y),
-        Math.fround(positionKm.z - cameraPositionKm.z),
-      );
+      const relativeX = positionKm.x - cameraPositionKm.x;
+      const relativeY = positionKm.y - cameraPositionKm.y;
+      const relativeZ = positionKm.z - cameraPositionKm.z;
+      if (aberrationActive) {
+        writeAberratedPositionInto(
+          this.aberratedPosition,
+          relativeX,
+          relativeY,
+          relativeZ,
+          observer,
+        );
+        visual.position.set(
+          Math.fround(this.aberratedPosition[0] as number),
+          Math.fround(this.aberratedPosition[1] as number),
+          Math.fround(this.aberratedPosition[2] as number),
+        );
+      } else {
+        visual.position.set(Math.fround(relativeX), Math.fround(relativeY), Math.fround(relativeZ));
+      }
       visual.updateMatrix();
     }
 
@@ -236,11 +263,25 @@ export class CameraRelativeSpaceScene {
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
         throw new RangeError('Packed visual position must contain finite coordinates.');
       }
-      visual.position.set(
-        Math.fround(x - cameraPositionKm.x),
-        Math.fround(y - cameraPositionKm.y),
-        Math.fround(z - cameraPositionKm.z),
-      );
+      const relativeX = x - cameraPositionKm.x;
+      const relativeY = y - cameraPositionKm.y;
+      const relativeZ = z - cameraPositionKm.z;
+      if (aberrationActive) {
+        writeAberratedPositionInto(
+          this.aberratedPosition,
+          relativeX,
+          relativeY,
+          relativeZ,
+          observer,
+        );
+        visual.position.set(
+          Math.fround(this.aberratedPosition[0] as number),
+          Math.fround(this.aberratedPosition[1] as number),
+          Math.fround(this.aberratedPosition[2] as number),
+        );
+      } else {
+        visual.position.set(Math.fround(relativeX), Math.fround(relativeY), Math.fround(relativeZ));
+      }
       visual.updateMatrix();
     }
 
@@ -288,9 +329,25 @@ export class CameraRelativeSpaceScene {
         if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
           throw new RangeError('Packed point positions must contain finite coordinates.');
         }
-        target[component] = Math.fround(x - cameraPositionKm.x);
-        target[component + 1] = Math.fround(y - cameraPositionKm.y);
-        target[component + 2] = Math.fround(z - cameraPositionKm.z);
+        const relativeX = x - cameraPositionKm.x;
+        const relativeY = y - cameraPositionKm.y;
+        const relativeZ = z - cameraPositionKm.z;
+        if (aberrationActive) {
+          writeAberratedPositionInto(
+            this.aberratedPosition,
+            relativeX,
+            relativeY,
+            relativeZ,
+            observer,
+          );
+          target[component] = Math.fround(this.aberratedPosition[0] as number);
+          target[component + 1] = Math.fround(this.aberratedPosition[1] as number);
+          target[component + 2] = Math.fround(this.aberratedPosition[2] as number);
+        } else {
+          target[component] = Math.fround(relativeX);
+          target[component + 1] = Math.fround(relativeY);
+          target[component + 2] = Math.fround(relativeZ);
+        }
       }
       attribute.needsUpdate = true;
       if (points.frustumCulled) {
@@ -348,22 +405,53 @@ export class CameraRelativeSpaceScene {
         const startOffset = segmentIndex * 3;
         const endOffset = startOffset + 3;
         const segmentOffset = segmentIndex * 6;
-        const startX = Math.fround(
-          (binding.positionsKm[startOffset] as number) - cameraPositionKm.x,
-        );
-        const startY = Math.fround(
-          (binding.positionsKm[startOffset + 1] as number) - cameraPositionKm.y,
-        );
-        const startZ = Math.fround(
-          (binding.positionsKm[startOffset + 2] as number) - cameraPositionKm.z,
-        );
-        const endX = Math.fround((binding.positionsKm[endOffset] as number) - cameraPositionKm.x);
-        const endY = Math.fround(
-          (binding.positionsKm[endOffset + 1] as number) - cameraPositionKm.y,
-        );
-        const endZ = Math.fround(
-          (binding.positionsKm[endOffset + 2] as number) - cameraPositionKm.z,
-        );
+        const startRelativeX = (binding.positionsKm[startOffset] as number) - cameraPositionKm.x;
+        const startRelativeY =
+          (binding.positionsKm[startOffset + 1] as number) - cameraPositionKm.y;
+        const startRelativeZ =
+          (binding.positionsKm[startOffset + 2] as number) - cameraPositionKm.z;
+        let startX: number;
+        let startY: number;
+        let startZ: number;
+        if (aberrationActive) {
+          writeAberratedPositionInto(
+            this.aberratedPosition,
+            startRelativeX,
+            startRelativeY,
+            startRelativeZ,
+            observer,
+          );
+          startX = Math.fround(this.aberratedPosition[0] as number);
+          startY = Math.fround(this.aberratedPosition[1] as number);
+          startZ = Math.fround(this.aberratedPosition[2] as number);
+        } else {
+          startX = Math.fround(startRelativeX);
+          startY = Math.fround(startRelativeY);
+          startZ = Math.fround(startRelativeZ);
+        }
+
+        const endRelativeX = (binding.positionsKm[endOffset] as number) - cameraPositionKm.x;
+        const endRelativeY = (binding.positionsKm[endOffset + 1] as number) - cameraPositionKm.y;
+        const endRelativeZ = (binding.positionsKm[endOffset + 2] as number) - cameraPositionKm.z;
+        let endX: number;
+        let endY: number;
+        let endZ: number;
+        if (aberrationActive) {
+          writeAberratedPositionInto(
+            this.aberratedPosition,
+            endRelativeX,
+            endRelativeY,
+            endRelativeZ,
+            observer,
+          );
+          endX = Math.fround(this.aberratedPosition[0] as number);
+          endY = Math.fround(this.aberratedPosition[1] as number);
+          endZ = Math.fround(this.aberratedPosition[2] as number);
+        } else {
+          endX = Math.fround(endRelativeX);
+          endY = Math.fround(endRelativeY);
+          endZ = Math.fround(endRelativeZ);
+        }
         if (
           !Number.isFinite(startX) ||
           !Number.isFinite(startY) ||
@@ -393,14 +481,31 @@ export class CameraRelativeSpaceScene {
       let maximumRadiusSquared = 0;
       for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
         const pointOffset = pointIndex * 3;
-        const x =
-          Math.fround((binding.positionsKm[pointOffset] as number) - cameraPositionKm.x) - centerX;
-        const y =
-          Math.fround((binding.positionsKm[pointOffset + 1] as number) - cameraPositionKm.y) -
-          centerY;
-        const z =
-          Math.fround((binding.positionsKm[pointOffset + 2] as number) - cameraPositionKm.z) -
-          centerZ;
+        const relativeX = (binding.positionsKm[pointOffset] as number) - cameraPositionKm.x;
+        const relativeY = (binding.positionsKm[pointOffset + 1] as number) - cameraPositionKm.y;
+        const relativeZ = (binding.positionsKm[pointOffset + 2] as number) - cameraPositionKm.z;
+        let pointX: number;
+        let pointY: number;
+        let pointZ: number;
+        if (aberrationActive) {
+          writeAberratedPositionInto(
+            this.aberratedPosition,
+            relativeX,
+            relativeY,
+            relativeZ,
+            observer,
+          );
+          pointX = Math.fround(this.aberratedPosition[0] as number);
+          pointY = Math.fround(this.aberratedPosition[1] as number);
+          pointZ = Math.fround(this.aberratedPosition[2] as number);
+        } else {
+          pointX = Math.fround(relativeX);
+          pointY = Math.fround(relativeY);
+          pointZ = Math.fround(relativeZ);
+        }
+        const x = pointX - centerX;
+        const y = pointY - centerY;
+        const z = pointZ - centerZ;
         maximumRadiusSquared = Math.max(maximumRadiusSquared, x * x + y * y + z * z);
       }
       binding.boundingSphere.center.set(centerX, centerY, centerZ);

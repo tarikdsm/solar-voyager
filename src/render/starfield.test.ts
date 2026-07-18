@@ -4,10 +4,12 @@ import {
   InterleavedBufferAttribute,
   LessEqualDepth,
   ShaderMaterial,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StarCatalog } from './starCatalog.js';
+import { createRelativisticVisualState } from './relativisticVisualState.js';
 import {
   STARFIELD_RADIUS_KM,
   Starfield,
@@ -95,7 +97,7 @@ describe('Starfield', () => {
     expect(material).toBeInstanceOf(ShaderMaterial);
     expect(material.uniforms.uRadiusKm?.value).toBe(STARFIELD_RADIUS_KM);
     expect(material.uniforms.uPixelRatio?.value).toBe(2);
-    expect(material.vertexShader).toContain('position * uRadiusKm');
+    expect(material.vertexShader).toContain('observedDirection * uRadiusKm');
     expect(material.vertexShader).toContain('#ifdef USE_REVERSED_DEPTH_BUFFER');
     expect(material.vertexShader).toContain('clipPosition.z = 0.0');
     expect(material.vertexShader).toContain('clipPosition.z = clipPosition.w');
@@ -126,5 +128,35 @@ describe('Starfield', () => {
 
     expect(geometryDispose).toHaveBeenCalledOnce();
     expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('updates stable observer uniforms and aberrates directions before projection', () => {
+    const starfield = new Starfield(createCatalog(), 1);
+    const material = starfield.points.material as ShaderMaterial;
+    const betaUniform = material.uniforms.uObserverBeta;
+    const gammaUniform = material.uniforms.uObserverGamma;
+    const activationUniform = material.uniforms.uRelativisticActivation;
+    const state = createRelativisticVisualState();
+    state.betaX = 0.1;
+    state.betaY = -0.2;
+    state.betaZ = 0.3;
+    state.gamma = 1.08;
+    state.activation = 0.75;
+
+    starfield.setRelativisticObserver(state);
+
+    expect(material.uniforms.uObserverBeta).toBe(betaUniform);
+    expect(material.uniforms.uObserverGamma).toBe(gammaUniform);
+    expect(material.uniforms.uRelativisticActivation).toBe(activationUniform);
+    expect(betaUniform?.value).toBeInstanceOf(Vector3);
+    expect((betaUniform?.value as Vector3).toArray()).toEqual([0.1, -0.2, 0.3]);
+    expect(gammaUniform?.value).toBe(1.08);
+    expect(activationUniform?.value).toBe(0.75);
+    expect(material.vertexShader).toContain('((uObserverGamma - 1.0) / betaSquared)');
+    expect(material.vertexShader).toContain('uObserverGamma * (1.0 + betaDotDirection)');
+    expect(material.vertexShader).toContain('normalize(mix(direction, observedDirection');
+    expect(material.vertexShader.indexOf('observedDirection * uRadiusKm')).toBeLessThan(
+      material.vertexShader.indexOf('projectionMatrix * viewPosition'),
+    );
   });
 });

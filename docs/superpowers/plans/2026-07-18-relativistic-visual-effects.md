@@ -147,7 +147,7 @@ Starfield.setRelativisticObserver(
 ): void;
 ```
 
-- [ ] **Step 1: Write failing boundary and starfield tests**
+- [x] **Step 1: Write failing boundary and starfield tests**
 
   Reuse one state and assert bound objects, packed points, and Line2 segments
   move to analytic 0.9c directions while source float64 arrays, attributes,
@@ -155,12 +155,12 @@ Starfield.setRelativisticObserver(
   previous exact float32 components. Assert starfield uniforms update in place
   and the shader contains the physics-spec transform before projection.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run `npx vitest run src/render/spaceScene.test.ts src/render/starfield.test.ts`.
   Expected: FAIL because both setters are absent.
 
-- [ ] **Step 3: Implement the active branch**
+- [x] **Step 3: Implement the active branch**
 
   Add one setup-time `Float64Array(3)` scratch to `CameraRelativeSpaceScene`.
   Keep the current loops unchanged when activation is zero; in the active
@@ -168,7 +168,7 @@ Starfield.setRelativisticObserver(
   transformed bounding volumes from the same output. Add stable starfield
   uniforms and the exact GLSL direction transform.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
   Run the focused tests plus `tests/render/float32Boundary.test.ts`. Commit
   `feat(render): [T0081] aberrate camera-relative directions`.
