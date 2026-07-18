@@ -389,10 +389,10 @@ async function main() {
   if (runsRequested > 2) throw new RangeError('--runs supports one or two benchmark runs.');
   const sampleFrames = readPositiveIntegerFlag('--sample-frames', DEFAULT_SAMPLE_FRAMES);
   const schedule = createFlightSchedule(FIXED_FLIGHT_SEED, sampleFrames);
-  const route = await createCanonicalFlightRoute();
   const outputPath = readOutputPath();
   runBuild();
   const bundle = await measureBundleSizes(resolve('dist'));
+  const route = await createCanonicalFlightRoute();
   await assertPortAvailable(PORT, HOST);
   const server = await preview({
     root: process.cwd(),
