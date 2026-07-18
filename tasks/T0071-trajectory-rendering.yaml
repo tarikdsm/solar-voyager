@@ -1,6 +1,6 @@
 id: T0071
 title: Trajectory polyline + event markers rendering
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0071-trajectory-rendering
 depends_on: [T0070, T0040]
@@ -10,4 +10,42 @@ spec: |
   body, billboarded SOI/approach/impact markers, impact warning UI hook.
 acceptance:
   - Markers land on the correct polyline points at all zooms
-handoff_notes: ""
+handoff_notes: |
+  Ready for merge review on task/T0071-trajectory-rendering. The branch adds a
+  float64 trajectory presentation model, one camera-relative Line2 colored by
+  dominant body, one batched SOI/closest-approach/impact marker resource, the
+  impact/readout signal UI, and the live module-worker lifecycle. Results are
+  validated transactionally (2-2000 finite points with strictly increasing
+  times) before stable buffers are changed; invalid responses surface an
+  unavailable state and remain retryable. Hidden marker batches perform no
+  frame update, and active packed point updates are bounded to the draw range.
+
+  Acceptance regression: Stable Chrome loads the real Vite module worker and
+  waits for data-trajectory-ready=true. The deterministic fixture reports 3
+  markers, 3 segments, at most 2 prediction draw calls, and 0 px maximum
+  marker/polyline projection error at both 45-degree and 20-degree FOV. A real
+  playtest changed the target to Moon, completed in 14.744 s with a 353,539 km
+  closest approach, and remained responsive under zoom and 5x warp with zero
+  console errors or warnings.
+
+  Performance evidence is in docs/bench/T0071-summary.md. The before/after
+  hardware benchmark held frame median/p75 at 6.100/6.100 ms; p99 changed by
+  +0.001 ms, frame-work p99 by +0.200 ms, and steady heap improved by 9,896 B.
+  The CI workload golden intentionally advances from 9 calls / 65,077
+  triangles to 10 / 77,071 for one 1,999-segment Line2, retaining +/-10%
+  tolerance and remaining below the 150 / 500k budgets. The final performance
+  gate passed at 10 / 77,071 with +53,233 B retained heap; its allocation and
+  draw-call fixtures failed as required. Entry/total gzip were 267,440 / 538,690
+  B against 285,000 / 570,000 B limits.
+
+  Fresh final gates: lint, strict typecheck, Prettier, build, git diff check,
+  task schema (53 files), asset budgets, application smoke, trajectory browser
+  regression, performance gates, full Vitest (98 passed files, 1 skipped; 608
+  passed tests, 3 skipped), and Python tools (50 tests) all pass. CI now runs
+  test:trajectory-overlay permanently and a workflow regression enforces that
+  step. Build retains only the existing Vite >500 kB chunk advisory.
+
+  Independent review found no remaining Critical, Important, or Minor code
+  findings after RED/GREEN corrections. The final delivery-only findings were
+  to add the browser regression to CI and move this task to REVIEW; both are
+  included in the branch. Normal PR/CI flow is still required before DONE.
