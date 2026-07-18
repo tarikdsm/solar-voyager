@@ -7,8 +7,10 @@ import {
   LessEqualDepth,
   Points,
   ShaderMaterial,
+  Vector3,
 } from 'three';
 
+import type { RelativisticVisualState } from './relativisticVisualState.js';
 import { STAR_STRIDE_FLOATS, type StarCatalog } from './starCatalog.js';
 
 export const STARFIELD_RADIUS_KM = 1e9;
@@ -18,6 +20,9 @@ export const STAR_MAX_SIZE_CSS_PX = 4;
 const vertexShader = /* glsl */ `
   uniform float uRadiusKm;
   uniform float uPixelRatio;
+  uniform vec3 uObserverBeta;
+  uniform float uObserverGamma;
+  uniform float uRelativisticActivation;
 
   attribute vec3 aColor;
   attribute float aSizeCssPx;
@@ -27,8 +32,23 @@ const vertexShader = /* glsl */ `
   varying float vStarOpacity;
   varying float vPointSizePx;
 
+  vec3 aberrateDirection(vec3 direction) {
+    float betaSquared = dot(uObserverBeta, uObserverBeta);
+    if (uRelativisticActivation == 0.0 || betaSquared == 0.0) return direction;
+
+    // physics-spec.md section 6.1: observer-frame source direction.
+    float betaDotDirection = dot(uObserverBeta, direction);
+    float boostCoefficient =
+      ((uObserverGamma - 1.0) / betaSquared) * betaDotDirection + uObserverGamma;
+    vec3 observedDirection =
+      (direction + boostCoefficient * uObserverBeta) /
+      (uObserverGamma * (1.0 + betaDotDirection));
+    return normalize(mix(direction, observedDirection, uRelativisticActivation));
+  }
+
   void main() {
-    vec4 viewPosition = modelViewMatrix * vec4(position * uRadiusKm, 1.0);
+    vec3 observedDirection = aberrateDirection(normalize(position));
+    vec4 viewPosition = modelViewMatrix * vec4(observedDirection * uRadiusKm, 1.0);
     vec4 clipPosition = projectionMatrix * viewPosition;
     #ifdef USE_REVERSED_DEPTH_BUFFER
       clipPosition.z = 0.0;
@@ -129,6 +149,9 @@ export class Starfield {
       uniforms: {
         uRadiusKm: { value: STARFIELD_RADIUS_KM },
         uPixelRatio: { value: pixelRatio },
+        uObserverBeta: { value: new Vector3() },
+        uObserverGamma: { value: 1 },
+        uRelativisticActivation: { value: 0 },
       },
       vertexShader,
       fragmentShader,
@@ -151,6 +174,16 @@ export class Starfield {
     assertPixelRatio(pixelRatio);
     const uniform = this.points.material.uniforms.uPixelRatio;
     if (uniform !== undefined) uniform.value = pixelRatio;
+  }
+
+  setRelativisticObserver(state: Readonly<RelativisticVisualState>): void {
+    const uniforms = this.points.material.uniforms;
+    const beta = uniforms.uObserverBeta?.value as Vector3 | undefined;
+    if (beta !== undefined) beta.set(state.betaX, state.betaY, state.betaZ);
+    if (uniforms.uObserverGamma !== undefined) uniforms.uObserverGamma.value = state.gamma;
+    if (uniforms.uRelativisticActivation !== undefined) {
+      uniforms.uRelativisticActivation.value = state.activation;
+    }
   }
 
   setCountCap(countCap: number): void {

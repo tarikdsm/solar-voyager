@@ -19,11 +19,15 @@ describe('CI workflow', () => {
     expect(workflow).toContain('actions/setup-python@v5');
     expect(workflow.match(/^\s*run: npm run test:tools\s*$/gmu)).toHaveLength(1);
     expect(workflow.match(/^\s*run: npm run test:trajectory-overlay\s*$/gmu)).toHaveLength(1);
+    expect(workflow.match(/^\s*run: npm run test:relativistic-visuals\s*$/gmu)).toHaveLength(1);
     expect(workflow).toContain(
       '- name: Application smoke\n        timeout-minutes: 5\n        run: npm run test:smoke',
     );
     expect(workflow).toContain(
       '- name: Trajectory overlay regression\n        timeout-minutes: 4\n        run: npm run test:trajectory-overlay',
+    );
+    expect(workflow).toContain(
+      '- name: Relativistic visuals regression\n        timeout-minutes: 2\n        run: npm run test:relativistic-visuals',
     );
     expect(workflow.match(/^\s*run: npm run format:check\s*$/gmu)).toHaveLength(1);
     expect(workflow).toContain('python-version: "3.9"');

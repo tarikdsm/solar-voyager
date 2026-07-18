@@ -28,12 +28,17 @@ export interface QualityVisualSystemPort {
   setModelThresholdScale(scale: number): void;
 }
 
+export interface QualityRelativisticVisualPort {
+  setQualityEnabled(enabled: boolean): void;
+}
+
 export interface RenderQualityControllerOptions {
   readonly assetLoader: QualityAssetLoaderPort;
   readonly pipeline: QualityPostPipelinePort;
   readonly postProcessingAvailable: boolean;
   readonly proceduralSun: QualityProceduralPort;
   readonly renderer: WebGLRenderer;
+  readonly relativisticVisuals: QualityRelativisticVisualPort;
   readonly starfield: QualityStarfieldPort;
   readonly visualSystem: QualityVisualSystemPort;
 }
@@ -45,6 +50,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
   private readonly pipeline: QualityPostPipelinePort;
   private readonly postProcessingAvailable: boolean;
   private readonly proceduralSun: QualityProceduralPort;
+  private readonly relativisticVisuals: QualityRelativisticVisualPort;
   private readonly starfield: QualityStarfieldPort;
   private readonly visualSystem: QualityVisualSystemPort;
   private appliedRung = -1;
@@ -54,6 +60,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.pipeline = options.pipeline;
     this.postProcessingAvailable = options.postProcessingAvailable;
     this.proceduralSun = options.proceduralSun;
+    this.relativisticVisuals = options.relativisticVisuals;
     this.starfield = options.starfield;
     this.visualSystem = options.visualSystem;
     this.basePixelRatio = options.renderer.getPixelRatio();
@@ -71,6 +78,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.proceduralSun.setQuality(profile.proceduralQuality);
     this.assetLoader.setTextureTierCap(profile.textureCap);
     this.visualSystem.setModelThresholdScale(profile.modelThresholdScale);
+    this.relativisticVisuals.setQualityEnabled(this.postProcessingAvailable && profile.tier >= 3);
     this.appliedRung = profile.rung;
   }
 }

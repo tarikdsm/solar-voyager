@@ -10,6 +10,7 @@ import {
   type RenderQualityProfile,
 } from '../../src/render/perfGovernor.js';
 import { RenderQualityController } from '../../src/render/renderQualityController.js';
+import { RelativisticVisualController } from '../../src/render/relativisticVisualController.js';
 
 const VIEWPORT_WIDTH = 640;
 const VIEWPORT_HEIGHT = 360;
@@ -90,6 +91,11 @@ const pipeline = new LightingPostPipeline(
   world.spaceScene.scene,
   world.spaceScene.camera,
 );
+const relativisticVisuals = new RelativisticVisualController({
+  postPass: pipeline.relativisticPass,
+  spaceScene: world.spaceScene,
+  starfield: world.starfield,
+});
 
 function resize(): void {
   const pixelRatio = renderer.getPixelRatio();
@@ -103,6 +109,7 @@ const controller = new RenderQualityController({
   postProcessingAvailable: true,
   proceduralSun: world.proceduralSun,
   renderer,
+  relativisticVisuals,
   starfield: world.starfield,
   visualSystem: world.visualSystem,
 });

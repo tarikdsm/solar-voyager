@@ -235,6 +235,24 @@ rollback as motion. The vector is an inertial signed integral; scalar proper
 
 ## 6. Analysis
 
+### 6.1 Observer-frame radiative rendering (ADR-031)
+
+Relativistic visual presentation is derived from simulation state without
+feeding back into the integrator. For observer velocity
+`beta = v_observer/c`, Lorentz factor `gamma`, and an inertial unit direction
+`n` from observer to source, define:
+
+- `q = beta dot n`
+- `k = ((gamma - 1)/|beta|^2) q + gamma`
+- `n_observed = (n + k beta) / (gamma (1 + q))`
+- `D = gamma (1 + q) = 1 / (gamma (1 - beta dot n_observed))`
+
+`n_observed` is the aberrated source direction and `D` is the observed-to-
+emitted frequency ratio. The Lorentz invariant `I_nu/nu^3` gives a bolometric
+headlight-beaming basis proportional to `D^3`. Rendering uses the bounded color
+and gain mapping in rendering-spec section 10, faded continuously from identity;
+these presentation bounds do not alter the physical definitions above.
+
 - **Solar-system barycenter (CM):** `r_cm = Σ mᵢrᵢ / Σ mᵢ`, `v_cm = Σ mᵢvᵢ / Σ mᵢ` over the whole catalog (masses from GM/G), evaluated per frame from rails. The HUD state-vector widget displays, **relative to the CM**: ship velocity `v − v_cm` (this starts at ~30 km/s in LEO — Earth's real orbital velocity, deliberately visible from the first frame), proper acceleration vector, **relativistic linear momentum** `p = γ·m·(v − v_cm)` and **angular momentum** `L = (r − r_cm) × p`. Also derived: speed as % of c, and γ.
 - **Dominant body:** start from the instantaneous argmax over bodies of
   `gᵢ = μᵢ/|r − rᵢ|²`, then apply the catalogued SOI hierarchy and a 10% band

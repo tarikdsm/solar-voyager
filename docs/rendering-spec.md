@@ -129,6 +129,37 @@ ground cap while radial-in faces the viewer. The hidden back arc is not drawn.
 
 ## 10. Relativistic visual effects (quality-gated, ship near c)
 
+The normative observer-frame model is defined in physics-spec section 6.1 and
+ADR-031. Camera-relative bodies, point sprites, and trajectory points transform
+their directions at the shared precision boundary. The starfield applies the
+same aberration in its vertex shader so sources outside the inertial frustum can
+enter the observed view. Near-field meshes use a rigid angular translation of
+their camera-relative center; their local shape is not distorted.
+
+Activation is `smoothstep(1.0, 1.05, gamma)`, multiplied by a quality gate that
+is zero for tiers 1 and 2 and for the direct software fallback. The identity
+path must preserve existing positions and HDR colors exactly.
+
+For Doppler factor `D`, the bounded presentation mapping is:
+
+- `x = clamp(log2(D), -2, 2)`
+- `g = exp2(x * (-0.20, 0.05, 0.35))`
+- `g_normalized = g / dot(g, (0.2126, 0.7152, 0.0722))`
+- `color_shifted = color * g_normalized`
+- `beaming = clamp(D^3, 0.20, 8.0)`
+- `output = mix(color, color_shifted * beaming, activation)`
+
+One precompiled HDR full-screen pass applies that mapping between the scene
+render and bloom. When active it may add at most one draw call and no render
+target. All uniforms and scratch values are preallocated; no frame-loop shader,
+material, geometry, or collection allocation is permitted.
+
+The full-screen pass is skipped while activation is below `1/65536`. Even at
+the maximum bounded gain, the omitted contribution is below 0.03 of one 8-bit
+display level. This keeps ordinary orbital flight on the zero-cost identity
+path without a visible discontinuity; directional shaders retain the exact
+smoothstep value.
+
 When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.
 
 ## 11. Close-range surface fidelity (real-scale bodies)

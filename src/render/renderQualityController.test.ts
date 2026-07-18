@@ -19,12 +19,14 @@ function fixture(postProcessingAvailable = true) {
   const proceduralSun = { setQuality: vi.fn() };
   const assetLoader = { setTextureTierCap: vi.fn() };
   const visualSystem = { setModelThresholdScale: vi.fn() };
+  const relativisticVisuals = { setQualityEnabled: vi.fn() };
   const controller = new RenderQualityController({
     assetLoader,
     pipeline,
     postProcessingAvailable,
     proceduralSun,
     renderer,
+    relativisticVisuals,
     starfield,
     visualSystem,
   });
@@ -34,6 +36,7 @@ function fixture(postProcessingAvailable = true) {
     pipeline,
     proceduralSun,
     renderer,
+    relativisticVisuals,
     starfield,
     visualSystem,
   };
@@ -54,11 +57,13 @@ describe('RenderQualityController', () => {
     expect(subject.proceduralSun.setQuality).toHaveBeenCalledWith('minimum');
     expect(subject.assetLoader.setTextureTierCap).toHaveBeenCalledWith('2k');
     expect(subject.visualSystem.setModelThresholdScale).toHaveBeenCalledWith(1);
+    expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledWith(false);
 
     const full = QUALITY_PROFILES[0];
     if (full === undefined) throw new Error('full profile missing');
     subject.controller.apply(full);
     expect(subject.pipeline.selectQuality).toHaveBeenLastCalledWith(full, true);
+    expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenLastCalledWith(true);
   });
 
   it('does not reapply the same rung and keeps post effects off on software rendering', () => {
@@ -71,5 +76,7 @@ describe('RenderQualityController', () => {
 
     expect(subject.pipeline.selectQuality).toHaveBeenCalledOnce();
     expect(subject.pipeline.selectQuality).toHaveBeenCalledWith(target, false);
+    expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledOnce();
+    expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledWith(false);
   });
 });

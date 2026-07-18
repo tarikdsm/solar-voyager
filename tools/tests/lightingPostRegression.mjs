@@ -150,6 +150,7 @@ function assertPipeline(snapshot, label) {
   );
   assert.deepEqual(snapshot.passNames, [
     'RenderPass',
+    'RelativisticPostPass',
     'AdaptiveBloomPass',
     'AdaptiveSmaaPass',
     'AdaptiveFxaaPass',

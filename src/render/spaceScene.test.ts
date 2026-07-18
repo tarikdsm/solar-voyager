@@ -11,6 +11,11 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it } from 'vitest';
 
+import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
+import {
+  createRelativisticVisualState,
+  writeRelativisticVisualState,
+} from './relativisticVisualState.js';
 import { CameraRelativeSpaceScene, SPACE_FAR_KM, SPACE_NEAR_KM } from './spaceScene.js';
 
 const AU_KM = 149_597_870.7;
@@ -265,5 +270,90 @@ describe('CameraRelativeSpaceScene', () => {
 
     spaceScene.bindPackedVisual(visual, valid, 0);
     expect(() => spaceScene.bindPackedVisual(visual, valid, 0)).toThrow('already bound');
+  });
+
+  it('aberrates bound roots, packed points, and Line2 segments without replacing sources', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const state = createRelativisticVisualState();
+    const gamma = 1 / Math.sqrt(1 - 0.9 ** 2);
+    writeRelativisticVisualState(
+      state,
+      {
+        shipCoordinateVelocityKmS: new Float64Array([0, 0, 0.9 * SPEED_OF_LIGHT_KM_S]),
+        gamma,
+        speedFractionOfLight: 0.9,
+      },
+      true,
+    );
+
+    const root = new Object3D();
+    const rootSource = { x: 100, y: 0, z: 0 };
+    spaceScene.bindVisual(root, rootSource);
+
+    const pointSource = new Float64Array([100, 0, 0, 0, 100, 0]);
+    const pointSourceBefore = pointSource.slice();
+    const pointAttribute = new Float32BufferAttribute(new Float32Array(pointSource.length), 3);
+    const pointGeometry = new BufferGeometry();
+    pointGeometry.setAttribute('position', pointAttribute);
+    const points = new Points(pointGeometry, new PointsMaterial());
+    spaceScene.bindPackedPointPositions(points, pointSource);
+
+    const lineSource = new Float64Array([100, 0, 0, 0, 100, 0]);
+    const lineSourceBefore = lineSource.slice();
+    const lineGeometry = new LineGeometry();
+    lineGeometry.setPositions(new Float32Array(lineSource.length));
+    const line = new Line2(lineGeometry, new LineMaterial());
+    const lineBinding = spaceScene.bindPackedPolyline(line, lineSource);
+    lineBinding.setPointCount(2);
+    const lineBuffer = (lineGeometry.getAttribute('instanceStart') as InterleavedBufferAttribute)
+      .data;
+    const originalPointArray = pointAttribute.array;
+    const originalLineArray = lineBuffer.array;
+
+    spaceScene.setRelativisticObserver(state);
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+
+    const perpendicular = Math.fround(100 / gamma);
+    const forward = Math.fround(90);
+    expect(root.position.toArray()).toEqual([perpendicular, 0, forward]);
+    expect(Array.from(pointAttribute.array)).toEqual([
+      perpendicular,
+      0,
+      forward,
+      0,
+      perpendicular,
+      forward,
+    ]);
+    expect(Array.from(lineBuffer.array.slice(0, 6))).toEqual([
+      perpendicular,
+      0,
+      forward,
+      0,
+      perpendicular,
+      forward,
+    ]);
+    expect(pointSource).toEqual(pointSourceBefore);
+    expect(lineSource).toEqual(lineSourceBefore);
+    expect(pointAttribute.array).toBe(originalPointArray);
+    expect(lineBuffer.array).toBe(originalLineArray);
+    expect(pointGeometry.boundingSphere?.radius).toBeGreaterThan(0);
+    expect(lineGeometry.boundingSphere?.radius).toBeGreaterThan(0);
+  });
+
+  it('keeps the previous exact float32 bridge when aberration activation is zero', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const state = createRelativisticVisualState();
+    const visual = new Object3D();
+    const source = { x: AU_KM + 10.25, y: -0.5, z: 0.125 };
+    spaceScene.bindVisual(visual, source);
+    spaceScene.setRelativisticObserver(state);
+
+    spaceScene.updateCameraRelative({ x: AU_KM, y: 0, z: 0 });
+
+    expect(visual.position.toArray()).toEqual([
+      Math.fround(10.25),
+      Math.fround(-0.5),
+      Math.fround(0.125),
+    ]);
   });
 });
