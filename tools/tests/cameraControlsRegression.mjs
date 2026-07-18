@@ -191,12 +191,12 @@ try {
   await productionPage.waitForTimeout(1_800);
   const completedFrames = await productionPage.evaluate(() => {
     const canvas = globalThis.document.querySelector('#space-canvas');
-    return canvas?.solarVoyagerTelemetry?.frameSampleCount ?? 0;
+    return canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0;
   });
   await productionPage.waitForFunction(
     (previousFrames) => {
       const canvas = globalThis.document.querySelector('#space-canvas');
-      return (canvas?.solarVoyagerTelemetry?.frameSampleCount ?? 0) > previousFrames;
+      return (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > previousFrames;
     },
     completedFrames,
     { timeout: 60_000 },
