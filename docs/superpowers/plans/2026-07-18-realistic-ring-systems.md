@@ -152,7 +152,7 @@ Fetch the official Solar System Scope CC BY 4.0 URLs, record SHA-256, normalize 
 
 Run Blender 5.1 once per planet into `build/T0083-authoring-a` and `build/T0083-authoring-b`; compare normalized GLB and texture SHA-256. Expected: all corresponding files match and each manifest reports ring triangles ≤5,000.
 
-- [ ] **Step 7: Inspect Blender previews**
+- [x] **Step 7: Inspect Blender previews**
 
 Render lit, edge-on, and backlit authoring views for each planet with review-only cameras/lights excluded from export. Confirm true proportions, no UV seam, no embedded images, and no cameras/lights/animations in GLB.
 
