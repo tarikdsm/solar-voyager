@@ -1,5 +1,15 @@
 import type { ReadonlyVec3 } from '../core/vec3.js';
-import { BufferAttribute, PerspectiveCamera, Scene, type Object3D, type Points } from 'three';
+import {
+  BufferAttribute,
+  InterleavedBufferAttribute,
+  PerspectiveCamera,
+  Scene,
+  type InstancedInterleavedBuffer,
+  type Object3D,
+  type Points,
+  type Sphere,
+} from 'three';
+import type { Line2 } from 'three/addons/lines/Line2.js';
 
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
@@ -25,6 +35,56 @@ function assertPackedPositions(positionsKm: Float64Array): void {
   }
 }
 
+export interface PackedPolylineBinding {
+  readonly maximumPointCount: number;
+  readonly pointCount: number;
+  setPointCount(pointCount: number): void;
+}
+
+class CameraRelativePackedPolylineBinding implements PackedPolylineBinding {
+  readonly maximumPointCount: number;
+  pointCount = 0;
+
+  readonly boundingSphere: Sphere;
+  readonly segmentBuffer: InstancedInterleavedBuffer;
+  readonly segmentComponents: Float32Array;
+
+  constructor(
+    readonly line: Line2,
+    readonly positionsKm: Float64Array,
+  ) {
+    this.maximumPointCount = positionsKm.length / 3;
+    const startAttribute = line.geometry.getAttribute('instanceStart');
+    if (
+      !(startAttribute instanceof InterleavedBufferAttribute) ||
+      !(startAttribute.data.array instanceof Float32Array) ||
+      startAttribute.data.array.length < (this.maximumPointCount - 1) * 6
+    ) {
+      throw new RangeError('Line2 requires a maximum-sized float32 segment buffer.');
+    }
+    if (line.geometry.boundingSphere === null) {
+      throw new RangeError('Line2 requires one reusable bounding sphere.');
+    }
+    this.segmentBuffer = startAttribute.data as InstancedInterleavedBuffer;
+    this.segmentComponents = startAttribute.data.array;
+    this.boundingSphere = line.geometry.boundingSphere;
+    line.geometry.instanceCount = 0;
+  }
+
+  setPointCount(pointCount: number): void {
+    if (
+      !Number.isInteger(pointCount) ||
+      pointCount < 0 ||
+      pointCount > this.maximumPointCount ||
+      pointCount === 1
+    ) {
+      throw new RangeError('Packed polyline point count must be zero or within [2, maximum].');
+    }
+    this.pointCount = pointCount;
+    this.line.geometry.instanceCount = Math.max(0, pointCount - 1);
+  }
+}
+
 /**
  * Owns the single float64-to-render-coordinate boundary for space visuals.
  * Physics positions remain in caller-owned objects and are never accumulated
@@ -42,6 +102,7 @@ export class CameraRelativeSpaceScene {
   private readonly packedPointVisuals: Points[] = [];
   private readonly packedPointPositionsKm: Float64Array[] = [];
   private readonly packedPointAttributes: BufferAttribute[] = [];
+  private readonly packedPolylines: CameraRelativePackedPolylineBinding[] = [];
   private readonly boundVisuals = new Set<Object3D>();
 
   constructor() {
@@ -88,11 +149,26 @@ export class CameraRelativeSpaceScene {
     ) {
       throw new RangeError('Points require a same-length float32 xyz position attribute.');
     }
+    if (points.frustumCulled && points.geometry.boundingSphere === null) {
+      points.geometry.computeBoundingSphere();
+    }
 
     this.claimVisual(points);
     this.packedPointVisuals.push(points);
     this.packedPointPositionsKm.push(positionsKm);
     this.packedPointAttributes.push(attribute);
+  }
+
+  /** Binds one preallocated Line2 to stable caller-owned float64 xyz points. */
+  bindPackedPolyline(line: Line2, positionsKm: Float64Array): PackedPolylineBinding {
+    assertPackedPositions(positionsKm);
+    if (positionsKm.length < 6) {
+      throw new RangeError('Packed polylines require at least two xyz points.');
+    }
+    const binding = new CameraRelativePackedPolylineBinding(line, positionsKm);
+    this.claimVisual(line);
+    this.packedPolylines.push(binding);
+    return binding;
   }
 
   /** Releases one setup-time binding and removes its visual from the scene. */
@@ -116,6 +192,10 @@ export class CameraRelativeSpaceScene {
       this.packedPointPositionsKm.splice(packedPointIndex, 1);
       this.packedPointAttributes.splice(packedPointIndex, 1);
     }
+    const packedPolylineIndex = this.packedPolylines.findIndex(
+      (binding) => binding.line === visual,
+    );
+    if (packedPolylineIndex >= 0) this.packedPolylines.splice(packedPolylineIndex, 1);
     this.scene.remove(visual);
     return true;
   }
@@ -171,11 +251,37 @@ export class CameraRelativeSpaceScene {
     ) {
       const positionsKm = this.packedPointPositionsKm[bindingIndex];
       const attribute = this.packedPointAttributes[bindingIndex];
-      if (positionsKm === undefined || attribute === undefined) {
+      const points = this.packedPointVisuals[bindingIndex];
+      if (positionsKm === undefined || attribute === undefined || points === undefined) {
         throw new Error('Packed point binding arrays are out of sync.');
       }
       const target = attribute.array as Float32Array;
-      for (let component = 0; component < positionsKm.length; component += 3) {
+      const maximumPointCount = target.length / 3;
+      const firstPoint = Math.min(
+        maximumPointCount,
+        Math.max(0, Math.floor(points.geometry.drawRange.start)),
+      );
+      const requestedCount = points.geometry.drawRange.count;
+      const activePointCount = Math.min(
+        maximumPointCount - firstPoint,
+        Number.isFinite(requestedCount)
+          ? Math.max(0, Math.floor(requestedCount))
+          : maximumPointCount - firstPoint,
+      );
+      const boundingSphere = points.geometry.boundingSphere;
+      if (points.frustumCulled && boundingSphere === null) {
+        throw new Error('Frustum-culled packed points require a setup-time bounding sphere.');
+      }
+      if (activePointCount === 0) {
+        if (boundingSphere !== null) {
+          boundingSphere.center.set(0, 0, 0);
+          boundingSphere.radius = 0;
+        }
+        continue;
+      }
+      const finalPoint = firstPoint + activePointCount;
+      for (let pointIndex = firstPoint; pointIndex < finalPoint; pointIndex += 1) {
+        const component = pointIndex * 3;
         const x = positionsKm[component] ?? Number.NaN;
         const y = positionsKm[component + 1] ?? Number.NaN;
         const z = positionsKm[component + 2] ?? Number.NaN;
@@ -187,6 +293,119 @@ export class CameraRelativeSpaceScene {
         target[component + 2] = Math.fround(z - cameraPositionKm.z);
       }
       attribute.needsUpdate = true;
+      if (points.frustumCulled) {
+        const activeBoundingSphere = boundingSphere;
+        if (activeBoundingSphere === null) {
+          throw new Error('Frustum-culled packed points require a setup-time bounding sphere.');
+        }
+        let minimumX = Number.POSITIVE_INFINITY;
+        let minimumY = Number.POSITIVE_INFINITY;
+        let minimumZ = Number.POSITIVE_INFINITY;
+        let maximumX = Number.NEGATIVE_INFINITY;
+        let maximumY = Number.NEGATIVE_INFINITY;
+        let maximumZ = Number.NEGATIVE_INFINITY;
+        for (let pointIndex = firstPoint; pointIndex < finalPoint; pointIndex += 1) {
+          const offset = pointIndex * 3;
+          const x = target[offset] as number;
+          const y = target[offset + 1] as number;
+          const z = target[offset + 2] as number;
+          minimumX = Math.min(minimumX, x);
+          minimumY = Math.min(minimumY, y);
+          minimumZ = Math.min(minimumZ, z);
+          maximumX = Math.max(maximumX, x);
+          maximumY = Math.max(maximumY, y);
+          maximumZ = Math.max(maximumZ, z);
+        }
+        const centerX = (minimumX + maximumX) * 0.5;
+        const centerY = (minimumY + maximumY) * 0.5;
+        const centerZ = (minimumZ + maximumZ) * 0.5;
+        let maximumRadiusSquared = 0;
+        for (let pointIndex = firstPoint; pointIndex < finalPoint; pointIndex += 1) {
+          const offset = pointIndex * 3;
+          const x = (target[offset] as number) - centerX;
+          const y = (target[offset + 1] as number) - centerY;
+          const z = (target[offset + 2] as number) - centerZ;
+          maximumRadiusSquared = Math.max(maximumRadiusSquared, x * x + y * y + z * z);
+        }
+        activeBoundingSphere.center.set(centerX, centerY, centerZ);
+        activeBoundingSphere.radius = Math.sqrt(maximumRadiusSquared);
+      }
+    }
+
+    for (let bindingIndex = 0; bindingIndex < this.packedPolylines.length; bindingIndex += 1) {
+      const binding = this.packedPolylines[bindingIndex];
+      if (binding === undefined) throw new Error('Packed polyline bindings are sparse.');
+      const pointCount = binding.pointCount;
+      if (pointCount === 0) continue;
+
+      let minimumX = Number.POSITIVE_INFINITY;
+      let minimumY = Number.POSITIVE_INFINITY;
+      let minimumZ = Number.POSITIVE_INFINITY;
+      let maximumX = Number.NEGATIVE_INFINITY;
+      let maximumY = Number.NEGATIVE_INFINITY;
+      let maximumZ = Number.NEGATIVE_INFINITY;
+      for (let segmentIndex = 0; segmentIndex < pointCount - 1; segmentIndex += 1) {
+        const startOffset = segmentIndex * 3;
+        const endOffset = startOffset + 3;
+        const segmentOffset = segmentIndex * 6;
+        const startX = Math.fround(
+          (binding.positionsKm[startOffset] as number) - cameraPositionKm.x,
+        );
+        const startY = Math.fround(
+          (binding.positionsKm[startOffset + 1] as number) - cameraPositionKm.y,
+        );
+        const startZ = Math.fround(
+          (binding.positionsKm[startOffset + 2] as number) - cameraPositionKm.z,
+        );
+        const endX = Math.fround((binding.positionsKm[endOffset] as number) - cameraPositionKm.x);
+        const endY = Math.fround(
+          (binding.positionsKm[endOffset + 1] as number) - cameraPositionKm.y,
+        );
+        const endZ = Math.fround(
+          (binding.positionsKm[endOffset + 2] as number) - cameraPositionKm.z,
+        );
+        if (
+          !Number.isFinite(startX) ||
+          !Number.isFinite(startY) ||
+          !Number.isFinite(startZ) ||
+          !Number.isFinite(endX) ||
+          !Number.isFinite(endY) ||
+          !Number.isFinite(endZ)
+        ) {
+          throw new RangeError('Packed polyline positions must contain finite coordinates.');
+        }
+        binding.segmentComponents[segmentOffset] = startX;
+        binding.segmentComponents[segmentOffset + 1] = startY;
+        binding.segmentComponents[segmentOffset + 2] = startZ;
+        binding.segmentComponents[segmentOffset + 3] = endX;
+        binding.segmentComponents[segmentOffset + 4] = endY;
+        binding.segmentComponents[segmentOffset + 5] = endZ;
+        minimumX = Math.min(minimumX, startX, endX);
+        minimumY = Math.min(minimumY, startY, endY);
+        minimumZ = Math.min(minimumZ, startZ, endZ);
+        maximumX = Math.max(maximumX, startX, endX);
+        maximumY = Math.max(maximumY, startY, endY);
+        maximumZ = Math.max(maximumZ, startZ, endZ);
+      }
+      const centerX = (minimumX + maximumX) * 0.5;
+      const centerY = (minimumY + maximumY) * 0.5;
+      const centerZ = (minimumZ + maximumZ) * 0.5;
+      let maximumRadiusSquared = 0;
+      for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
+        const pointOffset = pointIndex * 3;
+        const x =
+          Math.fround((binding.positionsKm[pointOffset] as number) - cameraPositionKm.x) - centerX;
+        const y =
+          Math.fround((binding.positionsKm[pointOffset + 1] as number) - cameraPositionKm.y) -
+          centerY;
+        const z =
+          Math.fround((binding.positionsKm[pointOffset + 2] as number) - cameraPositionKm.z) -
+          centerZ;
+        maximumRadiusSquared = Math.max(maximumRadiusSquared, x * x + y * y + z * z);
+      }
+      binding.boundingSphere.center.set(centerX, centerY, centerZ);
+      binding.boundingSphere.radius = Math.sqrt(maximumRadiusSquared);
+      binding.segmentBuffer.needsUpdate = true;
     }
   }
 

@@ -5,6 +5,8 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { createServer } from 'vite';
 
+import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+
 const HOST = '127.0.0.1';
 const PORT = 4178;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/cameraControls.html`;
@@ -147,6 +149,7 @@ try {
   });
 
   const productionPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await disableUnrelatedTrajectoryPrediction(productionPage);
   const productionErrors = [];
   productionPage.on('pageerror', (error) => productionErrors.push(error.message));
   productionPage.on('console', (message) => {

@@ -1,7 +1,10 @@
 import bodiesDocument from '../../data/bodies.json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createNewGameSimulation } from './createNewGameSimulation.js';
+import {
+  createGameSimulationFromPersistentState,
+  createNewGameSimulation,
+} from './createNewGameSimulation.js';
 
 describe('createNewGameSimulation', () => {
   it('inherits Earth barycentric velocity in the committed 400 km LEO', () => {
@@ -47,5 +50,22 @@ describe('createNewGameSimulation', () => {
       6,
     );
     expect(core.step(1).simTimeSec).toBe(1);
+  });
+
+  it('preserves trajectory invalidation listeners across new and restored simulations', () => {
+    const newGameInvalidated = vi.fn();
+    const core = createNewGameSimulation(10_000, newGameInvalidated);
+
+    core.commands.setThrottle(0.25);
+
+    expect(newGameInvalidated).toHaveBeenCalledOnce();
+    const restoredInvalidated = vi.fn();
+    const restored = createGameSimulationFromPersistentState(
+      10_000,
+      core.exportPersistentState(),
+      restoredInvalidated,
+    );
+    restored.commands.setThrottle(0);
+    expect(restoredInvalidated).toHaveBeenCalledOnce();
   });
 });

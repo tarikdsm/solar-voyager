@@ -9,6 +9,7 @@ import {
   PREDICTOR_EVENT_TIME_TO_IMPACT_SEC_OFFSET,
   PREDICTOR_MAX_POINTS,
   PREDICTOR_POINT_STRIDE,
+  PREDICTOR_POINT_TIME_SEC_OFFSET,
   PREDICTOR_STATE_LENGTH,
   PredictorEventCode,
   type PredictorEventCode as PredictorEventCodeValue,
@@ -41,6 +42,10 @@ export interface PredictorRequestMessage {
   readonly shipState: Float64Array<ArrayBuffer>;
   readonly osculatingPeriodSec: number;
   readonly userHorizonSec?: number;
+  /** Test harness override; production requests omit this field. */
+  readonly testHorizonSec?: number;
+  /** Test harness output-size override; production requests omit this field. */
+  readonly testPointCount?: number;
   readonly dominantBodyIndex: number;
   readonly targetBodyIndex?: number;
 }
@@ -141,6 +146,8 @@ export function isPredictorRequestMessage(
       'shipState',
       'osculatingPeriodSec',
       'userHorizonSec',
+      'testHorizonSec',
+      'testPointCount',
       'dominantBodyIndex',
       'targetBodyIndex',
     ]) ||
@@ -165,6 +172,24 @@ export function isPredictorRequestMessage(
     } catch {
       return false;
     }
+  }
+  if (
+    'testHorizonSec' in value &&
+    (typeof value.testHorizonSec !== 'number' ||
+      !Number.isFinite(value.testHorizonSec) ||
+      value.testHorizonSec <= 0 ||
+      value.testHorizonSec > PREDICTOR_BASE_HORIZON_SEC)
+  ) {
+    return false;
+  }
+  if (
+    'testPointCount' in value &&
+    (typeof value.testPointCount !== 'number' ||
+      !Number.isInteger(value.testPointCount) ||
+      value.testPointCount < 2 ||
+      value.testPointCount > PREDICTOR_MAX_POINTS)
+  ) {
+    return false;
   }
   return true;
 }
@@ -223,6 +248,16 @@ function hasValidPackedEvents(events: Float64Array, bodyCount: number): boolean 
   return true;
 }
 
+function hasStrictlyIncreasingPointTimes(points: Float64Array): boolean {
+  let previousTimeSec = Number.NEGATIVE_INFINITY;
+  for (let offset = 0; offset < points.length; offset += PREDICTOR_POINT_STRIDE) {
+    const timeSec = points[offset + PREDICTOR_POINT_TIME_SEC_OFFSET] as number;
+    if (timeSec <= previousTimeSec) return false;
+    previousTimeSec = timeSec;
+  }
+  return true;
+}
+
 /** Narrows an unknown worker payload to a packed predictor success response. */
 export function isPredictorSuccessMessage(
   value: unknown,
@@ -234,10 +269,11 @@ export function isPredictorSuccessMessage(
     value.type !== 'success' ||
     !isRequestId(value.requestId) ||
     !isOwnedFloat64Array(value.points) ||
-    value.points.length === 0 ||
+    value.points.length < 2 * PREDICTOR_POINT_STRIDE ||
     value.points.length % PREDICTOR_POINT_STRIDE !== 0 ||
     value.points.length > PREDICTOR_MAX_POINTS * PREDICTOR_POINT_STRIDE ||
     !hasFiniteComponents(value.points) ||
+    !hasStrictlyIncreasingPointTimes(value.points) ||
     !isOwnedFloat64Array(value.events) ||
     value.points.buffer === value.events.buffer ||
     value.events.length % PREDICTOR_EVENT_STRIDE !== 0

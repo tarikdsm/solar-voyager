@@ -75,11 +75,13 @@ export function createPredictorWorkerRuntime(
         catalog,
         collisionRadiiKm,
         startTimeSec: payload.startTimeSec,
-        horizonSec: selectPredictionHorizonSec(payload.osculatingPeriodSec, payload.userHorizonSec),
+        horizonSec:
+          payload.testHorizonSec ??
+          selectPredictionHorizonSec(payload.osculatingPeriodSec, payload.userHorizonSec),
         shipState: payload.shipState,
         dominantBodyIndex: payload.dominantBodyIndex,
         targetBodyIndex: payload.targetBodyIndex,
-        outputPointCount: PREDICTOR_MAX_POINTS,
+        outputPointCount: payload.testPointCount ?? PREDICTOR_MAX_POINTS,
       });
       const response: PredictorSuccessMessage = {
         type: 'success',

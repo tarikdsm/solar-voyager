@@ -45,6 +45,7 @@ jobs:
         run: npm run test:perf-gates
 
       - name: Application smoke
+        timeout-minutes: 5
         run: npm run test:smoke
 
       - name: Render depth regression
@@ -79,6 +80,10 @@ jobs:
 
       - name: State-vector widget regression
         run: npm run test:state-vectors
+
+      - name: Trajectory overlay regression
+        timeout-minutes: 4
+        run: npm run test:trajectory-overlay
 
       - name: Performance panel regression
         run: npm run test:perf-panel

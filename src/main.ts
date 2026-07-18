@@ -8,6 +8,17 @@ import { KeyboardCommandMapper, type KeyboardInputTarget } from './game/inputMap
 import { SaveRepository } from './game/saveLoad.js';
 import { GameSessionController } from './game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
+import { readTrajectoryEventSummary } from './game/trajectoryPredictionModel.js';
+import {
+  createTrajectoryPredictorClient,
+  type TrajectoryPredictorClient,
+} from './game/trajectoryPredictorClient.js';
+import { TrajectoryPredictionRefresh } from './game/trajectoryPredictionRefresh.js';
+import {
+  isTrajectoryPredictionRuntimeEnabled,
+  readTrajectoryPredictionTestHorizonSec,
+  readTrajectoryPredictionTestPointCount,
+} from './game/trajectoryPredictionRuntimePolicy.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
@@ -17,6 +28,7 @@ import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
 import type { Commands } from './sim/simulationSnapshot.js';
+import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
@@ -24,6 +36,7 @@ import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
 import { observeStateVectorLayout } from './ui/stateVectorLayoutObserver.js';
+import { createTrajectoryPredictionSignalStore } from './ui/trajectoryPredictionSignals.js';
 import {
   STATE_VECTOR_VIEWPORT_COMPONENT_COUNT,
   writeStateVectorViewportPixelsInto,
@@ -56,7 +69,22 @@ const perfPanelStore = createPerfPanelStore({
   resolution: canvas,
   telemetry,
 });
-const initialSimulation = createNewGameSimulation(SHIP_MASS_KG);
+const trajectoryPredictionStore = createTrajectoryPredictionSignalStore();
+const trajectoryPredictionRefresh = new TrajectoryPredictionRefresh();
+let trajectoryPredictorClient: TrajectoryPredictorClient | null = null;
+let trajectoryPredictionPending = false;
+
+function invalidateTrajectoryPrediction(): void {
+  trajectoryPredictionPending = true;
+  trajectoryPredictorClient?.invalidate();
+}
+
+function invalidateTrajectoryPredictionForWarpElapsed(): void {
+  trajectoryPredictionPending = true;
+  trajectoryPredictorClient?.invalidateForWarpElapsed();
+}
+
+const initialSimulation = createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction);
 const hudStore = createHudSignalStore();
 hudStore.publish(initialSimulation.snapshot, 0);
 const stateVectorStore = createStateVectorSignalStore();
@@ -82,9 +110,13 @@ const session = new GameSessionController({
   initialSimulation,
   saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(browserStorage),
-  createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+  createSimulation: (state) =>
+    createGameSimulationFromPersistentState(SHIP_MASS_KG, state, invalidateTrajectoryPrediction),
   onSimulationReplaced: (replacement) => {
     hudStore.publish(replacement.snapshot, performance.now());
+    world?.trajectoryOverlay.hide();
+    trajectoryPredictionRefresh.clear();
+    invalidateTrajectoryPrediction();
   },
   onSettingsChanged: (settings, origin) => {
     if (origin === 'restore') commandInput?.restoreBindings(settings.inputBindings);
@@ -92,6 +124,57 @@ const session = new GameSessionController({
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
+
+function handleTrajectoryPredictionResult(result: PredictorResponseMessage): void {
+  trajectoryPredictionPending = false;
+  if (result.type === 'error') {
+    world?.trajectoryOverlay.hide();
+    trajectoryPredictionRefresh.clear();
+    trajectoryPredictionStore.publishError();
+    canvas.dataset.trajectoryReady = 'error';
+    return;
+  }
+  const snapshot = session.simulation.snapshot;
+  try {
+    world?.trajectoryOverlay.applyPrediction(result, snapshot.dominantBodyIndex);
+    trajectoryPredictionRefresh.acceptPrediction(result.points);
+    trajectoryPredictionStore.publishSuccess(
+      readTrajectoryEventSummary(result.events),
+      snapshot.bodyIds,
+      snapshot.simTimeSec,
+    );
+    canvas.dataset.trajectoryReady = 'true';
+  } catch {
+    world?.trajectoryOverlay.hide();
+    trajectoryPredictionRefresh.clear();
+    trajectoryPredictionStore.publishError();
+    canvas.dataset.trajectoryReady = 'error';
+  }
+}
+
+if (isTrajectoryPredictionRuntimeEnabled(window)) {
+  const testHorizonSec = readTrajectoryPredictionTestHorizonSec(window);
+  const testPointCount = readTrajectoryPredictionTestPointCount(window);
+  const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
+    type: 'module',
+  });
+  trajectoryPredictorClient = createTrajectoryPredictorClient(
+    trajectoryWorker,
+    initialSimulation.snapshot.bodyIds.length,
+    handleTrajectoryPredictionResult,
+    {
+      ownsPort: true,
+      ...(testHorizonSec === undefined ? {} : { testHorizonSec }),
+      ...(testPointCount === undefined ? {} : { testPointCount }),
+    },
+  );
+}
+
+function handlePageHide(event: PageTransitionEvent): void {
+  if (!event.persisted) trajectoryPredictorClient?.dispose();
+}
+
+window.addEventListener('pagehide', handlePageHide);
 
 function currentInputSnapshot() {
   return session.simulation.snapshot;
@@ -128,7 +211,10 @@ const sessionCommands: Commands = {
   rotate: (pitchRateRadS, yawRateRadS, rollRateRadS) =>
     session.simulation.commands.rotate(pitchRateRadS, yawRateRadS, rollRateRadS),
   setAttitudeMode: (mode) => session.simulation.commands.setAttitudeMode(mode),
-  setTarget: (bodyId) => session.simulation.commands.setTarget(bodyId),
+  setTarget: (bodyId) => {
+    session.simulation.commands.setTarget(bodyId);
+    invalidateTrajectoryPrediction();
+  },
   setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
   setWarp: (warp) => session.simulation.commands.setWarp(warp),
 };
@@ -154,6 +240,11 @@ function resizeRenderer(): void {
     world.spaceScene.camera.aspect = clientWidth / clientHeight;
     world.spaceScene.camera.updateProjectionMatrix();
     postPipeline?.resize(clientWidth, clientHeight, pixelRatio);
+    world.trajectoryOverlay.setViewport(
+      Math.max(1, canvas.width),
+      Math.max(1, canvas.height),
+      pixelRatio,
+    );
     updateStateVectorViewport();
   }
 }
@@ -175,6 +266,17 @@ function renderFrame(nowMs: number): void {
   const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   proceduralSun.update(snapshot.simTimeSec);
+  if (trajectoryPredictionPending) {
+    trajectoryPredictionStore.publishPending(snapshot.targetBodyIndex);
+    canvas.dataset.trajectoryReady = 'pending';
+    trajectoryPredictionPending = false;
+  }
+  trajectoryPredictionStore.publishTime(snapshot.simTimeSec, nowMs);
+  trajectoryPredictionRefresh.update(
+    snapshot.simTimeSec,
+    invalidateTrajectoryPredictionForWarpElapsed,
+  );
+  trajectoryPredictorClient?.update(snapshot);
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
   hudStore.publish(snapshot, nowMs);
@@ -231,6 +333,7 @@ async function startApplication(): Promise<void> {
       session,
       stateVectors: stateVectorStore,
       stateVectorViewportRef: setStateVectorViewportElement,
+      trajectoryPrediction: trajectoryPredictionStore,
     }),
     appRoot,
   );
@@ -288,6 +391,7 @@ async function startApplication(): Promise<void> {
   canvas.dataset.cameraReady = 'true';
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
   window.addEventListener('scroll', updateStateVectorViewport, true);
+  invalidateTrajectoryPrediction();
   requestAnimationFrame(renderFrame);
 }
 

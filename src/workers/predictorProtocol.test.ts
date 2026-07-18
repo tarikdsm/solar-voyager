@@ -136,6 +136,12 @@ describe('trajectory predictor protocol', () => {
     const withoutTarget = createRequest();
     Reflect.deleteProperty(withoutTarget, 'targetBodyIndex');
     expect(isPredictorRequestMessage(withoutTarget, BODY_COUNT)).toBe(true);
+    expect(
+      isPredictorRequestMessage({ ...createRequest(), testHorizonSec: 21_600 }, BODY_COUNT),
+    ).toBe(true);
+    expect(isPredictorRequestMessage({ ...createRequest(), testPointCount: 128 }, BODY_COUNT)).toBe(
+      true,
+    );
   });
 
   it('rejects malformed request identifiers, times, states, and body indices', () => {
@@ -193,10 +199,49 @@ describe('trajectory predictor protocol', () => {
         BODY_COUNT,
       ),
     ).toBe(false);
+    expect(isPredictorRequestMessage({ ...createRequest(), testHorizonSec: 0 }, BODY_COUNT)).toBe(
+      false,
+    );
+    expect(
+      isPredictorRequestMessage(
+        { ...createRequest(), testHorizonSec: PREDICTOR_BASE_HORIZON_SEC + 1 },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(isPredictorRequestMessage({ ...createRequest(), testPointCount: 1 }, BODY_COUNT)).toBe(
+      false,
+    );
+    expect(
+      isPredictorRequestMessage({ ...createRequest(), testPointCount: 128.5 }, BODY_COUNT),
+    ).toBe(false);
+    expect(
+      isPredictorRequestMessage(
+        { ...createRequest(), testPointCount: PREDICTOR_MAX_POINTS + 1 },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
   });
 
   it('validates packed success and deterministic error messages', () => {
     expect(isPredictorSuccessMessage(createSuccess(), BODY_COUNT)).toBe(true);
+    expect(
+      isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([0, 1, 2, 3]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(
+      isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([0, 1, 2, 3, 0, 4, 5, 6]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(
+      isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([10, 1, 2, 3, 0, 4, 5, 6]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
     expect(
       isPredictorSuccessMessage(
         { ...createSuccess(), points: new Float64Array(PREDICTOR_POINT_STRIDE - 1) },

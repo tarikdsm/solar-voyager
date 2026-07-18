@@ -2,6 +2,7 @@ import bodiesDocument from '../../data/bodies.json';
 
 import { compileRailsCatalog } from '../sim/propagation/rails.js';
 import { SimulationCore } from '../sim/simulation.js';
+import type { TrajectoryInvalidationListener } from '../sim/simulationSnapshot.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
 import { createNewGameLeoState } from '../sim/ship/initialState.js';
 
@@ -21,12 +22,16 @@ function createCanonicalLeoState(catalog: ReturnType<typeof createCanonicalCatal
 }
 
 /** Compiles the committed J2026 catalog and creates the canonical new-game simulation. */
-export function createNewGameSimulation(shipMassKg: number): SimulationCore {
+export function createNewGameSimulation(
+  shipMassKg: number,
+  onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
+): SimulationCore {
   const catalog = createCanonicalCatalog();
   return new SimulationCore({
     catalog,
     initialShipState: createCanonicalLeoState(catalog),
     shipMassKg,
+    onTrajectoryInvalidated: onTrajectoryInvalidated ?? undefined,
   });
 }
 
@@ -34,12 +39,14 @@ export function createNewGameSimulation(shipMassKg: number): SimulationCore {
 export function createGameSimulationFromPersistentState(
   shipMassKg: number,
   persistentState: SimulationPersistentState,
+  onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
 ): SimulationCore {
   const catalog = createCanonicalCatalog();
   return new SimulationCore({
     catalog,
     initialShipState: createCanonicalLeoState(catalog),
     shipMassKg,
+    onTrajectoryInvalidated: onTrajectoryInvalidated ?? undefined,
     persistentState,
   });
 }

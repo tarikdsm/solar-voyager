@@ -104,7 +104,7 @@ function createSuccess(requestId: number): PredictorResponseMessage {
   return {
     type: 'success',
     requestId,
-    points: new Float64Array([123, 1, 2, 3]),
+    points: new Float64Array([123, 1, 2, 3, 124, 4, 5, 6]),
     events: new Float64Array(),
   };
 }
@@ -333,12 +333,20 @@ describe('trajectory predictor client', () => {
       type: 'success',
       requestId,
       points: new Float64Array([123, 1, 2, 3]),
-      events: new Float64Array([2, 123, 5, -1, 10, Number.NaN]),
+      events: new Float64Array(),
     });
-    expect(received).toHaveLength(0);
+    expect(received).toEqual([
+      { type: 'error', requestId, message: 'trajectory predictor returned an invalid response' },
+    ]);
 
-    port.respond(createSuccess(requestId));
-    expect(received).toEqual([createSuccess(requestId)]);
+    nowMs = 1_000;
+    client.update(snapshot);
+    const recoveredRequestId = port.posted[1]?.message.requestId ?? -1;
+    port.respond(createSuccess(recoveredRequestId));
+    expect(received).toEqual([
+      { type: 'error', requestId, message: 'trajectory predictor returned an invalid response' },
+      createSuccess(recoveredRequestId),
+    ]);
   });
 
   it('omits an absent user horizon and preserves a configured horizon', () => {
@@ -346,6 +354,8 @@ describe('trajectory predictor client', () => {
     const port = new FakePredictorPort();
     const client = createTrajectoryPredictorClient(port, 9, () => {}, {
       now: () => nowMs,
+      testHorizonSec: 21_600,
+      testPointCount: 128,
     });
     const snapshot = createSnapshot();
 
@@ -354,12 +364,16 @@ describe('trajectory predictor client', () => {
     client.update(snapshot);
     const first = port.posted[0]?.message;
     expect(first === undefined ? true : 'userHorizonSec' in first).toBe(false);
+    expect(first?.testHorizonSec).toBe(21_600);
+    expect(first?.testPointCount).toBe(128);
     port.respond(createSuccess(first?.requestId ?? -1));
 
     client.invalidate();
     nowMs = 1_000;
     client.update(snapshot, 10_000_000);
     expect(port.posted[1]?.message.userHorizonSec).toBe(10_000_000);
+    expect(port.posted[1]?.message.testHorizonSec).toBe(21_600);
+    expect(port.posted[1]?.message.testPointCount).toBe(128);
   });
 
   it('removes its listener and terminates only an owned port on disposal', () => {
