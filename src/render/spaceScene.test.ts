@@ -1,4 +1,14 @@
-import { BufferGeometry, Float32BufferAttribute, Object3D, Points, PointsMaterial } from 'three';
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  InterleavedBufferAttribute,
+  Object3D,
+  Points,
+  PointsMaterial,
+} from 'three';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it } from 'vitest';
 
 import { CameraRelativeSpaceScene, SPACE_FAR_KM, SPACE_NEAR_KM } from './spaceScene.js';
@@ -143,6 +153,79 @@ describe('CameraRelativeSpaceScene', () => {
     ]);
     expect(attribute.version).toBe(originalVersion + 1);
     expect(points.matrixAutoUpdate).toBe(false);
+  });
+
+  it('updates preallocated Line2 segments camera-relatively without replacing buffers', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const positionsKm = new Float64Array([
+      AU_KM + 10,
+      -1,
+      2,
+      AU_KM + 20,
+      3,
+      4,
+      AU_KM - 5,
+      10,
+      20,
+      AU_KM + 100,
+      200,
+      300,
+    ]);
+    const geometry = new LineGeometry();
+    geometry.setPositions(new Float32Array(positionsKm.length));
+    const line = new Line2(geometry, new LineMaterial());
+    const startAttribute = geometry.getAttribute('instanceStart');
+    expect(startAttribute).toBeInstanceOf(InterleavedBufferAttribute);
+    if (!(startAttribute instanceof InterleavedBufferAttribute)) throw new Error('unreachable');
+    const segmentBuffer = startAttribute.data;
+    const originalArray = segmentBuffer.array;
+    const originalVersion = segmentBuffer.version;
+
+    const binding = spaceScene.bindPackedPolyline(line, positionsKm);
+    binding.setPointCount(3);
+    spaceScene.updateCameraRelative({ x: AU_KM, y: 0, z: 0 });
+
+    expect(binding.maximumPointCount).toBe(4);
+    expect(binding.pointCount).toBe(3);
+    expect(geometry.instanceCount).toBe(2);
+    expect(startAttribute.data).toBe(segmentBuffer);
+    expect(startAttribute.data.array).toBe(originalArray);
+    expect(Array.from(originalArray.slice(0, 12))).toEqual([
+      10, -1, 2, 20, 3, 4, 20, 3, 4, -5, 10, 20,
+    ]);
+    expect(segmentBuffer.version).toBe(originalVersion + 1);
+    expect(geometry.boundingSphere?.radius).toBeGreaterThan(0);
+
+    spaceScene.updateCameraRelative({ x: AU_KM + 5, y: 0, z: 0 });
+    expect(startAttribute.data.array).toBe(originalArray);
+    expect(Array.from(originalArray.slice(0, 12))).toEqual([
+      5, -1, 2, 15, 3, 4, 15, 3, 4, -10, 10, 20,
+    ]);
+    expect(segmentBuffer.version).toBe(originalVersion + 2);
+  });
+
+  it('validates packed Line2 point counts and removes bindings on unbind', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const positionsKm = new Float64Array([1, 2, 3, 4, 5, 6]);
+    const geometry = new LineGeometry();
+    geometry.setPositions(new Float32Array(positionsKm.length));
+    const line = new Line2(geometry, new LineMaterial());
+    const binding = spaceScene.bindPackedPolyline(line, positionsKm);
+
+    expect(() => binding.setPointCount(-1)).toThrow(RangeError);
+    expect(() => binding.setPointCount(1)).toThrow(RangeError);
+    expect(() => binding.setPointCount(3)).toThrow(RangeError);
+    binding.setPointCount(2);
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    const beforeUnbind = Array.from(
+      (geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data.array,
+    );
+    expect(spaceScene.unbindVisual(line)).toBe(true);
+    positionsKm.fill(99);
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(
+      Array.from((geometry.getAttribute('instanceStart') as InterleavedBufferAttribute).data.array),
+    ).toEqual(beforeUnbind);
   });
 
   it('rejects malformed packed bindings without adding partial scene state', () => {
