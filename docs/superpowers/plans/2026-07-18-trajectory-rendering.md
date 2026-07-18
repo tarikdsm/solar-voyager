@@ -305,13 +305,15 @@ export interface TrajectoryPredictionSignalStore {
 ```ts
 export class TrajectoryPredictionRefresh {
   acceptPrediction(points: Float64Array): void;
+  clear(): void;
   update(simTimeSec: number, invalidateForWarpElapsed: () => void): void;
 }
 ```
 
   `acceptPrediction()` stores first time and positive sample interval;
   `update()` invalidates once after one interval and remains latched until the
-  next accepted prediction.
+  next accepted prediction. `clear()` removes the timing anchor during an
+  atomic session replacement or a predictor error.
 
 - [ ] **Step 1: Write failing factory and scheduler tests**
 
