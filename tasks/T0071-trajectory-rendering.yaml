@@ -61,6 +61,12 @@ handoff_notes: |
   Stable Chrome (the same channel as the successful trajectory E2E) and has a
   structurally tested five-minute CI timeout. The full Stable-Chrome smoke
   contract passes locally in about 10 s; a third PR CI run is required.
+  The third run confirmed that fix: smoke and all following regressions through
+  state-vector passed. Trajectory prediction also reached ready=true, then the
+  test failed only because a brittle nth-child locator could not find the
+  already-rendered Next approach row on Linux. The regression now finds the
+  semantic dt label and reads its adjacent dd, and passes locally with the real
+  worker and 0 px alignment. A fourth PR CI run is required.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
