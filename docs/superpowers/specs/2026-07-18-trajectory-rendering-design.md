@@ -146,4 +146,3 @@ without replacing the last valid buffers mid-write.
   evidence; full lint, typecheck, formatting, Vitest, build, budgets, task
   schema, smoke, performance gates, playtest, and independent review complete
   delivery.
-
