@@ -10,20 +10,20 @@
 
 Both runs used `npm run bench` with the default 900-frame deterministic route, two cache-priming runs, the same Chrome channel, four session checkpoints, and the same 30-second settle/measurement heap windows.
 
-| Metric | Baseline | T0080 | Delta |
-|---|---:|---:|---:|
-| Frame median | 6.1 ms | 6.1 ms | 0.0 ms |
-| Frame p75 | 6.1 ms | 6.1 ms | 0.0 ms |
-| Frame p99 | 6.2 ms | 6.2 ms | 0.0 ms |
-| Work median | 1.2 ms | 1.3 ms | +0.1 ms |
-| Work p75 | 1.3 ms | 1.5 ms | +0.2 ms |
-| Work p99 | 2.0 ms | 2.1 ms | +0.1 ms |
-| Stabilized heap delta | +86,944 B | +87,736 B | +792 B |
-| Route heap delta | +677,868 B | +676,692 B | −1,176 B |
-| Max draw calls | 26 | 26 | 0 |
-| Max triangles | 66,246 | 66,246 | 0 |
-| Entry gzip | 257,307 B | 261,292 B | +3,985 B |
-| Total gzip | 515,284 B | 519,711 B | +4,427 B |
+| Metric                |   Baseline |      T0080 |    Delta |
+| --------------------- | ---------: | ---------: | -------: |
+| Frame median          |     6.1 ms |     6.1 ms |   0.0 ms |
+| Frame p75             |     6.1 ms |     6.1 ms |   0.0 ms |
+| Frame p99             |     6.2 ms |     6.2 ms |   0.0 ms |
+| Work median           |     1.2 ms |     1.3 ms |  +0.1 ms |
+| Work p75              |     1.3 ms |     1.5 ms |  +0.2 ms |
+| Work p99              |     2.0 ms |     2.1 ms |  +0.1 ms |
+| Stabilized heap delta |  +86,944 B |  +87,736 B |   +792 B |
+| Route heap delta      | +677,868 B | +676,692 B | −1,176 B |
+| Max draw calls        |         26 |         26 |        0 |
+| Max triangles         |     66,246 |     66,246 |        0 |
+| Entry gzip            |  257,307 B |  261,292 B | +3,985 B |
+| Total gzip            |  515,284 B |  519,711 B | +4,427 B |
 
 The canonical harness intentionally uses 640×360. That activates the scrolling responsive HUD, where the bottom-right widget is outside the visible canvas bounds and correctly receives a zero-sized clipped scissor. Consequently this route measures the frame-loop/model overhead but not the widget draw calls. Both raw reports are retained in ignored `.playwright-mcp/` worktree storage.
 
