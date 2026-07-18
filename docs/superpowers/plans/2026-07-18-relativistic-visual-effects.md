@@ -47,18 +47,18 @@ Vitest, Playwright, Vite.
 - Rendering spec fixes activation at `smoothstep(1, 1.05, gamma)`, quality
   tiers 3-6, RGB gains `(-0.20, 0.05, 0.35)`, and beaming clamp `[0.20, 8]`.
 
-- [ ] **Step 1: Write the ADR and exact formulas**
+- [x] **Step 1: Write the ADR and exact formulas**
 
   Record the selected hybrid boundary/starfield/post approach, alternatives,
   consequences, and the fact that no public simulation interface changes.
   Add the equations from the approved design to physics-spec section 6.
 
-- [ ] **Step 2: Make rendering constants normative**
+- [x] **Step 2: Make rendering constants normative**
 
   Expand rendering-spec section 10 with the exact interpolation, RGB gain,
   Rec.709 normalization, `D^3` clamp, post-chain order, and low-tier behavior.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
   Run `npx prettier --check docs/decisions/ADR-031-relativistic-rendering-model.md
   docs/physics-spec.md docs/rendering-spec.md` and `git diff --check`.
