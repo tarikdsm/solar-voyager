@@ -98,10 +98,12 @@ export function readTrajectoryEventSummary(
 
   Validate storage lengths and packed strides, copy xyz triples without
   changing float64 precision, binary-search point times for each event, and
-  write interpolated xyz values into the caller-owned marker buffer. Scan SOI
-  records independently of event order and select the latest transition whose
-  time is not later than each segment start. Return `-1`/`NaN` summary defaults
-  when an event class is absent.
+  write interpolated xyz values into the caller-owned marker buffer. Process
+  the chronologically emitted SOI subset with one forward cursor while walking
+  segment start times; ignore interleaved non-SOI records so the pass stays
+  O(points + events) even though the final closest-approach record may have an
+  earlier timestamp. Return `-1`/`NaN` summary defaults when an event class is
+  absent.
 
 - [ ] **Step 4: Verify GREEN and commit**
 
