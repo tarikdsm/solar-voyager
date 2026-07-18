@@ -45,6 +45,16 @@ handoff_notes: |
   test:trajectory-overlay permanently and a workflow regression enforces that
   step. Build retains only the existing Vite >500 kB chunk advisory.
 
+  The first PR CI run passed lint through the two-minute performance gate, then
+  exposed CPU starvation in application smoke: unrelated SwiftShader pages
+  competed with the new 90-day worker job. The run was cancelled rather than
+  left hanging. A narrowly named test-only runtime sentinel now prevents the
+  worker from starting in smoke, camera-control, and renderer-policy contracts;
+  smoke asserts that no predictor worker request escaped isolation. The real
+  worker remains mandatory in the trajectory regression, performance gate,
+  benchmark, and normal application. Focused isolation tests plus all three
+  affected browser contracts pass locally; a fresh PR CI run is required.
+
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
   to add the browser regression to CI and move this task to REVIEW; both are
