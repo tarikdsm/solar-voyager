@@ -249,7 +249,27 @@ rollback as motion. The vector is an inertial signed integral; scalar proper
   SOI radii use `r_SOI = a·(m/M)^(2/5)` and are precomputed in bodies.json;
   the root's null SOI is compiled as infinity.
 - **Osculating elements** wrt dominant body from state vectors (standard conversion via h, e, n vectors; handle e→0 and i→0 degeneracies explicitly). Computed every frame for the HUD; it is an *approximation* in an n-body field — the worker prediction is the truth.
-- **Trajectory prediction:** worker propagates thrust-free with §3.1 over max(2 osculating periods, 90 days, user-extended); downsampled polyline ≤ 2000 points; events: SOI transitions, closest approach to target, **impact** (path crosses body radius + atmosphere top) with time-to-impact.
+- **Trajectory prediction:** worker propagates thrust-free with §3.1 over
+  `max(2 osculating periods, 90 days, user-extended)`. Production requests
+  2,000 output points; setup-time test requests may ask for fewer, and every
+  request is capped at 2,000 with a minimum of two. Absent impact, the initial
+  and horizon endpoints are included at uniform coordinate-time spacing. The seven-component
+  state is propagated sequentially between adjacent output times with the
+  production DP54 tolerance, rails, full n-body field, relativistic derivative,
+  and zero proper acceleration.
+- Predictor events are evaluated at each emitted point. SOI changes reuse the
+  §6 hysteretic selector and encode the previous and next body. Target closest
+  approach is the earliest minimum sampled target-centre distance. Collision
+  radius is `meanRadiusKm + atmosphereTopKm`, with absent atmosphere top treated
+  as zero. An impact requires a bracket whose previous clearance is strictly
+  positive and whose next clearance is non-positive. Crossing time is the
+  linear interpolation of endpoint clearances. If several bodies cross within
+  one interval, the earliest interpolated crossing wins (catalog order breaks
+  exact ties). The crossing position is linearly interpolated, replaces the
+  inside sample as the final polyline point, and propagation stops. Impact
+  time-to-impact is crossing time minus prediction start time. A complete
+  outside-to-inside-to-outside passage between adjacent samples is not detected;
+  this is a known consequence of the bounded sampling contract (ADR-030).
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.
 
 ## 7. Regression & validation tests (must exist before v1)
