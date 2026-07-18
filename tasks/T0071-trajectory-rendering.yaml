@@ -1,8 +1,8 @@
 id: T0071
 title: Trajectory polyline + event markers rendering
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0071-trajectory-rendering
 depends_on: [T0070, T0040]
 milestone: M5
 spec: |
