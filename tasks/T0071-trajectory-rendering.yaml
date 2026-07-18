@@ -34,13 +34,13 @@ handoff_notes: |
   The CI workload golden intentionally advances from 9 calls / 65,077
   triangles to 10 / 77,071 for one 1,999-segment Line2, retaining +/-10%
   tolerance and remaining below the 150 / 500k budgets. The final performance
-  gate passed at 10 / 77,071 with +53,233 B retained heap; its allocation and
-  draw-call fixtures failed as required. Entry/total gzip were 267,440 / 538,690
-  B against 285,000 / 570,000 B limits.
+  gate passed at 10 / 77,071 with -200,723 B retained heap; its allocation and
+  draw-call fixtures failed as required. Final entry/total gzip are 267,497 /
+  538,749 B against 285,000 / 570,000 B limits.
 
   Fresh final gates: lint, strict typecheck, Prettier, build, git diff check,
   task schema (53 files), asset budgets, application smoke, trajectory browser
-  regression, performance gates, full Vitest (98 passed files, 1 skipped; 608
+  regression, performance gates, full Vitest (99 passed files, 1 skipped; 609
   passed tests, 3 skipped), and Python tools (50 tests) all pass. CI now runs
   test:trajectory-overlay permanently and a workflow regression enforces that
   step. Build retains only the existing Vite >500 kB chunk advisory.
