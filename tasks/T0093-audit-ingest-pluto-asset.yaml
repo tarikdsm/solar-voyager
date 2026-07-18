@@ -1,6 +1,6 @@
 id: T0093
 title: Audit and ingest Pluto source asset
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0093-audit-ingest-pluto-asset
 depends_on: [T0035]
@@ -31,3 +31,5 @@ handoff_notes: |
   Verification: npm test (635 passed, 3 skipped); npm run test:tools (54 passed);
   lint, typecheck, format:check, build, check:tasks, check:budgets,
   test:visual-tiers, test:surface-detail, test:relativistic-visuals, and test:smoke.
+  Independent review passed with no blockers, and GitHub CI passed at the reviewed
+  head before task completion.
