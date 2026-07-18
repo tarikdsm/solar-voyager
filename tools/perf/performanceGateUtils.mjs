@@ -1,5 +1,4 @@
 const DEFAULT_STABILITY_LIMIT = 0.05;
-const REFERENCE_FRAME_BUDGET_MS = 1_000 / 60;
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -50,10 +49,7 @@ function validateCount(label, measured, expected, toleranceFraction, findings) {
 }
 
 function compareTimingMetrics(first, second, label, limit, findings) {
-  const workMetrics = ['workMedianMs', 'workP75Ms', 'workP99Ms'];
-  const metrics = workMetrics.every((metric) => metric in first && metric in second)
-    ? workMetrics
-    : ['medianMs', 'p75Ms', 'p99Ms'];
+  const metrics = ['medianMs', 'p75Ms', 'p99Ms'];
   for (const metric of metrics) {
     const left = first[metric];
     const right = second[metric];
@@ -61,13 +57,10 @@ function compareTimingMetrics(first, second, label, limit, findings) {
       findings.push(`${label} ${metric} values must be finite and nonnegative.`);
       continue;
     }
-    const isWorkMetric = metric.startsWith('work');
-    const difference = isWorkMetric
-      ? Math.abs(left - right) / REFERENCE_FRAME_BUDGET_MS
-      : symmetricRelativeDifference(left, right);
+    const difference = symmetricRelativeDifference(left, right);
     if (difference >= limit) {
       findings.push(
-        `${label} ${metric}${isWorkMetric ? ' frame-budget' : ''} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
+        `${label} ${metric} variance must be < ${(limit * 100).toFixed(1)}%; measured ${(difference * 100).toFixed(2)}%.`,
       );
     }
   }
@@ -157,37 +150,28 @@ export function compareBenchmarkRuns(first, second, limit = DEFAULT_STABILITY_LI
     return ['Benchmark stability limit is malformed.'];
   }
   const findings = [];
-  const firstHasLegs = Array.isArray(first.legs);
-  const secondHasLegs = Array.isArray(second.legs);
-  if (firstHasLegs || secondHasLegs) {
-    if (!firstHasLegs || !secondHasLegs) {
-      findings.push('Benchmark leg summaries must be present in both runs.');
+  compareTimingMetrics(first, second, 'Benchmark', limit, findings);
+  const firstHasHeap = 'steadyHeapAfterBytes' in first;
+  const secondHasHeap = 'steadyHeapAfterBytes' in second;
+  if (firstHasHeap || secondHasHeap) {
+    if (
+      !firstHasHeap ||
+      !secondHasHeap ||
+      !validNonnegativeNumber(first.steadyHeapAfterBytes) ||
+      !validNonnegativeNumber(second.steadyHeapAfterBytes)
+    ) {
+      findings.push('Benchmark steady heap footprints must be finite and present in both runs.');
     } else {
-      if (first.legs.length !== second.legs.length) {
+      const heapDifference = symmetricRelativeDifference(
+        first.steadyHeapAfterBytes,
+        second.steadyHeapAfterBytes,
+      );
+      if (heapDifference >= limit) {
         findings.push(
-          `Benchmark leg counts differ: ${formatInteger(first.legs.length)} versus ${formatInteger(second.legs.length)}.`,
-        );
-      }
-      const comparedLegs = Math.min(first.legs.length, second.legs.length);
-      for (let index = 0; index < comparedLegs; index += 1) {
-        const firstLeg = first.legs[index];
-        const secondLeg = second.legs[index];
-        if (firstLeg.id !== secondLeg.id) {
-          findings.push(
-            `Benchmark leg identities differ at index ${String(index)}: "${String(firstLeg.id)}" versus "${String(secondLeg.id)}".`,
-          );
-        }
-        compareTimingMetrics(
-          firstLeg,
-          secondLeg,
-          `Benchmark leg "${String(firstLeg.id)}"`,
-          limit,
-          findings,
+          `Benchmark steadyHeapAfterBytes variance must be < ${(limit * 100).toFixed(1)}%; measured ${(heapDifference * 100).toFixed(2)}%.`,
         );
       }
     }
-  } else {
-    compareTimingMetrics(first, second, 'Benchmark', limit, findings);
   }
   if (first.maxDrawCalls !== second.maxDrawCalls) {
     findings.push(

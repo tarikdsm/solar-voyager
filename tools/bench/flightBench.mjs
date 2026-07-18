@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { chromium } from 'playwright';
-import { preview } from 'vite';
+import { createServer, preview } from 'vite';
 
 import { installHighQualitySetting } from '../perf/browserSettings.mjs';
 import { measureBundleSizes } from '../perf/bundleMeasurement.mjs';
@@ -19,6 +19,7 @@ const HOST = '127.0.0.1';
 const PORT = 4177;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
+const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 const STEADY_HEAP_SETTLE_MS = 30_000;
 const STEADY_HEAP_MEASURE_MS = 30_000;
 const DEFAULT_SAMPLE_FRAMES = 900;
@@ -63,6 +64,25 @@ function runBuild() {
   });
   if (result.status !== 0) {
     throw new Error(`Production build failed with status ${String(result.status)}.`);
+  }
+}
+
+async function createCanonicalFlightRoute() {
+  const loader = await createServer({
+    appType: 'custom',
+    logLevel: 'error',
+    root: process.cwd(),
+    server: { middlewareMode: true },
+  });
+  try {
+    const routeModule = await loader.ssrLoadModule('/src/game/flightBenchmarkRoute.ts');
+    const route = routeModule.createFlightBenchmarkRoute();
+    if (!Array.isArray(route) || route.length !== 4) {
+      throw new Error('Canonical flight route must contain four checkpoints.');
+    }
+    return route;
+  } finally {
+    await loader.close();
   }
 }
 
@@ -111,6 +131,48 @@ async function readEnvironment(page) {
   }, TELEMETRY_PROPERTY);
 }
 
+async function validateFlightRoute(page, route) {
+  const evidence = [];
+  for (const checkpoint of route) {
+    const loaded = await page.evaluate(
+      ({ checkpoint: routeCheckpoint, saveStorageKey }) => {
+        const loadButton = globalThis.document.querySelector('#session-load');
+        const saveButton = globalThis.document.querySelector('#session-save');
+        if (
+          !(loadButton instanceof globalThis.HTMLButtonElement) ||
+          !(saveButton instanceof globalThis.HTMLButtonElement)
+        ) {
+          throw new Error('Flight benchmark session controls are missing.');
+        }
+        globalThis.localStorage.setItem(saveStorageKey, routeCheckpoint.saveJson);
+        loadButton.click();
+        saveButton.click();
+        const savedJson = globalThis.localStorage.getItem(saveStorageKey);
+        if (savedJson === null) throw new Error('Loaded checkpoint could not be saved.');
+        const saved = JSON.parse(savedJson);
+        return {
+          distanceToTargetKm: routeCheckpoint.distanceToTargetKm,
+          dominantBodyId: routeCheckpoint.dominantBodyId,
+          loadedSimTimeSec: saved.simulation.simTimeSec,
+          loadedTargetBodyId: saved.simulation.targetBodyId,
+          requestedSimTimeSec: routeCheckpoint.simTimeSec,
+          targetBodyId: routeCheckpoint.targetBodyId,
+        };
+      },
+      { checkpoint, saveStorageKey: SAVE_STORAGE_KEY },
+    );
+    await page.waitForFunction(
+      (dominantBodyId) =>
+        globalThis.document.querySelector('#orbit-title')?.textContent?.toLowerCase() ===
+        dominantBodyId,
+      checkpoint.dominantBodyId,
+      { timeout: 5_000 },
+    );
+    evidence.push({ ...loaded, renderedDominantBody: checkpoint.dominantBodyId });
+  }
+  return evidence;
+}
+
 async function forceGc(page) {
   return page.evaluate(() => {
     if (typeof globalThis.gc !== 'function') throw new Error('Chromium did not expose gc().');
@@ -120,9 +182,9 @@ async function forceGc(page) {
   });
 }
 
-async function measureFlight(page, schedule) {
+async function measureFlight(page, schedule, route) {
   return page.evaluate(
-    ({ schedule: flightSchedule, telemetryProperty }) =>
+    ({ route: flightRoute, saveStorageKey, schedule: flightSchedule, telemetryProperty }) =>
       new Promise((resolvePromise, rejectPromise) => {
         const canvas = globalThis.document.querySelector('#space-canvas');
         if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -134,8 +196,18 @@ async function measureFlight(page, schedule) {
           rejectPromise(new Error('Flight benchmark telemetry is missing.'));
           return;
         }
+        const loadButton = globalThis.document.querySelector('#session-load');
+        const saveButton = globalThis.document.querySelector('#session-save');
+        if (
+          !(loadButton instanceof globalThis.HTMLButtonElement) ||
+          !(saveButton instanceof globalThis.HTMLButtonElement)
+        ) {
+          rejectPromise(new Error('Flight benchmark session controls are missing.'));
+          return;
+        }
         const frameDeltasMs = new Float64Array(flightSchedule.sampleFrames);
         const frameWorkMs = new Float64Array(flightSchedule.sampleFrames);
+        const checkpointEvidence = [];
         let focusEventIndex = 0;
         let maxDrawCalls = 0;
         let maxTriangles = 0;
@@ -143,12 +215,32 @@ async function measureFlight(page, schedule) {
         let sampleIndex = 0;
         let zoomEventIndex = 0;
 
+        function loadCheckpoint(checkpoint) {
+          globalThis.localStorage.setItem(saveStorageKey, checkpoint.saveJson);
+          loadButton.click();
+          saveButton.click();
+          const savedJson = globalThis.localStorage.getItem(saveStorageKey);
+          if (savedJson === null) throw new Error('Loaded checkpoint could not be saved.');
+          const saved = JSON.parse(savedJson);
+          checkpointEvidence.push({
+            distanceToTargetKm: checkpoint.distanceToTargetKm,
+            dominantBodyId: checkpoint.dominantBodyId,
+            loadedSimTimeSec: saved.simulation.simTimeSec,
+            loadedTargetBodyId: saved.simulation.targetBodyId,
+            requestedSimTimeSec: checkpoint.simTimeSec,
+            targetBodyId: checkpoint.targetBodyId,
+          });
+        }
+
         function measureFrame(frameTimeMs) {
           frameDeltasMs[sampleIndex] = frameTimeMs - previousFrameTimeMs;
           frameWorkMs[sampleIndex] = Math.max(0, performance.now() - frameTimeMs);
           previousFrameTimeMs = frameTimeMs;
           const focusEvent = flightSchedule.focusEvents[focusEventIndex];
           if (focusEvent !== undefined && focusEvent.frame === sampleIndex) {
+            const checkpoint = flightRoute[focusEventIndex + 1];
+            if (checkpoint === undefined) throw new Error('Flight checkpoint schedule is sparse.');
+            loadCheckpoint(checkpoint);
             globalThis.dispatchEvent(
               new globalThis.KeyboardEvent('keydown', { key: focusEvent.key }),
             );
@@ -171,24 +263,38 @@ async function measureFlight(page, schedule) {
             globalThis.requestAnimationFrame(measureFrame);
             return;
           }
-          resolvePromise({
-            finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
-            frameDeltasMs: Array.from(frameDeltasMs),
-            frameWorkMs: Array.from(frameWorkMs),
-            maxDrawCalls,
-            maxTriangles,
+          const finalCheckpoint = flightRoute[3];
+          if (finalCheckpoint === undefined) throw new Error('Final flight checkpoint is missing.');
+          loadCheckpoint(finalCheckpoint);
+          globalThis.requestAnimationFrame(() => {
+            resolvePromise({
+              checkpointEvidence,
+              finalFocusLabel:
+                globalThis.document.querySelector('#camera-focus-label')?.textContent,
+              frameDeltasMs: Array.from(frameDeltasMs),
+              frameWorkMs: Array.from(frameWorkMs),
+              maxDrawCalls,
+              maxTriangles,
+            });
           });
         }
+        const initialCheckpoint = flightRoute[0];
+        if (initialCheckpoint === undefined)
+          throw new Error('Initial flight checkpoint is missing.');
+        loadCheckpoint(initialCheckpoint);
+        previousFrameTimeMs = performance.now();
         globalThis.requestAnimationFrame(measureFrame);
       }),
     {
+      route,
+      saveStorageKey: SAVE_STORAGE_KEY,
       schedule,
       telemetryProperty: TELEMETRY_PROPERTY,
     },
   );
 }
 
-async function runOnce(browser, schedule, index) {
+async function runOnce(browser, schedule, route, index) {
   console.log(`Flight benchmark run ${String(index + 1)}`);
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const errors = [];
@@ -198,8 +304,9 @@ async function runOnce(browser, schedule, index) {
     await waitForReady(page);
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     const environment = await readEnvironment(page);
+    const routeEvidence = await validateFlightRoute(page, route);
     const pathHeapBeforeBytes = await forceGc(page);
-    const raw = await measureFlight(page, schedule);
+    const raw = await measureFlight(page, schedule, route);
     const pathHeapAfterBytes = await forceGc(page);
     await page.waitForTimeout(STEADY_HEAP_SETTLE_MS);
     const steadyHeapBeforeBytes = await forceGc(page);
@@ -222,13 +329,28 @@ async function runOnce(browser, schedule, index) {
     if (raw.finalFocusLabel !== 'Focus: Jupiter') {
       throw new Error(`Flight ended on an unexpected focus: ${String(raw.finalFocusLabel)}`);
     }
-    return { environment, errors, finalFocusLabel: raw.finalFocusLabel, summary };
+    for (const checkpoint of raw.checkpointEvidence) {
+      if (
+        checkpoint.loadedSimTimeSec !== checkpoint.requestedSimTimeSec ||
+        checkpoint.loadedTargetBodyId !== checkpoint.targetBodyId
+      ) {
+        throw new Error(`Flight checkpoint was not executed: ${JSON.stringify(checkpoint)}`);
+      }
+    }
+    return {
+      checkpointEvidence: raw.checkpointEvidence,
+      environment,
+      errors,
+      finalFocusLabel: raw.finalFocusLabel,
+      routeEvidence,
+      summary,
+    };
   } finally {
     await page.close();
   }
 }
 
-async function primeBrowser(browser, schedule, index) {
+async function primeBrowser(browser, schedule, route, index) {
   console.log(`Flight benchmark cache priming ${String(index + 1)}/${String(PRIMING_RUNS)}`);
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const errors = [];
@@ -236,7 +358,7 @@ async function primeBrowser(browser, schedule, index) {
   await installHighQualitySetting(page);
   try {
     await waitForReady(page);
-    const raw = await measureFlight(page, schedule);
+    const raw = await measureFlight(page, schedule, route);
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     if (raw.finalFocusLabel !== 'Focus: Jupiter') {
       throw new Error(`Priming ended on an unexpected focus: ${String(raw.finalFocusLabel)}`);
@@ -267,6 +389,7 @@ async function main() {
   if (runsRequested > 2) throw new RangeError('--runs supports one or two benchmark runs.');
   const sampleFrames = readPositiveIntegerFlag('--sample-frames', DEFAULT_SAMPLE_FRAMES);
   const schedule = createFlightSchedule(FIXED_FLIGHT_SEED, sampleFrames);
+  const route = await createCanonicalFlightRoute();
   const outputPath = readOutputPath();
   runBuild();
   const bundle = await measureBundleSizes(resolve('dist'));
@@ -281,11 +404,11 @@ async function main() {
   try {
     browser = await launchBenchmarkBrowser();
     for (let index = 0; index < PRIMING_RUNS; index += 1) {
-      await primeBrowser(browser, schedule, index);
+      await primeBrowser(browser, schedule, route, index);
     }
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
-      runs.push(await runOnce(browser, schedule, index));
+      runs.push(await runOnce(browser, schedule, route, index));
     }
     const stabilityFindings =
       runs.length === 2 ? compareBenchmarkRuns(runs[0].summary, runs[1].summary) : [];
@@ -296,9 +419,11 @@ async function main() {
       bundle,
       environment: runs[0]?.environment,
       schedule,
-      runs: runs.map(({ errors, finalFocusLabel, summary }) => ({
+      runs: runs.map(({ checkpointEvidence, errors, finalFocusLabel, routeEvidence, summary }) => ({
+        checkpointEvidence,
         errors,
         finalFocusLabel,
+        routeEvidence,
         summary,
       })),
       stability: { findings: stabilityFindings, limitFraction: 0.05 },

@@ -106,6 +106,8 @@ export function summarizeFlightRun(raw) {
     maxDrawCalls: raw.maxDrawCalls,
     maxTriangles: raw.maxTriangles,
     pathHeapDeltaBytes,
+    steadyHeapAfterBytes: raw.steadyHeapAfterBytes,
+    steadyHeapBeforeBytes: raw.steadyHeapBeforeBytes,
     ...summary,
     ...summarizeFrameWork(raw.frameWorkMs),
   });

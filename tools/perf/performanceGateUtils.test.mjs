@@ -81,6 +81,7 @@ describe('compareBenchmarkRuns', () => {
     medianMs: 10,
     p75Ms: 12,
     p99Ms: 16,
+    steadyHeapAfterBytes: 60_000_000,
     maxDrawCalls: 26,
     maxTriangles: 65_094,
   });
@@ -91,6 +92,7 @@ describe('compareBenchmarkRuns', () => {
         medianMs: 10.4,
         p75Ms: 12.5,
         p99Ms: 16.7,
+        steadyHeapAfterBytes: 61_000_000,
         maxDrawCalls: 26,
         maxTriangles: 65_094,
       }),
@@ -103,6 +105,7 @@ describe('compareBenchmarkRuns', () => {
         medianMs: 10.6,
         p75Ms: 12,
         p99Ms: 16,
+        steadyHeapAfterBytes: 60_000_000,
         maxDrawCalls: 27,
         maxTriangles: 65_095,
       }),
@@ -113,12 +116,14 @@ describe('compareBenchmarkRuns', () => {
     ]);
   });
 
-  it('compares each scripted-flight leg instead of the mixed aggregate distribution', () => {
+  it('compares the reported aggregate frame percentiles literally', () => {
     expect(
       compareBenchmarkRuns(
         {
           ...first,
-          p99Ms: 133.3,
+          medianMs: 10,
+          p75Ms: 12,
+          p99Ms: 16,
           legs: [
             { id: 'leo', medianMs: 100, p75Ms: 116.6, p99Ms: 133.3 },
             { id: 'moon-flyby', medianMs: 16.7, p75Ms: 16.7, p99Ms: 33.565 },
@@ -127,7 +132,9 @@ describe('compareBenchmarkRuns', () => {
         },
         {
           ...first,
-          p99Ms: 116.965,
+          medianMs: 10.6,
+          p75Ms: 12,
+          p99Ms: 16,
           legs: [
             { id: 'leo', medianMs: 100, p75Ms: 116.6, p99Ms: 133.4 },
             { id: 'moon-flyby', medianMs: 16.7, p75Ms: 16.7, p99Ms: 33.566 },
@@ -135,28 +142,10 @@ describe('compareBenchmarkRuns', () => {
           ],
         },
       ),
-    ).toEqual([]);
+    ).toEqual(['Benchmark medianMs variance must be < 5.0%; measured 5.83%.']);
   });
 
-  it('rejects unstable scripted-flight legs and mismatched leg identities', () => {
-    expect(
-      compareBenchmarkRuns(
-        {
-          ...first,
-          legs: [{ id: 'leo', medianMs: 10, p75Ms: 12, p99Ms: 16 }],
-        },
-        {
-          ...first,
-          legs: [{ id: 'moon-flyby', medianMs: 11, p75Ms: 12, p99Ms: 16 }],
-        },
-      ),
-    ).toEqual([
-      'Benchmark leg identities differ at index 0: "leo" versus "moon-flyby".',
-      'Benchmark leg "leo" medianMs variance must be < 5.0%; measured 9.52%.',
-    ]);
-  });
-
-  it('uses game-work percentiles for stability when wall-clock scheduling also exists', () => {
+  it('does not substitute game-work metrics for the reported frame percentiles', () => {
     expect(
       compareBenchmarkRuns(
         {
@@ -164,9 +153,9 @@ describe('compareBenchmarkRuns', () => {
           legs: [
             {
               id: 'leo',
-              medianMs: 6,
-              p75Ms: 6,
-              p99Ms: 24,
+              medianMs: 100,
+              p75Ms: 116.6,
+              p99Ms: 133.3,
               workMedianMs: 4,
               workP75Ms: 4.5,
               workP99Ms: 5,
@@ -178,9 +167,9 @@ describe('compareBenchmarkRuns', () => {
           legs: [
             {
               id: 'leo',
-              medianMs: 6,
-              p75Ms: 6,
-              p99Ms: 18,
+              medianMs: 1,
+              p75Ms: 1,
+              p99Ms: 1,
               workMedianMs: 4.1,
               workP75Ms: 4.6,
               workP99Ms: 5.1,
@@ -191,40 +180,14 @@ describe('compareBenchmarkRuns', () => {
     ).toEqual([]);
   });
 
-  it('rejects game-work drift beyond five percent of the 60-fps frame budget', () => {
+  it('rejects a steady heap footprint that varies by at least five percent', () => {
     expect(
       compareBenchmarkRuns(
-        {
-          ...first,
-          legs: [
-            {
-              id: 'leo',
-              medianMs: 6,
-              p75Ms: 6,
-              p99Ms: 6,
-              workMedianMs: 4,
-              workP75Ms: 4,
-              workP99Ms: 4,
-            },
-          ],
-        },
-        {
-          ...first,
-          legs: [
-            {
-              id: 'leo',
-              medianMs: 6,
-              p75Ms: 6,
-              p99Ms: 6,
-              workMedianMs: 5,
-              workP75Ms: 4,
-              workP99Ms: 4,
-            },
-          ],
-        },
+        first,
+        { ...first, steadyHeapAfterBytes: 64_000_000 },
       ),
     ).toEqual([
-      'Benchmark leg "leo" workMedianMs frame-budget variance must be < 5.0%; measured 6.00%.',
+      'Benchmark steadyHeapAfterBytes variance must be < 5.0%; measured 6.45%.',
     ]);
   });
 });

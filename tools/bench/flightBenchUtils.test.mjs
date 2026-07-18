@@ -118,6 +118,8 @@ describe('summarizeFlightRun', () => {
       p75Ms: 32.5,
       p99Ms: 39.7,
       pathHeapDeltaBytes: 100,
+      steadyHeapAfterBytes: 900,
+      steadyHeapBeforeBytes: 1_000,
       workMedianMs: 2.5,
       workP75Ms: 3.25,
       workP99Ms: 3.97,
