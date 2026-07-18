@@ -1,8 +1,8 @@
 id: T0083
 title: Realistic ring systems (Saturn, Uranus, Jupiter, Neptune)
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0083-realistic-rings
 depends_on: [T0041, T0043]
 milestone: M6
 spec: |
