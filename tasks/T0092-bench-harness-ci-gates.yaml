@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -38,3 +38,7 @@ handoff_notes: |
     typecheck, 531 Vitest assertions, 50 Python tests, budgets, and 53 task schemas
     passed during the correction cycle. Exact-head CI and re-review remain gates;
     the merger flips DONE only after both approve.
+  - Independent reviewer approved exact head
+    eb79f75cb5b0fc21ad127974dad9f675c16812d7 after verifying the canonical route,
+    literal stability comparison, calibrated heap gate, and both negative fixtures.
+    GitHub Actions run 29627162257 completed successfully on that exact head.
