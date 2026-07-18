@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-07-18T00:36:21.976Z",
+  "gitSha": "b6d279e51f5c377cc1ce429e1d4c13f890a05e5b",
+  "bundle": {
+    "entryFile": "assets/index-1O6yav0Y.js",
+    "entryGzipBytes": 257307,
+    "totalGzipBytes": 515284
+  },
+  "environment": {
+    "canvas": {
+      "height": 360,
+      "width": 640
+    },
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Laptop GPU (0x000024DD) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "softwareRasterizer": false
+  },
+  "schedule": {
+    "focusEvents": [
+      {
+        "frame": 300,
+        "key": "]"
+      },
+      {
+        "frame": 600,
+        "key": "j"
+      }
+    ],
+    "legs": [
+      {
+        "endFrame": 300,
+        "endSec": 60,
+        "id": "leo",
+        "startFrame": 0,
+        "startSec": 0,
+        "target": "earth"
+      },
+      {
+        "endFrame": 600,
+        "endSec": 120,
+        "id": "moon-flyby",
+        "startFrame": 300,
+        "startSec": 60,
+        "target": "moon"
+      },
+      {
+        "endFrame": 900,
+        "endSec": 180,
+        "id": "jupiter-approach",
+        "startFrame": 600,
+        "startSec": 120,
+        "target": "jupiter"
+      }
+    ],
+    "sampleFrames": 900,
+    "seed": 1511506142,
+    "virtualDurationSec": 180,
+    "zoomEvents": [
+      {
+        "delta": 62,
+        "frame": 60
+      },
+      {
+        "delta": 73,
+        "frame": 120
+      },
+      {
+        "delta": -50,
+        "frame": 180
+      },
+      {
+        "delta": 67,
+        "frame": 240
+      },
+      {
+        "delta": 67,
+        "frame": 300
+      },
+      {
+        "delta": -10,
+        "frame": 360
+      },
+      {
+        "delta": 44,
+        "frame": 420
+      },
+      {
+        "delta": 32,
+        "frame": 480
+      },
+      {
+        "delta": 14,
+        "frame": 540
+      },
+      {
+        "delta": -64,
+        "frame": 600
+      },
+      {
+        "delta": 33,
+        "frame": 660
+      },
+      {
+        "delta": -27,
+        "frame": 720
+      },
+      {
+        "delta": -72,
+        "frame": 780
+      },
+      {
+        "delta": -74,
+        "frame": 840
+      }
+    ]
+  },
+  "runs": [
+    {
+      "errors": [],
+      "finalFocusLabel": "Focus: Jupiter",
+      "summary": {
+        "heapDeltaBytes": 63252,
+        "legs": [
+          {
+            "id": "leo",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.2,
+            "workMedianMs": 1.2,
+            "workP75Ms": 1.5,
+            "workP99Ms": 2.301
+          },
+          {
+            "id": "moon-flyby",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.201,
+            "workMedianMs": 1.2,
+            "workP75Ms": 1.4,
+            "workP99Ms": 2.1
+          },
+          {
+            "id": "jupiter-approach",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.2,
+            "workMedianMs": 1.15,
+            "workP75Ms": 1.4,
+            "workP99Ms": 2.209
+          }
+        ],
+        "maxDrawCalls": 26,
+        "maxTriangles": 65094,
+        "pathHeapDeltaBytes": 595996,
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 6.2,
+        "workMedianMs": 1.2,
+        "workP75Ms": 1.4,
+        "workP99Ms": 2.2
+      }
+    },
+    {
+      "errors": [],
+      "finalFocusLabel": "Focus: Jupiter",
+      "summary": {
+        "heapDeltaBytes": 67284,
+        "legs": [
+          {
+            "id": "leo",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.2,
+            "workMedianMs": 1.4,
+            "workP75Ms": 1.6,
+            "workP99Ms": 2.501
+          },
+          {
+            "id": "moon-flyby",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.2,
+            "workMedianMs": 1.3,
+            "workP75Ms": 1.5,
+            "workP99Ms": 2.201
+          },
+          {
+            "id": "jupiter-approach",
+            "medianMs": 6.1,
+            "p75Ms": 6.1,
+            "p99Ms": 6.2,
+            "workMedianMs": 1.2,
+            "workP75Ms": 1.3,
+            "workP99Ms": 2.001
+          }
+        ],
+        "maxDrawCalls": 26,
+        "maxTriangles": 65094,
+        "pathHeapDeltaBytes": 613784,
+        "medianMs": 6.1,
+        "p75Ms": 6.1,
+        "p99Ms": 6.2,
+        "workMedianMs": 1.3,
+        "workP75Ms": 1.5,
+        "workP99Ms": 2.4
+      }
+    }
+  ],
+  "stability": {
+    "findings": [],
+    "limitFraction": 0.05
+  }
+}
