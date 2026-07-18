@@ -1,6 +1,6 @@
 id: T0081
 title: Relativistic visual effects (aberration, Doppler, beaming)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0081-relativistic-visuals
 depends_on: [T0042, T0043]
