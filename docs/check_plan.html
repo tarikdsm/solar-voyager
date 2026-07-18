@@ -259,11 +259,11 @@
         <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Review independente concluído</strong><small>Nenhum finding Critical, Important ou Minor.</small></span></label>
         <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>E2E limitado a 6 horas</strong><small>Somente a regressão injeta 21.600 s; worker, protocolo e integrador continuam reais.</small></span></label>
         <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Produção preservada em 90 dias ou mais</strong><small>Gameplay, benchmark e performance mantêm o horizonte canônico e o golden de 10 calls / 77.071 triângulos.</small></span></label>
-        <label class="checkpoint"><input type="checkbox" disabled><span><strong>CI final e integração</strong><small>Executar a sexta rodada, confirmar todos os gates verdes, marcar T0071 como DONE e fazer o merge normal.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" disabled><span><strong>Investigação CI e integração</strong><small>A sexta rodada falhou com trajectoryReady=pending após 83,7 s no SwiftShader. Instrumentar o caminho do override até o executor, obter CI verde, marcar DONE e fazer o merge normal.</small></span></label>
       </div>
       <details>
-        <summary>Histórico resumido das cinco rodadas de CI</summary>
-        <div class="detail-body"><p>Rodadas 1–2 localizaram competição do worker longo com smoke/SwiftShader. A rodada 3 validou Stable Chrome e revelou um seletor frágil. A rodada 4 confirmou o seletor semântico e revelou descarte incompleto. A rodada 5 passou os gates anteriores e comprovou que 90 dias podem exceder quatro minutos no runner. A correção atual limita apenas o E2E a 6 horas.</p></div>
+        <summary>Histórico resumido das seis rodadas de CI</summary>
+        <div class="detail-body"><p>Rodadas 1–2 localizaram competição do worker longo com smoke/SwiftShader. A rodada 3 validou Stable Chrome e revelou um seletor frágil. A rodada 4 confirmou o seletor semântico e revelou descarte incompleto. A rodada 5 comprovou que 90 dias podem exceder quatro minutos no runner. A rodada 6, no head cf3f1a6, passou todos os gates anteriores e chegou à regressão dedicada, mas permaneceu em trajectoryReady=pending por 83,7 s mesmo com o override local de 6 horas. Não houve erro de console/página; a próxima sessão deve instrumentar a propagação do override até o executor antes de alterar código ou timeout.</p></div>
       </details>
     </section>
 
@@ -332,7 +332,7 @@
       T0058: { status: "DONE", agent: "chatgpt", branch: "task/T0058-save-load-settings-input" },
       T0059: { status: "DONE", agent: "chatgpt", branch: "task/T0059-playwright-smoke" },
       T0070: { status: "DONE", agent: "chatgpt", branch: "task/T0070-predictor-worker" },
-      T0071: { status: "REVIEW", agent: "chatgpt", branch: "task/T0071-trajectory-rendering", handoff_notes: "Implementação concluída no PR #47. Review independente C0/I0/M0. O E2E usa 6 h somente em teste; produção, benchmark e performance mantêm 90 dias ou mais. Próximo passo: sexta rodada de CI, DONE e merge normal." },
+      T0071: { status: "REVIEW", agent: "chatgpt", branch: "task/T0071-trajectory-rendering", handoff_notes: "PR #47 no head cf3f1a6; review independente C0/I0/M0. A sexta CI (29642564311) passou todos os gates anteriores, mas a regressão terminou com trajectoryReady=pending após 83,7 s no SwiftShader. O E2E configura 6 h somente em teste; produção, benchmark e performance mantêm 90 dias ou mais. Próximo passo: instrumentar init-property -> main -> protocolo -> worker, obter CI verde, DONE e merge normal." },
       T0080: { status: "DONE", agent: "chatgpt", branch: "task/T0080-state-vector-widget" },
       T0090: { status: "DONE", agent: "chatgpt", branch: "task/T0090-perf-hud-panel" },
       T0091: { status: "DONE", agent: "chatgpt", branch: "task/T0091-adaptive-quality-governor" },

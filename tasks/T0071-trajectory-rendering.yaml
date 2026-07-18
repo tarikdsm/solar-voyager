@@ -82,7 +82,15 @@ handoff_notes: |
   90-day-or-longer horizon. Locally, the regression now finishes in 14.5 s with
   ready=true, the expected HUD state, two prediction calls, and 0 px alignment;
   the separate production performance gate still passes at 10 calls / 77,071
-  triangles. A sixth PR CI run is required.
+  triangles. Sixth CI run 29642564311 validated the exact head cf3f1a6 through
+  Vitest, build, performance, smoke, and every browser regression preceding
+  trajectory. The trajectory step then remained pending for 83.7 s on
+  SwiftShader (7.7 FPS) and failed its 90 s readiness assertion with no console
+  or page errors. Therefore the six-hour override is locally proven but not yet
+  proven effective on the shared runner. No further fix was attempted after
+  this evidence; resume with instrumentation across the init-property -> main
+  bootstrap -> request protocol -> worker executor boundary before changing
+  behavior or timeouts.
 
   Final pause point: the test-only horizon delta passed 27 focused Vitest
   tests, strict typecheck, ESLint, Prettier, build, task schema, asset budgets,
@@ -91,9 +99,10 @@ handoff_notes: |
   CPU contention all passed unchanged when rerun individually; no timeout or
   assertion was weakened. Python tools passed 50/50. An independent reviewer
   found no Critical, Important, or Minor findings and approved the delta for
-  commit and a fresh CI run. PR #47 remains the continuation point; task status
-  intentionally stays REVIEW until exact-head CI is green and the normal merge
-  can mark it DONE.
+  commit and a fresh CI run. PR #47 at cf3f1a6 remains the continuation point;
+  CI run 29642564311 is the latest authoritative failure evidence. Task status
+  intentionally stays REVIEW until a later exact-head CI is green and the
+  normal merge can mark it DONE.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were

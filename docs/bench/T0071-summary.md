@@ -72,3 +72,15 @@ single added call and 11,994 added triangles are exactly one maximum-capacity
 are the deterministic feature workload, remain far below the 150-call / 500k-
 triangle typical-view budgets, and retain the existing +/-10% regression
 tolerance for later changes.
+
+## Paused CI status
+
+CI run `29642564311` on head `cf3f1a6` passed Vitest, build, the production
+performance gate, application smoke, and every browser regression before the
+trajectory step. On the GitHub runner's SwiftShader path, the dedicated test
+then remained at `data-trajectory-ready="pending"` for 83.7 seconds and failed
+its readiness assertion with no console or page errors. The local six-hour
+override is therefore not yet proven at the CI worker boundary. Development is
+paused before another fix: the next investigation should instrument the
+init-property, main-thread request, protocol payload, and worker executor
+horizon in sequence rather than extend the timeout.
