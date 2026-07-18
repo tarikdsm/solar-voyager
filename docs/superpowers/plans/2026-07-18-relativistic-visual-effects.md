@@ -281,6 +281,7 @@ export class RelativisticVisualController {
 - Modify: `package.json`
 - Modify: `.github/workflows/ci.yml`
 - Modify: `tools/checks/ciWorkflow.test.mjs`
+- Modify: `tools/tests/lightingPostRegression.mjs`
 - Create: `docs/bench/T0081-summary.md`
 - Modify: `tasks/T0081-relativistic-visuals.yaml`
 
@@ -307,7 +308,7 @@ export class RelativisticVisualController {
   Add a named workflow step and a structural test proving the exact package
   command occurs once.
 
-- [ ] **Step 5: Capture after benchmark and run full gates**
+- [x] **Step 5: Capture after benchmark and run full gates**
 
   Run benchmark, lint, typecheck, format, full Vitest, build, all browser
   regressions, Python tools, budgets, task schema, and performance gates.
