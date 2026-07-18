@@ -23,6 +23,7 @@ import { CameraInputController } from './ui/cameraInputController.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
+import { observeStateVectorLayout } from './ui/stateVectorLayoutObserver.js';
 import {
   STATE_VECTOR_VIEWPORT_COMPONENT_COUNT,
   writeStateVectorViewportPixelsInto,
@@ -71,6 +72,7 @@ let commandInput: KeyboardCommandMapper | null = null;
 let perfGovernor: PerfGovernor | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
 let stateVectorViewportElement: HTMLDivElement | null = null;
+let disposeStateVectorLayoutObservation: (() => void) | null = null;
 const stateVectorViewportPixels = new Float64Array(STATE_VECTOR_VIEWPORT_COMPONENT_COUNT);
 const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
@@ -231,6 +233,15 @@ async function startApplication(): Promise<void> {
       stateVectorViewportRef: setStateVectorViewportElement,
     }),
     appRoot,
+  );
+  const appOverlay = appRoot.querySelector('.app-overlay');
+  if (!(appOverlay instanceof HTMLElement)) {
+    throw new Error('Solar Voyager application overlay was not found.');
+  }
+  disposeStateVectorLayoutObservation?.();
+  disposeStateVectorLayoutObservation = observeStateVectorLayout(
+    appOverlay,
+    updateStateVectorViewport,
   );
   canvas.dataset.depthStrategy = contextReport.depthStrategy;
   canvas.dataset.rendererName = contextReport.rendererName;

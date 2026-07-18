@@ -136,8 +136,16 @@ describe('StateVectorWidget', () => {
     const widget = new StateVectorWidget();
     const renderer = new FakeRenderer();
 
+    const now = vi.spyOn(performance, 'now');
+    now.mockReturnValueOnce(10).mockReturnValueOnce(12);
+    widget.setViewportPixels(0, 0, 100, 100);
     widget.render(renderer);
-    expect(renderer.renderCalls).toBe(0);
+    expect(widget.lastRenderMs).toBe(2);
+
+    widget.setViewportPixels(0, 0, 0, 0);
+    widget.render(renderer);
+    expect(renderer.renderCalls).toBe(1);
+    expect(widget.lastRenderMs).toBe(0);
     expect(() => widget.setViewportPixels(Number.NaN, 0, 1, 1)).toThrow(RangeError);
     expect(() => widget.setViewportPixels(0, 0, -1, 1)).toThrow(RangeError);
   });

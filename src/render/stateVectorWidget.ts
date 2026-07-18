@@ -362,7 +362,10 @@ export class StateVectorWidget {
 
   /** Renders the inset and restores the main renderer's state before returning. */
   render(renderer: StateVectorRendererPort): void {
-    if (this.viewportWidth === 0 || this.viewportHeight === 0) return;
+    if (this.viewportWidth === 0 || this.viewportHeight === 0) {
+      this.lastRenderMs = 0;
+      return;
+    }
     const startMs = performance.now();
     renderer.getViewport(this.previousViewport);
     renderer.getScissor(this.previousScissor);

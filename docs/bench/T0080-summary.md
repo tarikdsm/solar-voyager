@@ -53,6 +53,8 @@ This directly passes the task's `< 1 ms/frame` reference-hardware contract with 
 
 The test gates pixels, scissor composition, snapshot consumption, and console cleanliness in CI. Unit tests separately cover the literal monotonic 30 km/s → 0.99c logarithmic velocity domain, all four dimension-specific scales, SI formatting, buffer reuse, renderer-state restoration, orientation modes, and sampled DOM signals.
 
+`npm run test:smoke` is the authoritative production-wiring check. It opens the compiled application and gates the live LEO values (37.9 km/s, γ 1.000000, 0.0127% c), both orientation-toggle states, and the visible 144×144 scissored pixel region. `npm run test:perf-panel` additionally expands and collapses the real responsive performance panel without scrolling; the state-vector layout observer must refresh while the viewport moves, preventing stale WebGL inset coordinates.
+
 ## LEO readout interpretation
 
 The live new-game snapshot reads about **37.9 km/s** on the current prograde LEO initial condition. This is the physically correct CM-relative ship speed: Earth's roughly 30 km/s barycentric orbital velocity plus the ship's roughly 7.7 km/s prograde orbital velocity. The acceptance wording uses “~30 km/s” to require visibility of Earth's inherited orbital motion rather than an Earth-relative 7.7 km/s readout; the production value satisfies that intent while the dedicated regression fixes the canonical display input at exactly 30 km/s.
