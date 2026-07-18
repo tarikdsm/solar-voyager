@@ -67,8 +67,10 @@ export function writeRelativisticVisualState(
     throw new RangeError('Relativistic observer beta must be consistent and subluminal.');
   }
 
-  const expectedGamma = 1 / Math.sqrt(1 - betaSquared);
-  if (snapshotGamma < 1 || !areConsistent(snapshotGamma, expectedGamma)) {
+  // Validate gamma^-2 + beta^2 = 1 without subtracting two near-equal values at high gamma.
+  const inverseGamma = 1 / snapshotGamma;
+  const massShellInvariant = betaSquared + inverseGamma * inverseGamma;
+  if (snapshotGamma < 1 || !areConsistent(massShellInvariant, 1)) {
     throw new RangeError('Relativistic observer gamma must be consistent with velocity.');
   }
 

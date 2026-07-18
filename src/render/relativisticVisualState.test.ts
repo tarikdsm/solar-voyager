@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import type { SimSnapshot } from '../sim/simulationSnapshot.js';
 import {
+  coordinateVelocityInto,
+  lorentzFactorFromCelerity,
+  speedFractionOfLightFromCelerity,
+} from '../sim/ship/relativity.js';
+import {
   createRelativisticVisualState,
   writeAberratedPositionInto,
   writeRelativisticVisualState,
@@ -90,6 +95,25 @@ describe('relativistic visual state', () => {
     writeRelativisticVisualState(state, snapshotAtBeta(betaAtGamma(1.05) + 1e-8), true);
     expect(state.activation).toBe(1);
   });
+
+  it.each([30, 1_000_000])(
+    'accepts a valid celerity-derived snapshot at gamma %s without cancellation',
+    (targetGamma) => {
+      const state = createRelativisticVisualState();
+      const celerityX = Math.sqrt(targetGamma * targetGamma - 1) * SPEED_OF_LIGHT_KM_S;
+      const velocity = new Float64Array(3);
+      coordinateVelocityInto(velocity, celerityX, 0, 0);
+      const snapshot = {
+        shipCoordinateVelocityKmS: velocity,
+        gamma: lorentzFactorFromCelerity(celerityX, 0, 0),
+        speedFractionOfLight: speedFractionOfLightFromCelerity(celerityX, 0, 0),
+      };
+
+      expect(() => writeRelativisticVisualState(state, snapshot, true)).not.toThrow();
+      expect(state.gamma).toBeCloseTo(targetGamma, 10);
+      expect(state.activation).toBe(1);
+    },
+  );
 
   it.each([
     [
