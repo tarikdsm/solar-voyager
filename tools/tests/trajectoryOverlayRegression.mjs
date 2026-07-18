@@ -110,12 +110,15 @@ try {
   assert.notEqual(nextApproach, null, 'production Next approach readout is missing');
   assert.equal(nextApproach, '—');
   assert.deepEqual(productionErrors, []);
+  const productionWorkerUrl = loadedWorkerResponse.url();
+  await productionPage.goto('about:blank', { waitUntil: 'load' });
+  await productionPage.close();
 
   process.stdout.write(
     `${JSON.stringify(
       {
         productionNextApproach: nextApproach,
-        productionWorkerUrl: loadedWorkerResponse.url(),
+        productionWorkerUrl,
         wide,
         zoomed,
       },

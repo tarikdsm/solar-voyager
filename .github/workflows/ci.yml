@@ -82,6 +82,7 @@ jobs:
         run: npm run test:state-vectors
 
       - name: Trajectory overlay regression
+        timeout-minutes: 4
         run: npm run test:trajectory-overlay
 
       - name: Performance panel regression
