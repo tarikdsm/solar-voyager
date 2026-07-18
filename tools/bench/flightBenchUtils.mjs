@@ -29,7 +29,7 @@ function summarizeFrameTimes(frameDeltasMs) {
   };
 }
 
-export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 300) {
+export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 900) {
   if (!Number.isInteger(seed)) throw new RangeError('Flight seed must be an integer.');
   if (!Number.isInteger(sampleFrames) || sampleFrames <= 0 || sampleFrames % 3 !== 0) {
     throw new RangeError('Flight sample frames must be a positive multiple of three.');

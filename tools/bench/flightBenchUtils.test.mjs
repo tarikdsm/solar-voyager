@@ -47,13 +47,13 @@ describe('createFlightSchedule', () => {
     expect(first.zoomEvents).toHaveLength(14);
   });
 
-  it('uses a portable one-hundred-samples-per-leg default schedule', () => {
+  it('uses a robust three-hundred-samples-per-leg default schedule', () => {
     const schedule = createFlightSchedule();
 
-    expect(schedule.sampleFrames).toBe(300);
-    expect(schedule.legs.map((leg) => leg.endFrame)).toEqual([100, 200, 300]);
+    expect(schedule.sampleFrames).toBe(900);
+    expect(schedule.legs.map((leg) => leg.endFrame)).toEqual([300, 600, 900]);
     expect(schedule.zoomEvents).toHaveLength(14);
-    expect(schedule.zoomEvents[0]?.frame).toBe(20);
+    expect(schedule.zoomEvents[0]?.frame).toBe(60);
   });
 
   it('rejects a frame count that cannot divide equally across all three legs', () => {
