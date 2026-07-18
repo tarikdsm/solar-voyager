@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -30,8 +30,11 @@ handoff_notes: |
     valid CI telemetry frame with timed polling, and yields its single callback
     through a preallocated macrotask so SwiftShader cannot starve control commands.
     It retains the mandatory 60 s settle and 30 s measurement. Fresh local
-    production retained -72,960 bytes; allocation was rejected at +811,528 bytes
-    and extra draws at 27 calls versus golden 9. All 14 browser regressions, build, format, lint,
+    Two Linux runs measured repeatable +180,468/+181,668-byte renderer bookkeeping,
+    so the explicit tolerance is 192 KiB (<0.2% of its heap) and the fixture was
+    strengthened to 256 KiB/frame. Fresh local production retained -193,779 bytes;
+    allocation was rejected at +3,240,020 bytes and extra draws at 27 calls versus
+    golden 9. All 14 browser regressions, build, format, lint,
     typecheck, 531 Vitest assertions, 50 Python tests, budgets, and 53 task schemas
     passed during the correction cycle. Exact-head CI and re-review remain gates;
     the merger flips DONE only after both approve.
