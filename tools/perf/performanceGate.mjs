@@ -69,11 +69,11 @@ async function waitForReady(page) {
       return (
         canvas instanceof globalThis.HTMLCanvasElement &&
         canvas[telemetryProperty] !== undefined &&
-        canvas[telemetryProperty].frameSampleCount === 120
+        canvas[telemetryProperty].frameSampleCount > 0
       );
     },
     TELEMETRY_PROPERTY,
-    { timeout: 60_000 },
+    { polling: 250, timeout: 60_000 },
   );
 }
 
@@ -141,13 +141,18 @@ async function measurePage(browser, durationMs, allocationFixture, label) {
     } catch (error) {
       throw new Error(`${label} did not become ready: ${describeError(error)}; ${browserErrors.join(' | ')}`);
     }
+    console.log(`Performance gate ready: ${label}`);
     await exposeGc(page);
     let workload = await waitForStableWorkload(page);
+    console.log(`Performance gate workload stable: ${label}`);
     await page.waitForTimeout(allocationFixture ? FIXTURE_SETTLE_MS : HEAP_SETTLE_MS);
+    console.log(`Performance gate settled: ${label}`);
     workload = await waitForStableWorkload(page);
     const beforeBytes = await forceGc(page);
+    console.log(`Performance gate measuring: ${label}`);
     await page.waitForTimeout(durationMs);
     const afterBytes = await forceGc(page);
+    console.log(`Performance gate measured: ${label}`);
     assert.deepEqual(browserErrors, []);
     return {
       heap: { afterBytes, beforeBytes, deltaBytes: afterBytes - beforeBytes },

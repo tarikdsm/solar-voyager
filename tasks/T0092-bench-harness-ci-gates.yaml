@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: REVIEW
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -18,7 +18,7 @@ acceptance:
   - Injected extra draw calls (fixture) fail the golden-count gate
   - Bench produces a stable report twice on the same machine (< 5% variance)
 handoff_notes: |
-  Ready for independent re-review on task/T0092-bench-harness-ci-gates.
+  Addressing a Linux CI liveness issue found after independent approval.
   - The fixed route now generates canonical simulation states and executes them
     through the production save/load path at t=0/60/120/180. Both recorded runs
     render the expected Earth, Moon, Jupiter, Jupiter dominant-body sequence.
