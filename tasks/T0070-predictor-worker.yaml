@@ -1,6 +1,6 @@
 id: T0070
 title: Trajectory predictor worker
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0070-predictor-worker
 depends_on: [T0050]
@@ -88,5 +88,15 @@ handoff_notes: |
   - An independent post-fix review of 21bf4a8..50015f9 found no remaining
     Critical, Important, or Minor defects in the requested fix scope.
 
-  Status remains REVIEW. Do not mark DONE and do not create a PR from this fix
-  wave.
+  Whole-branch completion evidence (2026-07-18):
+  - The independent senior re-review at de27ba8 found no Critical, Important,
+    or Minor defects and explicitly reported the branch ready to merge.
+  - Draft PR #46 exercised the exact de27ba8 head in GitHub Actions run
+    29636969693. Attempt 1 was manually cancelled after a silent Chromium smoke
+    hang; the identical smoke command passed locally in 7.3 s. Attempt 2 passed
+    the application smoke and every remaining CI gate, completing successfully.
+  - The transient runner diagnosis was confirmed without a code change: the
+    same commit and workflow passed on retry.
+
+  T0070 is DONE and PR #46 is ready for normal merge after this status-only
+  commit receives its final CI result.
