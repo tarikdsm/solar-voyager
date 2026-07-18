@@ -59,3 +59,34 @@ handoff_notes: |
   origin/main remained at 6ecf3e6 after git fetch origin, so no rebase was
   required. This branch is ready for controller whole-branch review and PR
   creation. Do not mark DONE until that independent final review and green CI.
+
+  Final-review fix wave (2026-07-18):
+  - Commit 50015f9 moves the packed prediction layout into pure
+    `src/sim/analysis/trajectoryPredictionLayout.ts`; the worker protocol
+    reexports the existing public constants and event code, while an ESLint
+    restricted-path zone now rejects every `src/sim -> src/workers` import.
+  - The same commit makes client dispatch transactional. Synchronous
+    `postMessage` throws, worker `error`, and worker `messageerror` now produce
+    host-independent `PredictorErrorMessage` values, release single-flight
+    state, retain a 500 ms retry debounce, suppress stale failures, and permit a
+    later successful request. Disposal removes all three stable listeners and
+    preserves optional worker ownership.
+  - TDD RED evidence: the focused client run failed 4 tests for the expected
+    causes (synchronous throw escaped, both transport events produced no error,
+    and stale pending work blocked retry). The GREEN client file passes 14
+    tests, including structural compatibility with a real browser `Worker`.
+  - Focused final coverage passes 4 files / 33 tests across protocol/layout
+    reexports, predictor core, client, and worker runtime. Full Vitest passes 94
+    files with 1 skipped / 585 tests with 3 skipped; Python tools pass 50 tests.
+  - Final gates pass: lint, typecheck, format:check, full Vitest, test:tools,
+    build, budgets, tasks, and diff-check. Build retains the existing Vite
+    advisory for the 914.76 kB application chunk; all enforced budgets pass
+    (repo 139.26 MiB, assets 19.51 MiB, critical path 4.08 MiB).
+  - The design now matches ADR-030: SOI and closest approach are sampled at
+    emitted points, while impact uses a body-relative segment/sphere crossing
+    on every accepted DP54 segment.
+  - An independent post-fix review of 21bf4a8..50015f9 found no remaining
+    Critical, Important, or Minor defects in the requested fix scope.
+
+  Status remains REVIEW. Do not mark DONE and do not create a PR from this fix
+  wave.
