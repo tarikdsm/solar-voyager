@@ -1,6 +1,6 @@
 id: T0070
 title: Trajectory predictor worker
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0070-predictor-worker
 depends_on: [T0050]
