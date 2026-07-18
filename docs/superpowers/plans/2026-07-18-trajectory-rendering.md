@@ -449,7 +449,7 @@ the real worker remains pending past the 90-second assertion.
   `data-trajectory-ready="true"`, zero browser errors, and the unchanged 0 px
   deterministic marker-alignment assertions.
 
-- [ ] **Step 5: Run proportional gates and deliver**
+- [x] **Step 5: Run proportional gates and deliver**
 
   Run lint, typecheck, formatting, build, task schema, the affected focused
   tests, and the production performance gate. Update the task handoff with the

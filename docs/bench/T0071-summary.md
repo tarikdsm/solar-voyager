@@ -95,5 +95,9 @@ normal gameplay, the benchmark, and the production performance gate retain
 reports `data-trajectory-ready="true"`, two prediction draw calls, and 0 px
 marker alignment error at both tested FOVs. The production gate remains exactly
 10 calls / 77,071 triangles with +69,540 B retained heap and bundle sizes of
-267,797 / 539,129 gzip bytes, all within their committed limits. A fresh PR CI
-run is still required to validate the bounded workload on SwiftShader.
+267,797 / 539,129 gzip bytes, all within their committed limits.
+
+CI run `29650881922` on exact head `26da579` completed green in 5 minutes. It
+passed the trajectory overlay regression on the shared SwiftShader runner and
+all later browser, Python, asset-budget, and task-schema gates. This closes the
+paused CI investigation without weakening an assertion or timeout.

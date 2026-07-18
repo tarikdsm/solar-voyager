@@ -1,6 +1,6 @@
 id: T0071
 title: Trajectory polyline + event markers rendering
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0071-trajectory-rendering
 depends_on: [T0070, T0040]
@@ -121,6 +121,10 @@ handoff_notes: |
   performance gate remains 10 calls / 77,071 triangles, +69,540 B retained
   heap, and 267,797 / 539,129 B entry/total gzip. A fresh exact-head CI run is
   the only remaining delivery gate.
+
+  CI run 29650881922 passed exact head 26da579 in 5m00s, including the
+  trajectory regression on SwiftShader and every later gate. T0071 is complete
+  and ready for normal merge.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were
