@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -17,4 +17,14 @@ acceptance:
   - Injected per-frame allocation (fixture) fails the heap gate
   - Injected extra draw calls (fixture) fail the golden-count gate
   - Bench produces a stable report twice on the same machine (< 5% variance)
-handoff_notes: ""
+handoff_notes: |
+  Implementation complete on task/T0092-bench-harness-ci-gates.
+  - `npm run test:perf-gates` passes production workload, heap, and bundle gates;
+    the retained-allocation fixture is rejected (+790,592 bytes) and the injected
+    draw fixture is rejected (27 calls versus golden 9).
+  - `npm run bench -- --runs 2` passes on the reference RTX 3070/D3D11 renderer;
+    docs/bench/T0092-flight.json records empty stability findings, exact workload
+    counts (26 calls, 65,094 triangles), and median/p75/p99 evidence for both runs.
+  - Full verification passed: format, lint, typecheck, 530 Vitest tests, build,
+    14 browser regression scripts, budgets, 53 task schemas, and 50 Python tests.
+  Review the exact branch head and confirm CI before merging; merger flips DONE.
