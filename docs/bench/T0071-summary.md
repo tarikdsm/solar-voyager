@@ -44,7 +44,12 @@ measured exactly two prediction calls when both line and markers were visible.
 - Dedicated WebGL regression at FOV 45 degrees and 20 degrees: 3 markers,
   3 segments, 2 prediction draw calls, maximum marker/polyline projection
   error `0 px` at both zooms.
-- Production module-worker request loaded successfully from Vite.
+- Stable-Chrome production regression loaded the real Vite module worker,
+  waited for `data-trajectory-ready="true"`, and confirmed the HUD left its
+  pending state before evaluating the deterministic zoom fixture.
+- Malformed success payloads (fewer than two points or non-increasing sample
+  times) are rejected before any overlay buffer mutation, surface the
+  unavailable state, and leave the client able to retry.
 - Real Chrome playtest: initial prediction completed; changing the target to
   Moon transitioned from `Calculating…` to
   `353,539 km · T−82d 23:25:54.356` in 14.744 s; warp 5× and camera zoom
