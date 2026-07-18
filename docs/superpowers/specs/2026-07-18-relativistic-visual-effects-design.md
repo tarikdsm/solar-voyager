@@ -1,7 +1,7 @@
 # Relativistic Visual Effects Design
 
-**Task:** T0081  
-**Status:** Approved by the maintainer's autonomous-execution instruction  
+**Task:** T0081
+**Status:** Approved by the maintainer's autonomous-execution instruction
 **Scope:** Aberration, Doppler color shift, and headlight beaming for the v1
 render path. No simulation or public snapshot changes.
 
