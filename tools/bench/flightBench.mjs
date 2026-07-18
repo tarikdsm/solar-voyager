@@ -223,6 +223,24 @@ async function runOnce(browser, schedule, index) {
   }
 }
 
+async function primeBrowser(browser, schedule) {
+  console.log('Flight benchmark cache priming');
+  const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+  const errors = [];
+  addBrowserErrorListeners(page, errors);
+  await installHighQualitySetting(page);
+  try {
+    await waitForReady(page);
+    const raw = await measureFlight(page, schedule);
+    if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
+    if (raw.finalFocusLabel !== 'Focus: Jupiter') {
+      throw new Error(`Priming ended on an unexpected focus: ${String(raw.finalFocusLabel)}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   const runsRequested = readPositiveIntegerFlag('--runs', 1);
   if (runsRequested > 2) throw new RangeError('--runs supports one or two benchmark runs.');
@@ -244,6 +262,7 @@ async function main() {
       headless: true,
       args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
     });
+    await primeBrowser(browser, schedule);
     const runs = [];
     for (let index = 0; index < runsRequested; index += 1) {
       runs.push(await runOnce(browser, schedule, index));
