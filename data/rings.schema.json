@@ -30,9 +30,10 @@
     "arc": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "centerDeg", "widthDeg", "gain"],
+      "required": ["name", "bandName", "centerDeg", "widthDeg", "gain"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "bandName": { "type": "string", "minLength": 1 },
         "centerDeg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
         "widthDeg": { "type": "number", "exclusiveMinimum": 0, "maximum": 360 },
         "gain": { "type": "number", "minimum": 1 }
