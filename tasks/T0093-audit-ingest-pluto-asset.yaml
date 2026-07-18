@@ -1,8 +1,8 @@
 id: T0093
 title: Audit and ingest Pluto source asset
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0093-audit-ingest-pluto-asset
 depends_on: [T0035]
 milestone: M6
 spec: |
