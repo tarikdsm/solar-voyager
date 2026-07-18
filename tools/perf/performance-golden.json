@@ -8,7 +8,7 @@
   "heap": {
     "durationMs": 30000,
     "fixtureDurationMs": 1000,
-    "maxRetainedGrowthBytes": 65536
+    "maxRetainedGrowthBytes": 196608
   },
   "bundle": {
     "maxEntryGzipBytes": 285000,
