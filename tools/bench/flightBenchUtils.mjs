@@ -29,6 +29,15 @@ function summarizeFrameTimes(frameDeltasMs) {
   };
 }
 
+function summarizeFrameWork(frameWorkMs) {
+  const summary = summarizeFrameTimes(frameWorkMs);
+  return {
+    workMedianMs: summary.medianMs,
+    workP75Ms: summary.p75Ms,
+    workP99Ms: summary.p99Ms,
+  };
+}
+
 export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 900) {
   if (!Number.isInteger(seed)) throw new RangeError('Flight seed must be an integer.');
   if (!Number.isInteger(sampleFrames) || sampleFrames <= 0 || sampleFrames % 3 !== 0) {
@@ -77,7 +86,11 @@ export function createFlightSchedule(seed = FIXED_FLIGHT_SEED, sampleFrames = 90
 export function summarizeFlightRun(raw) {
   const summary = summarizeFrameTimes(raw.frameDeltasMs);
   const legs = raw.legs.map((leg) =>
-    Object.freeze({ id: leg.id, ...summarizeFrameTimes(leg.frameDeltasMs) }),
+    Object.freeze({
+      id: leg.id,
+      ...summarizeFrameTimes(leg.frameDeltasMs),
+      ...summarizeFrameWork(leg.frameWorkMs),
+    }),
   );
   const heapDeltaBytes =
     raw.steadyHeapBeforeBytes === null || raw.steadyHeapAfterBytes === null
@@ -94,5 +107,6 @@ export function summarizeFlightRun(raw) {
     maxTriangles: raw.maxTriangles,
     pathHeapDeltaBytes,
     ...summary,
+    ...summarizeFrameWork(raw.frameWorkMs),
   });
 }

@@ -68,14 +68,15 @@ describe('summarizeFlightRun', () => {
     expect(
       summarizeFlightRun({
         frameDeltasMs: [10, 20, 30, 40],
+        frameWorkMs: [1, 2, 3, 4],
         pathHeapAfterBytes: 1_100,
         pathHeapBeforeBytes: 1_000,
         steadyHeapAfterBytes: 900,
         steadyHeapBeforeBytes: 1_000,
         legs: [
-          { frameDeltasMs: [10, 20], id: 'leo' },
-          { frameDeltasMs: [30], id: 'moon-flyby' },
-          { frameDeltasMs: [40], id: 'jupiter-approach' },
+          { frameDeltasMs: [10, 20], frameWorkMs: [1, 2], id: 'leo' },
+          { frameDeltasMs: [30], frameWorkMs: [3], id: 'moon-flyby' },
+          { frameDeltasMs: [40], frameWorkMs: [4], id: 'jupiter-approach' },
         ],
         maxDrawCalls: 26,
         maxTriangles: 65_094,
@@ -83,9 +84,33 @@ describe('summarizeFlightRun', () => {
     ).toEqual({
       heapDeltaBytes: -100,
       legs: [
-        { id: 'leo', medianMs: 15, p75Ms: 17.5, p99Ms: 19.9 },
-        { id: 'moon-flyby', medianMs: 30, p75Ms: 30, p99Ms: 30 },
-        { id: 'jupiter-approach', medianMs: 40, p75Ms: 40, p99Ms: 40 },
+        {
+          id: 'leo',
+          medianMs: 15,
+          p75Ms: 17.5,
+          p99Ms: 19.9,
+          workMedianMs: 1.5,
+          workP75Ms: 1.75,
+          workP99Ms: 1.99,
+        },
+        {
+          id: 'moon-flyby',
+          medianMs: 30,
+          p75Ms: 30,
+          p99Ms: 30,
+          workMedianMs: 3,
+          workP75Ms: 3,
+          workP99Ms: 3,
+        },
+        {
+          id: 'jupiter-approach',
+          medianMs: 40,
+          p75Ms: 40,
+          p99Ms: 40,
+          workMedianMs: 4,
+          workP75Ms: 4,
+          workP99Ms: 4,
+        },
       ],
       maxDrawCalls: 26,
       maxTriangles: 65_094,
@@ -93,6 +118,9 @@ describe('summarizeFlightRun', () => {
       p75Ms: 32.5,
       p99Ms: 39.7,
       pathHeapDeltaBytes: 100,
+      workMedianMs: 2.5,
+      workP75Ms: 3.25,
+      workP99Ms: 3.97,
     });
   });
 
@@ -100,6 +128,7 @@ describe('summarizeFlightRun', () => {
     expect(() =>
       summarizeFlightRun({
         frameDeltasMs: [],
+        frameWorkMs: [],
         pathHeapAfterBytes: null,
         pathHeapBeforeBytes: null,
         legs: [],

@@ -134,6 +134,7 @@ async function measureFlight(page, schedule) {
           return;
         }
         const frameDeltasMs = new Float64Array(flightSchedule.sampleFrames);
+        const frameWorkMs = new Float64Array(flightSchedule.sampleFrames);
         let focusEventIndex = 0;
         let maxDrawCalls = 0;
         let maxTriangles = 0;
@@ -143,6 +144,7 @@ async function measureFlight(page, schedule) {
 
         function measureFrame(frameTimeMs) {
           frameDeltasMs[sampleIndex] = frameTimeMs - previousFrameTimeMs;
+          frameWorkMs[sampleIndex] = Math.max(0, performance.now() - frameTimeMs);
           previousFrameTimeMs = frameTimeMs;
           const focusEvent = flightSchedule.focusEvents[focusEventIndex];
           if (focusEvent !== undefined && focusEvent.frame === sampleIndex) {
@@ -171,6 +173,7 @@ async function measureFlight(page, schedule) {
           resolvePromise({
             finalFocusLabel: globalThis.document.querySelector('#camera-focus-label')?.textContent,
             frameDeltasMs: Array.from(frameDeltasMs),
+            frameWorkMs: Array.from(frameWorkMs),
             maxDrawCalls,
             maxTriangles,
           });
@@ -204,6 +207,7 @@ async function runOnce(browser, schedule, index) {
     if (errors.length > 0) throw new Error(`Browser errors: ${errors.join(' | ')}`);
     const legs = schedule.legs.map((leg) => ({
       frameDeltasMs: raw.frameDeltasMs.slice(leg.startFrame, leg.endFrame),
+      frameWorkMs: raw.frameWorkMs.slice(leg.startFrame, leg.endFrame),
       id: leg.id,
     }));
     const summary = summarizeFlightRun({

@@ -49,7 +49,11 @@ function validateCount(label, measured, expected, toleranceFraction, findings) {
 }
 
 function compareTimingMetrics(first, second, label, limit, findings) {
-  for (const metric of ['medianMs', 'p75Ms', 'p99Ms']) {
+  const workMetrics = ['workMedianMs', 'workP75Ms', 'workP99Ms'];
+  const metrics = workMetrics.every((metric) => metric in first && metric in second)
+    ? workMetrics
+    : ['medianMs', 'p75Ms', 'p99Ms'];
+  for (const metric of metrics) {
     const left = first[metric];
     const right = second[metric];
     if (!validNonnegativeNumber(left) || !validNonnegativeNumber(right)) {

@@ -155,6 +155,41 @@ describe('compareBenchmarkRuns', () => {
       'Benchmark leg "leo" medianMs variance must be < 5.0%; measured 9.52%.',
     ]);
   });
+
+  it('uses game-work percentiles for stability when wall-clock scheduling also exists', () => {
+    expect(
+      compareBenchmarkRuns(
+        {
+          ...first,
+          legs: [
+            {
+              id: 'leo',
+              medianMs: 6,
+              p75Ms: 6,
+              p99Ms: 24,
+              workMedianMs: 4,
+              workP75Ms: 4.5,
+              workP99Ms: 5,
+            },
+          ],
+        },
+        {
+          ...first,
+          legs: [
+            {
+              id: 'leo',
+              medianMs: 6,
+              p75Ms: 6,
+              p99Ms: 18,
+              workMedianMs: 4.1,
+              workP75Ms: 4.6,
+              workP99Ms: 5.1,
+            },
+          ],
+        },
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('parsePerformanceGolden', () => {
