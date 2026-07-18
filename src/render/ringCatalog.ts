@@ -10,6 +10,7 @@ export interface RingBand {
 
 export interface RingArc {
   readonly name: string;
+  readonly bandName: string;
   readonly centerDeg: number;
   readonly widthDeg: number;
   readonly gain: number;
@@ -101,13 +102,23 @@ function parseBand(value: unknown, path: string, inner: number, outer: number): 
   });
 }
 
-function parseArc(value: unknown, path: string): RingArc {
+function parseArc(value: unknown, path: string, bands: readonly RingBand[]): RingArc {
   const source = record(value, path);
+  const bandName = textValue(source.bandName, `${path}.bandName`);
+  if (!bands.some((band) => band.name === bandName)) {
+    throw new RangeError(`${path}.bandName references missing band ${bandName}.`);
+  }
   const centerDeg = finite(source.centerDeg, `${path}.centerDeg`);
   const widthDeg = positive(source.widthDeg, `${path}.widthDeg`);
   const gain = finite(source.gain, `${path}.gain`, 1);
   if (centerDeg >= 360 || widthDeg > 360) throw new RangeError(`${path} has invalid degrees.`);
-  return Object.freeze({ name: textValue(source.name, `${path}.name`), centerDeg, widthDeg, gain });
+  return Object.freeze({
+    name: textValue(source.name, `${path}.name`),
+    bandName,
+    centerDeg,
+    widthDeg,
+    gain,
+  });
 }
 
 function parseParticles(value: unknown, path: string): RingParticleDefinition | null {
@@ -137,7 +148,7 @@ function parseSystem(value: unknown, path: string): RingDefinition {
   );
   if (bands.length === 0) throw new RangeError(`${path}.bands must not be empty.`);
   const arcs = array(source.arcs, `${path}.arcs`).map((arc, index) =>
-    parseArc(arc, `${path}.arcs[${String(index)}]`),
+    parseArc(arc, `${path}.arcs[${String(index)}]`, bands),
   );
   const sources = array(source.sources, `${path}.sources`).map((entry, index) =>
     textValue(entry, `${path}.sources[${String(index)}]`),

@@ -44,8 +44,13 @@ try {
   });
   const programs = await page.evaluate(() => globalThis.__ringFlythroughTest.programs);
   assert.ok(
-    programs.afterFirstActive >= programs.beforeActive && programs.afterFirstActive > 0,
-    `particle program did not compile: ${JSON.stringify(programs)}`,
+    programs.afterPrecompile > programs.beforePrecompile,
+    `particle program was not precompiled: ${JSON.stringify(programs)}`,
+  );
+  assert.equal(
+    programs.afterFirstActive,
+    programs.afterPrecompile,
+    'first particle activation compiled a runtime program',
   );
   assert.equal(programs.afterWarmUp, programs.afterFirstActive, 'particle program changed after warm-up');
 
@@ -67,13 +72,34 @@ try {
 
   const heights = [2600, 1800, 1200, 600, 0, -600, -1200, -1800, -2600];
   const crossing = [];
+  const crossingLayers = [];
   for (const height of heights) {
-    crossing.push(
-      await page.evaluate(
-        (value) => globalThis.__ringFlythroughTest.sample(value, 2, 4096),
-        height,
-      ),
+    const combined = await page.evaluate(
+      (value) => globalThis.__ringFlythroughTest.sample(value, 2, 4096, 'combined'),
+      height,
     );
+    const annulus = await page.evaluate(
+      (value) => globalThis.__ringFlythroughTest.sample(value, 2, 4096, 'annulus'),
+      height,
+    );
+    const particles = await page.evaluate(
+      (value) => globalThis.__ringFlythroughTest.sample(value, 2, 4096, 'particles'),
+      height,
+    );
+    const strongestLayerPixels = Math.max(annulus.litPixels, particles.litPixels, 1);
+    const strongestLayerLuminance = Math.max(
+      annulus.meanLuminance,
+      particles.meanLuminance,
+      Number.EPSILON,
+    );
+    crossing.push(combined);
+    crossingLayers.push({
+      annulus,
+      combined,
+      coverageRatio: combined.litPixels / strongestLayerPixels,
+      luminanceRatio: combined.meanLuminance / strongestLayerLuminance,
+      particles,
+    });
   }
   assert.equal(crossing[0].blend, 0);
   assert.equal(crossing.at(-1).blend, 0);
@@ -85,13 +111,18 @@ try {
       'plane crossing is asymmetric',
     );
   }
-  assert.ok(crossing.every((snapshot) => snapshot.combinedRepresentation === 1));
+  assert.ok(
+    crossingLayers.every(
+      (snapshot) => snapshot.coverageRatio >= 0.95 && snapshot.luminanceRatio >= 0.65,
+    ),
+    `rendered cross-fade contains a visual gap: ${JSON.stringify(crossingLayers)}`,
+  );
 
   const particlesBefore = await page.evaluate(() =>
-    globalThis.__ringFlythroughTest.sample(0.02, 0, 4096, true),
+    globalThis.__ringFlythroughTest.sample(0.02, 0, 4096, 'particles'),
   );
   const particlesAfter = await page.evaluate(() =>
-    globalThis.__ringFlythroughTest.sample(0.02, 0.001, 4096, true),
+    globalThis.__ringFlythroughTest.sample(0.02, 0.001, 4096, 'particles'),
   );
   const diagnostics = await page.evaluate(() => globalThis.__ringFlythroughTest.diagnostics());
   assert.ok(
@@ -121,13 +152,15 @@ try {
   if (process.env.RING_FLYTHROUGH_SCREENSHOTS !== undefined) {
     const output = resolve(process.env.RING_FLYTHROUGH_SCREENSHOTS);
     await mkdir(output, { recursive: true });
-    await page.evaluate(() => globalThis.__ringFlythroughTest.sample(0.02, 0, 4096, true));
+    await page.evaluate(() => globalThis.__ringFlythroughTest.sample(0.02, 0, 4096, 'particles'));
     await writeFile(resolve(output, 'saturn-particles-before.png'), await page.locator('canvas').screenshot());
-    await page.evaluate(() => globalThis.__ringFlythroughTest.sample(0.02, 0.001, 4096, true));
+    await page.evaluate(() =>
+      globalThis.__ringFlythroughTest.sample(0.02, 0.001, 4096, 'particles'),
+    );
     await writeFile(resolve(output, 'saturn-particles-after.png'), await page.locator('canvas').screenshot());
   }
   process.stdout.write(
-    `${JSON.stringify({ programs, qualityCounts, crossing, particlesBefore, particlesAfter, diagnostics, stressWarmUp, stress }, null, 2)}\n`,
+    `${JSON.stringify({ programs, qualityCounts, crossing, crossingLayers, particlesBefore, particlesAfter, diagnostics, stressWarmUp, stress }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();

@@ -11,8 +11,8 @@
       "bands": [
         { "name": "Halo", "innerRadiusKm": 100000, "outerRadiusKm": 122400, "opticalDepth": 0.000001, "color": "#8c6c58" },
         { "name": "Main", "innerRadiusKm": 122400, "outerRadiusKm": 129100, "opticalDepth": 0.000008, "color": "#d0a47c" },
-        { "name": "Amalthea", "innerRadiusKm": 129100, "outerRadiusKm": 181350, "opticalDepth": 0.0000005, "color": "#a47c64" },
-        { "name": "Thebe", "innerRadiusKm": 181350, "outerRadiusKm": 221900, "opticalDepth": 0.0000001, "color": "#866454" },
+        { "name": "Amalthea", "innerRadiusKm": 122400, "outerRadiusKm": 181350, "opticalDepth": 0.0000005, "color": "#a47c64" },
+        { "name": "Thebe", "innerRadiusKm": 122400, "outerRadiusKm": 221900, "opticalDepth": 0.0000001, "color": "#866454" },
         { "name": "Thebe extension", "innerRadiusKm": 221900, "outerRadiusKm": 270000, "opticalDepth": 0.000000001, "color": "#705448" }
       ],
       "arcs": [],
@@ -33,10 +33,10 @@
         { "name": "Adams", "innerRadiusKm": 62925, "outerRadiusKm": 62940, "opticalDepth": 0.003, "color": "#aab4c0" }
       ],
       "arcs": [
-        { "name": "Fraternite", "centerDeg": 0, "widthDeg": 8, "gain": 8 },
-        { "name": "Egalite", "centerDeg": 10.7, "widthDeg": 5, "gain": 7 },
-        { "name": "Liberte", "centerDeg": 22.7, "widthDeg": 4, "gain": 6 },
-        { "name": "Courage", "centerDeg": 30, "widthDeg": 3, "gain": 4 }
+        { "name": "Fraternite", "bandName": "Adams", "centerDeg": 0, "widthDeg": 8, "gain": 8 },
+        { "name": "Egalite", "bandName": "Adams", "centerDeg": 10.7, "widthDeg": 5, "gain": 7 },
+        { "name": "Liberte", "bandName": "Adams", "centerDeg": 22.7, "widthDeg": 4, "gain": 6 },
+        { "name": "Courage", "bandName": "Adams", "centerDeg": 30, "widthDeg": 3, "gain": 4 }
       ],
       "particles": null,
       "sources": ["https://pds-rings.seti.org/neptune/neptune_rings_table.html"]
@@ -45,19 +45,19 @@
       "bodyId": "saturn",
       "referenceRadiusKm": 60268,
       "innerRadiusKm": 66900,
-      "outerRadiusKm": 140224,
+      "outerRadiusKm": 140612,
       "exposure": 2.2,
       "baseColor": "#d8c49a",
       "bands": [
-        { "name": "D", "innerRadiusKm": 66900, "outerRadiusKm": 74510, "opticalDepth": 0.00001, "color": "#91836d" },
-        { "name": "C", "innerRadiusKm": 74658, "outerRadiusKm": 91975, "opticalDepth": 0.2, "color": "#b9aa8d" },
-        { "name": "B", "innerRadiusKm": 91975, "outerRadiusKm": 117507, "opticalDepth": 1.5, "color": "#ead8ad" },
-        { "name": "A", "innerRadiusKm": 122340, "outerRadiusKm": 136780, "opticalDepth": 0.7, "color": "#d7c49d" },
-        { "name": "F", "innerRadiusKm": 139724, "outerRadiusKm": 140224, "opticalDepth": 0.1, "color": "#c8b58f" }
+        { "name": "D", "innerRadiusKm": 66900, "outerRadiusKm": 74491, "opticalDepth": 0.00001, "color": "#91836d" },
+        { "name": "C", "innerRadiusKm": 74491, "outerRadiusKm": 91975, "opticalDepth": 0.2, "color": "#b9aa8d" },
+        { "name": "B", "innerRadiusKm": 91975, "outerRadiusKm": 117570, "opticalDepth": 1.5, "color": "#ead8ad" },
+        { "name": "A", "innerRadiusKm": 122050, "outerRadiusKm": 136770, "opticalDepth": 0.7, "color": "#d7c49d" },
+        { "name": "F", "innerRadiusKm": 139826, "outerRadiusKm": 140612, "opticalDepth": 0.1, "color": "#c8b58f" }
       ],
       "arcs": [],
       "particles": { "seed": 699, "maxCount": 4096, "patchRadiusKm": 2400, "verticalThicknessKm": 0.12, "minSizeM": 0.15, "maxSizeM": 8 },
-      "sources": ["https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html"]
+      "sources": ["https://pds-rings.seti.org/saturn/saturn_rings_table.html"]
     },
     {
       "bodyId": "uranus",

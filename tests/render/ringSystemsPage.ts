@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   DirectionalLight,
+  Mesh,
   PerspectiveCamera,
   Scene,
   Vector3,
@@ -16,13 +17,17 @@ import { prepareRingSystem, type PreparedRingSystem } from '../../src/render/rin
 const VIEWPORT_SIZE = 512;
 const BODY_IDS = ['jupiter', 'saturn', 'uranus', 'neptune'] as const;
 type BodyId = (typeof BODY_IDS)[number];
-type ViewMode = 'top' | 'shadow' | 'backlit' | 'edge';
+type ViewMode = 'top' | 'shadow' | 'backlit' | 'edge' | 'planet-shadow' | 'planet-shadow-control';
 
 interface PixelMetrics {
+  readonly arcBandAngularContrast: number;
   readonly annulusMean: number;
   readonly angularContrast: number;
+  readonly innerBandAngularContrast: number;
   readonly litPixels: number;
   readonly meanLuminance: number;
+  readonly planetDiskMean: number;
+  readonly planetDiskPixels: number;
   readonly radialVariation: number;
   readonly sectorMeans: readonly number[];
 }
@@ -51,6 +56,11 @@ declare global {
 }
 
 interface FixtureBody {
+  readonly controlRoot: Awaited<ReturnType<BodyAssetLoader['loadModel']>> extends infer Loaded
+    ? Loaded extends { root: infer Root }
+      ? Root
+      : never
+    : never;
   readonly definition: RingDefinition;
   readonly prepared: PreparedRingSystem;
   readonly root: Awaited<ReturnType<BodyAssetLoader['loadModel']>> extends infer Loaded
@@ -99,6 +109,15 @@ for (const bodyId of BODY_IDS) {
   if (definition === null || body === undefined || model === null) {
     throw new Error(`Ring fixture could not load ${bodyId}.`);
   }
+  const controlRoot = model.root.clone(true);
+  controlRoot.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.material = Array.isArray(object.material)
+      ? object.material.map((material) => material.clone())
+      : object.material.clone();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    if (materials.some((material) => material.name === 'mat_rings')) object.visible = false;
+  });
   const prepared = prepareRingSystem(model.root, model.materials, definition, {
     axialTiltRad: body.axialTiltRad,
     meanRadiusKm: body.meanRadiusKm,
@@ -108,15 +127,33 @@ for (const bodyId of BODY_IDS) {
   if (prepared === null) throw new Error(`Ring fixture found an incomplete ${bodyId} model.`);
   prepared.setParticleCount(0);
   model.root.scale.setScalar(definition.referenceRadiusKm);
+  controlRoot.rotation.z = body.axialTiltRad;
+  controlRoot.scale.setScalar(definition.referenceRadiusKm);
+  controlRoot.visible = false;
+  controlRoot.updateMatrix();
   model.root.visible = false;
   model.root.updateMatrix();
-  scene.add(model.root);
+  scene.add(model.root, controlRoot);
   fixtures.set(bodyId, {
+    controlRoot,
     definition,
     prepared,
     root: model.root,
     tilt: body.axialTiltRad,
   });
+}
+
+function contrast(sums: Float64Array, counts: Uint32Array): number {
+  let minimum = Number.POSITIVE_INFINITY;
+  let maximum = 0;
+  for (let index = 0; index < sums.length; index += 1) {
+    const count = counts[index] ?? 0;
+    if (count === 0) continue;
+    const mean = (sums[index] ?? 0) / count;
+    minimum = Math.min(minimum, mean);
+    maximum = Math.max(maximum, mean);
+  }
+  return maximum / Math.max(0.01, minimum);
 }
 
 function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): PixelMetrics {
@@ -140,6 +177,29 @@ function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): Pix
   const radialCounts = new Uint32Array(24);
   const sectorSums = new Float64Array(24);
   const sectorCounts = new Uint32Array(24);
+  const arcSectorSums = new Float64Array(24);
+  const arcSectorCounts = new Uint32Array(24);
+  const innerSectorSums = new Float64Array(24);
+  const innerSectorCounts = new Uint32Array(24);
+  const arcBand = definition.arcs[0]
+    ? definition.bands.find((band) => band.name === definition.arcs[0]?.bandName)
+    : undefined;
+  const innerBand = definition.bands.find((band) => band.name === 'Le Verrier');
+  const projectedArcCenter =
+    arcBand === undefined
+      ? -1
+      : (((arcBand.innerRadiusKm + arcBand.outerRadiusKm) * 0.5) / definition.outerRadiusKm) *
+        projectedOuter;
+  const projectedInnerBandCenter =
+    innerBand === undefined
+      ? -1
+      : (((innerBand.innerRadiusKm + innerBand.outerRadiusKm) * 0.5) / definition.outerRadiusKm) *
+        projectedOuter;
+  const projectedPlanet =
+    (definition.referenceRadiusKm / cameraDistanceKm / Math.tan((camera.fov * Math.PI) / 360)) *
+    center;
+  let planetDiskSum = 0;
+  let planetDiskPixels = 0;
   let litPixels = 0;
   let totalLuminance = 0;
   let annulusSum = 0;
@@ -156,14 +216,26 @@ function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): Pix
       const dx = x + 0.5 - center;
       const dy = y + 0.5 - center;
       const radius = Math.hypot(dx, dy);
+      if (radius < projectedPlanet * 0.96) {
+        planetDiskSum += luminance;
+        planetDiskPixels += 1;
+      }
+      let angle = Math.atan2(dy, dx);
+      if (angle < 0) angle += Math.PI * 2;
+      const sectorIndex = Math.min(23, Math.floor((angle / (Math.PI * 2)) * 24));
+      if (Math.abs(radius - projectedArcCenter) <= 1.5) {
+        arcSectorSums[sectorIndex] = (arcSectorSums[sectorIndex] ?? 0) + luminance;
+        arcSectorCounts[sectorIndex] = (arcSectorCounts[sectorIndex] ?? 0) + 1;
+      }
+      if (Math.abs(radius - projectedInnerBandCenter) <= 1.5) {
+        innerSectorSums[sectorIndex] = (innerSectorSums[sectorIndex] ?? 0) + luminance;
+        innerSectorCounts[sectorIndex] = (innerSectorCounts[sectorIndex] ?? 0) + 1;
+      }
       if (radius < projectedInner + 2 || radius > projectedOuter - 2) continue;
       const radialIndex = Math.min(
         23,
         Math.floor(((radius - projectedInner) / (projectedOuter - projectedInner)) * 24),
       );
-      let angle = Math.atan2(dy, dx);
-      if (angle < 0) angle += Math.PI * 2;
-      const sectorIndex = Math.min(23, Math.floor((angle / (Math.PI * 2)) * 24));
       radialSums[radialIndex] = (radialSums[radialIndex] ?? 0) + luminance;
       radialCounts[radialIndex] = (radialCounts[radialIndex] ?? 0) + 1;
       sectorSums[sectorIndex] = (sectorSums[sectorIndex] ?? 0) + luminance;
@@ -185,10 +257,14 @@ function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): Pix
   const minimumSector = Math.min(...sectorMeans);
   const maximumSector = Math.max(...sectorMeans);
   return {
+    arcBandAngularContrast: contrast(arcSectorSums, arcSectorCounts),
     annulusMean: annulusCount === 0 ? 0 : annulusSum / annulusCount,
     angularContrast: maximumSector / Math.max(0.01, minimumSector),
+    innerBandAngularContrast: contrast(innerSectorSums, innerSectorCounts),
     litPixels,
     meanLuminance: totalLuminance / (VIEWPORT_SIZE * VIEWPORT_SIZE),
+    planetDiskMean: planetDiskPixels === 0 ? 0 : planetDiskSum / planetDiskPixels,
+    planetDiskPixels,
     radialVariation,
     sectorMeans,
   };
@@ -197,7 +273,10 @@ function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): Pix
 function renderBody(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot {
   const fixture = fixtures.get(bodyId);
   if (fixture === undefined) throw new Error(`Unknown ring fixture ${bodyId}.`);
-  for (const candidate of fixtures.values()) candidate.root.visible = candidate === fixture;
+  for (const candidate of fixtures.values()) {
+    candidate.root.visible = candidate === fixture && mode !== 'planet-shadow-control';
+    candidate.controlRoot.visible = candidate === fixture && mode === 'planet-shadow-control';
+  }
   const outer = fixture.definition.outerRadiusKm;
   const cameraDistance = outer * 2.95;
   const localCameraX = 0;
@@ -206,6 +285,8 @@ function renderBody(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot {
   if (mode === 'edge') {
     localCameraY = outer * 0.075;
     localCameraZ = cameraDistance;
+  } else if (mode === 'planet-shadow' || mode === 'planet-shadow-control') {
+    localCameraY = -cameraDistance;
   }
   rotateLocalIntoGlobal(transformed, localCameraX, localCameraY, localCameraZ, fixture.tilt);
   camera.position.copy(transformed);
@@ -227,6 +308,10 @@ function renderBody(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot {
   if (mode === 'shadow' || mode === 'edge') {
     localSunX = 1;
     localSunY = 0.12;
+    localSunZ = 0.15;
+  } else if (mode === 'planet-shadow' || mode === 'planet-shadow-control') {
+    localSunX = 1;
+    localSunY = 0.6;
     localSunZ = 0.15;
   } else if (mode === 'backlit') {
     localSunY = -1;

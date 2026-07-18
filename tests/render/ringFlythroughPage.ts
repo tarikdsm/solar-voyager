@@ -21,10 +21,10 @@ interface FlythroughSnapshot {
   readonly calls: number;
   readonly centroidX: number;
   readonly centroidY: number;
-  readonly combinedRepresentation: number;
   readonly count: number;
   readonly glError: number;
   readonly litPixels: number;
+  readonly meanLuminance: number;
   readonly pixelHash: number;
   readonly programs: number;
   readonly triangles: number;
@@ -33,14 +33,15 @@ interface FlythroughSnapshot {
 interface FlythroughHarness {
   readonly programs: {
     readonly afterFirstActive: number;
+    readonly afterPrecompile: number;
     readonly afterWarmUp: number;
-    readonly beforeActive: number;
+    readonly beforePrecompile: number;
   };
   sample(
     heightKm: number,
     simTimeSec: number,
     count: number,
-    particlesOnly?: boolean,
+    view?: 'annulus' | 'combined' | 'particles',
   ): FlythroughSnapshot;
   diagnostics(): {
     readonly densityAlpha: number;
@@ -107,7 +108,7 @@ function localToGlobal(output: Vector3, x: number, y: number, z: number): void {
 
 function pixelSnapshot(): Pick<
   FlythroughSnapshot,
-  'centroidX' | 'centroidY' | 'litPixels' | 'pixelHash'
+  'centroidX' | 'centroidY' | 'litPixels' | 'meanLuminance' | 'pixelHash'
 > {
   const context = renderer.getContext();
   const pixels = new Uint8Array(VIEWPORT_SIZE * VIEWPORT_SIZE * 4);
@@ -150,6 +151,7 @@ function pixelSnapshot(): Pick<
     centroidX: totalWeight === 0 ? 0 : weightedX / totalWeight,
     centroidY: totalWeight === 0 ? 0 : weightedY / totalWeight,
     litPixels,
+    meanLuminance: totalWeight / (VIEWPORT_SIZE * VIEWPORT_SIZE),
     pixelHash: pixelHash >>> 0,
   };
 }
@@ -158,7 +160,7 @@ function sample(
   heightKm: number,
   simTimeSec: number,
   count: number,
-  particlesOnly = false,
+  view: 'annulus' | 'combined' | 'particles' = 'combined',
 ): FlythroughSnapshot {
   if (!Number.isFinite(heightKm)) throw new RangeError('Flythrough height must be finite.');
   prepared.setParticleCount(count);
@@ -184,14 +186,14 @@ function sample(
     transformed.z,
     simTimeSec,
   );
-  for (const mesh of authoredMeshes) mesh.visible = !particlesOnly;
+  for (const mesh of authoredMeshes) mesh.visible = view !== 'particles';
+  particleMesh.visible = view !== 'annulus';
   renderer.render(scene, camera);
   const blend = prepared.blend;
   return {
     ...pixelSnapshot(),
     blend,
     calls: renderer.info.render.calls,
-    combinedRepresentation: 1 - blend * 0.65 + blend * 0.65,
     count: particleMesh.count,
     glError: renderer.getContext().getError(),
     programs: renderer.info.programs?.length ?? 0,
@@ -199,9 +201,10 @@ function sample(
   };
 }
 
-const beforeActive = renderer.info.programs?.length ?? 0;
-sample(0.02, 0, 0);
-const beforeParticleProgram = renderer.info.programs?.length ?? 0;
+const beforePrecompile = renderer.info.programs?.length ?? 0;
+prepared.setParticleCount(4096);
+await renderer.compileAsync(scene, camera);
+const afterPrecompile = renderer.info.programs?.length ?? 0;
 sample(0.02, 0, 4096);
 const afterFirstActive = renderer.info.programs?.length ?? 0;
 sample(0.02, 0.001, 4096);
@@ -209,7 +212,8 @@ const afterWarmUp = renderer.info.programs?.length ?? 0;
 
 globalThis.__ringFlythroughTest = {
   programs: {
-    beforeActive: Math.max(beforeActive, beforeParticleProgram),
+    beforePrecompile,
+    afterPrecompile,
     afterFirstActive,
     afterWarmUp,
   },

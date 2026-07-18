@@ -65,6 +65,31 @@ try {
       snapshots.push(snapshot);
     }
   }
+  const saturnPlanetShadow = await page.evaluate(() =>
+    globalThis.__ringSystemsTest.render('saturn', 'planet-shadow'),
+  );
+  const saturnPlanetControl = await page.evaluate(() =>
+    globalThis.__ringSystemsTest.render('saturn', 'planet-shadow-control'),
+  );
+  if (process.env.RING_SYSTEM_SCREENSHOTS !== undefined) {
+    const output = resolve(process.env.RING_SYSTEM_SCREENSHOTS);
+    await mkdir(output, { recursive: true });
+    await writeFile(
+      resolve(output, 'saturn-planet-shadow.png'),
+      await page.locator('canvas').screenshot(),
+    );
+  }
+  assert.equal(saturnPlanetShadow.glError, 0, 'Saturn planet-shadow: WebGL error');
+  assert.equal(saturnPlanetControl.glError, 0, 'Saturn planet-shadow control: WebGL error');
+  assert.ok(
+    saturnPlanetShadow.planetDiskPixels > 1_000,
+    `Saturn planet disk sample is empty: ${JSON.stringify(saturnPlanetShadow)}`,
+  );
+  assert.ok(
+    saturnPlanetShadow.planetDiskMean < saturnPlanetControl.planetDiskMean * 0.995,
+    `Saturn ring shadow is absent from the planet: ${JSON.stringify({ saturnPlanetControl, saturnPlanetShadow })}`,
+  );
+  snapshots.push(saturnPlanetShadow, saturnPlanetControl);
 
   for (const bodyId of BODY_IDS) {
     const top = snapshots.find((snapshot) => snapshot.bodyId === bodyId && snapshot.mode === 'top');
@@ -89,7 +114,14 @@ try {
   const neptuneTop = snapshots.find(
     (snapshot) => snapshot.bodyId === 'neptune' && snapshot.mode === 'top',
   );
-  assert.ok(neptuneTop.angularContrast > 1.15, 'Neptune arcs are not localized');
+  assert.ok(
+    neptuneTop.arcBandAngularContrast > 1.15,
+    `Neptune Adams arcs are not localized: ${JSON.stringify(neptuneTop)}`,
+  );
+  assert.ok(
+    neptuneTop.innerBandAngularContrast < 1.12,
+    `Neptune arcs leaked into inner rings: ${JSON.stringify(neptuneTop)}`,
+  );
 
   for (const bodyId of BODY_IDS) {
     const modelRequests = requests.filter((url) =>

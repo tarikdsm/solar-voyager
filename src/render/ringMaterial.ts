@@ -7,7 +7,7 @@ import {
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 
-import type { RingArc, RingDefinition } from './ringCatalog.js';
+import type { RingDefinition } from './ringCatalog.js';
 
 const PROGRAM_CACHE_VERSION = 'v1';
 const MAX_TRANSMISSION = 0.22;
@@ -79,8 +79,8 @@ function glslFloat(value: number): string {
   return serialized.includes('.') ? serialized : `${serialized}.0`;
 }
 
-function arcFunction(arcs: readonly RingArc[]): string {
-  if (arcs.length === 0) {
+function arcFunction(definition: RingDefinition): string {
+  if (definition.arcs.length === 0) {
     return /* glsl */ `
 float ringArcGain( vec3 ringPosition ) {
   return 1.0;
@@ -88,24 +88,41 @@ float ringArcGain( vec3 ringPosition ) {
 `;
   }
 
-  const contributions = arcs
+  const contributions = definition.arcs
     .map((arc) => {
+      const band = definition.bands.find((candidate) => candidate.name === arc.bandName);
+      if (band === undefined) {
+        throw new Error(`Ring arc "${arc.name}" references missing band "${arc.bandName}".`);
+      }
       const center = (arc.centerDeg * Math.PI) / 180;
       const halfWidth = (arc.widthDeg * Math.PI) / 360;
+      const identifier = arc.name.replace(/[^a-z0-9]/giu, '');
       return /* glsl */ `
   // ${arc.name}
-  float ${arc.name.replace(/[^a-z0-9]/giu, '')}Distance = abs(
+  float ${identifier}Distance = abs(
     atan( sin( ringAngle - ${glslFloat(center)} ), cos( ringAngle - ${glslFloat(center)} ) )
+  );
+  float ${identifier}Radial = ringArcRadialMask(
+    ringRadius,
+    ${glslFloat(band.innerRadiusKm / definition.referenceRadiusKm)},
+    ${glslFloat(band.outerRadiusKm / definition.referenceRadiusKm)}
   );
   gain = max( gain, mix( 1.0, ${glslFloat(arc.gain)},
     1.0 - smoothstep( ${glslFloat(halfWidth * 0.72)}, ${glslFloat(halfWidth)},
-      ${arc.name.replace(/[^a-z0-9]/giu, '')}Distance ) ) );`;
+      ${identifier}Distance ) ) * ${identifier}Radial );`;
     })
     .join('\n');
 
   return /* glsl */ `
+float ringArcRadialMask( float radius, float innerRadius, float outerRadius ) {
+  float feather = max( ( outerRadius - innerRadius ) * 0.15, 0.000001 );
+  return smoothstep( innerRadius, innerRadius + feather, radius ) *
+    ( 1.0 - smoothstep( outerRadius - feather, outerRadius, radius ) );
+}
+
 float ringArcGain( vec3 ringPosition ) {
   float ringAngle = atan( ringPosition.z, ringPosition.x );
+  float ringRadius = length( ringPosition.xz );
   float gain = 1.0;
 ${contributions}
   return gain;
@@ -113,7 +130,7 @@ ${contributions}
 `;
 }
 
-function ringFragmentDeclarations(arcs: readonly RingArc[]): string {
+function ringFragmentDeclarations(definition: RingDefinition): string {
   return /* glsl */ `
 #define RING_MAX_TRANSMISSION ${MAX_TRANSMISSION.toFixed(2)}
 varying vec3 vRingLocalPosition;
@@ -136,7 +153,7 @@ float ringPlanetOcclusion( vec3 origin, vec3 direction ) {
   float nearest = ( -quadraticB - sqrt( discriminant ) ) / ( 2.0 * quadraticA );
   return nearest > 0.0 ? 1.0 : 0.0;
 }
-${arcFunction(arcs)}
+${arcFunction(definition)}
 `;
 }
 
@@ -214,9 +231,9 @@ function installSurfaceShader(material: MeshStandardMaterial, uniforms: RingUnif
 function installRingShader(
   material: MeshStandardMaterial,
   uniforms: RingUniforms,
-  arcs: readonly RingArc[],
+  definition: RingDefinition,
 ): void {
-  const declarations = ringFragmentDeclarations(arcs);
+  const declarations = ringFragmentDeclarations(definition);
   const previousCompile = material.onBeforeCompile;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer): void => {
     previousCompile.call(material, shader, renderer);
@@ -252,7 +269,7 @@ export function prepareRingMaterials(
   };
 
   installSurfaceShader(surface, uniforms);
-  installRingShader(rings, uniforms, definition.arcs);
+  installRingShader(rings, uniforms, definition);
 
   const cacheSuffix = `solar-voyager-rings-${definition.bodyId}-${PROGRAM_CACHE_VERSION}`;
   const previousSurfaceCacheKey = surface.customProgramCacheKey.bind(surface);
