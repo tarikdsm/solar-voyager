@@ -26,6 +26,7 @@ import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
+import { RelativisticVisualController } from './render/relativisticVisualController.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
 import type { Commands } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
@@ -98,6 +99,7 @@ let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let commandInput: KeyboardCommandMapper | null = null;
 let perfGovernor: PerfGovernor | null = null;
+let relativisticVisuals: RelativisticVisualController | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
 let stateVectorViewportElement: HTMLDivElement | null = null;
 let disposeStateVectorLayoutObservation: (() => void) | null = null;
@@ -250,7 +252,14 @@ function resizeRenderer(): void {
 }
 
 function renderFrame(nowMs: number): void {
-  if (world === null || postPipeline === null || stateVectorWidget === null) return;
+  if (
+    world === null ||
+    postPipeline === null ||
+    relativisticVisuals === null ||
+    stateVectorWidget === null
+  ) {
+    return;
+  }
   const {
     spaceScene,
     visualSystem,
@@ -290,6 +299,8 @@ function renderFrame(nowMs: number): void {
     cameraController.lookDirection.z,
   );
   spaceScene.camera.updateMatrix();
+  spaceScene.camera.updateMatrixWorld(true);
+  relativisticVisuals.update(snapshot, spaceScene.camera);
   stateVectorWidget.setPinnedToEcliptic(stateVectorStore.signals.pinnedToEcliptic.value);
   stateVectorWidget.update(snapshot, spaceScene.camera);
   visualSystem.update(
@@ -360,12 +371,18 @@ async function startApplication(): Promise<void> {
     world.spaceScene.scene,
     world.spaceScene.camera,
   );
+  relativisticVisuals = new RelativisticVisualController({
+    postPass: postPipeline.relativisticPass,
+    spaceScene: world.spaceScene,
+    starfield: world.starfield,
+  });
   const qualityController = new RenderQualityController({
     assetLoader: world.visualSystem,
     pipeline: postPipeline,
     postProcessingAvailable: postProcessingEnabled,
     proceduralSun: world.proceduralSun,
     renderer,
+    relativisticVisuals,
     starfield: world.starfield,
     visualSystem: world.visualSystem,
   });

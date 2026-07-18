@@ -231,6 +231,7 @@ export interface RelativisticPostPassPort extends AdaptivePostPassPort {
 - Modify: `src/render/renderQualityController.ts`
 - Modify: `src/render/renderQualityController.test.ts`
 - Modify: `src/main.ts`
+- Modify: `tests/render/perfGovernorPage.ts`
 
 **Interfaces:**
 
@@ -245,26 +246,26 @@ export class RelativisticVisualController {
 }
 ```
 
-- [ ] **Step 1: Write failing controller/quality tests**
+- [x] **Step 1: Write failing controller/quality tests**
 
   Assert validation happens before any consumer changes, camera-space beta is
   reused without allocation, tiers 1-2 disable and tiers 3-6 enable, duplicate
   rungs do not reapply, and post-processing unavailable always disables.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run `npx vitest run src/render/relativisticVisualController.test.ts
   src/render/renderQualityController.test.ts`. Expected: FAIL because the
   controller port is absent.
 
-- [ ] **Step 3: Wire setup and frame order**
+- [x] **Step 3: Wire setup and frame order**
 
   Create the controller after the post pipeline, pass it to
   `RenderQualityController`, and call `update(snapshot, camera)` after camera
   matrices update but before `spaceScene.updateCameraRelative()`. Do not add
   literals, spreads, closures, or formatting to `renderFrame()`.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
   Run focused tests, lint, typecheck, and build. Confirm the gamma-one
   performance workload remains 10 calls / 77,071 triangles. Commit
