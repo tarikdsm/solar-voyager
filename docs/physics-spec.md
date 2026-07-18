@@ -249,7 +249,29 @@ rollback as motion. The vector is an inertial signed integral; scalar proper
   SOI radii use `r_SOI = a·(m/M)^(2/5)` and are precomputed in bodies.json;
   the root's null SOI is compiled as infinity.
 - **Osculating elements** wrt dominant body from state vectors (standard conversion via h, e, n vectors; handle e→0 and i→0 degeneracies explicitly). Computed every frame for the HUD; it is an *approximation* in an n-body field — the worker prediction is the truth.
-- **Trajectory prediction:** worker propagates thrust-free with §3.1 over max(2 osculating periods, 90 days, user-extended); downsampled polyline ≤ 2000 points; events: SOI transitions, closest approach to target, **impact** (path crosses body radius + atmosphere top) with time-to-impact.
+- **Trajectory prediction:** worker propagates thrust-free with §3.1 over
+  `max(2 osculating periods, 90 days, user-extended)`. Production requests
+  2,000 output points; setup-time test requests may ask for fewer, and every
+  request is capped at 2,000 with a minimum of two. Absent impact, the initial
+  and horizon endpoints are included at uniform coordinate-time spacing. The seven-component
+  state is propagated sequentially between adjacent output times with the
+  production DP54 tolerance, rails, full n-body field, relativistic derivative,
+  and zero proper acceleration. Each propagation call is limited to exactly one
+  accepted DP54 step, carries `nextStepSec` into the next call, and repeats until
+  the output time is reached; the production 4,000-step budget applies per
+  output interval.
+- SOI and target events are evaluated at each emitted point. SOI changes reuse the
+  §6 hysteretic selector and encode the previous and next body. Target closest
+  approach is the earliest minimum sampled target-centre distance. Collision
+  radius is `meanRadiusKm + atmosphereTopKm`, with absent atmosphere top treated
+  as zero. Impact is tested across every accepted DP54 step in each body's
+  linearly interpolated relative frame. With `r0 = ship0 - body0`,
+  `r1 = ship1 - body1`, and `d = r1 - r0`, solve `|r0 + f·d|² = R²`; when
+  `|r0| > R`, the smallest root `f ∈ [0,1]` is the entry crossing. The earliest
+  crossing in coordinate time wins, with catalog order breaking an exact tie.
+  Its ship position and time are linearly interpolated, replace the pending
+  output sample as the final polyline point, and stop both propagation loops.
+  Impact time-to-impact is crossing time minus prediction start time (ADR-030).
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.
 
 ## 7. Regression & validation tests (must exist before v1)

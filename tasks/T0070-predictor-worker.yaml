@@ -1,6 +1,6 @@
 id: T0070
 title: Trajectory predictor worker
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0070-predictor-worker
 depends_on: [T0050]
@@ -13,4 +13,90 @@ spec: |
 acceptance:
   - Worker polyline within 1 km of main-thread propagation over 30 days (test)
   - Main-thread frame impact < 0.5 ms
-handoff_notes: ""
+handoff_notes: |
+  Delivery summary:
+  - Production predictions emit at most 2,000 points. A canonical no-event
+    result transfers 64,000 point bytes plus 0 event bytes; event payloads are
+    variable-length and transfer only their actual-sized Float64Array storage.
+  - Each request transfers the seven-component float64 ship state (56 bytes).
+  - The 30-day acceptance comparison passed across 31 daily samples with a
+    maximum position error of 0.0168491658562252 km (required maximum: 1 km).
+  - Clean client update p99 was 0.000200 ms (required maximum: 0.5 ms).
+  - Impact crossing detection runs once per accepted DP54 step and uses linear
+    body-relative segment/sphere interpolation within that accepted step.
+  - Focused predictor acceptance coverage passed 5 files / 30 tests. The final
+    full Vitest gate passed 94 files with 1 skipped / 580 tests with 3 skipped;
+    the Python tools gate passed 50 tests.
+  - ADR-030 records prediction sampling, event detection, impact interpolation,
+    and the accepted-step observation decision.
+  - Independent per-task reviews approved Tasks 1 through 5. Task 5 retained a
+    historical Minor note: its original RED evidence was unavailable because
+    the predictor core predated the acceptance-test slice; this has no
+    functional impact and all current focused and full tests pass.
+
+  Principal commits:
+  - a6536cc define predictor protocol contract
+  - 4d0729b harden predictor transfer contract
+  - d74a66d add thrust-free trajectory predictor
+  - bd05332 detect impacts per accepted step
+  - c8a52f1 add predictor worker runtime
+  - 54d84bf add debounced predictor client
+  - 519f9f1 add predictor acceptance coverage
+
+  Final gates (2026-07-18):
+  - npm run lint: passed
+  - npm run typecheck: passed
+  - npm run format:check: passed
+  - npm test -- --run: passed (94 passed / 1 skipped files; 580 passed / 3
+    skipped tests)
+  - npm run test:tools: passed (50 tests)
+  - npm run build: passed (existing Vite >500 kB chunk advisory; application
+    chunk 914.76 kB)
+  - npm run check:budgets: passed (repo 139.25 MiB, assets 19.51 MiB,
+    critical path 4.08 MiB)
+  - npm run check:tasks: passed (53 task files)
+
+  origin/main remained at 6ecf3e6 after git fetch origin, so no rebase was
+  required. This branch is ready for controller whole-branch review and PR
+  creation. Do not mark DONE until that independent final review and green CI.
+
+  Final-review fix wave (2026-07-18):
+  - Commit 50015f9 moves the packed prediction layout into pure
+    `src/sim/analysis/trajectoryPredictionLayout.ts`; the worker protocol
+    reexports the existing public constants and event code, while an ESLint
+    restricted-path zone now rejects every `src/sim -> src/workers` import.
+  - The same commit makes client dispatch transactional. Synchronous
+    `postMessage` throws, worker `error`, and worker `messageerror` now produce
+    host-independent `PredictorErrorMessage` values, release single-flight
+    state, retain a 500 ms retry debounce, suppress stale failures, and permit a
+    later successful request. Disposal removes all three stable listeners and
+    preserves optional worker ownership.
+  - TDD RED evidence: the focused client run failed 4 tests for the expected
+    causes (synchronous throw escaped, both transport events produced no error,
+    and stale pending work blocked retry). The GREEN client file passes 14
+    tests, including structural compatibility with a real browser `Worker`.
+  - Focused final coverage passes 4 files / 33 tests across protocol/layout
+    reexports, predictor core, client, and worker runtime. Full Vitest passes 94
+    files with 1 skipped / 585 tests with 3 skipped; Python tools pass 50 tests.
+  - Final gates pass: lint, typecheck, format:check, full Vitest, test:tools,
+    build, budgets, tasks, and diff-check. Build retains the existing Vite
+    advisory for the 914.76 kB application chunk; all enforced budgets pass
+    (repo 139.26 MiB, assets 19.51 MiB, critical path 4.08 MiB).
+  - The design now matches ADR-030: SOI and closest approach are sampled at
+    emitted points, while impact uses a body-relative segment/sphere crossing
+    on every accepted DP54 segment.
+  - An independent post-fix review of 21bf4a8..50015f9 found no remaining
+    Critical, Important, or Minor defects in the requested fix scope.
+
+  Whole-branch completion evidence (2026-07-18):
+  - The independent senior re-review at de27ba8 found no Critical, Important,
+    or Minor defects and explicitly reported the branch ready to merge.
+  - Draft PR #46 exercised the exact de27ba8 head in GitHub Actions run
+    29636969693. Attempt 1 was manually cancelled after a silent Chromium smoke
+    hang; the identical smoke command passed locally in 7.3 s. Attempt 2 passed
+    the application smoke and every remaining CI gate, completing successfully.
+  - The transient runner diagnosis was confirmed without a code change: the
+    same commit and workflow passed on retry.
+
+  T0070 is DONE and PR #46 is ready for normal merge after this status-only
+  commit receives its final CI result.
