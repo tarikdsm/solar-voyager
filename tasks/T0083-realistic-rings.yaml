@@ -1,6 +1,6 @@
 id: T0083
 title: Realistic ring systems (Saturn, Uranus, Jupiter, Neptune)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0083-realistic-rings
 depends_on: [T0041, T0043]
