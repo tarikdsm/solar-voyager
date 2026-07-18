@@ -51,3 +51,15 @@ measured exactly two prediction calls when both line and markers were visible.
   remained responsive; 0 console errors and 0 warnings.
 - Production completed-trajectory scene: 27 total draw calls, still far below
   the 150-call budget.
+
+## CI workload calibration
+
+The production performance gate waits through its 60-second settle window, so
+the real predictor completes and the trajectory line is intentionally visible
+when its workload snapshot is taken. T0071 therefore advances the committed
+golden from 9 calls / 65,077 triangles to 10 calls / 77,071 triangles. The
+single added call and 11,994 added triangles are exactly one maximum-capacity
+1,999-segment `Line2`; the zero-event marker batch remains hidden. These values
+are the deterministic feature workload, remain far below the 150-call / 500k-
+triangle typical-view budgets, and retain the existing +/-10% regression
+tolerance for later changes.
