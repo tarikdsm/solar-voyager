@@ -18,10 +18,6 @@ const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
 );
 
-function describeError(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function assertNoBrowserErrors(browserErrors) {
   if (browserErrors.length > 0) {
     throw new Error(`browser errors detected: ${browserErrors.join(' | ')}`);
@@ -204,15 +200,57 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   }
 }
 
-async function expectRuntimeFixtureFailure(browser, fixturePath, marker) {
+async function expectRuntimeFixtureFailure(browser, fixturePath, marker, triggerReadPixels = false) {
+  const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  let timeout;
+  const failure = new Promise((resolve, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error(`${marker} fixture did not report its injected error`)),
+      60_000,
+    );
+    const inspect = (message) => {
+      if (message.includes(marker)) resolve(message);
+    };
+    page.on('pageerror', (error) => inspect(`pageerror: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') inspect(`console: ${message.text()}`);
+    });
+    page.on('crash', () => reject(new Error(`${marker} fixture page crashed`)));
+  });
+  await page.addInitScript({ path: fixturePath });
   try {
-    await runProbe(browser, fixturePath);
-  } catch (error) {
-    const message = describeError(error);
+    const response = await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
+    assert.ok(response?.ok(), `fixture page returned ${String(response?.status())}`);
+    if (triggerReadPixels) {
+      await page.waitForFunction(
+        () =>
+          globalThis.document.querySelector('#space-canvas[data-renderer-ready="true"]') !== null,
+        undefined,
+        { timeout: 30_000 },
+      );
+      await page.evaluate(() => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) throw new Error('canvas missing');
+        const context = canvas.getContext('webgl2');
+        if (context === null) throw new Error('WebGL2 context missing');
+        context.readPixels(
+          0,
+          0,
+          1,
+          1,
+          context.RGBA,
+          context.UNSIGNED_BYTE,
+          new globalThis.Uint8Array(4),
+        );
+      });
+    }
+    const message = await failure;
     assert.match(message, new RegExp(marker, 'u'));
     return message;
+  } finally {
+    clearTimeout(timeout);
+    await page.close();
   }
-  throw new Error(`${marker} fixture did not make the probe fail`);
 }
 
 export async function runApplicationSmokeContract({
@@ -242,6 +280,7 @@ export async function runApplicationSmokeContract({
       browser,
       FRAMEBUFFER_ERROR_FIXTURE,
       FRAMEBUFFER_ERROR_MARKER,
+      true,
     );
     const production = await runProbe(browser, null, true);
     return { production, rejectedFixture, rejectedFramebufferFixture };
