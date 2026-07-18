@@ -61,7 +61,7 @@ describe('predictor worker runtime', () => {
     };
     createPredictorWorkerRuntime(port, execute);
 
-    const firstRequest = createRequest(1);
+    const firstRequest = { ...createRequest(1), testHorizonSec: 21_600 };
     const secondRequest = createRequest(2);
     port.dispatch(firstRequest);
     port.dispatch(secondRequest);
@@ -70,7 +70,8 @@ describe('predictor worker runtime', () => {
     expect(received[0]?.catalog).toBe(received[1]?.catalog);
     expect(received[0]?.collisionRadiiKm).toBe(received[1]?.collisionRadiiKm);
     expect(received[0]?.catalog.bodyCount).toBe(bodiesDocument.bodies.length);
-    expect(received[0]?.horizonSec).toBe(12_000_000);
+    expect(received[0]?.horizonSec).toBe(21_600);
+    expect(received[1]?.horizonSec).toBe(12_000_000);
     expect(received[0]?.outputPointCount).toBe(2_000);
     expect(received[0]?.startTimeSec).toBe(123);
     expect(received[0]?.shipState).toBe(firstRequest.shipState);

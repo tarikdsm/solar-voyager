@@ -213,12 +213,12 @@
 </head>
 <body>
   <header class="hero shell">
-    <div class="eyebrow">Solar Voyager · estado esperado após integração</div>
+    <div class="eyebrow">Solar Voyager · snapshot atual · 18 Jul 2026</div>
     <h1>Plano total de desenvolvimento</h1>
     <p class="lede">Uma visão única do caminho até o v1.0 e das expansões já previstas, com todas as tasks formais, dependências, checkpoints e lacunas ainda não convertidas em tasks.</p>
     <div class="notice" role="note">
       <span aria-hidden="true">ⓘ</span>
-      <div><strong>Painel somente para consulta.</strong> Este HTML mostra o estado esperado imediatamente após a integração da T0094 e foi gerado a partir de <code>tasks/*.yaml</code>, <code>docs/roadmap.md</code>, arquitetura e especificações. Por isso, a própria T0094 já aparece como DONE aqui, embora permaneça REVIEW no YAML até o merge. Este painel não é fonte de verdade; os YAMLs e documentos canônicos prevalecem.</div>
+      <div><strong>Painel somente para consulta.</strong> Esta é uma fotografia do estado canônico atual, gerada de <code>tasks/*.yaml</code> e complementada pelo roadmap, arquitetura e especificações. Este painel não é fonte de verdade; os YAMLs e documentos canônicos sempre prevalecem.</div>
     </div>
   </header>
 
@@ -226,9 +226,9 @@
     <section class="stats" aria-label="Resumo do projeto">
       <article class="stat">
         <div class="stat-label">Progresso formal</div>
-        <div class="stat-value">17/53</div>
-        <div class="stat-note">32% das tasks em DONE</div>
-        <div class="progress-track"><div class="progress-fill" style="width:32.1%"></div></div>
+        <div class="stat-value">45/53</div>
+        <div class="stat-note">85% das tasks em DONE</div>
+        <div class="progress-track"><div class="progress-fill" style="width:84.9%"></div></div>
       </article>
       <article class="stat"><div class="stat-label">Concluídas</div><div class="stat-value" id="stat-done">—</div><div class="stat-note">validadas e integradas</div></article>
       <article class="stat"><div class="stat-label">Em curso</div><div class="stat-value" id="stat-active">—</div><div class="stat-note">claimed, in progress ou review</div></article>
@@ -241,13 +241,30 @@
       <p>Os checkpoints abaixo resumem os critérios de saída do roadmap. Apenas resultados já demonstrados aparecem marcados.</p>
       <div class="checkpoint-grid">
         <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>M0 · Fundação publicada</strong><small>Pages ativo, CI verde, protocolo e scaffold entregues.</small></span></label>
-        <label class="checkpoint"><input type="checkbox" disabled><span><strong>M1 · Núcleo e assets-base</strong><small>Rails/Horizons e DP54 estão prontos; pipeline Blender, Earth/Moon/Sun finais ainda fecham a fase.</small></span></label>
-        <label class="checkpoint"><input type="checkbox" disabled><span><strong>M2 · Mundo 3D navegável</strong><small>Viagem visual Earth → Jupiter, tiers sem pop e 60 fps comprovados.</small></span></label>
-        <label class="checkpoint"><input type="checkbox" disabled><span><strong>M3 · Primeiro jogável</strong><small>Nave em LEO, HUD, warp, ledger, save/load e viagem relativística.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>M1 · Núcleo e assets-base</strong><small>Física, catálogo, regressões, pipeline Blender e assets-base foram concluídos formalmente.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>M2 · Mundo 3D navegável</strong><small>Mundo 3D, controles, telemetria, detalhes de superfície e Sol procedural foram concluídos formalmente.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>M3 · Primeiro jogável</strong><small>As 15 tasks formais foram concluídas, incluindo nave em LEO, HUD, persistência, performance e widget 3D de vetores.</small></span></label>
         <label class="checkpoint"><input type="checkbox" disabled><span><strong>M5 · Navegação completa</strong><small>Predição de encontro com Marte e alertas de impacto dentro da tolerância.</small></span></label>
         <label class="checkpoint"><input type="checkbox" disabled><span><strong>M6 · Release v1.0</strong><small>Roster visual, efeitos, tutorial, auditoria de performance, otimização e tag v1.0.</small></span></label>
         <label class="checkpoint"><input type="checkbox" disabled><span><strong>M4 · Lançamento 2D pós-v1</strong><small>Lançamento manual de Alcântara até órbita de 200 km, handoff contínuo para 3D e opção “start from launch pad”.</small></span></label>
       </div>
+    </section>
+
+    <section class="card" aria-labelledby="current-title">
+      <h2 id="current-title">Checkpoint atual · T0071</h2>
+      <p><strong>Implementação concluída e em REVIEW no <a href="https://github.com/tarikdsm/solar-voyager/pull/47">PR #47</a>.</strong> O checkbox formal permanece desmarcado até CI verde, transição para DONE e merge.</p>
+      <div class="checkpoint-grid">
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Trajetória e marcadores implementados</strong><small>Line2 camera-relative, cores por corpo dominante, marcadores de SOI/aproximação/impacto, HUD e worker real.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Validação local concluída</strong><small>Testes focados, lint, typecheck, Prettier, build, budgets, schema, Chrome real, performance e 50 testes Python aprovados.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Review independente concluído</strong><small>Nenhum finding Critical, Important ou Minor.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>E2E limitado a 6 horas</strong><small>Somente a regressão injeta 21.600 s; worker, protocolo e integrador continuam reais.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" checked disabled><span><strong>Produção preservada em 90 dias ou mais</strong><small>Gameplay, benchmark e performance mantêm o horizonte canônico e o golden de 10 calls / 77.071 triângulos.</small></span></label>
+        <label class="checkpoint"><input type="checkbox" disabled><span><strong>CI final e integração</strong><small>Executar a sexta rodada, confirmar todos os gates verdes, marcar T0071 como DONE e fazer o merge normal.</small></span></label>
+      </div>
+      <details>
+        <summary>Histórico resumido das cinco rodadas de CI</summary>
+        <div class="detail-body"><p>Rodadas 1–2 localizaram competição do worker longo com smoke/SwiftShader. A rodada 3 validou Stable Chrome e revelou um seletor frágil. A rodada 4 confirmou o seletor semântico e revelou descarte incompleto. A rodada 5 passou os gates anteriores e comprovou que 90 dias podem exceder quatro minutos no runner. A correção atual limita apenas o E2E a 6 horas.</p></div>
+      </details>
     </section>
 
     <section class="card" aria-labelledby="actions-title">
@@ -301,7 +318,7 @@
   </main>
 
   <footer class="shell">
-    Gerado como artefato de consulta em T0094. Fontes canônicas: task queue, roadmap, arquitetura, game design, physics/rendering/performance specs e ADRs. Fotografia do estado esperado imediatamente após a integração da T0094.
+    Gerado como artefato de consulta. Snapshot de continuidade: 45 DONE, 1 REVIEW, 4 TODO e 3 BLOCKED em 53 tasks; T0071 no PR #47, ainda não integrada.
   </footer>
 
   <script>
@@ -311,6 +328,19 @@
     TASKS.push.apply(TASKS, EXTRA_TASKS);
     const dashboardTask = TASKS.find(function (task) { return task.id === "T0094"; });
     if (dashboardTask) dashboardTask.status = "DONE";
+    const CANONICAL_TASK_STATE = {
+      T0058: { status: "DONE", agent: "chatgpt", branch: "task/T0058-save-load-settings-input" },
+      T0059: { status: "DONE", agent: "chatgpt", branch: "task/T0059-playwright-smoke" },
+      T0070: { status: "DONE", agent: "chatgpt", branch: "task/T0070-predictor-worker" },
+      T0071: { status: "REVIEW", agent: "chatgpt", branch: "task/T0071-trajectory-rendering", handoff_notes: "Implementação concluída no PR #47. Review independente C0/I0/M0. O E2E usa 6 h somente em teste; produção, benchmark e performance mantêm 90 dias ou mais. Próximo passo: sexta rodada de CI, DONE e merge normal." },
+      T0080: { status: "DONE", agent: "chatgpt", branch: "task/T0080-state-vector-widget" },
+      T0090: { status: "DONE", agent: "chatgpt", branch: "task/T0090-perf-hud-panel" },
+      T0091: { status: "DONE", agent: "chatgpt", branch: "task/T0091-adaptive-quality-governor" },
+      T0092: { status: "DONE", agent: "chatgpt", branch: "task/T0092-bench-harness-ci-gates" }
+    };
+    TASKS.forEach(function (task) {
+      if (CANONICAL_TASK_STATE[task.id]) Object.assign(task, CANONICAL_TASK_STATE[task.id]);
+    });
     TASKS.sort(function (left, right) { return left.id.localeCompare(right.id); });
     const ORDER = ["M0", "M1", "M2", "M3", "M5", "M6", "M4"];
     const META = {

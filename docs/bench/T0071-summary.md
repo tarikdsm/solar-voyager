@@ -46,7 +46,11 @@ measured exactly two prediction calls when both line and markers were visible.
   error `0 px` at both zooms.
 - Stable-Chrome production regression loaded the real Vite module worker,
   waited for `data-trajectory-ready="true"`, and confirmed the HUD left its
-  pending state before evaluating the deterministic zoom fixture.
+  pending state before evaluating the deterministic zoom fixture. The
+  regression supplies a test-only six-hour horizon so the real worker and
+  integrator finish deterministically on shared CI runners; normal gameplay,
+  the benchmark, and the production performance gate still use the canonical
+  90-day-or-longer horizon.
 - Malformed success payloads (fewer than two points or non-increasing sample
   times) are rejected before any overlay buffer mutation, surface the
   unavailable state, and leave the client able to retry.

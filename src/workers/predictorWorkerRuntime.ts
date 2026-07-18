@@ -75,7 +75,9 @@ export function createPredictorWorkerRuntime(
         catalog,
         collisionRadiiKm,
         startTimeSec: payload.startTimeSec,
-        horizonSec: selectPredictionHorizonSec(payload.osculatingPeriodSec, payload.userHorizonSec),
+        horizonSec:
+          payload.testHorizonSec ??
+          selectPredictionHorizonSec(payload.osculatingPeriodSec, payload.userHorizonSec),
         shipState: payload.shipState,
         dominantBodyIndex: payload.dominantBodyIndex,
         targetBodyIndex: payload.targetBodyIndex,

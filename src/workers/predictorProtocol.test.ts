@@ -136,6 +136,9 @@ describe('trajectory predictor protocol', () => {
     const withoutTarget = createRequest();
     Reflect.deleteProperty(withoutTarget, 'targetBodyIndex');
     expect(isPredictorRequestMessage(withoutTarget, BODY_COUNT)).toBe(true);
+    expect(
+      isPredictorRequestMessage({ ...createRequest(), testHorizonSec: 21_600 }, BODY_COUNT),
+    ).toBe(true);
   });
 
   it('rejects malformed request identifiers, times, states, and body indices', () => {
@@ -190,6 +193,15 @@ describe('trajectory predictor protocol', () => {
     expect(
       isPredictorRequestMessage(
         { ...createRequest(), requestId: Number.MAX_SAFE_INTEGER + 1 },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(isPredictorRequestMessage({ ...createRequest(), testHorizonSec: 0 }, BODY_COUNT)).toBe(
+      false,
+    );
+    expect(
+      isPredictorRequestMessage(
+        { ...createRequest(), testHorizonSec: PREDICTOR_BASE_HORIZON_SEC + 1 },
         BODY_COUNT,
       ),
     ).toBe(false);

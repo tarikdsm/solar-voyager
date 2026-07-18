@@ -73,6 +73,27 @@ handoff_notes: |
   production page to about:blank to trigger pagehide/client disposal, closes it
   explicitly, and has a structurally tested four-minute CI timeout. The full
   regression passes locally in about 28 s; a fifth PR CI run is required.
+  The fifth run again passed every earlier gate, then showed that the complete
+  90-day prediction itself can exceed four minutes on a shared runner. The
+  dedicated regression now injects a validated test-only six-hour horizon
+  before application startup while retaining the real Vite worker, production
+  predictor protocol, and integrator. Normal gameplay, the hardware benchmark,
+  and the performance gate omit the override and retain the canonical
+  90-day-or-longer horizon. Locally, the regression now finishes in 14.5 s with
+  ready=true, the expected HUD state, two prediction calls, and 0 px alignment;
+  the separate production performance gate still passes at 10 calls / 77,071
+  triangles. A sixth PR CI run is required.
+
+  Final pause point: the test-only horizon delta passed 27 focused Vitest
+  tests, strict typecheck, ESLint, Prettier, build, task schema, asset budgets,
+  the Stable-Chrome trajectory regression, and the production performance
+  gate. The three expensive contracts that timed out under full-suite local
+  CPU contention all passed unchanged when rerun individually; no timeout or
+  assertion was weakened. Python tools passed 50/50. An independent reviewer
+  found no Critical, Important, or Minor findings and approved the delta for
+  commit and a fresh CI run. PR #47 remains the continuation point; task status
+  intentionally stays REVIEW until exact-head CI is green and the normal merge
+  can mark it DONE.
 
   Independent review found no remaining Critical, Important, or Minor code
   findings after RED/GREEN corrections. The final delivery-only findings were

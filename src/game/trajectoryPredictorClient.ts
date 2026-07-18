@@ -2,6 +2,7 @@ import type { SimSnapshot } from '../sim/simulationSnapshot.js';
 import {
   isPredictorErrorMessage,
   isPredictorSuccessMessage,
+  PREDICTOR_BASE_HORIZON_SEC,
   PREDICTOR_STATE_LENGTH,
   type PredictorRequestMessage,
   type PredictorResponseMessage,
@@ -38,6 +39,7 @@ export type TrajectoryPredictionResultListener = (result: PredictorResponseMessa
 export interface TrajectoryPredictorClientOptions {
   readonly now?: () => number;
   readonly ownsPort?: boolean;
+  readonly testHorizonSec?: number;
 }
 
 /** Allocation-free frame-loop facade around debounced trajectory worker jobs. */
@@ -61,6 +63,7 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
   private lastRequestId = 0;
   private readonly now: () => number;
   private readonly ownsPort: boolean;
+  private readonly testHorizonSec: number | undefined;
   private readonly messageListener: (event: MessageEvent<unknown>) => void;
   private readonly errorListener: (event: ErrorEvent) => void;
   private readonly messageErrorListener: (event: MessageEvent<unknown>) => void;
@@ -76,6 +79,15 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
     }
     this.now = options.now ?? readPerformanceNow;
     this.ownsPort = options.ownsPort ?? false;
+    if (
+      options.testHorizonSec !== undefined &&
+      (!Number.isFinite(options.testHorizonSec) ||
+        options.testHorizonSec <= 0 ||
+        options.testHorizonSec > PREDICTOR_BASE_HORIZON_SEC)
+    ) {
+      throw new RangeError('test horizon must be positive, finite, and at most the base horizon');
+    }
+    this.testHorizonSec = options.testHorizonSec;
     this.messageListener = (event) => {
       this.handleMessage(event.data);
     };
@@ -137,27 +149,17 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
     }
     const requestId = this.lastRequestId + 1;
     const dispatchInvalidationVersion = this.invalidationVersion;
-    const message: PredictorRequestMessage =
-      userHorizonSec === undefined
-        ? {
-            type: 'predict',
-            requestId,
-            startTimeSec: snapshot.simTimeSec,
-            shipState,
-            osculatingPeriodSec: snapshot.osculatingElements.periodSec,
-            dominantBodyIndex: snapshot.dominantBodyIndex,
-            targetBodyIndex: snapshot.targetBodyIndex,
-          }
-        : {
-            type: 'predict',
-            requestId,
-            startTimeSec: snapshot.simTimeSec,
-            shipState,
-            osculatingPeriodSec: snapshot.osculatingElements.periodSec,
-            userHorizonSec,
-            dominantBodyIndex: snapshot.dominantBodyIndex,
-            targetBodyIndex: snapshot.targetBodyIndex,
-          };
+    const message: PredictorRequestMessage = {
+      type: 'predict',
+      requestId,
+      startTimeSec: snapshot.simTimeSec,
+      shipState,
+      osculatingPeriodSec: snapshot.osculatingElements.periodSec,
+      ...(userHorizonSec === undefined ? {} : { userHorizonSec }),
+      ...(this.testHorizonSec === undefined ? {} : { testHorizonSec: this.testHorizonSec }),
+      dominantBodyIndex: snapshot.dominantBodyIndex,
+      targetBodyIndex: snapshot.targetBodyIndex,
+    };
 
     this.lastRequestId = requestId;
     try {

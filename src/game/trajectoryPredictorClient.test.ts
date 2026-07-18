@@ -354,6 +354,7 @@ describe('trajectory predictor client', () => {
     const port = new FakePredictorPort();
     const client = createTrajectoryPredictorClient(port, 9, () => {}, {
       now: () => nowMs,
+      testHorizonSec: 21_600,
     });
     const snapshot = createSnapshot();
 
@@ -362,12 +363,14 @@ describe('trajectory predictor client', () => {
     client.update(snapshot);
     const first = port.posted[0]?.message;
     expect(first === undefined ? true : 'userHorizonSec' in first).toBe(false);
+    expect(first?.testHorizonSec).toBe(21_600);
     port.respond(createSuccess(first?.requestId ?? -1));
 
     client.invalidate();
     nowMs = 1_000;
     client.update(snapshot, 10_000_000);
     expect(port.posted[1]?.message.userHorizonSec).toBe(10_000_000);
+    expect(port.posted[1]?.message.testHorizonSec).toBe(21_600);
   });
 
   it('removes its listener and terminates only an owned port on disposal', () => {

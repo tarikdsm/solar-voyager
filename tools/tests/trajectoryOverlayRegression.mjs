@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+import { installTrajectoryPredictionTestHorizon } from './trajectoryPredictionTestIsolation.mjs';
+
 const HOST = '127.0.0.1';
 const PORT = 4190;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/trajectoryOverlay.html`;
@@ -52,6 +54,7 @@ try {
   await page.close();
 
   const productionPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await installTrajectoryPredictionTestHorizon(productionPage, 21_600);
   const productionErrors = [];
   productionPage.on('pageerror', (error) => productionErrors.push(`pageerror: ${error.message}`));
   productionPage.on('console', (message) => {

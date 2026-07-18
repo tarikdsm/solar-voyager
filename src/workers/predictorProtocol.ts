@@ -42,6 +42,8 @@ export interface PredictorRequestMessage {
   readonly shipState: Float64Array<ArrayBuffer>;
   readonly osculatingPeriodSec: number;
   readonly userHorizonSec?: number;
+  /** Test harness override; production requests omit this field. */
+  readonly testHorizonSec?: number;
   readonly dominantBodyIndex: number;
   readonly targetBodyIndex?: number;
 }
@@ -142,6 +144,7 @@ export function isPredictorRequestMessage(
       'shipState',
       'osculatingPeriodSec',
       'userHorizonSec',
+      'testHorizonSec',
       'dominantBodyIndex',
       'targetBodyIndex',
     ]) ||
@@ -166,6 +169,15 @@ export function isPredictorRequestMessage(
     } catch {
       return false;
     }
+  }
+  if (
+    'testHorizonSec' in value &&
+    (typeof value.testHorizonSec !== 'number' ||
+      !Number.isFinite(value.testHorizonSec) ||
+      value.testHorizonSec <= 0 ||
+      value.testHorizonSec > PREDICTOR_BASE_HORIZON_SEC)
+  ) {
+    return false;
   }
   return true;
 }
