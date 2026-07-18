@@ -256,7 +256,32 @@ export class CameraRelativeSpaceScene {
         throw new Error('Packed point binding arrays are out of sync.');
       }
       const target = attribute.array as Float32Array;
-      for (let component = 0; component < positionsKm.length; component += 3) {
+      const maximumPointCount = target.length / 3;
+      const firstPoint = Math.min(
+        maximumPointCount,
+        Math.max(0, Math.floor(points.geometry.drawRange.start)),
+      );
+      const requestedCount = points.geometry.drawRange.count;
+      const activePointCount = Math.min(
+        maximumPointCount - firstPoint,
+        Number.isFinite(requestedCount)
+          ? Math.max(0, Math.floor(requestedCount))
+          : maximumPointCount - firstPoint,
+      );
+      const boundingSphere = points.geometry.boundingSphere;
+      if (points.frustumCulled && boundingSphere === null) {
+        throw new Error('Frustum-culled packed points require a setup-time bounding sphere.');
+      }
+      if (activePointCount === 0) {
+        if (boundingSphere !== null) {
+          boundingSphere.center.set(0, 0, 0);
+          boundingSphere.radius = 0;
+        }
+        continue;
+      }
+      const finalPoint = firstPoint + activePointCount;
+      for (let pointIndex = firstPoint; pointIndex < finalPoint; pointIndex += 1) {
+        const component = pointIndex * 3;
         const x = positionsKm[component] ?? Number.NaN;
         const y = positionsKm[component + 1] ?? Number.NaN;
         const z = positionsKm[component + 2] ?? Number.NaN;
@@ -269,26 +294,9 @@ export class CameraRelativeSpaceScene {
       }
       attribute.needsUpdate = true;
       if (points.frustumCulled) {
-        const boundingSphere = points.geometry.boundingSphere;
-        if (boundingSphere === null) {
+        const activeBoundingSphere = boundingSphere;
+        if (activeBoundingSphere === null) {
           throw new Error('Frustum-culled packed points require a setup-time bounding sphere.');
-        }
-        const maximumPointCount = target.length / 3;
-        const firstPoint = Math.min(
-          maximumPointCount,
-          Math.max(0, Math.floor(points.geometry.drawRange.start)),
-        );
-        const requestedCount = points.geometry.drawRange.count;
-        const activePointCount = Math.min(
-          maximumPointCount - firstPoint,
-          Number.isFinite(requestedCount)
-            ? Math.max(0, Math.floor(requestedCount))
-            : maximumPointCount - firstPoint,
-        );
-        if (activePointCount === 0) {
-          boundingSphere.center.set(0, 0, 0);
-          boundingSphere.radius = 0;
-          continue;
         }
         let minimumX = Number.POSITIVE_INFINITY;
         let minimumY = Number.POSITIVE_INFINITY;
@@ -296,7 +304,6 @@ export class CameraRelativeSpaceScene {
         let maximumX = Number.NEGATIVE_INFINITY;
         let maximumY = Number.NEGATIVE_INFINITY;
         let maximumZ = Number.NEGATIVE_INFINITY;
-        const finalPoint = firstPoint + activePointCount;
         for (let pointIndex = firstPoint; pointIndex < finalPoint; pointIndex += 1) {
           const offset = pointIndex * 3;
           const x = target[offset] as number;
@@ -320,8 +327,8 @@ export class CameraRelativeSpaceScene {
           const z = (target[offset + 2] as number) - centerZ;
           maximumRadiusSquared = Math.max(maximumRadiusSquared, x * x + y * y + z * z);
         }
-        boundingSphere.center.set(centerX, centerY, centerZ);
-        boundingSphere.radius = Math.sqrt(maximumRadiusSquared);
+        activeBoundingSphere.center.set(centerX, centerY, centerZ);
+        activeBoundingSphere.radius = Math.sqrt(maximumRadiusSquared);
       }
     }
 

@@ -199,6 +199,24 @@ describe('trajectory predictor protocol', () => {
     expect(isPredictorSuccessMessage(createSuccess(), BODY_COUNT)).toBe(true);
     expect(
       isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([0, 1, 2, 3]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(
+      isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([0, 1, 2, 3, 0, 4, 5, 6]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(
+      isPredictorSuccessMessage(
+        { ...createSuccess(), points: new Float64Array([10, 1, 2, 3, 0, 4, 5, 6]) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    expect(
+      isPredictorSuccessMessage(
         { ...createSuccess(), points: new Float64Array(PREDICTOR_POINT_STRIDE - 1) },
         BODY_COUNT,
       ),

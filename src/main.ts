@@ -130,14 +130,21 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
     return;
   }
   const snapshot = session.simulation.snapshot;
-  world?.trajectoryOverlay.applyPrediction(result, snapshot.dominantBodyIndex);
-  trajectoryPredictionRefresh.acceptPrediction(result.points);
-  trajectoryPredictionStore.publishSuccess(
-    readTrajectoryEventSummary(result.events),
-    snapshot.bodyIds,
-    snapshot.simTimeSec,
-  );
-  canvas.dataset.trajectoryReady = 'true';
+  try {
+    world?.trajectoryOverlay.applyPrediction(result, snapshot.dominantBodyIndex);
+    trajectoryPredictionRefresh.acceptPrediction(result.points);
+    trajectoryPredictionStore.publishSuccess(
+      readTrajectoryEventSummary(result.events),
+      snapshot.bodyIds,
+      snapshot.simTimeSec,
+    );
+    canvas.dataset.trajectoryReady = 'true';
+  } catch {
+    world?.trajectoryOverlay.hide();
+    trajectoryPredictionRefresh.clear();
+    trajectoryPredictionStore.publishError();
+    canvas.dataset.trajectoryReady = 'error';
+  }
 }
 
 const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {

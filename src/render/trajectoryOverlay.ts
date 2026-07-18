@@ -19,6 +19,9 @@ import {
 } from '../game/trajectoryPredictionModel.js';
 import {
   PREDICTOR_MAX_POINTS,
+  PREDICTOR_POINT_STRIDE,
+  PREDICTOR_POINT_TIME_SEC_OFFSET,
+  isPredictorSuccessMessage,
   type PredictorSuccessMessage,
 } from '../workers/predictorProtocol.js';
 import { CameraRelativeSpaceScene, type PackedPolylineBinding } from './spaceScene.js';
@@ -202,8 +205,22 @@ export class TrajectoryOverlay {
 
   /** Applies one validated worker result without replacing setup-time resources. */
   applyPrediction(result: PredictorSuccessMessage, fallbackDominantBodyIndex: number): void {
+    if (result.points.length < 2 * PREDICTOR_POINT_STRIDE) {
+      throw new RangeError('Trajectory rendering requires at least two points.');
+    }
+    let previousTimeSec = Number.NEGATIVE_INFINITY;
+    for (let offset = 0; offset < result.points.length; offset += PREDICTOR_POINT_STRIDE) {
+      const timeSec = result.points[offset + PREDICTOR_POINT_TIME_SEC_OFFSET] as number;
+      if (timeSec <= previousTimeSec) {
+        throw new RangeError('Trajectory point times must be strictly increasing.');
+      }
+      previousTimeSec = timeSec;
+    }
+    if (!isPredictorSuccessMessage(result, this.bodyPalette.length / 3)) {
+      throw new RangeError('Trajectory rendering requires a valid packed predictor result.');
+    }
+
     const pointCount = writePredictionPointsInto(this.linePositionsKm, result.points);
-    if (pointCount < 2) throw new RangeError('Trajectory rendering requires at least two points.');
     const segmentCount = writeTrajectorySegmentBodiesInto(
       this.segmentBodyIndices,
       result.points,

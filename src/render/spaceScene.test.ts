@@ -155,6 +155,25 @@ describe('CameraRelativeSpaceScene', () => {
     expect(points.matrixAutoUpdate).toBe(false);
   });
 
+  it('skips hidden packed point batches without touching their GPU buffer', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const positionsKm = new Float64Array([10, 20, 30, 40, 50, 60]);
+    const target = new Float32Array(positionsKm.length);
+    const attribute = new Float32BufferAttribute(target, 3);
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', attribute);
+    geometry.setDrawRange(0, 0);
+    const points = new Points(geometry, new PointsMaterial());
+    const originalVersion = attribute.version;
+
+    spaceScene.bindPackedPointPositions(points, positionsKm);
+    spaceScene.updateCameraRelative({ x: 1, y: 2, z: 3 });
+
+    expect(attribute.version).toBe(originalVersion);
+    expect(Array.from(target)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(geometry.boundingSphere?.radius).toBe(0);
+  });
+
   it('updates preallocated Line2 segments camera-relatively without replacing buffers', () => {
     const spaceScene = new CameraRelativeSpaceScene();
     const positionsKm = new Float64Array([

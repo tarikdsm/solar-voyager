@@ -182,6 +182,7 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
   private handleMessage(payload: unknown): void {
     if (this.disposed) return;
     if (!isPredictorSuccessMessage(payload, this.bodyCount) && !isPredictorErrorMessage(payload)) {
+      this.handleTransportFailure('trajectory predictor returned an invalid response');
       return;
     }
     if (payload.requestId !== this.pendingRequestId) return;

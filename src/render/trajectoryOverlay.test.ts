@@ -121,6 +121,38 @@ describe('TrajectoryOverlay', () => {
     expect(overlay.markers.geometry.getAttribute('position').array).toBe(originalMarkerArray);
   });
 
+  it('rejects an invalid timeline before mutating an existing overlay', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const overlay = new TrajectoryOverlay(spaceScene, BODY_IDS);
+    const lineStart = overlay.line.geometry.getAttribute(
+      'instanceStart',
+    ) as InterleavedBufferAttribute;
+
+    overlay.applyPrediction(result(), 0);
+    spaceScene.updateCameraRelative({ x: 100, y: 0, z: 0 });
+    const beforeSegments = Array.from(lineStart.data.array.slice(0, 18));
+    const beforeStartTime = overlay.startTimeSec;
+
+    expect(() =>
+      overlay.applyPrediction({ ...result(), points: new Float64Array([999, 999, 999, 999]) }, 0),
+    ).toThrow(/at least two/u);
+    spaceScene.updateCameraRelative({ x: 100, y: 0, z: 0 });
+
+    expect(Array.from(lineStart.data.array.slice(0, 18))).toEqual(beforeSegments);
+    expect(overlay.startTimeSec).toBe(beforeStartTime);
+    expect(overlay.line.geometry.instanceCount).toBe(3);
+    expect(overlay.line.visible).toBe(true);
+
+    expect(() =>
+      overlay.applyPrediction(
+        { ...result(), points: new Float64Array([0, 1, 2, 3, 0, 4, 5, 6]) },
+        0,
+      ),
+    ).toThrow(/strictly increasing/u);
+    spaceScene.updateCameraRelative({ x: 100, y: 0, z: 0 });
+    expect(Array.from(lineStart.data.array.slice(0, 18))).toEqual(beforeSegments);
+  });
+
   it('uses one precompiled shader with distinct SOI, approach, and impact icon branches', () => {
     const overlay = new TrajectoryOverlay(new CameraRelativeSpaceScene(), BODY_IDS);
     const material = overlay.markers.material as ShaderMaterial;

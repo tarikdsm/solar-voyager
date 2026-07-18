@@ -104,7 +104,7 @@ function createSuccess(requestId: number): PredictorResponseMessage {
   return {
     type: 'success',
     requestId,
-    points: new Float64Array([123, 1, 2, 3]),
+    points: new Float64Array([123, 1, 2, 3, 124, 4, 5, 6]),
     events: new Float64Array(),
   };
 }
@@ -333,12 +333,20 @@ describe('trajectory predictor client', () => {
       type: 'success',
       requestId,
       points: new Float64Array([123, 1, 2, 3]),
-      events: new Float64Array([2, 123, 5, -1, 10, Number.NaN]),
+      events: new Float64Array(),
     });
-    expect(received).toHaveLength(0);
+    expect(received).toEqual([
+      { type: 'error', requestId, message: 'trajectory predictor returned an invalid response' },
+    ]);
 
-    port.respond(createSuccess(requestId));
-    expect(received).toEqual([createSuccess(requestId)]);
+    nowMs = 1_000;
+    client.update(snapshot);
+    const recoveredRequestId = port.posted[1]?.message.requestId ?? -1;
+    port.respond(createSuccess(recoveredRequestId));
+    expect(received).toEqual([
+      { type: 'error', requestId, message: 'trajectory predictor returned an invalid response' },
+      createSuccess(recoveredRequestId),
+    ]);
   });
 
   it('omits an absent user horizon and preserves a configured horizon', () => {
