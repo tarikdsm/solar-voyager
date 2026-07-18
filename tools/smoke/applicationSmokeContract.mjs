@@ -107,40 +107,42 @@ async function probeProductionStateVector(page) {
 }
 
 async function probeCanvasPixels(page) {
-  const metrics = await page.evaluate(
-    () =>
-      new Promise((resolve, reject) => {
-        globalThis.requestAnimationFrame(() => {
-          const canvas = globalThis.document.querySelector('#space-canvas');
-          if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
-            reject(new Error('space canvas is not an HTMLCanvasElement'));
-            return;
-          }
-          const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
-          if (context === null) {
-            reject(new Error('space canvas has no WebGL context'));
-            return;
-          }
-          const width = context.drawingBufferWidth;
-          const height = context.drawingBufferHeight;
-          const pixels = new globalThis.Uint8Array(width * height * 4);
-          context.readPixels(0, 0, width, height, context.RGBA, context.UNSIGNED_BYTE, pixels);
-          let minimumLuminance = 255;
-          let maximumLuminance = 0;
-          let litPixels = 0;
-          for (let offset = 0; offset < pixels.length; offset += 4) {
-            const luminance =
-              0.2126 * (pixels[offset] ?? 0) +
-              0.7152 * (pixels[offset + 1] ?? 0) +
-              0.0722 * (pixels[offset + 2] ?? 0);
-            minimumLuminance = Math.min(minimumLuminance, luminance);
-            maximumLuminance = Math.max(maximumLuminance, luminance);
-            if (luminance >= 16) litPixels += 1;
-          }
-          resolve({ height, maximumLuminance, minimumLuminance, litPixels, width });
-        });
-      }),
+  await page.waitForFunction(
+    () => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (
+        canvas instanceof globalThis.HTMLCanvasElement &&
+        canvas.solarVoyagerTelemetry?.frameSampleCount > 0
+      );
+    },
+    undefined,
+    { timeout: 60_000 },
   );
+  const metrics = await page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
+      throw new Error('space canvas is not an HTMLCanvasElement');
+    }
+    const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+    if (context === null) throw new Error('space canvas has no WebGL context');
+    const width = context.drawingBufferWidth;
+    const height = context.drawingBufferHeight;
+    const pixels = new globalThis.Uint8Array(width * height * 4);
+    context.readPixels(0, 0, width, height, context.RGBA, context.UNSIGNED_BYTE, pixels);
+    let minimumLuminance = 255;
+    let maximumLuminance = 0;
+    let litPixels = 0;
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      const luminance =
+        0.2126 * (pixels[offset] ?? 0) +
+        0.7152 * (pixels[offset + 1] ?? 0) +
+        0.0722 * (pixels[offset + 2] ?? 0);
+      minimumLuminance = Math.min(minimumLuminance, luminance);
+      maximumLuminance = Math.max(maximumLuminance, luminance);
+      if (luminance >= 16) litPixels += 1;
+    }
+    return { height, maximumLuminance, minimumLuminance, litPixels, width };
+  });
   const luminanceRange = metrics.maximumLuminance - metrics.minimumLuminance;
   assert.ok(luminanceRange >= 12, `space canvas is blank: luminance range ${luminanceRange}`);
   assert.ok(
