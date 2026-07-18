@@ -19,6 +19,7 @@ let browser;
 try {
   await server.listen();
   browser = await chromium.launch({
+    channel: 'chrome',
     headless: true,
     args: ['--enable-webgl', '--ignore-gpu-blocklist'],
   });
@@ -71,6 +72,14 @@ try {
   );
   const loadedWorkerResponse = await workerResponse;
   assert.ok(loadedWorkerResponse.ok(), `worker response ${loadedWorkerResponse.status()}`);
+  await productionPage.waitForFunction(
+    () => {
+      const state = globalThis.document.querySelector('#space-canvas')?.dataset.trajectoryReady;
+      return state === 'true' || state === 'error';
+    },
+    undefined,
+    { timeout: 90_000 },
+  );
   const productionState = await productionPage.evaluate(() => ({
     appHtml: globalThis.document.querySelector('#app')?.innerHTML.slice(0, 1_000) ?? '',
     bodyText: globalThis.document.body.textContent?.slice(0, 500) ?? '',
@@ -83,6 +92,11 @@ try {
     productionState.selectorCount,
     1,
     `production target selector missing: ${JSON.stringify({ productionErrors, productionState })}`,
+  );
+  assert.equal(
+    productionState.trajectoryReady,
+    'true',
+    `production prediction did not complete: ${JSON.stringify({ productionErrors, productionState })}`,
   );
   const nextApproach = await productionPage
     .locator('#target-panel .hud-readout-row:nth-child(3) dd')
