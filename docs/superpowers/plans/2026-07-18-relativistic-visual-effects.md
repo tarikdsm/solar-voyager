@@ -314,7 +314,7 @@ export class RelativisticVisualController {
   regressions, Python tools, budgets, task schema, and performance gates.
   Record exact before/after evidence in `docs/bench/T0081-summary.md`.
 
-- [ ] **Step 6: Review and deliver**
+- [x] **Step 6: Review and deliver**
 
   Move T0081 to REVIEW, obtain an independent whole-branch review, fix every
   finding through RED/GREEN, push, open PR `[T0081] Relativistic visual

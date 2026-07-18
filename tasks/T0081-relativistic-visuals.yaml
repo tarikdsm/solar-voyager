@@ -1,6 +1,6 @@
 id: T0081
 title: Relativistic visual effects (aberration, Doppler, beaming)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0081-relativistic-visuals
 depends_on: [T0042, T0043]
@@ -18,4 +18,5 @@ handoff_notes: >-
   Hybrid observer-frame aberration, Doppler shift, and headlight beaming are
   implemented and quality-gated. Stable Chrome acceptance, full CI-equivalent
   gates, and before/after performance evidence are recorded in
-  docs/bench/T0081-summary.md.
+  docs/bench/T0081-summary.md. Independent whole-branch review found and fixed
+  high-gamma cancellation; exact-head CI passed before completion.
