@@ -4,6 +4,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import type { AdaptivePostPassPort } from './lightingPostPipeline.js';
 import type { RelativisticVisualState } from './relativisticVisualState.js';
 
+export const MIN_VISIBLE_RELATIVISTIC_POST_ACTIVATION = 1 / 65_536;
+
 const vertexShader = /* glsl */ `
   uniform float uAdaptiveUvScale;
 
@@ -95,6 +97,6 @@ export class RelativisticPostPass extends ShaderPass implements RelativisticPost
     if (uniforms.uRelativisticActivation !== undefined) {
       uniforms.uRelativisticActivation.value = state.activation;
     }
-    this.enabled = state.activation !== 0;
+    this.enabled = state.activation >= MIN_VISIBLE_RELATIVISTIC_POST_ACTIVATION;
   }
 }

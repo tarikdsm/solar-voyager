@@ -2,7 +2,10 @@ import { PerspectiveCamera, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRelativisticVisualState } from './relativisticVisualState.js';
-import { RelativisticPostPass } from './relativisticPostPass.js';
+import {
+  MIN_VISIBLE_RELATIVISTIC_POST_ACTIVATION,
+  RelativisticPostPass,
+} from './relativisticPostPass.js';
 
 describe('RelativisticPostPass', () => {
   it('updates stable view and camera-space observer uniforms without normalizing beta', () => {
@@ -54,6 +57,14 @@ describe('RelativisticPostPass', () => {
     state.activation = 0;
     pass.updateObserver(state, camera);
     expect(pass.enabled).toBe(false);
+
+    state.activation = MIN_VISIBLE_RELATIVISTIC_POST_ACTIVATION / 2;
+    pass.updateObserver(state, camera);
+    expect(pass.enabled).toBe(false);
+
+    state.activation = MIN_VISIBLE_RELATIVISTIC_POST_ACTIVATION;
+    pass.updateObserver(state, camera);
+    expect(pass.enabled).toBe(true);
   });
 
   it('contains the normative Doppler, RGB, beaming, and adaptive UV mapping', () => {

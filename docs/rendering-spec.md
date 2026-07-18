@@ -154,6 +154,12 @@ render and bloom. When active it may add at most one draw call and no render
 target. All uniforms and scratch values are preallocated; no frame-loop shader,
 material, geometry, or collection allocation is permitted.
 
+The full-screen pass is skipped while activation is below `1/65536`. Even at
+the maximum bounded gain, the omitted contribution is below 0.03 of one 8-bit
+display level. This keeps ordinary orbital flight on the zero-cost identity
+path without a visible discontinuity; directional shaders retain the exact
+smoothstep value.
+
 When γ is significant (threshold ~1.05), a full-screen shader pass applies, in order of gameplay value: (1) **relativistic aberration** — star/body directions transformed by the velocity boost, the sky compresses toward the direction of travel; (2) **Doppler shift** — starfield B-V colors shifted blue ahead / red behind; (3) **headlight beaming** — intensity boost ahead. Applied to the starfield and point-sprite tiers (correct transformation of directions), approximated for near-field geometry. OFF at low quality; the effect must interpolate smoothly as γ→1 (no popping when crossing the threshold). This is v1-optional polish (M6 task) — the sim is relativistic regardless.
 
 ## 11. Close-range surface fidelity (real-scale bodies)
