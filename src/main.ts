@@ -14,6 +14,7 @@ import {
   type TrajectoryPredictorClient,
 } from './game/trajectoryPredictorClient.js';
 import { TrajectoryPredictionRefresh } from './game/trajectoryPredictionRefresh.js';
+import { isTrajectoryPredictionRuntimeEnabled } from './game/trajectoryPredictionRuntimePolicy.js';
 import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
@@ -147,15 +148,17 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
   }
 }
 
-const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
-  type: 'module',
-});
-trajectoryPredictorClient = createTrajectoryPredictorClient(
-  trajectoryWorker,
-  initialSimulation.snapshot.bodyIds.length,
-  handleTrajectoryPredictionResult,
-  { ownsPort: true },
-);
+if (isTrajectoryPredictionRuntimeEnabled(window)) {
+  const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
+    type: 'module',
+  });
+  trajectoryPredictorClient = createTrajectoryPredictorClient(
+    trajectoryWorker,
+    initialSimulation.snapshot.bodyIds.length,
+    handleTrajectoryPredictionResult,
+    { ownsPort: true },
+  );
+}
 
 function handlePageHide(event: PageTransitionEvent): void {
   if (!event.persisted) trajectoryPredictorClient?.dispose();

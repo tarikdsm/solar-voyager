@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+
 const HOST = '127.0.0.1';
 const PORT = 4179;
 const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/`;
@@ -28,6 +30,7 @@ try {
     ],
   });
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  await disableUnrelatedTrajectoryPrediction(page);
   const pageErrors = [];
   const consoleErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));

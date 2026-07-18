@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { disableUnrelatedTrajectoryPrediction } from '../tests/trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 4175;
@@ -151,11 +152,16 @@ async function probeCanvasPixels(page) {
 async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   const browserErrors = [];
+  let trajectoryWorkerRequestCount = 0;
+  page.on('request', (request) => {
+    if (/predictor\.worker/iu.test(request.url())) trajectoryWorkerRequestCount += 1;
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
   });
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   page.on('crash', () => browserErrors.push('page crash'));
+  await disableUnrelatedTrajectoryPrediction(page);
   if (fixturePath !== null) await page.addInitScript({ path: fixturePath });
 
   try {
@@ -194,6 +200,11 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
     const stateVector = probeStateVector ? await probeProductionStateVector(page) : null;
     await page.waitForTimeout(0);
     assertNoBrowserErrors(browserErrors);
+    assert.equal(
+      trajectoryWorkerRequestCount,
+      0,
+      'application smoke must not start the unrelated long-horizon trajectory worker',
+    );
     return { canvas, hud, stateVector };
   } finally {
     await page.close();
@@ -202,6 +213,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
 
 async function expectRuntimeFixtureFailure(browser, fixturePath, marker, triggerReadPixels = false) {
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  await disableUnrelatedTrajectoryPrediction(page);
   let timeout;
   const failure = new Promise((resolve, reject) => {
     timeout = setTimeout(
