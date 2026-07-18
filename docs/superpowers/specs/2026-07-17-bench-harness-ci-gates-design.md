@@ -22,6 +22,8 @@ Two-run mode first executes two unreported routes to prime lazy assets, shaders,
 
 The performance gate also runs against the production build with the High quality lock.
 
+The gate's page harness delivers the single production animation callback through a preallocated zero-delay macrotask. This does not skip frames or change workload counts; it prevents an uncapped software renderer from starving Playwright's telemetry and GC commands on Linux CI. The production application and reference-hardware benchmark retain native rAF scheduling.
+
 - Draw calls and triangles are sampled from `RenderTelemetry` after four identical snapshots. Committed golden counts permit a symmetric ±10% range.
 - Retained JS heap is measured after a 60-second late-initialization settling window over 30 seconds of animation frames, with explicit GC before and after. A small fixed tolerance absorbs Chromium measurement noise; fixture growth is orders of magnitude larger.
 - Bundle sizes are measured from `dist/` after build. Entry JavaScript gzip size and total JavaScript/CSS gzip size have explicit committed ceilings, while the existing critical-path gate remains authoritative for WASM and startup assets.

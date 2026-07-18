@@ -43,6 +43,45 @@ function addBrowserErrorListeners(page, browserErrors) {
   page.on('crash', () => browserErrors.push('page crash'));
 }
 
+async function installCooperativeFrameLoop(page, allocationFixture) {
+  await page.addInitScript(
+    ({ allocationBytesPerFrame }) => {
+      const retained = [];
+      const requestFrame = globalThis.requestAnimationFrame.bind(globalThis);
+      let pendingCallback = null;
+      let pendingTimestamp = 0;
+
+      function deliverFrame() {
+        const callback = pendingCallback;
+        pendingCallback = null;
+        if (allocationBytesPerFrame > 0) {
+          retained.push(new Uint8Array(allocationBytesPerFrame));
+        }
+        callback?.(pendingTimestamp);
+      }
+
+      function queueFrame(timestamp) {
+        pendingTimestamp = timestamp;
+        globalThis.setTimeout(deliverFrame, 0);
+      }
+
+      globalThis.requestAnimationFrame = (callback) => {
+        if (pendingCallback !== null) {
+          throw new Error('Performance gate supports one active animation-frame callback.');
+        }
+        pendingCallback = callback;
+        return requestFrame(queueFrame);
+      };
+      if (allocationBytesPerFrame > 0) {
+        Object.defineProperty(globalThis, '__performanceAllocationFixture', {
+          value: retained,
+        });
+      }
+    },
+    { allocationBytesPerFrame: allocationFixture ? ALLOCATION_BYTES_PER_FRAME : 0 },
+  );
+}
+
 async function exposeGc(page) {
   const available = await page.evaluate(() => typeof globalThis.gc === 'function');
   if (!available) throw new Error('Chromium did not expose gc().');
@@ -119,21 +158,8 @@ async function measurePage(browser, durationMs, allocationFixture, label) {
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const browserErrors = [];
   addBrowserErrorListeners(page, browserErrors);
+  await installCooperativeFrameLoop(page, allocationFixture);
   await installHighQualitySetting(page);
-  if (allocationFixture) {
-    await page.addInitScript((bytesPerFrame) => {
-      const retained = [];
-      const requestFrame = globalThis.requestAnimationFrame.bind(globalThis);
-      globalThis.requestAnimationFrame = (callback) =>
-        requestFrame((timestamp) => {
-          retained.push(new Uint8Array(bytesPerFrame));
-          callback(timestamp);
-        });
-      Object.defineProperty(globalThis, '__performanceAllocationFixture', {
-        value: retained,
-      });
-    }, ALLOCATION_BYTES_PER_FRAME);
-  }
 
   try {
     try {
