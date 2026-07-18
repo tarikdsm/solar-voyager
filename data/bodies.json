@@ -275,7 +275,7 @@
         "albedoColor": "#c9a477",
         "assetRef": null,
         "proceduralSeed": 599,
-        "polarRadiusRatio": 1.0
+        "polarRadiusRatio": 0.9351256084596878
       }
     },
     {
@@ -430,7 +430,7 @@
         "albedoColor": "#d8c28e",
         "assetRef": null,
         "proceduralSeed": 699,
-        "polarRadiusRatio": 1.0
+        "polarRadiusRatio": 0.9020375655405853
       }
     },
     {
@@ -678,7 +678,7 @@
         "albedoColor": "#9ccbd3",
         "assetRef": null,
         "proceduralSeed": 799,
-        "polarRadiusRatio": 1.0
+        "polarRadiusRatio": 0.9770726554247037
       }
     },
     {
@@ -864,7 +864,7 @@
         "albedoColor": "#4169a9",
         "assetRef": null,
         "proceduralSeed": 899,
-        "polarRadiusRatio": 1.0
+        "polarRadiusRatio": 0.9829187530285899
       }
     },
     {

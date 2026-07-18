@@ -1,4 +1,4 @@
-"""Build Saturn through the catalog-driven ringed-planet authoring path."""
+"""Build Neptune through the catalog-driven ringed-planet authoring path."""
 
 import pathlib
 import sys
@@ -13,4 +13,4 @@ from build_planet import main  # noqa: E402
 
 if __name__ == "__main__":
     arguments = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    main(["--id", "saturn", *arguments])
+    main(["--id", "neptune", *arguments])
