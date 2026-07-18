@@ -209,12 +209,9 @@ export function writeTrajectorySegmentBodiesInto(
   for (let eventIndex = 0; eventIndex < eventCount; eventIndex += 1) {
     const eventOffset = eventIndex * PREDICTOR_EVENT_STRIDE;
     if (
-      packedEvents[eventOffset + PREDICTOR_EVENT_CODE_OFFSET] ===
-      PredictorEventCode.SoiTransition
+      packedEvents[eventOffset + PREDICTOR_EVENT_CODE_OFFSET] === PredictorEventCode.SoiTransition
     ) {
-      activeBodyIndex = packedEvents[
-        eventOffset + PREDICTOR_EVENT_BODY_INDEX_OFFSET
-      ] as number;
+      activeBodyIndex = packedEvents[eventOffset + PREDICTOR_EVENT_BODY_INDEX_OFFSET] as number;
       break;
     }
   }

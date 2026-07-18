@@ -13,11 +13,7 @@ import {
 } from './trajectoryPredictionModel.js';
 
 function createPoints(): Float64Array {
-  return new Float64Array([
-    0, 0, 0, 0,
-    10, 10, 20, 30,
-    20, 20, 40, 60,
-  ]);
+  return new Float64Array([0, 0, 0, 0, 10, 10, 20, 30, 20, 20, 40, 60]);
 }
 
 function event(
@@ -52,20 +48,10 @@ describe('trajectory prediction presentation model', () => {
     const codes = new Float32Array(4).fill(-1);
     const bodies = new Float32Array(4).fill(-1);
 
-    const markerCount = writeTrajectoryMarkersInto(
-      positions,
-      codes,
-      bodies,
-      points,
-      events,
-    );
+    const markerCount = writeTrajectoryMarkersInto(positions, codes, bodies, points, events);
 
     expect(markerCount).toBe(3);
-    expect(Array.from(positions.slice(0, 9))).toEqual([
-      10, 20, 30,
-      5, 10, 15,
-      20, 40, 60,
-    ]);
+    expect(Array.from(positions.slice(0, 9))).toEqual([10, 20, 30, 5, 10, 15, 20, 40, 60]);
     expect(Array.from(codes.slice(0, 3))).toEqual([
       PredictorEventCode.SoiTransition,
       PredictorEventCode.ClosestApproach,
