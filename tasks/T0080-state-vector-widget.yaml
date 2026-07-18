@@ -48,6 +48,6 @@ handoff_notes: |
   0.99c logarithmic domain is unit tested; the live prograde LEO total is the
   physically correct 37.9 km/s CM-relative speed.
 
-  Independent reviewer approval: exact head f890dd4 was re-reviewed with no
-  Critical or Important findings. GitHub Actions run 29630614904 completed green
-  in 4m43s. T0080 is approved as DONE; merge remains a maintainer action.
+  Final independent reviewer approval: exact code head 356cb96 was reviewed with
+  no Critical or Important findings. GitHub Actions run 29632072949 completed
+  green in 4m42s. T0080 remains approved as DONE; merge is a maintainer action.
