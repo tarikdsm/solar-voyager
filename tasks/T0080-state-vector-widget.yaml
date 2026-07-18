@@ -1,6 +1,6 @@
 id: T0080
 title: Bottom-right 3D state-vector widget (v, a, p, L relative to CM)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0080-state-vector-widget
 depends_on: [T0040, T0054]
@@ -47,3 +47,7 @@ handoff_notes: |
   median/p75/p99, with route heap -1,176 B. The literal monotonic 30 km/s to
   0.99c logarithmic domain is unit tested; the live prograde LEO total is the
   physically correct 37.9 km/s CM-relative speed.
+
+  Independent reviewer approval: exact head f890dd4 was re-reviewed with no
+  Critical or Important findings. GitHub Actions run 29630614904 completed green
+  in 4m43s. T0080 is approved as DONE; merge remains a maintainer action.
