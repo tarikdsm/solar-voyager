@@ -1,6 +1,6 @@
 id: T0080
 title: Bottom-right 3D state-vector widget (v, a, p, L relative to CM)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0080-state-vector-widget
 depends_on: [T0040, T0054]
