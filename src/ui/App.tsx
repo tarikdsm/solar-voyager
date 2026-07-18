@@ -12,6 +12,8 @@ import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
 import { StateVectorPanel } from './StateVectorPanel.js';
 import type { StateVectorSignalStore } from './stateVectorSignals.js';
+import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
+import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
 
 const scaffoldState = createScaffoldState();
 const WARP_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -30,6 +32,7 @@ export interface AppProps {
   readonly session?: SessionSettingsPort | null;
   readonly stateVectors?: StateVectorSignalStore | null;
   readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
+  readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
 }
 
 interface ReadoutValueProps {
@@ -170,11 +173,13 @@ export function TargetPanel({
   commands,
   hud,
   hudState,
+  trajectoryPrediction = null,
 }: {
   readonly bodyIds: readonly string[];
   readonly commands: Commands;
   readonly hud: HudDisplaySignals;
   readonly hudState: HudSignals;
+  readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
 }) {
   const selectedTarget = useComputed(() => hudState.targetBodyId.value ?? '');
   return (
@@ -198,7 +203,10 @@ export function TargetPanel({
       <dl>
         <ReadoutValue label="Distance" value={hud.targetDistance} />
         <ReadoutValue label="Relative speed" value={hud.targetRelativeSpeed} />
-        <ReadoutValue label="Next approach" value={hud.nextClosestApproach} />
+        <ReadoutValue
+          label="Next approach"
+          value={trajectoryPrediction?.display.nextClosestApproach ?? hud.nextClosestApproach}
+        />
       </dl>
     </section>
   );
@@ -238,11 +246,15 @@ export function App({
   session = null,
   stateVectors = null,
   stateVectorViewportRef = null,
+  trajectoryPrediction = null,
 }: AppProps) {
   return (
     <main class="app-overlay">
       {hardwareWarning === null ? null : (
         <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
+      )}
+      {trajectoryPrediction === null ? null : (
+        <TrajectoryImpactWarning display={trajectoryPrediction.display} />
       )}
       <h1 class="app-title">{scaffoldState.title}</h1>
       {perfPanel === null ? null : <PerfPanel store={perfPanel} />}
@@ -251,7 +263,13 @@ export function App({
       <DualClock hud={hud} />
       <WarpControl commands={commands} hud={hud} hudState={hudState} />
       <EnergyPanel hud={hud} />
-      <TargetPanel bodyIds={bodyIds} commands={commands} hud={hud} hudState={hudState} />
+      <TargetPanel
+        bodyIds={bodyIds}
+        commands={commands}
+        hud={hud}
+        hudState={hudState}
+        trajectoryPrediction={trajectoryPrediction}
+      />
       {stateVectors === null || stateVectorViewportRef === null ? null : (
         <StateVectorPanel
           display={stateVectors.display}

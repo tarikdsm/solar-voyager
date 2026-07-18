@@ -906,6 +906,57 @@
   pointer-events: auto;
 }
 
+.trajectory-impact-warning {
+  position: fixed;
+  z-index: 12;
+  top: 4.75rem;
+  left: 50%;
+  width: min(28rem, calc(100vw - 2rem));
+  height: 4.5rem;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgb(255 111 79 / 62%);
+  border-radius: 0.7rem;
+  background: linear-gradient(135deg, rgb(54 12 12 / 94%), rgb(20 7 12 / 90%));
+  box-shadow: 0 0 2rem rgb(255 65 45 / 18%);
+  color: #ffe1d9;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -0.75rem);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  contain: strict;
+}
+
+.trajectory-impact-warning[data-visible='true'] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.trajectory-impact-warning > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.trajectory-impact-warning strong {
+  color: #ff8b73;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.trajectory-impact-icon {
+  color: #ff6f4f;
+  font-size: 2rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 0.45rem rgb(255 83 51 / 55%));
+}
+
 .hardware-warning h2,
 .hardware-warning p,
 .hardware-warning ul {
