@@ -279,7 +279,7 @@ export async function runApplicationSmokeContract({
   });
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
     if (fixtureOnly) return await runProbe(browser, RUNTIME_ERROR_FIXTURE);
     if (delayedFixtureOnly) return await runProbe(browser, FRAMEBUFFER_ERROR_FIXTURE);
     if (productionOnly) return await runProbe(browser, null, true);

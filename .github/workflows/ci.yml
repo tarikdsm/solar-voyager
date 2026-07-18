@@ -45,6 +45,7 @@ jobs:
         run: npm run test:perf-gates
 
       - name: Application smoke
+        timeout-minutes: 5
         run: npm run test:smoke
 
       - name: Render depth regression
