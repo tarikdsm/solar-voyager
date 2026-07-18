@@ -1,6 +1,6 @@
 id: T0093
 title: Audit and ingest Pluto source asset
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0093-audit-ingest-pluto-asset
 depends_on: [T0035]
