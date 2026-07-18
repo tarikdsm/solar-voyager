@@ -42,7 +42,7 @@ Orientation: **north pole along +Y** (after glTF's +Y-up export), prime meridian
 | Planets, Sun, major moons | Quad sphere (subdivided cube, poles-free UVs preferred) or UV sphere ≥ 128×64 segments | ≤ 50k tris |
 | Dwarfs, small moons | UV sphere 64×32 | ≤ 15k tris |
 | Asteroids/comets | Displaced icosphere (seeded noise + craters) or decimated real shape model (Eros, Bennu, 67P have published meshes) | ≤ 5k tris |
-| Rings | Flat annulus, 128+ radial segments, **double-sided material** | ≤ 5k tris |
+| Rings | Flat annulus, 256 angular × 4 radial segments, **double-sided material**; radial structure belongs in texture U | ≤ 5k tris |
 | Ship | Hard-surface model, PBR, named nodes `hull_tip` (+X orientation marker) and `engine_nozzle` (renderer attaches the plume there) | ≤ 30k tris |
 
 Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (quad sphere solves this — check with a checker texture).
@@ -73,7 +73,7 @@ Current project-authored detail pairs can be regenerated with
 `node tools/generateDetailTextures.mjs`. Generated files still require explicit
 entries in each body's `SOURCES.md`.
 
-Rings (Saturn, Uranus, Jupiter's faint ring, Neptune's arcs): **1D radial strips stretched to 2048×64** — color+alpha (transmission) from real ring scans (solarsystemscope / NASA PDS derived). Alpha is optical depth; the shader uses it for both transparency and the planet's shadow on the ring.
+Rings (Saturn, Uranus, Jupiter's faint ring, Neptune's arcs): **1D radial strips stretched to 2048×64** — color+alpha (transmission) from the records and sources pinned in `data/rings.json`. Alpha is exposed optical depth; the shader uses it for transparency, shadows, and density. Use `tools/blender/common/rings.py` rather than hand-building an annulus: its radial U / angular V mapping, exact catalog ratios, smooth normals, and 2,048-triangle topology are the authoring contract. Review with `render_ring_previews.py`; cameras and lights are never exported.
 
 ## 6. Materials
 

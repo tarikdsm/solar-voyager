@@ -355,11 +355,11 @@ git commit -m "test(render): [T0083] verify ring systems in WebGL"
 **Interfaces:**
 - Produces complete acceptance evidence and REVIEW handoff.
 
-- [ ] **Step 1: Capture paired benchmark evidence**
+- [x] **Step 1: Capture paired benchmark evidence**
 
 Run the unchanged native 1920×1080 benchmark route before/after with identical browser, warm-up, duration, and camera. Record FPS/cadence, CPU/GPU p50/p75/p99, draw calls, triangles, programs, heap, renderer string, console errors, and page errors. Add a dedicated Saturn-plane segment if the standard route does not activate particles.
 
-- [ ] **Step 2: Document implemented constants only**
+- [x] **Step 2: Document implemented constants only**
 
 Update rendering spec §11 with catalog/shader/cross-fade/quality behavior, asset pipeline with `rings.json` and strip generation, and modeling guide with the shared annulus helper. Record sources and the reference-hardware limitation honestly.
 
