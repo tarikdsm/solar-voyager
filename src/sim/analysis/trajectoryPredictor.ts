@@ -13,7 +13,7 @@ import {
   PREDICTOR_POINT_Z_KM_OFFSET,
   PREDICTOR_STATE_LENGTH,
   PredictorEventCode,
-} from '../../workers/predictorProtocol.js';
+} from './trajectoryPredictionLayout.js';
 import {
   createDp54Result,
   createDp54Workspace,

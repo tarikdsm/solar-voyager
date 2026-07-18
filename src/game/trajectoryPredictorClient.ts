@@ -11,8 +11,16 @@ export const TRAJECTORY_PREDICTOR_DEBOUNCE_MS = 500;
 
 /** Worker subset used by the browser-independent trajectory client. */
 export interface TrajectoryPredictorWorkerPort {
-  addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
-  removeEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
+  addEventListener(
+    type: 'message' | 'messageerror',
+    listener: (event: MessageEvent<unknown>) => void,
+  ): void;
+  addEventListener(type: 'error', listener: (event: ErrorEvent) => void): void;
+  removeEventListener(
+    type: 'message' | 'messageerror',
+    listener: (event: MessageEvent<unknown>) => void,
+  ): void;
+  removeEventListener(type: 'error', listener: (event: ErrorEvent) => void): void;
   postMessage(message: PredictorRequestMessage, transfer: Transferable[]): void;
   terminate?(): void;
 }
@@ -48,11 +56,14 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
   private dirty = false;
   private disposed = false;
   private latestInvalidationMs = 0;
+  private invalidationVersion = 0;
   private pendingRequestId = -1;
   private lastRequestId = 0;
   private readonly now: () => number;
   private readonly ownsPort: boolean;
   private readonly messageListener: (event: MessageEvent<unknown>) => void;
+  private readonly errorListener: (event: ErrorEvent) => void;
+  private readonly messageErrorListener: (event: MessageEvent<unknown>) => void;
 
   constructor(
     private readonly port: TrajectoryPredictorWorkerPort,
@@ -68,12 +79,21 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
     this.messageListener = (event) => {
       this.handleMessage(event.data);
     };
+    this.errorListener = () => {
+      this.handleTransportFailure('trajectory predictor worker error');
+    };
+    this.messageErrorListener = () => {
+      this.handleTransportFailure('trajectory predictor message error');
+    };
     port.addEventListener('message', this.messageListener);
+    port.addEventListener('error', this.errorListener);
+    port.addEventListener('messageerror', this.messageErrorListener);
   }
 
   invalidate(): void {
     if (this.disposed) return;
     this.dirty = true;
+    this.invalidationVersion += 1;
     this.latestInvalidationMs = this.now();
   }
 
@@ -98,6 +118,8 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
     this.disposed = true;
     this.dirty = false;
     this.port.removeEventListener('message', this.messageListener);
+    this.port.removeEventListener('error', this.errorListener);
+    this.port.removeEventListener('messageerror', this.messageErrorListener);
     if (this.ownsPort) this.port.terminate?.();
   }
 
@@ -114,6 +136,7 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
       shipState[index] = snapshot.shipState[index] as number;
     }
     const requestId = this.lastRequestId + 1;
+    const dispatchInvalidationVersion = this.invalidationVersion;
     const message: PredictorRequestMessage =
       userHorizonSec === undefined
         ? {
@@ -137,9 +160,23 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
           };
 
     this.lastRequestId = requestId;
+    try {
+      this.port.postMessage(message, [shipState.buffer]);
+    } catch {
+      const isCurrent = this.invalidationVersion === dispatchInvalidationVersion;
+      this.dirty = true;
+      this.latestInvalidationMs = this.now();
+      if (isCurrent) {
+        this.onResult({
+          type: 'error',
+          requestId,
+          message: 'trajectory predictor dispatch failed',
+        });
+      }
+      return;
+    }
     this.pendingRequestId = requestId;
-    this.dirty = false;
-    this.port.postMessage(message, [shipState.buffer]);
+    this.dirty = this.invalidationVersion !== dispatchInvalidationVersion;
   }
 
   private handleMessage(payload: unknown): void {
@@ -152,6 +189,17 @@ class DefaultTrajectoryPredictorClient implements TrajectoryPredictorClient {
     const isCurrent = !this.dirty;
     this.pendingRequestId = -1;
     if (isCurrent) this.onResult(payload);
+  }
+
+  private handleTransportFailure(message: string): void {
+    if (this.disposed || this.pendingRequestId < 0) return;
+
+    const requestId = this.pendingRequestId;
+    const isCurrent = !this.dirty;
+    this.pendingRequestId = -1;
+    this.dirty = true;
+    this.latestInvalidationMs = this.now();
+    if (isCurrent) this.onResult({ type: 'error', requestId, message });
   }
 }
 

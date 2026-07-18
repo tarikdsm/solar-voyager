@@ -52,12 +52,14 @@ gravity derivative calls `evaluateRailsInto()` and
 `evaluateNBodyAccelerationInto()` exactly as `SimulationCore` does, while its
 proper-acceleration evaluator writes zero. No alternate force model is allowed.
 
-The worker checks events at every accepted output point. Dominant-body changes
-reuse `selectDominantBodyIndexWithHysteresis()`. Target closest approach is the
-minimum sampled target-centre distance. Impact is the first outside-to-inside
-crossing of each body's mean radius plus atmosphere top, with crossing time
-linearly interpolated between the bracketing samples. Prediction stops at the
-first impact so the final point and time-to-impact remain operationally useful.
+SOI selection and target closest approach are evaluated at every emitted output
+point. Dominant-body changes reuse
+`selectDominantBodyIndexWithHysteresis()`, and closest approach is the minimum
+sampled target-centre distance. Impact is inspected on every accepted DP54
+segment using body-relative ship/body endpoints and a segment-sphere crossing
+test against each body's mean radius plus atmosphere top. The first crossing is
+linearly interpolated within that accepted segment. Prediction stops there so
+the final point and time-to-impact remain operationally useful.
 
 ## Debounce and stale work
 

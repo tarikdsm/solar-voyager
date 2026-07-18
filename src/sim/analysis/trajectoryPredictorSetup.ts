@@ -1,5 +1,5 @@
-import { PREDICTOR_MAX_POINTS, PREDICTOR_STATE_LENGTH } from '../../workers/predictorProtocol.js';
 import type { CompiledRailsCatalog } from '../propagation/rails.js';
+import { PREDICTOR_MAX_POINTS, PREDICTOR_STATE_LENGTH } from './trajectoryPredictionLayout.js';
 
 export interface ThrustFreeTrajectoryOptions {
   readonly catalog: CompiledRailsCatalog;

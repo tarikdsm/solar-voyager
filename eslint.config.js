@@ -54,8 +54,8 @@ export default tseslint.config(
             },
             {
               target: './src/sim',
-              from: ['./src/game', './src/render', './src/ui'],
-              message: 'Simulation must not import from game, render, or UI.',
+              from: ['./src/game', './src/render', './src/ui', './src/workers'],
+              message: 'Simulation must not import from game, render, UI, or workers.',
             },
             {
               target: './src/game',

@@ -11,7 +11,7 @@ import {
   PREDICTOR_MAX_POINTS,
   PREDICTOR_POINT_STRIDE,
   PredictorEventCode,
-} from '../../workers/predictorProtocol.js';
+} from './trajectoryPredictionLayout.js';
 import {
   createDp54Result,
   createDp54Workspace,
