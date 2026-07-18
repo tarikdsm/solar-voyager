@@ -15,12 +15,18 @@ import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
+import { StateVectorWidget } from './render/stateVectorWidget.js';
 import type { Commands } from './sim/simulationSnapshot.js';
 import './style.css';
 import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
+import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
+import {
+  STATE_VECTOR_VIEWPORT_COMPONENT_COUNT,
+  writeStateVectorViewportPixelsInto,
+} from './ui/stateVectorViewport.js';
 
 const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
@@ -52,6 +58,8 @@ const perfPanelStore = createPerfPanelStore({
 const initialSimulation = createNewGameSimulation(SHIP_MASS_KG);
 const hudStore = createHudSignalStore();
 hudStore.publish(initialSimulation.snapshot, 0);
+const stateVectorStore = createStateVectorSignalStore();
+stateVectorStore.publish(initialSimulation.snapshot, 0);
 const hardwareWarning = contextReport.warningRequired
   ? { rendererName: contextReport.rendererName }
   : null;
@@ -61,6 +69,9 @@ let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let commandInput: KeyboardCommandMapper | null = null;
 let perfGovernor: PerfGovernor | null = null;
+let stateVectorWidget: StateVectorWidget | null = null;
+let stateVectorViewportElement: HTMLDivElement | null = null;
+const stateVectorViewportPixels = new Float64Array(STATE_VECTOR_VIEWPORT_COMPONENT_COUNT);
 const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
   setItem: (key, value) => window.localStorage.setItem(key, value),
@@ -82,6 +93,33 @@ const session = new GameSessionController({
 
 function currentInputSnapshot() {
   return session.simulation.snapshot;
+}
+
+function updateStateVectorViewport(): void {
+  if (stateVectorWidget === null || stateVectorViewportElement === null) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  if (canvasRect.width <= 0 || canvasRect.height <= 0) {
+    stateVectorWidget.setViewportPixels(0, 0, 0, 0);
+    return;
+  }
+  writeStateVectorViewportPixelsInto(
+    stateVectorViewportPixels,
+    canvasRect,
+    stateVectorViewportElement.getBoundingClientRect(),
+    canvas.width,
+    canvas.height,
+  );
+  stateVectorWidget.setViewportPixels(
+    stateVectorViewportPixels[0] as number,
+    stateVectorViewportPixels[1] as number,
+    stateVectorViewportPixels[2] as number,
+    stateVectorViewportPixels[3] as number,
+  );
+}
+
+function setStateVectorViewportElement(element: HTMLDivElement | null): void {
+  stateVectorViewportElement = element;
+  updateStateVectorViewport();
 }
 
 const sessionCommands: Commands = {
@@ -114,11 +152,12 @@ function resizeRenderer(): void {
     world.spaceScene.camera.aspect = clientWidth / clientHeight;
     world.spaceScene.camera.updateProjectionMatrix();
     postPipeline?.resize(clientWidth, clientHeight, pixelRatio);
+    updateStateVectorViewport();
   }
 }
 
 function renderFrame(nowMs: number): void {
-  if (world === null || postPipeline === null) return;
+  if (world === null || postPipeline === null || stateVectorWidget === null) return;
   const {
     spaceScene,
     visualSystem,
@@ -137,6 +176,7 @@ function renderFrame(nowMs: number): void {
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
   hudStore.publish(snapshot, nowMs);
+  stateVectorStore.publish(snapshot, nowMs);
   const hudEndMs = performance.now();
   const renderStartMs = performance.now();
   cameraController.update(deltaSec);
@@ -146,6 +186,8 @@ function renderFrame(nowMs: number): void {
     cameraController.lookDirection.z,
   );
   spaceScene.camera.updateMatrix();
+  stateVectorWidget.setPinnedToEcliptic(stateVectorStore.signals.pinnedToEcliptic.value);
+  stateVectorWidget.update(snapshot, spaceScene.camera);
   visualSystem.update(
     cameraPositionKm,
     Math.max(1, canvas.clientHeight),
@@ -158,6 +200,8 @@ function renderFrame(nowMs: number): void {
   spaceScene.updateCameraRelative(cameraPositionKm);
   telemetry.beginGpuTimer();
   postPipeline.render(postProcessingEnabled);
+  stateVectorWidget.render(renderer);
+  telemetry.recordStateVectorWidgetMs(stateVectorWidget.lastRenderMs);
   telemetry.endGpuTimer();
   const renderEndMs = performance.now();
   const perfPanelStartMs = performance.now();
@@ -183,6 +227,8 @@ async function startApplication(): Promise<void> {
       hudState: hudStore.signals,
       perfPanel: perfPanelStore,
       session,
+      stateVectors: stateVectorStore,
+      stateVectorViewportRef: setStateVectorViewportElement,
     }),
     appRoot,
   );
@@ -194,6 +240,7 @@ async function startApplication(): Promise<void> {
   world = await createEpochWorld(renderer, {
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
   });
+  stateVectorWidget = new StateVectorWidget();
   postPipeline = new LightingPostPipeline(
     renderer,
     world.spaceScene.scene,
@@ -219,6 +266,8 @@ async function startApplication(): Promise<void> {
   world.lighting.update();
   world.spaceScene.updateCameraRelative(world.cameraPositionKm);
   postPipeline.warmUp(postProcessingEnabled);
+  await stateVectorWidget.prepare(renderer);
+  updateStateVectorViewport();
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
@@ -227,6 +276,7 @@ async function startApplication(): Promise<void> {
   cameraInput = new CameraInputController(canvas, window, focusLabel, world.cameraController);
   canvas.dataset.cameraReady = 'true';
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
+  window.addEventListener('scroll', updateStateVectorViewport, true);
   requestAnimationFrame(renderFrame);
 }
 

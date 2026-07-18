@@ -47,6 +47,7 @@ function createTelemetry(frameTimesChronological: readonly number[]): PerfPanelT
       qualityActionCount: 0,
       renderMs: 6.5,
       simMs: 1.25,
+      stateVectorWidgetMs: 0.35,
       textures: 4,
       triangles: 34_567,
       uiMs: 0.15,

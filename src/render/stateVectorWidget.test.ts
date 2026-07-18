@@ -1,4 +1,5 @@
-import { Euler, PerspectiveCamera, Vector4, type Camera, type Scene } from 'three';
+import { Euler, Mesh, PerspectiveCamera, Vector4, type Camera, type Scene } from 'three';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createSimulationSnapshotBuffer } from '../sim/simulationSnapshot.js';
@@ -61,6 +62,17 @@ function createSnapshot() {
 }
 
 describe('StateVectorWidget', () => {
+  it('owns a screen-facing backdrop behind the oriented vectors', () => {
+    const widget = new StateVectorWidget();
+    const backdrop = widget.scene.getObjectByName('state-vector-backdrop');
+
+    expect(backdrop).toBeDefined();
+    expect(backdrop?.parent).toBe(widget.scene);
+    expect(backdrop?.renderOrder).toBeLessThan(widget.orientationRoot.renderOrder);
+    expect(backdrop).toBeInstanceOf(Mesh);
+    expect((backdrop as Mesh).geometry.type).toBe('PlaneGeometry');
+  });
+
   it('creates resources once and mutates the same vector buffers across updates', () => {
     const widget = new StateVectorWidget();
     const camera = new PerspectiveCamera();
@@ -77,6 +89,9 @@ describe('StateVectorWidget', () => {
     expect(widget.vectorLines.map((line) => line.geometry)).toEqual(geometries);
     expect(widget.vectorLines.map((line) => line.material)).toEqual(materials);
     expect(widget.visibleMask).toBe(0b1111);
+    expect((widget.vectorLines[0]?.material as LineMaterial).linewidth).toBeGreaterThan(
+      (widget.vectorLines[2]?.material as LineMaterial).linewidth,
+    );
     expect(widget.endpointComponents[0]).toBe(0);
     expect(widget.endpointComponents[1]).toBeGreaterThan(0);
     expect(widget.endpointComponents[2]).toBeGreaterThan(0);

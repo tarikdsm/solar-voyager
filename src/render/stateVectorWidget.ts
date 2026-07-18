@@ -10,7 +10,10 @@ import {
   LineBasicMaterial,
   LineSegments,
   type Material,
+  Mesh,
+  MeshBasicMaterial,
   OrthographicCamera,
+  PlaneGeometry,
   Points,
   Quaternion,
   Scene,
@@ -28,6 +31,7 @@ import { STATE_VECTOR_COMPONENT_COUNT, writeStateVectorEndpointsInto } from './s
 
 const VECTOR_COUNT = 4;
 const VECTOR_COLORS = Object.freeze([0x5eead4, 0xfbbf24, 0xf472b6, 0xa78bfa]);
+const VECTOR_WIDTHS = Object.freeze([3.2, 2.2, 1.35, 2.2]);
 const VECTOR_COLOR_COMPONENTS = Object.freeze([
   Object.freeze([0.3686, 0.9176, 0.8314]),
   Object.freeze([0.9843, 0.749, 0.1412]),
@@ -52,7 +56,7 @@ varying vec4 vGlowColor;
 
 void main() {
   float radial = length(gl_PointCoord - vec2(0.5));
-  float alpha = smoothstep(0.5, 0.0, radial) * vGlowColor.a;
+  float alpha = (1.0 - smoothstep(0.08, 0.5, radial)) * vGlowColor.a;
   gl_FragColor = vec4(vGlowColor.rgb, alpha);
 }
 `;
@@ -125,7 +129,7 @@ function createAxesGeometry(): BufferGeometry {
   return geometry;
 }
 
-function createVectorLine(color: number): MutableLineResources {
+function createVectorLine(color: number, linewidth: number): MutableLineResources {
   const geometry = new LineGeometry();
   geometry.setPositions(new Float32Array(6));
   const startAttribute = geometry.getAttribute('instanceStart');
@@ -137,7 +141,7 @@ function createVectorLine(color: number): MutableLineResources {
   }
   const material = new LineMaterial({
     color,
-    linewidth: 1.8,
+    linewidth,
     transparent: true,
     opacity: 0.92,
     depthTest: false,
@@ -185,6 +189,19 @@ export class StateVectorWidget {
 
   constructor() {
     this.scene.name = 'state-vector-widget';
+    const backdropGeometry = new PlaneGeometry(2.24, 2.24);
+    const backdropMaterial = new MeshBasicMaterial({
+      color: 0x061426,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const backdrop = new Mesh(backdropGeometry, backdropMaterial);
+    backdrop.name = 'state-vector-backdrop';
+    backdrop.position.z = -0.4;
+    backdrop.renderOrder = -100;
+    backdrop.matrixAutoUpdate = false;
+    backdrop.updateMatrix();
+    this.scene.add(backdrop);
     this.camera.name = 'state-vector-camera';
     this.camera.position.set(0, 0, 3);
     this.camera.updateMatrix();
@@ -223,10 +240,13 @@ export class StateVectorWidget {
 
     const resources: MutableLineResources[] = [];
     const lines: Line2[] = [];
-    const geometries: BufferGeometry[] = [gridGeometry, axesGeometry];
-    const materials: Material[] = [gridMaterial, axesMaterial];
+    const geometries: BufferGeometry[] = [backdropGeometry, gridGeometry, axesGeometry];
+    const materials: Material[] = [backdropMaterial, gridMaterial, axesMaterial];
     for (let index = 0; index < VECTOR_COUNT; index += 1) {
-      const resource = createVectorLine(VECTOR_COLORS[index] as number);
+      const resource = createVectorLine(
+        VECTOR_COLORS[index] as number,
+        VECTOR_WIDTHS[index] as number,
+      );
       resource.line.name = `state-vector-${index}`;
       resources.push(resource);
       lines.push(resource.line);
@@ -252,7 +272,7 @@ export class StateVectorWidget {
     tipGeometry.setAttribute('position', this.tipPositionAttribute);
     tipGeometry.setAttribute('glowColor', this.tipColorAttribute);
     const tipMaterial = new ShaderMaterial({
-      uniforms: { pointSize: { value: 13 } },
+      uniforms: { pointSize: { value: 26 } },
       vertexShader: GLOW_VERTEX_SHADER,
       fragmentShader: GLOW_FRAGMENT_SHADER,
       transparent: true,

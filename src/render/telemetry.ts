@@ -40,6 +40,7 @@ export interface RenderTelemetrySnapshot {
   qualityActionCount: number;
   renderMs: number;
   simMs: number;
+  stateVectorWidgetMs: number;
   textures: number;
   triangles: number;
   uiMs: number;
@@ -78,6 +79,7 @@ export class RenderTelemetry {
   private latestSimMs = 0;
   private latestRenderMs = 0;
   private latestUiMs = 0;
+  private latestStateVectorWidgetMs = 0;
   private nextSnapshotTimestampMs = 0;
   private activeGpuQueryIndex = -1;
   private nextGpuQueryIndex = 0;
@@ -113,6 +115,7 @@ export class RenderTelemetry {
       qualityActionCount: 0,
       renderMs: 0,
       simMs: 0,
+      stateVectorWidgetMs: 0,
       textures: 0,
       triangles: 0,
       uiMs: 0,
@@ -183,6 +186,13 @@ export class RenderTelemetry {
     this.context.endQuery(this.timerExtension.TIME_ELAPSED_EXT);
     this.gpuQueryStates[this.activeGpuQueryIndex] = GPU_QUERY_PENDING;
     this.activeGpuQueryIndex = -1;
+  }
+
+  recordStateVectorWidgetMs(durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      throw new RangeError('State-vector widget duration must be finite and nonnegative.');
+    }
+    this.latestStateVectorWidgetMs = durationMs;
   }
 
   endFrame(simMs: number, renderMs: number, uiMs: number, frameTimestampMs: number): void {
@@ -348,6 +358,7 @@ export class RenderTelemetry {
     this.snapshot.programs = this.renderer.info.programs?.length ?? 0;
     this.snapshot.renderMs = this.latestRenderMs;
     this.snapshot.simMs = this.latestSimMs;
+    this.snapshot.stateVectorWidgetMs = this.latestStateVectorWidgetMs;
     this.snapshot.textures = memoryInfo.textures;
     this.snapshot.triangles = renderInfo.triangles;
     this.snapshot.uiMs = this.latestUiMs;

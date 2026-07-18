@@ -157,6 +157,7 @@ describe('RenderTelemetry', () => {
     telemetry.endFrame(0, 0, 0, 0);
 
     telemetry.beginFrame(250);
+    telemetry.recordStateVectorWidgetMs(0.42);
     info.render.calls = 14;
     info.render.triangles = 18;
     info.render.points = 17;
@@ -178,10 +179,19 @@ describe('RenderTelemetry', () => {
       programs: 4,
       renderMs: 2,
       simMs: 1,
+      stateVectorWidgetMs: 0.42,
       textures: 13,
       triangles: 18,
       uiMs: 0.5,
     });
+  });
+
+  it('rejects invalid state-vector cost samples', () => {
+    const { renderer } = fakeRenderer(contextWithoutTimer());
+    const telemetry = new RenderTelemetry(renderer, contextReport());
+
+    expect(() => telemetry.recordStateVectorWidgetMs(Number.NaN)).toThrow(RangeError);
+    expect(() => telemetry.recordStateVectorWidgetMs(-0.1)).toThrow(RangeError);
   });
 
   it('keeps a true one-second FPS window above the 120-frame sparkline capacity', () => {
