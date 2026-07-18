@@ -67,7 +67,7 @@ function hasOnlyKeys(value: Record<string, unknown>, allowedKeys: readonly strin
 }
 
 function isRequestId(value: unknown): value is number {
-  return Number.isInteger(value) && (value as number) >= 0;
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function isBodyIndex(value: unknown, bodyCount: number): value is number {
@@ -230,6 +230,7 @@ export function isPredictorSuccessMessage(
     value.points.length > PREDICTOR_MAX_POINTS * PREDICTOR_POINT_STRIDE ||
     !hasFiniteComponents(value.points) ||
     !isOwnedFloat64Array(value.events) ||
+    value.points.buffer === value.events.buffer ||
     value.events.length % PREDICTOR_EVENT_STRIDE !== 0
   ) {
     return false;

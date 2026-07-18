@@ -116,7 +116,12 @@ describe('trajectory predictor protocol', () => {
   });
 
   it('validates predictor requests and permits unavailable body indices', () => {
-    expect(isPredictorRequestMessage(createRequest(), BODY_COUNT)).toBe(true);
+    expect(
+      isPredictorRequestMessage(
+        { ...createRequest(), requestId: Number.MAX_SAFE_INTEGER },
+        BODY_COUNT,
+      ),
+    ).toBe(true);
     expect(
       isPredictorRequestMessage(
         {
@@ -152,6 +157,15 @@ describe('trajectory predictor protocol', () => {
     const nonFiniteState = createRequest();
     nonFiniteState.shipState[3] = Number.POSITIVE_INFINITY;
     expect(isPredictorRequestMessage(nonFiniteState, BODY_COUNT)).toBe(false);
+    if (typeof SharedArrayBuffer === 'function') {
+      const sharedState = new Float64Array(
+        new SharedArrayBuffer(PREDICTOR_STATE_LENGTH * Float64Array.BYTES_PER_ELEMENT),
+      );
+      sharedState.fill(1);
+      expect(
+        isPredictorRequestMessage({ ...createRequest(), shipState: sharedState }, BODY_COUNT),
+      ).toBe(false);
+    }
     const oversizedStateBuffer = new ArrayBuffer((PREDICTOR_STATE_LENGTH + 1) * 8);
     const partialStateView = new Float64Array(oversizedStateBuffer, 8, PREDICTOR_STATE_LENGTH);
     partialStateView.fill(1);
@@ -173,6 +187,12 @@ describe('trajectory predictor protocol', () => {
     expect(
       isPredictorRequestMessage({ ...createRequest(), userHorizonSec: undefined }, BODY_COUNT),
     ).toBe(false);
+    expect(
+      isPredictorRequestMessage(
+        { ...createRequest(), requestId: Number.MAX_SAFE_INTEGER + 1 },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
   });
 
   it('validates packed success and deterministic error messages', () => {
@@ -180,6 +200,55 @@ describe('trajectory predictor protocol', () => {
     expect(
       isPredictorSuccessMessage(
         { ...createSuccess(), points: new Float64Array(PREDICTOR_POINT_STRIDE - 1) },
+        BODY_COUNT,
+      ),
+    ).toBe(false);
+    const success = createSuccess();
+    const oversizedPointsBuffer = new ArrayBuffer(
+      success.points.byteLength + Float64Array.BYTES_PER_ELEMENT,
+    );
+    const partialPoints = new Float64Array(
+      oversizedPointsBuffer,
+      Float64Array.BYTES_PER_ELEMENT,
+      success.points.length,
+    );
+    partialPoints.set(success.points);
+    expect(isPredictorSuccessMessage({ ...success, points: partialPoints }, BODY_COUNT)).toBe(
+      false,
+    );
+    if (typeof SharedArrayBuffer === 'function') {
+      const sharedPoints = new Float64Array(new SharedArrayBuffer(success.points.byteLength));
+      sharedPoints.set(success.points);
+      expect(isPredictorSuccessMessage({ ...success, points: sharedPoints }, BODY_COUNT)).toBe(
+        false,
+      );
+
+      const sharedEvents = new Float64Array(new SharedArrayBuffer(success.events.byteLength));
+      sharedEvents.set(success.events);
+      expect(isPredictorSuccessMessage({ ...success, events: sharedEvents }, BODY_COUNT)).toBe(
+        false,
+      );
+    }
+    const aliasedBuffer = new ArrayBuffer(12 * Float64Array.BYTES_PER_ELEMENT);
+    const aliasedPoints = new Float64Array(aliasedBuffer);
+    const aliasedEvents = new Float64Array(aliasedBuffer);
+    aliasedEvents.set([
+      PredictorEventCode.Impact,
+      2,
+      1,
+      -1,
+      0,
+      2,
+      PredictorEventCode.Impact,
+      3,
+      1,
+      -1,
+      0,
+      3,
+    ]);
+    expect(
+      isPredictorSuccessMessage(
+        { type: 'success', requestId: 1, points: aliasedPoints, events: aliasedEvents },
         BODY_COUNT,
       ),
     ).toBe(false);
