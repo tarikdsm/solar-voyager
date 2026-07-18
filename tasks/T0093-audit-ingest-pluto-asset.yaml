@@ -1,6 +1,6 @@
 id: T0093
 title: Audit and ingest Pluto source asset
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0093-audit-ingest-pluto-asset
 depends_on: [T0035]
@@ -17,7 +17,17 @@ acceptance:
   - Runtime GLB and KTX2 artifacts pass the dwarf 4 MB budget
   - Blender preview and ingested asset show no UV seam, pole distortion, or embedded lights/cameras
 handoff_notes: |
-  Existing source work: commit 66a4ab0 contains build_pluto.py, pluto.glb,
-  pluto_albedo.jpg, SOURCES.md, assets/blender/pluto.blend, and two preview PNGs.
-  This follow-up exists because the source was delivered before T0035 and outside
-  the shared task queue, so ingest and formal acceptance remain outstanding.
+  Replaced the ad-hoc builder with the shared deterministic Blender helpers and a
+  catalog-driven Pluto contract. Two clean builder runs produced byte-identical
+  normalized GLBs (64x32, 3,968 tris, radius 1.000000291) and identical albedo.
+  The NASA mosaic's southern no-data region is now reconstructed deterministically
+  with seed-999 spherical 3D noise, a 2D acquisition-edge feather, and longitude-
+  converged polar rows. Real-source tests cover black artifacts, bands, detail
+  variance, seam continuity, and the guide-aligned polar rings.
+  Canonical ingest published all six assets; Pluto's 13 runtime files matched the
+  independently ingested package byte-for-byte. Runtime Pluto is 3,112,392 bytes
+  (<4 MiB), KTX validates, and WebGL front/seam/south renders passed independent
+  review with no embedded images, lights, cameras, UV seam, or pole distortion.
+  Verification: npm test (635 passed, 3 skipped); npm run test:tools (54 passed);
+  lint, typecheck, format:check, build, check:tasks, check:budgets,
+  test:visual-tiers, test:surface-detail, test:relativistic-visuals, and test:smoke.
