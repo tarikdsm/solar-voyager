@@ -163,11 +163,14 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   try {
     const response = await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
     assert.ok(response?.ok(), `production page returned ${String(response?.status())}`);
-    await page.waitForSelector(
-      '#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]',
-      { state: 'attached', timeout: 30_000 },
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector(
+          '#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]',
+        ) !== null && globalThis.document.querySelector('.app-overlay') !== null,
+      undefined,
+      { timeout: 30_000 },
     );
-    await page.waitForSelector('.app-overlay', { state: 'attached', timeout: 30_000 });
     await page.waitForTimeout(250);
 
     assertNoBrowserErrors(browserErrors);

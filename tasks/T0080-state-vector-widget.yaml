@@ -28,6 +28,10 @@ handoff_notes: |
   Playwright, responsive perf-panel expansion triggers viewport refresh, and a
   clipped viewport resets lastRenderMs to zero. The focused responsive regression
   observed refresh count 3 -> 4 while the viewport moved 62 -> 640 CSS px.
+  Follow-up CI diagnosis replaced two flaky Playwright selector-actionability waits
+  with a direct DOM readiness predicate after GitHub's SwiftShader found the ready,
+  visible canvas but timed out the selector; the complete smoke and both injected
+  runtime-error fixtures pass locally with the focused fix.
 
   Fresh verification on 69eda23: lint, typecheck, format, git diff check, build,
   550 Vitest tests passed (3 skipped), 50 Python tool tests passed, asset budgets,
