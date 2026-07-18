@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Performance gates
+        run: npm run test:perf-gates
+
       - name: Application smoke
         run: npm run test:smoke
 
