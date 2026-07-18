@@ -1,6 +1,6 @@
 id: T0092
 title: Bench harness + CI performance gates
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0092-bench-harness-ci-gates
 depends_on: [T0059, T0091]
@@ -17,4 +17,28 @@ acceptance:
   - Injected per-frame allocation (fixture) fails the heap gate
   - Injected extra draw calls (fixture) fail the golden-count gate
   - Bench produces a stable report twice on the same machine (< 5% variance)
-handoff_notes: ""
+handoff_notes: |
+  Ready for exact-head independent re-review after Linux CI liveness correction.
+  - The fixed route now generates canonical simulation states and executes them
+    through the production save/load path at t=0/60/120/180. Both recorded runs
+    render the expected Earth, Moon, Jupiter, Jupiter dominant-body sequence.
+  - Stability is literal symmetric variance over reported aggregate frame-time
+    median/p75/p99 and final steady heap footprint. The RTX 3070/D3D11 runs in
+    docs/bench/T0092-flight.json measured 6.1/6.1/6.2 and 6.1/6.1/6.3 ms,
+    identical 26-call/66,246-triangle workloads, and empty findings.
+  - The gate now leaves rAF-based warmup to `npm run bench`, waits for the first
+    valid CI telemetry frame with timed polling, and yields its single callback
+    through a preallocated macrotask so SwiftShader cannot starve control commands.
+    It retains the mandatory 60 s settle and 30 s measurement. Fresh local
+    Two Linux runs measured repeatable +180,468/+181,668-byte renderer bookkeeping,
+    so the explicit tolerance is 192 KiB (<0.2% of its heap) and the fixture was
+    strengthened to 256 KiB/frame. Fresh local production retained -193,779 bytes;
+    allocation was rejected at +3,240,020 bytes and extra draws at 27 calls versus
+    golden 9. All 14 browser regressions, build, format, lint,
+    typecheck, 531 Vitest assertions, 50 Python tests, budgets, and 53 task schemas
+    passed during the correction cycle. Exact-head CI and re-review remain gates;
+    the merger flips DONE only after both approve.
+  - Independent reviewer approved exact head
+    eb79f75cb5b0fc21ad127974dad9f675c16812d7 after verifying the canonical route,
+    literal stability comparison, calibrated heap gate, and both negative fixtures.
+    GitHub Actions run 29627162257 completed successfully on that exact head.
