@@ -263,28 +263,28 @@ git commit -m "feat(render): [T0083] add Saturn ring flythrough field"
 - Adds `ringParticleCount: number` to `RenderQualityProfile`.
 - Adds `setRingParticleCount(count: number): void` to the visual-system quality port.
 
-- [ ] **Step 1: Write lifecycle and quality tests**
+- [x] **Step 1: Write lifecycle and quality tests**
 
 Cover exact material pairing, incomplete-model rejection, Saturn particles only, root axial tilt at setup, Sun/local transforms, sphere fallback on preparation failure, disposal, profile sequence `4096, 2048, 1024, 0`, and no reapplication of an unchanged rung.
 
-- [ ] **Step 2: Run focused suite red**
+- [x] **Step 2: Run focused suite red**
 
 Run: `npx vitest run src/render/ringSystem.test.ts src/render/bodyVisualSystem.test.ts src/render/perfGovernor.test.ts src/render/renderQualityController.test.ts`
 Expected: FAIL on missing interfaces.
 
-- [ ] **Step 3: Implement `PreparedRingSystem`**
+- [x] **Step 3: Implement `PreparedRingSystem`**
 
 Find the ring mesh by material name, prepare shaders, optionally create Saturn particles, attach the particle mesh under the same tilted root, and expose `update(camera, sun, simTime)` using scalar arguments. Maintain temporary transform vectors/matrices as fields.
 
-- [ ] **Step 4: Integrate into the existing body loop**
+- [x] **Step 4: Integrate into the existing body loop**
 
 Add `muKm3S2` and `axialTiltRad` to definitions from epoch data. Pass `snapshot.simTimeSec` into `BodyVisualSystem.update`. Reuse body distance and packed Sun/body coordinates; do not add a second body loop. Capture ring materials' original fade state alongside existing model material baselines.
 
-- [ ] **Step 5: Add quality count profiles**
+- [x] **Step 5: Add quality count profiles**
 
 Extend the profile constructor and every profile literal. Keep 4096 through high-quality rungs, descend to 2048 and 1024 before texture degradation, and use zero at the lowest rung/software policy. Forward changes without shader rebuild.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 Run: `npx vitest run src/render/ringSystem.test.ts src/render/bodyVisualSystem.test.ts src/render/perfGovernor.test.ts src/render/renderQualityController.test.ts && npm run lint && npm run typecheck`
 Expected: PASS.

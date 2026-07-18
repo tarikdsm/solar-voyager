@@ -80,7 +80,10 @@ export async function createEpochWorld(
     definitions.push({
       id: body.id,
       category: runtimeCategory(body.kind),
+      axialTiltRad: body.axialTiltRad,
       meanRadiusKm: body.meanRadiusKm,
+      muKm3S2: body.muKm3S2,
+      polarRadiusRatio: body.polarRadiusRatio,
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: parseAlbedoColor(body.albedoColor),
     });

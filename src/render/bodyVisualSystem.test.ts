@@ -1,9 +1,11 @@
 import {
+  DataTexture,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   MeshStandardMaterial,
+  RGBAFormat,
   Texture,
   type Material,
   type Object3D,
@@ -27,6 +29,9 @@ function definitions(): BodyVisualDefinition[] {
       id: 'sun',
       category: 'sun',
       meanRadiusKm: 10,
+      muKm3S2: 1_000,
+      axialTiltRad: 0,
+      polarRadiusRatio: 1,
       geometricAlbedo: 1,
       albedoColor: 0xffdd88,
     },
@@ -34,6 +39,9 @@ function definitions(): BodyVisualDefinition[] {
       id: 'earth',
       category: 'planet',
       meanRadiusKm: 1,
+      muKm3S2: 10,
+      axialTiltRad: 0.409,
+      polarRadiusRatio: 0.996,
       geometricAlbedo: 0.434,
       albedoColor: 0x4488ff,
     },
@@ -245,6 +253,65 @@ describe('BodyVisualSystem structure', () => {
     system.setSurfaceDetailEnabled('earth', false);
     expect(system.getSurfaceDetailBlend('earth')).toBe(0);
   });
+
+  it('prepares a ringed giant before compilation and forwards simulation and quality state', async () => {
+    const tilt = 0.4665265090580843;
+    const saturnX = 10 * AU_KM;
+    const ringRadiusKm = (66_900 + 140_224) / 2;
+    const ringCamera = {
+      x: saturnX + Math.cos(tilt) * ringRadiusKm,
+      y: Math.sin(tilt) * ringRadiusKm,
+      z: 0,
+    };
+    const ringDefinitions: BodyVisualDefinition[] = [
+      definitions()[0] as BodyVisualDefinition,
+      {
+        id: 'saturn',
+        category: 'planet',
+        axialTiltRad: tilt,
+        meanRadiusKm: 58_232,
+        muKm3S2: 37_931_207.8,
+        polarRadiusRatio: 0.9020375655405853,
+        geometricAlbedo: 0.499,
+        albedoColor: 0xd8c49a,
+      },
+    ];
+    const surface = new MeshStandardMaterial();
+    surface.name = 'mat_surface';
+    const rings = new MeshStandardMaterial();
+    rings.name = 'mat_rings';
+    rings.map = new DataTexture(new Uint8Array([255, 220, 180, 200]), 1, 1, RGBAFormat);
+    const root = new Group();
+    root.add(new Mesh(undefined, surface), new Mesh(undefined, rings));
+    const model: LoadedBodyModel = { root, materials: [surface, rings], surfaceDetail: null };
+    const compileModel = vi.fn(async () => {
+      expect(root.rotation.z).toBeCloseTo(tilt);
+      expect(root.getObjectByName('saturn_ring_particles')).toBeDefined();
+    });
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) => (id === 'saturn' ? model : null)),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      ringDefinitions,
+      new Float64Array([0, 0, 0, saturnX, 0, 0]),
+      loader,
+      compileModel,
+      PROCEDURAL_SUN_STUB,
+    );
+
+    system.update(ringCamera, 1_000, 1, 0, 123_456);
+    await vi.waitFor(() => expect(system.getLoadState('saturn')).toBe('ready'));
+    expect(root.scale.x).toBe(60_268);
+
+    system.setRingParticleCount(1024);
+    system.update(ringCamera, 1_000, 1, 300, 123_457);
+    expect(system.getRingBlend('saturn')).toBe(1);
+    expect((root.getObjectByName('saturn_ring_particles') as Mesh).count).toBe(1024);
+    expect(compileModel).toHaveBeenCalledOnce();
+  });
 });
 
 describe('BodyVisualSystem transitions', () => {
@@ -289,7 +356,10 @@ describe('BodyVisualSystem transitions', () => {
         {
           id: 'pluto',
           category: 'dwarf',
+          axialTiltRad: 0,
           meanRadiusKm: 1,
+          muKm3S2: 1,
+          polarRadiusRatio: 1,
           geometricAlbedo: 0.52,
           albedoColor: 0xccaa88,
         },

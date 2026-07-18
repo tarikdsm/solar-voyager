@@ -21,6 +21,8 @@ import {
 import { CameraRelativeSpaceScene } from './spaceScene.js';
 import type { ProceduralSunMaterialPort } from './proceduralSun.js';
 import type { TextureQualityCap } from './perfGovernor.js';
+import { ringDefinitionFor } from './ringCatalog.js';
+import { prepareRingSystem, type PreparedRingSystem } from './ringSystem.js';
 import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
 import {
   apparentMagnitude,
@@ -32,7 +34,10 @@ import {
 export interface BodyVisualDefinition {
   readonly id: string;
   readonly category: RuntimeAssetCategory;
+  readonly axialTiltRad: number;
   readonly meanRadiusKm: number;
+  readonly muKm3S2: number;
+  readonly polarRadiusRatio: number;
   readonly geometricAlbedo: number;
   readonly albedoColor: number;
 }
@@ -95,6 +100,7 @@ export class BodyVisualSystem {
   private readonly modelBaseForceSinglePasses: Array<Uint8Array | null>;
   private readonly surfaceDetails: Array<PreparedSurfaceDetail | null>;
   private readonly earthSurfaceLayers: Array<PreparedEarthSurfaceLayers | null>;
+  private readonly ringSystems: Array<PreparedRingSystem | null>;
   private readonly selectedTiers: Uint8Array;
   private readonly displayTargetTiers: Uint8Array;
   private readonly fadeActive: Uint8Array;
@@ -107,6 +113,7 @@ export class BodyVisualSystem {
   private readonly fadeModelStarts: Float32Array;
   private readonly sunIndex: number;
   private modelThresholdScale = 1;
+  private ringParticleCount = 4096;
 
   constructor(
     private readonly spaceScene: CameraRelativeSpaceScene,
@@ -132,6 +139,21 @@ export class BodyVisualSystem {
       if (!Number.isFinite(definition.meanRadiusKm) || definition.meanRadiusKm <= 0) {
         throw new RangeError(`Body "${definition.id}" must have a positive finite radius.`);
       }
+      if (!Number.isFinite(definition.muKm3S2) || definition.muKm3S2 <= 0) {
+        throw new RangeError(
+          `Body "${definition.id}" must have a positive finite gravitational parameter.`,
+        );
+      }
+      if (!Number.isFinite(definition.axialTiltRad) || definition.axialTiltRad < 0) {
+        throw new RangeError(`Body "${definition.id}" must have a finite nonnegative axial tilt.`);
+      }
+      if (
+        !Number.isFinite(definition.polarRadiusRatio) ||
+        definition.polarRadiusRatio <= 0 ||
+        definition.polarRadiusRatio > 1
+      ) {
+        throw new RangeError(`Body "${definition.id}" must have a physical polar-radius ratio.`);
+      }
       if (!Number.isFinite(definition.geometricAlbedo) || definition.geometricAlbedo < 0) {
         throw new RangeError(`Body "${definition.id}" must have a finite nonnegative albedo.`);
       }
@@ -156,6 +178,7 @@ export class BodyVisualSystem {
     this.modelBaseForceSinglePasses = new Array<Uint8Array | null>(count).fill(null);
     this.surfaceDetails = new Array<PreparedSurfaceDetail | null>(count).fill(null);
     this.earthSurfaceLayers = new Array<PreparedEarthSurfaceLayers | null>(count).fill(null);
+    this.ringSystems = new Array<PreparedRingSystem | null>(count).fill(null);
     this.selectedTiers = new Uint8Array(count);
     this.selectedTiers.fill(1);
     this.displayTargetTiers = new Uint8Array(count);
@@ -255,8 +278,15 @@ export class BodyVisualSystem {
     viewportHeightPx: number,
     verticalFovRad: number,
     nowMs: number,
+    simTimeSec = 0,
   ): void {
     if (!Number.isFinite(nowMs)) throw new RangeError('nowMs must be finite.');
+    if (!Number.isFinite(simTimeSec)) throw new RangeError('simTimeSec must be finite.');
+
+    const sunOffset = this.sunIndex * 3;
+    const sunX = this.positionsKm[sunOffset] ?? Number.NaN;
+    const sunY = this.positionsKm[sunOffset + 1] ?? Number.NaN;
+    const sunZ = this.positionsKm[sunOffset + 2] ?? Number.NaN;
 
     for (let index = 0; index < this.definitions.length; index += 1) {
       this.advanceFade(index, nowMs);
@@ -281,6 +311,18 @@ export class BodyVisualSystem {
       }
       const earthLayers = this.earthSurfaceLayers[index];
       if (earthLayers !== null && earthLayers !== undefined) earthLayers.update(nowMs);
+      const ringSystem = this.ringSystems[index];
+      if (ringSystem !== null && ringSystem !== undefined) {
+        ringSystem.update(
+          cameraPositionKm.x - x,
+          cameraPositionKm.y - y,
+          cameraPositionKm.z - z,
+          sunX - x,
+          sunY - y,
+          sunZ - z,
+          simTimeSec,
+        );
+      }
       const diameterPx = projectedDiameterPx(
         definition.meanRadiusKm,
         distanceKm,
@@ -340,6 +382,19 @@ export class BodyVisualSystem {
       throw new RangeError('Model threshold scale must be finite and at least one.');
     }
     this.modelThresholdScale = scale;
+  }
+
+  setRingParticleCount(count: number): void {
+    if (!Number.isInteger(count) || count < 0 || count > 4096) {
+      throw new RangeError('Ring particle count must be an integer from 0 to 4096.');
+    }
+    if (count === this.ringParticleCount) return;
+    this.ringParticleCount = count;
+    for (const ringSystem of this.ringSystems) ringSystem?.setParticleCount(count);
+  }
+
+  getRingBlend(id: string): number {
+    return this.ringSystems[this.indexForId(id)]?.blend ?? 0;
   }
 
   setTextureTierCap(cap: TextureQualityCap): void {
@@ -437,6 +492,15 @@ export class BodyVisualSystem {
     }
     const definition = this.definitions[index];
     if (definition === undefined) throw new Error('Body definition array is sparse.');
+    const ringDefinition = ringDefinitionFor(definition.id);
+    if (ringDefinition !== null) {
+      const ringSystem = prepareRingSystem(model.root, model.materials, ringDefinition, definition);
+      if (ringSystem === null) {
+        throw new Error(`Ring model "${definition.id}" is missing its required material pair.`);
+      }
+      ringSystem.setParticleCount(this.ringParticleCount);
+      this.ringSystems[index] = ringSystem;
+    }
     if (model.surfaceDetail !== null) {
       const surfaceMaterial = model.materials.find(
         (material): material is MeshStandardMaterial =>
@@ -492,7 +556,7 @@ export class BodyVisualSystem {
       material.opacity = 0;
       material.depthWrite = false;
     }
-    model.root.scale.setScalar(definition.meanRadiusKm);
+    model.root.scale.setScalar(ringDefinition?.referenceRadiusKm ?? definition.meanRadiusKm);
     model.root.visible = true;
     this.modelRoots[index] = model.root;
     this.modelMaterials[index] = model.materials;
@@ -510,6 +574,8 @@ export class BodyVisualSystem {
       this.surfaceDetails[index] = null;
       this.earthSurfaceLayers[index]?.dispose();
       this.earthSurfaceLayers[index] = null;
+      this.ringSystems[index]?.dispose();
+      this.ringSystems[index] = null;
       model.root.visible = false;
       this.modelLoadStates[index] = LOAD_FAILED;
     }

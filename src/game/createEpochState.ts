@@ -11,9 +11,12 @@ import {
 const LEO_ALTITUDE_KM = 400;
 
 export interface EpochBodyDefinition {
+  readonly axialTiltRad: number;
   readonly id: string;
   readonly kind: string;
   readonly meanRadiusKm: number;
+  readonly muKm3S2: number;
+  readonly polarRadiusRatio: number;
   readonly geometricAlbedo: number;
   readonly albedoColor: string;
   readonly proceduralSeed: number;
@@ -38,9 +41,12 @@ export function createEpochState(): EpochState {
     const body = bodiesDocument.bodies[index];
     if (body === undefined) throw new Error('Body catalog array is sparse.');
     bodies.push({
+      axialTiltRad: body.axialTiltRad,
       id: body.id,
       kind: body.kind,
       meanRadiusKm: body.meanRadiusKm,
+      muKm3S2: body.muKm3S2,
+      polarRadiusRatio: body.visual.polarRadiusRatio,
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: body.visual.albedoColor,
       proceduralSeed: body.visual.proceduralSeed,
