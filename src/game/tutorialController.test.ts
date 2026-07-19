@@ -190,6 +190,10 @@ describe('TutorialController', () => {
 
   it('requires valid readouts before acknowledgement even after resume', () => {
     const { controller } = setup(progress('active', 'readouts'));
+    let readinessPublications = 0;
+    controller.subscribe(() => {
+      readinessPublications += 1;
+    });
 
     expect(controller.canAcknowledgeReadouts).toBe(false);
     expect(controller.acknowledgeReadouts()).toBe(false);
@@ -198,6 +202,7 @@ describe('TutorialController', () => {
     expect(controller.acknowledgeReadouts()).toBe(false);
     expect(controller.observeReadouts(true, true)).toBe(false);
     expect(controller.canAcknowledgeReadouts).toBe(true);
+    expect(readinessPublications).toBe(1);
     expect(controller.acknowledgeReadouts()).toBe(true);
     expect(controller.canAcknowledgeReadouts).toBe(false);
   });

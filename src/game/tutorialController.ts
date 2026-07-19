@@ -108,7 +108,10 @@ export class TutorialController {
 
   observeReadouts(orbitValid: boolean, trajectoryComplete: boolean): boolean {
     if (!this.isCurrentStep('readouts')) return false;
-    this.readoutsReady = orbitValid && trajectoryComplete;
+    const nextReady = orbitValid && trajectoryComplete;
+    if (nextReady === this.readoutsReady) return false;
+    this.readoutsReady = nextReady;
+    this.publishCurrent();
     return false;
   }
 
@@ -192,8 +195,12 @@ export class TutorialController {
     this.currentProgress = next;
     this.completedTransitions += 1;
     this.clearStepFacts();
-    for (const listener of this.listeners) listener(next);
+    this.publishCurrent();
     return true;
+  }
+
+  private publishCurrent(): void {
+    for (const listener of this.listeners) listener(this.currentProgress);
   }
 
   private clearStepFacts(): void {
