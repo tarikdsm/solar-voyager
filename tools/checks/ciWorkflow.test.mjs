@@ -36,7 +36,10 @@ describe('CI workflow', () => {
       '- name: Application smoke\n        timeout-minutes: 5\n        run: npm run test:smoke',
     );
     expect(workflow).toContain(
-      '- name: Trajectory overlay regression\n        timeout-minutes: 4\n        run: npm run test:trajectory-overlay',
+      '- name: Trajectory overlay regression\n        timeout-minutes: 8\n        run: npm run test:trajectory-overlay',
+    );
+    expect(workflow).toContain(
+      '- name: Startup quality and loading regression\n        timeout-minutes: 8\n        run: npm run test:startup',
     );
     expect(workflow).toContain(
       '- name: Relativistic visuals regression\n        timeout-minutes: 2\n        run: npm run test:relativistic-visuals',

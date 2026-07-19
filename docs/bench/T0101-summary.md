@@ -109,3 +109,23 @@ checkpoints make any remaining stall observable. The five-minute outer limit and
 every product/startup assertion remain unchanged. The focused liveness test and
 complete startup regression pass locally; exact-head CI is rerun after this
 correction.
+
+The first post-merge `main` CI run (`29706373941`) provided the remaining timing
+evidence: all cold-load checks reached `startup ready` in under two seconds, but
+the first-frame shader assertion completed at 5m04s on that runner. The fixture
+then advanced through recovery scenarios before the workflow killed it at five
+minutes. No product assertion failed, including the fixed 5-second first-playable
+ceiling. The startup step's operational envelope is therefore eight minutes;
+the product deadlines, assertions, and permanent workflow coverage are unchanged,
+and the workflow regression pins this distinction.
+
+Follow-up PR CI run `29706876853` confirmed that separation: startup passed all
+unchanged assertions in 6m34s under its eight-minute operational envelope. The
+same heavily contended runner then killed `Trajectory overlay regression` at its
+independent four-minute workflow limit (`23:06:38`-`23:10:50`) without an
+assertion or error log, skipping every later gate. This is the same operational
+failure mode previously observed for the real-worker regression; its dedicated
+local run remains green. The trajectory step therefore receives the same
+eight-minute runner envelope. Its real Vite worker, predictor/integrator path,
+readiness assertions, production ceilings, and all product behavior remain
+unchanged, and workflow regression coverage pins the envelope explicitly.
