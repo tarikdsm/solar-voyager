@@ -1,7 +1,7 @@
 {
   "name": "solar-voyager",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -46,6 +46,9 @@
     "assets:verify": "node tools/assets/verifyEarth.mjs",
     "textures:fetch": "python tools/fetch_textures.py",
     "textures:rings": "node tools/textures/generateRingTextures.mjs",
+    "generate:dashboard": "node tools/checks/taskDashboard.mjs --write",
+    "check:dashboard": "node tools/checks/taskDashboard.mjs",
+    "check:release": "node tools/checks/releaseReadiness.mjs",
     "check:tasks": "node tools/checks/taskSchema.mjs",
     "check:budgets": "node tools/checks/assetBudgets.mjs",
     "bench:scaffold": "node tools/bench/scaffoldBench.mjs",

@@ -131,3 +131,9 @@ jobs:
 
       - name: Task-file schema check
         run: npm run check:tasks
+
+      - name: Canonical task dashboard check
+        run: npm run check:dashboard
+
+      - name: Public release readiness check
+        run: npm run check:release
