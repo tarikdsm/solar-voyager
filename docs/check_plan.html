@@ -1502,7 +1502,7 @@
       "All repository gates plus a production playtest and GitHub Pages no-404/console-error audit pass on the release commit",
       "Every eligible task is DONE, only T0060-T0062 remain explicitly deferred, and annotated tag v1.0.0 points to the deployed green main commit"
     ],
-    "handoff_notes": ""
+    "handoff_notes": "Public landing, v1 player/contributor documentation, MIT license, credits,\nprivacy/accessibility notes, release notes, package version 1.0.0, canonical\ndashboard generation, and permanent release-readiness CI checks are implemented.\n\nLocal release audit at runtime commit 8553f9b passed lint, typecheck, formatting,\n821 Vitest tests (3 skipped), 60 Python tests, every permanent browser/render/\nperformance regression, task/schema/dashboard/release checks, budgets, asset\nverification, two deterministic Blender builds, and two byte-identical complete\nproduction builds. Production measured 10 draws / 77,071 triangles, +60,184 B\nretained heap, and 555,755 B total gzip. The RTX 3070 flight benchmark measured\n6.1 ms median/p75 and 6.301 ms p99 with no errors or stability findings. Desktop\nand 360x480 playtests covered landing, keyboard-accessible launch, flight, map,\ncompact scrolling, and empty warning/error logs. Full evidence is in\ndocs/bench/T0101-summary.md.\n\nPublication is intentionally pending independent C/I/M review, exact-head PR CI,\nDONE transition/merge, green main CI + Pages deploy, cache-disabled live audit,\nand only then creation/push/verification of annotated tag v1.0.0 on that exact\ndeployed main commit. T0060-T0062 remain the only post-v1 deferrals.\n"
   }
 ];
     /* TASK_DATA_END */

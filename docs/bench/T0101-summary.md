@@ -1,0 +1,69 @@
+# T0101 public v1 release audit
+
+## Candidate
+
+The implementation audit was run from commit
+`8553f9b6345dc6db79e72af4a818d9c401673b24` on 2026-07-19. Later evidence and
+task-status commits do not change the runtime. The annotated `v1.0.0` tag remains
+intentionally absent until the reviewed branch is merged and the exact `main`
+commit passes CI, Pages deployment, and a cache-disabled live audit.
+
+## Static, unit, and tool gates
+
+- ESLint, both TypeScript projects, Prettier, and `git diff --check`: PASS.
+- Vitest: 133 files passed, 1 skipped; 821 tests passed, 3 skipped.
+- Python tool suite: 60/60 PASS.
+- Task schema: 60 canonical YAML files; dashboard equality and release readiness:
+  PASS.
+- Repository content: 183,861,574 B / 300 MiB; runtime assets: 32,655,463 B /
+  150 MiB; critical path: 4,354,239 B / 8 MiB.
+
+## Browser and performance gates
+
+Every permanent CI browser gate passed against the production build: positive
+and injected-error smoke, main menu, system map, burn log, tutorial, startup,
+render depth, starfield, visual tiers, lighting/post, relativistic visuals,
+surface detail, procedural Sun, gas giants, camera controls, renderer policy,
+telemetry, HUD signals, state vectors, trajectory overlay, performance panel,
+adaptive governor, and session settings.
+
+- Production performance fixture: 10 draw calls, 77,071 triangles, and retained
+  heap growth of 60,184 B.
+- Bundle: 125,975 B entry gzip and 555,755 B total gzip against fixed ceilings of
+  285,000 B and 570,000 B.
+- Cold startup on SwiftShader: first playable in 1,014.4 ms; 34 programs both at
+  ready and after first frame; exactly the four canonical runtime files; no
+  success-path console/page errors. Manifest, hero texture, and bootstrap chunk
+  failures all reached the accessible recovery path and succeeded on retry.
+- Flight benchmark on NVIDIA GeForce RTX 3070 Laptop GPU: 6.1 ms median/p75,
+  6.301 ms p99, +104,544 B steady retained heap, no browser errors, and no
+  stability finding at the 5% limit.
+- Simulation core: 10,000 sampled steps averaged 0.107794 ms, reused exactly two
+  snapshot buffers, and retained -225,184 B after forced GC.
+
+## Asset and build reproducibility
+
+- Earth ingest generated 29 byte-identical files on two passes, totaling
+  9,923,242 B, with decoded Draco/KTX2 material and texture contracts accepted.
+- Blender 5.1.2 generated the Sun and quad-sphere contracts twice with identical
+  GLB bytes; runtime Draco ingest passed in the isolated `build/blender-smoke`
+  tree.
+- Two complete production builds matched SHA-256 for all 159 emitted files.
+
+## Manual playtest
+
+The loaded landing, a new 400 km LEO session, and the system map were inspected
+in the in-app browser. Desktop and 360×480 layouts were exercised; the compact
+menu measured `top=8`, `right=352`, `bottom=472`, document width 360, and an
+internal 1,037/463 px scroll range. Actions and settings remained reachable.
+Desktop and compact browser warning/error logs were empty.
+
+Local ignored captures:
+
+- `.playwright-mcp/T0101-landing-desktop.png`
+- `.playwright-mcp/T0101-flight-desktop.png`
+- `.playwright-mcp/T0101-system-map.png`
+- `.playwright-mcp/T0101-landing-compact.png`
+- `.playwright-mcp/T0101-landing-compact-actions.png`
+
+The dedicated server was stopped and port 5199 was verified released.
