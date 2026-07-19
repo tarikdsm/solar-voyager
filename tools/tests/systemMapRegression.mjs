@@ -33,6 +33,7 @@ async function readMapRuntime(page) {
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) throw new Error('canvas missing');
     const runtime = canvas.solarVoyagerSystemMap;
     if (runtime === undefined) throw new Error('system-map diagnostics missing');
+    const render = canvas.solarVoyagerTelemetry?.snapshot;
     return {
       bodyCount: runtime.scene.bodyCount,
       focusBodyId: runtime.focusBodyId,
@@ -44,7 +45,13 @@ async function readMapRuntime(page) {
       resources: canvas.solarVoyagerRuntimeResources,
       simulationTimeSec: runtime.simulationTimeSec,
       spaceRenderCount: runtime.spaceRenderCount,
+      spaceRenderCountAtModeChange: runtime.spaceRenderCountAtModeChange,
       targetBodyId: runtime.targetBodyId,
+      drawCalls: render?.drawCalls ?? -1,
+      geometries: render?.geometries ?? -1,
+      programs: render?.programs ?? -1,
+      textures: render?.textures ?? -1,
+      triangles: render?.triangles ?? -1,
       trajectoryLineVisible: runtime.trajectoryLineVisible,
       trajectoryMarkersVisible: runtime.trajectoryMarkersVisible,
     };
@@ -108,8 +115,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
-  await installTrajectoryPredictionTestHorizon(page, 3_600);
-  await installTrajectoryPredictionTestPointCount(page, 64);
+  await installTrajectoryPredictionTestHorizon(page, 21_600);
+  await installTrajectoryPredictionTestPointCount(page, 128);
   const response = await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
   assert.ok(response?.ok(), `system-map page returned ${String(response?.status())}`);
   await page.waitForFunction(
@@ -158,17 +165,48 @@ try {
   await page.keyboard.press('m');
   await panel.waitFor({ state: 'visible' });
   assert.equal(await selector.evaluate((element) => element === globalThis.document.activeElement), true);
-  await page.waitForTimeout(100);
+  await page.waitForFunction(
+    (simulationTimeSec) => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (
+        canvas instanceof globalThis.HTMLCanvasElement &&
+        canvas.solarVoyagerSystemMap !== undefined &&
+        canvas.solarVoyagerSystemMap.simulationTimeSec > simulationTimeSec &&
+        canvas.solarVoyagerSystemMap.mapRenderCount > 0
+      );
+    },
+    beforeOpen.simulationTimeSec,
+    { timeout: 10_000 },
+  );
   const afterOpen = await readMapRuntime(page);
   assert.equal(afterOpen.mode, 'system-map');
   assert.ok(afterOpen.simulationTimeSec > beforeOpen.simulationTimeSec, 'simulation paused in map');
   assert.ok(afterOpen.mapRenderCount > beforeOpen.mapRenderCount, 'map scene was not rendered');
-  assert.equal(afterOpen.spaceRenderCount, beforeOpen.spaceRenderCount, 'space rendered behind map');
+  assert.equal(
+    afterOpen.spaceRenderCount,
+    afterOpen.spaceRenderCountAtModeChange,
+    'space rendered behind map',
+  );
   assert.equal(afterOpen.trajectoryLineVisible, true, 'shared prediction line is hidden');
+  assert.ok(afterOpen.drawCalls > 0 && afterOpen.drawCalls <= 150, `map draws: ${afterOpen.drawCalls}`);
+  assert.ok(afterOpen.triangles <= 500_000, `map triangles: ${afterOpen.triangles}`);
 
   await selector.selectOption('mercury');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.trajectoryReady !== 'true',
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.trajectoryReady === 'true',
+    undefined,
+    { timeout: 90_000 },
+  );
   await page.waitForTimeout(1_700);
   assert.equal(await page.locator('#system-map-target').textContent(), 'Mercury');
+  assert.equal(
+    (await readMapRuntime(page)).trajectoryMarkersVisible,
+    true,
+    'targeted prediction markers are hidden',
+  );
   assertFinitePrecision('mercury', await readSelectedPrecision(page));
   await page.screenshot({
     path: path.join(SCREENSHOT_DIRECTORY, 'T0097-system-map-inner.png'),
@@ -186,6 +224,7 @@ try {
     fullPage: true,
   });
 
+  const beforeToggles = await readMapRuntime(page);
   const heapBeforeBytes = await page.evaluate(() => {
     globalThis.gc?.();
     globalThis.gc?.();
@@ -203,7 +242,13 @@ try {
     globalThis.gc?.();
     const canvas = globalThis.document.querySelector('#space-canvas');
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) throw new Error('canvas missing');
+    const render = canvas.solarVoyagerTelemetry?.snapshot;
     return {
+      gpuResources: {
+        geometries: render?.geometries ?? -1,
+        programs: render?.programs ?? -1,
+        textures: render?.textures ?? -1,
+      },
       heapAfterBytes: performance.memory?.usedJSHeapSize ?? -1,
       identityStable:
         globalThis.__systemMapResourceIdentity?.diagnostics === canvas.solarVoyagerSystemMap &&
@@ -213,6 +258,15 @@ try {
   });
   assert.equal(toggleEvidence.identityStable, true, 'toggle replaced setup-owned resources');
   assert.deepEqual(toggleEvidence.resources, beforeOpen.resources, 'toggle changed runtime resources');
+  assert.deepEqual(
+    toggleEvidence.gpuResources,
+    {
+      geometries: beforeToggles.geometries,
+      programs: beforeToggles.programs,
+      textures: beforeToggles.textures,
+    },
+    'toggle changed GPU resource counts',
+  );
   assert.ok(
     toggleEvidence.heapAfterBytes - heapBeforeBytes <= MAXIMUM_TOGGLE_HEAP_GROWTH_BYTES,
     `toggles retained heap: ${String(toggleEvidence.heapAfterBytes - heapBeforeBytes)} bytes`,
@@ -227,6 +281,15 @@ try {
   assert.equal(returned.focusBodyId, 'pluto');
   assert.equal(returned.targetBodyId, 'pluto');
   assert.ok(returned.spaceRenderCount > afterOpen.spaceRenderCount, 'space render did not resume');
+  await page.keyboard.press('e');
+  await page.waitForFunction(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return (
+      canvas instanceof globalThis.HTMLCanvasElement &&
+      canvas.solarVoyagerSystemMap?.focusBodyId === 'earth' &&
+      canvas.solarVoyagerSystemMap.targetBodyId === 'earth'
+    );
+  });
   assert.deepEqual(browserErrors, []);
 
   const compactContext = await browser.newContext({

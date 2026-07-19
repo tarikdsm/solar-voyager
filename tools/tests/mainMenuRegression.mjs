@@ -36,7 +36,7 @@ const MENU_RUNTIME_RESOURCES = {
 
 const ACTIVE_RUNTIME_RESOURCES = {
   animationLoopStarts: 1,
-  cameraInputControllers: 1,
+  cameraInputControllers: 2,
   canvasBindings: 1,
   epochWorldCreations: 1,
   keyboardCommandMappers: 1,

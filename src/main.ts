@@ -5,10 +5,12 @@ import {
   createNewGameSimulation,
 } from './game/createNewGameSimulation.js';
 import { KeyboardCommandMapper, type KeyboardInputTarget } from './game/inputMapping.js';
+import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
 import { GameSessionController } from './game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
+import { SystemMapController, type SystemMapMode } from './game/systemMapController.js';
 import { readTrajectoryEventSummary } from './game/trajectoryPredictionModel.js';
 import {
   createTrajectoryPredictorClient,
@@ -33,10 +35,11 @@ import type { Commands } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
-import { CameraInputController } from './ui/cameraInputController.js';
+import { CameraInputController, type CameraControlPort } from './ui/cameraInputController.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
+import { createSystemMapSignalStore } from './ui/systemMapSignals.js';
 import { observeStateVectorLayout } from './ui/stateVectorLayoutObserver.js';
 import { createTrajectoryPredictionSignalStore } from './ui/trajectoryPredictionSignals.js';
 import {
@@ -63,6 +66,53 @@ interface RuntimeResourceCounts {
   spacePhaseActivations: number;
   stateVectorLayoutObservers: number;
   trajectoryWorkers: number;
+}
+
+interface SystemMapRuntimeDiagnostics {
+  readonly scene: EpochWorld['systemMap']['diagnostics'];
+  readonly mapSceneCreations: 1;
+  mode: SystemMapMode;
+  focusBodyId: string;
+  targetBodyId: string | null;
+  simulationTimeSec: number;
+  spaceRenderCount: number;
+  spaceRenderCountAtModeChange: number;
+  mapRenderCount: number;
+  trajectoryLineVisible: boolean;
+  trajectoryMarkersVisible: boolean;
+}
+
+class SharedCameraControls implements CameraControlPort {
+  constructor(
+    private readonly camera: OrbitCameraController,
+    private readonly map: SystemMapController,
+    private readonly commands: Commands,
+  ) {}
+
+  get focusId(): string {
+    return this.map.focusId;
+  }
+
+  orbitBy(deltaYawRad: number, deltaPitchRad: number): void {
+    this.camera.orbitBy(deltaYawRad, deltaPitchRad);
+  }
+
+  zoomByWheel(wheelDelta: number): void {
+    this.camera.zoomByWheel(wheelDelta);
+  }
+
+  focusBody(id: string): boolean {
+    const changed = this.map.focusBody(id);
+    if (id === this.map.focusId) this.commands.setTarget(id);
+    return changed;
+  }
+
+  cycleFocus(step: number): string {
+    const id = this.camera.cycleFocus(step);
+    this.map.focusBody(id);
+    this.commands.setTarget(id);
+    return id;
+  }
 }
 
 const canvasElement = document.querySelector('#space-canvas');
@@ -133,12 +183,15 @@ const resizeListenerOptions: AddEventListenerOptions = { passive: true };
 let world: EpochWorld | null = null;
 let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
+let systemMapCameraInput: CameraInputController | null = null;
 let commandInput: KeyboardCommandMapper | null = null;
 let perfGovernor: PerfGovernor | null = null;
 let relativisticVisuals: RelativisticVisualController | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
 let stateVectorViewportElement: HTMLDivElement | null = null;
 let disposeStateVectorLayoutObservation: (() => void) | null = null;
+let runtimeDisposed = false;
+let systemMapRuntimeDiagnostics: SystemMapRuntimeDiagnostics | null = null;
 const stateVectorViewportPixels = new Float64Array(STATE_VECTOR_VIEWPORT_COMPONENT_COUNT);
 const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
@@ -173,6 +226,16 @@ const session = new GameSessionController({
     runtimeResources.sessionSimulationReplacements += 1;
     hudStore.publish(replacement.snapshot, performance.now());
     world?.trajectoryOverlay.hide();
+    world?.systemMap.trajectoryOverlay.hide();
+    if (systemMapRuntimeDiagnostics !== null) {
+      systemMapRuntimeDiagnostics.trajectoryLineVisible = false;
+      systemMapRuntimeDiagnostics.trajectoryMarkersVisible = false;
+    }
+    if (replacement.snapshot.targetBodyIndex >= 0) {
+      const replacementTargetId =
+        replacement.snapshot.bodyIds[replacement.snapshot.targetBodyIndex];
+      if (replacementTargetId !== undefined) systemMapController.focusBody(replacementTargetId);
+    }
     trajectoryPredictionRefresh.clear();
     invalidateTrajectoryPrediction();
   },
@@ -189,6 +252,11 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
   trajectoryPredictionPending = false;
   if (result.type === 'error') {
     world?.trajectoryOverlay.hide();
+    world?.systemMap.trajectoryOverlay.hide();
+    if (systemMapRuntimeDiagnostics !== null) {
+      systemMapRuntimeDiagnostics.trajectoryLineVisible = false;
+      systemMapRuntimeDiagnostics.trajectoryMarkersVisible = false;
+    }
     trajectoryPredictionRefresh.clear();
     trajectoryPredictionStore.publishError();
     canvas.dataset.trajectoryReady = 'error';
@@ -197,6 +265,7 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
   const snapshot = session.simulation.snapshot;
   try {
     world?.trajectoryOverlay.applyPrediction(result, snapshot.dominantBodyIndex);
+    world?.systemMap.trajectoryOverlay.applyPrediction(result, snapshot.dominantBodyIndex);
     trajectoryPredictionRefresh.acceptPrediction(result.points);
     trajectoryPredictionStore.publishSuccess(
       readTrajectoryEventSummary(result.events),
@@ -204,8 +273,19 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
       snapshot.simTimeSec,
     );
     canvas.dataset.trajectoryReady = 'true';
+    if (world !== null && systemMapRuntimeDiagnostics !== null) {
+      systemMapRuntimeDiagnostics.trajectoryLineVisible =
+        world.systemMap.trajectoryOverlay.line.visible;
+      systemMapRuntimeDiagnostics.trajectoryMarkersVisible =
+        world.systemMap.trajectoryOverlay.markers.visible;
+    }
   } catch {
     world?.trajectoryOverlay.hide();
+    world?.systemMap.trajectoryOverlay.hide();
+    if (systemMapRuntimeDiagnostics !== null) {
+      systemMapRuntimeDiagnostics.trajectoryLineVisible = false;
+      systemMapRuntimeDiagnostics.trajectoryMarkersVisible = false;
+    }
     trajectoryPredictionRefresh.clear();
     trajectoryPredictionStore.publishError();
     canvas.dataset.trajectoryReady = 'error';
@@ -233,11 +313,15 @@ function startTrajectoryPredictionRuntime(): void {
 }
 
 function handlePageHide(event: PageTransitionEvent): void {
-  if (event.persisted) return;
+  if (event.persisted || runtimeDisposed) return;
+  runtimeDisposed = true;
   trajectoryPredictorClient?.dispose();
   cameraInput?.dispose();
+  systemMapCameraInput?.dispose();
   commandInput?.dispose();
   disposeStateVectorLayoutObservation?.();
+  world?.systemMap.dispose();
+  postPipeline?.dispose();
 }
 
 function currentInputSnapshot() {
@@ -277,11 +361,52 @@ const sessionCommands: Commands = {
   setAttitudeMode: (mode) => session.simulation.commands.setAttitudeMode(mode),
   setTarget: (bodyId) => {
     session.simulation.commands.setTarget(bodyId);
+    if (bodyId !== null) systemMapController.focusBody(bodyId);
     invalidateTrajectoryPrediction();
   },
   setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
   setWarp: (warp) => session.simulation.commands.setWarp(warp),
 };
+
+const initialSystemMapFocusId = 'earth';
+const systemMapSignals = createSystemMapSignalStore(
+  session.simulation.snapshot.bodyIds,
+  initialSystemMapFocusId,
+);
+
+function writeCameraFocusLabel(bodyId: string): void {
+  const focusLabel = document.querySelector('#camera-focus-label');
+  if (focusLabel instanceof HTMLElement) {
+    focusLabel.textContent = `Focus: ${bodyId.charAt(0).toUpperCase()}${bodyId.slice(1)}`;
+  }
+}
+
+function handleSystemMapModeChange(mode: SystemMapMode): void {
+  systemMapSignals.publishMode(mode);
+  cameraInput?.setEnabled(mode === 'space');
+  systemMapCameraInput?.setEnabled(mode === 'system-map');
+  canvas.dataset.systemMapMode = mode;
+  if (systemMapRuntimeDiagnostics !== null) {
+    systemMapRuntimeDiagnostics.mode = mode;
+    systemMapRuntimeDiagnostics.spaceRenderCountAtModeChange =
+      systemMapRuntimeDiagnostics.spaceRenderCount;
+  }
+}
+
+function handleSystemMapFocusChange(bodyId: string): void {
+  systemMapSignals.publishFocus(bodyId);
+  world?.cameraController.focusBody(bodyId);
+  world?.systemMap.focusBody(bodyId);
+  writeCameraFocusLabel(bodyId);
+  if (systemMapRuntimeDiagnostics !== null) systemMapRuntimeDiagnostics.focusBodyId = bodyId;
+}
+
+const systemMapController = new SystemMapController({
+  bodyIds: session.simulation.snapshot.bodyIds,
+  initialFocusId: initialSystemMapFocusId,
+  onModeChange: handleSystemMapModeChange,
+  onFocusChange: handleSystemMapFocusChange,
+});
 
 function resizeRenderer(): void {
   const clientWidth = canvas.clientWidth;
@@ -302,6 +427,7 @@ function resizeRenderer(): void {
       Math.max(1, canvas.height),
       pixelRatio,
     );
+    world.systemMap.resize(Math.max(1, clientWidth), Math.max(1, clientHeight), pixelRatio);
     updateStateVectorViewport();
   }
 }
@@ -329,7 +455,11 @@ function renderFrame(nowMs: number): void {
   commandInput?.update();
   const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
-  proceduralSun.update(snapshot.simTimeSec);
+  if (systemMapRuntimeDiagnostics !== null) {
+    systemMapRuntimeDiagnostics.simulationTimeSec = snapshot.simTimeSec;
+    systemMapRuntimeDiagnostics.targetBodyId =
+      snapshot.targetBodyIndex < 0 ? null : (snapshot.bodyIds[snapshot.targetBodyIndex] ?? null);
+  }
   if (trajectoryPredictionPending) {
     trajectoryPredictionStore.publishPending(snapshot.targetBodyIndex);
     canvas.dataset.trajectoryReady = 'pending';
@@ -355,25 +485,37 @@ function renderFrame(nowMs: number): void {
   );
   spaceScene.camera.updateMatrix();
   spaceScene.camera.updateMatrixWorld(true);
-  relativisticVisuals.update(snapshot, spaceScene.camera);
-  stateVectorWidget.setPinnedToEcliptic(stateVectorStore.signals.pinnedToEcliptic.value);
-  stateVectorWidget.update(snapshot, spaceScene.camera);
-  visualSystem.update(
-    cameraPositionKm,
-    Math.max(1, canvas.clientHeight),
-    spaceScene.camera.fov * (Math.PI / 180),
-    nowMs,
-    snapshot.simTimeSec,
-  );
-  lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
-  lighting.update();
-  osculatingConic.update(snapshot, canvas.width, canvas.height);
-  spaceScene.updateCameraRelative(cameraPositionKm);
-  telemetry.beginGpuTimer();
-  postPipeline.render(postProcessingEnabled);
-  stateVectorWidget.render(renderer);
-  telemetry.recordStateVectorWidgetMs(stateVectorWidget.lastRenderMs);
-  telemetry.endGpuTimer();
+  if (systemMapController.mode === 'system-map') {
+    world.systemMap.update(deltaSec);
+    telemetry.beginGpuTimer();
+    world.systemMap.render(renderer);
+    telemetry.recordStateVectorWidgetMs(0);
+    telemetry.endGpuTimer();
+    if (systemMapRuntimeDiagnostics !== null) systemMapRuntimeDiagnostics.mapRenderCount += 1;
+  } else {
+    world.systemMap.cameraController.update(deltaSec);
+    proceduralSun.update(snapshot.simTimeSec);
+    relativisticVisuals.update(snapshot, spaceScene.camera);
+    stateVectorWidget.setPinnedToEcliptic(stateVectorStore.signals.pinnedToEcliptic.value);
+    stateVectorWidget.update(snapshot, spaceScene.camera);
+    visualSystem.update(
+      cameraPositionKm,
+      Math.max(1, canvas.clientHeight),
+      spaceScene.camera.fov * (Math.PI / 180),
+      nowMs,
+      snapshot.simTimeSec,
+    );
+    lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
+    lighting.update();
+    osculatingConic.update(snapshot, canvas.width, canvas.height);
+    spaceScene.updateCameraRelative(cameraPositionKm);
+    telemetry.beginGpuTimer();
+    postPipeline.render(postProcessingEnabled);
+    stateVectorWidget.render(renderer);
+    telemetry.recordStateVectorWidgetMs(stateVectorWidget.lastRenderMs);
+    telemetry.endGpuTimer();
+    if (systemMapRuntimeDiagnostics !== null) systemMapRuntimeDiagnostics.spaceRenderCount += 1;
+  }
   const renderEndMs = performance.now();
   const perfPanelStartMs = performance.now();
   perfPanelStore.publish(nowMs);
@@ -409,6 +551,10 @@ function renderApplication(): void {
       session,
       stateVectors: stateVectorStore,
       stateVectorViewportRef: setStateVectorViewportElement,
+      systemMap: {
+        controller: systemMapController,
+        signals: systemMapSignals,
+      },
       trajectoryPrediction: trajectoryPredictionStore,
       onSpacePhaseEntered: () => {
         void activateSpacePhase();
@@ -430,9 +576,28 @@ async function prepareApplication(): Promise<void> {
   canvas.dataset.softwareRasterizer = String(contextReport.softwareRasterizer);
   resizeRenderer();
   world = await createEpochWorld(renderer, {
+    initialViewportWidthPx: Math.max(1, canvas.clientWidth),
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
   });
   runtimeResources.epochWorldCreations += 1;
+  world.systemMap.focusBody(systemMapController.focusId);
+  systemMapRuntimeDiagnostics = {
+    scene: world.systemMap.diagnostics,
+    mapSceneCreations: 1,
+    mode: systemMapController.mode,
+    focusBodyId: systemMapController.focusId,
+    targetBodyId: null,
+    simulationTimeSec: session.simulation.snapshot.simTimeSec,
+    spaceRenderCount: 0,
+    spaceRenderCountAtModeChange: 0,
+    mapRenderCount: 0,
+    trajectoryLineVisible: false,
+    trajectoryMarkersVisible: false,
+  };
+  Object.defineProperty(canvas, 'solarVoyagerSystemMap', {
+    value: systemMapRuntimeDiagnostics,
+  });
+  canvas.dataset.systemMapMode = systemMapController.mode;
   stateVectorWidget = new StateVectorWidget();
   postPipeline = new LightingPostPipeline(
     renderer,
@@ -464,6 +629,7 @@ async function prepareApplication(): Promise<void> {
   resizeRenderer();
   world.lighting.update();
   world.spaceScene.updateCameraRelative(world.cameraPositionKm);
+  world.systemMap.update(0);
   postPipeline.warmUp(postProcessingEnabled);
   await stateVectorWidget.prepare(renderer);
   updateStateVectorViewport();
@@ -487,8 +653,25 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     session.settings.inputBindings,
   );
   runtimeResources.keyboardCommandMappers += 1;
-  cameraInput = new CameraInputController(canvas, window, focusLabel, activeWorld.cameraController);
-  runtimeResources.cameraInputControllers += 1;
+  const spaceCameraControls = new SharedCameraControls(
+    activeWorld.cameraController,
+    systemMapController,
+    sessionCommands,
+  );
+  const mapCameraControls = new SharedCameraControls(
+    activeWorld.systemMap.cameraController,
+    systemMapController,
+    sessionCommands,
+  );
+  cameraInput = new CameraInputController(canvas, window, focusLabel, spaceCameraControls, true);
+  systemMapCameraInput = new CameraInputController(
+    canvas,
+    window,
+    focusLabel,
+    mapCameraControls,
+    false,
+  );
+  runtimeResources.cameraInputControllers += 2;
   startTrajectoryPredictionRuntime();
   const appOverlay = appRoot.querySelector('.app-overlay');
   if (!(appOverlay instanceof HTMLElement)) {
