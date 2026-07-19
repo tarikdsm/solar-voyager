@@ -169,7 +169,7 @@ committed unchanged.
 - Produces: `prepareGasGiantMaterial(material, uniforms): PreparedGasGiantMaterial`
 - Preserves: previous compile hook/cache key and the exact disabled map path
 
-- [ ] **Step 1: Write the failing shader-hook tests**
+- [x] **Step 1: Write the failing shader-hook tests**
 
 Use a mapped, named standard material and a shader fixture containing `common`
 and `map_fragment`. Assert the complete contract:
@@ -206,7 +206,7 @@ Add failure cases for an unmapped standard material, wrong material name, and
 non-standard material. Compile twice and assert declarations/injections occur
 once per resulting shader.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 ```powershell
 npx vitest run src/render/gasGiantMaterial.test.ts
@@ -214,7 +214,7 @@ npx vitest run src/render/gasGiantMaterial.test.ts
 
 Expected: FAIL because `gasGiantMaterial.ts` does not exist.
 
-- [ ] **Step 3: Implement deterministic GLSL injection**
+- [x] **Step 3: Implement deterministic GLSL injection**
 
 Chain the previous hook, assign the stable uniforms, and inject declarations
 after `#include <common>`. The GLSL must include:
@@ -260,7 +260,7 @@ The shimmer function must return `1.0` when disabled and otherwise remain in
 `[0.985, 1.015]`. The program cache key contains only the constant extension
 version, never uniform values.
 
-- [ ] **Step 4: Verify GREEN, neighboring hooks, and commit**
+- [x] **Step 4: Verify GREEN, neighboring hooks, and commit**
 
 ```powershell
 npx vitest run src/render/gasGiantMaterial.test.ts src/render/surfaceDetail.test.ts src/render/proceduralSunMaterial.test.ts
