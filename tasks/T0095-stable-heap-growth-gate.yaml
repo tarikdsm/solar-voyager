@@ -51,3 +51,13 @@ handoff_notes: |
   +211,256 B across retries. The new confirmation path distinguishes a
   one-window forced-GC outlier from persistent retained growth without raising
   the contractual ceiling.
+
+  Independent Task 3 review covered a36d2e9..adbf772. The initial review at
+  b9625a1 reported Critical 0, Important 1, Minor 0 because the dashboard used
+  a summarized handoff instead of the canonical YAML value. A focused
+  YAML-to-dashboard deep-equality assertion reproduced the documentation/data
+  mirror defect as RED; no production test or production code change was
+  needed. Commit adbf772 regenerated the T0095 dashboard line from this YAML,
+  and the same assertion passed GREEN while every other dashboard byte was
+  preserved. Final re-review reported Critical 0, Important 0, Minor 0, with
+  spec compliance and code quality approved; Ready to merge after CI.

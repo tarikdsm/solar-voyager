@@ -317,7 +317,7 @@ assert html.count('"id":"T0094"') == 1
 
 Expected: 54 task files validate and each newest task id occurs exactly once.
 
-- [ ] **Step 3: Request independent exact-head review**
+- [x] **Step 3: Request independent exact-head review**
 
 The different reviewer verifies the unchanged golden, classifier boundaries,
 same-page independence, fail-closed behavior, negative fixture, JSON evidence,
