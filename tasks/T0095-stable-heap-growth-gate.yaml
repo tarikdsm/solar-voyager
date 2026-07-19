@@ -1,0 +1,23 @@
+id: T0095
+title: Stabilize retained-heap CI measurement without weakening the gate
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0092]
+milestone: M6
+spec: |
+  The single before/after forced-GC heap sample in tools/perf/performanceGate.mjs
+  produces narrow false failures on GitHub runners despite identical frame-loop
+  code passing adjacent samples. Preserve the fixed 196,608-byte ceiling and
+  30-second observation window, but confirm only a narrowly exceeded primary
+  sample with an independent same-page window. Persistent growth must still fail,
+  large failures must fail immediately, and the retained-allocation fixture must
+  remain a mandatory negative control. Record both samples when confirmation runs.
+acceptance:
+  - The 196,608-byte ceiling and production draw/triangle/bundle budgets are unchanged
+  - Only a primary heap failure no more than 25% above the ceiling receives one confirmation window
+  - Production passes after confirmation only when the independent 30-second window is within the original ceiling
+  - Persistent or large retained growth and the allocation fixture are still rejected
+  - Unit tests cover pass, immediate fail, confirmed pass, and confirmed fail decisions
+  - Local production and negative-control gates pass, CI is green, and docs/check_plan.html includes T0095 exactly once
+handoff_notes: ""
