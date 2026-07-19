@@ -18,6 +18,13 @@ const FRAMEBUFFER_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_FRAMEBUFFER_RUNTIME_ERR
 const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
 );
+const SMOKE_STARTED_AT_MS = performance.now();
+
+function progress(stage) {
+  process.stdout.write(
+    `[application-smoke] ${stage} +${((performance.now() - SMOKE_STARTED_AT_MS) / 1_000).toFixed(1)}s\n`,
+  );
+}
 
 function assertNoBrowserErrors(browserErrors) {
   if (browserErrors.length > 0) {
@@ -150,6 +157,7 @@ async function probeCanvasPixels(page) {
 }
 
 async function runProbe(browser, fixturePath = null, probeStateVector = false) {
+  progress(`probe start ${probeStateVector ? 'production' : 'fixture'}`);
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   const browserErrors = [];
   let trajectoryWorkerRequestCount = 0;
@@ -176,6 +184,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       { timeout: 30_000 },
     );
     await page.waitForTimeout(250);
+    progress(`probe ready ${probeStateVector ? 'production' : 'fixture'}`);
 
     assertNoBrowserErrors(browserErrors);
 
@@ -198,6 +207,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       timeWarp: 1,
     });
     const canvas = await probeCanvasPixels(page);
+    progress(`probe canvas ${probeStateVector ? 'production' : 'fixture'}`);
     const stateVector = probeStateVector ? await probeProductionStateVector(page) : null;
     await page.waitForTimeout(0);
     assertNoBrowserErrors(browserErrors);
@@ -206,6 +216,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       0,
       'application smoke must not start the unrelated long-horizon trajectory worker',
     );
+    progress(`probe done ${probeStateVector ? 'production' : 'fixture'}`);
     return { canvas, hud, stateVector };
   } finally {
     await page.close();
@@ -213,6 +224,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
 }
 
 async function expectRuntimeFixtureFailure(browser, fixturePath, marker, triggerReadPixels = false) {
+  progress(`negative fixture start ${marker}`);
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   await disableUnrelatedTrajectoryPrediction(page);
   let timeout;
@@ -259,6 +271,7 @@ async function expectRuntimeFixtureFailure(browser, fixturePath, marker, trigger
     }
     const message = await failure;
     assert.match(message, new RegExp(marker, 'u'));
+    progress(`negative fixture done ${marker}`);
     return message;
   } finally {
     clearTimeout(timeout);
@@ -269,9 +282,11 @@ async function expectRuntimeFixtureFailure(browser, fixturePath, marker, trigger
 export async function runApplicationSmokeContract({
   delayedFixtureOnly = false,
   fixtureOnly = false,
+  negativeFixturesOnly = false,
   productionOnly = false,
 } = {}) {
   await assertPortAvailable(PORT, HOST);
+  progress('preview start');
   const server = await preview({
     root: process.cwd(),
     base: '/solar-voyager/',
@@ -280,7 +295,9 @@ export async function runApplicationSmokeContract({
   });
   let browser;
   try {
+    progress('browser launch');
     browser = await chromium.launch({ channel: 'chrome', headless: true });
+    progress('browser ready');
     if (fixtureOnly) return await runProbe(browser, RUNTIME_ERROR_FIXTURE);
     if (delayedFixtureOnly) return await runProbe(browser, FRAMEBUFFER_ERROR_FIXTURE);
     if (productionOnly) return await runProbe(browser, null, true);
@@ -295,6 +312,7 @@ export async function runApplicationSmokeContract({
       FRAMEBUFFER_ERROR_MARKER,
       true,
     );
+    if (negativeFixturesOnly) return { rejectedFixture, rejectedFramebufferFixture };
     const production = await runProbe(browser, null, true);
     return { production, rejectedFixture, rejectedFramebufferFixture };
   } finally {

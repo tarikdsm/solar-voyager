@@ -3,6 +3,7 @@ import { runApplicationSmokeContract } from '../smoke/applicationSmokeContract.m
 const result = await runApplicationSmokeContract({
   delayedFixtureOnly: process.argv.includes('--fixture-delayed-runtime-error'),
   fixtureOnly: process.argv.includes('--fixture-runtime-error'),
+  negativeFixturesOnly: process.argv.includes('--negative-fixtures-only'),
   productionOnly: process.argv.includes('--production-only'),
 });
 
