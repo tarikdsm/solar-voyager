@@ -37,9 +37,12 @@ describe('energy HUD formatters — physics-spec.md §5', () => {
     );
     expect(formatBodyId('alpha-centauri')).toBe('Alpha Centauri');
     expect(formatBodyId(null)).toBe('—');
+    expect(formatProperDeltaV(1)).toBe('1 m/s');
     expect(formatProperDeltaV(12.5)).toBe('12.5 m/s');
     expect(formatProperDeltaV(0.001_23)).toBe('0.00123 m/s');
-    expect(formatProperDeltaV(1_250)).toBe('1.25 km/s');
+    expect(formatProperDeltaV(999.6)).toBe('1,000 m/s');
+    expect(formatProperDeltaV(1_000)).toBe('1 km/s');
+    expect(formatProperDeltaV(999_600)).toBe('1,000 km/s');
     expect(formatSignedDeltaV(10)).toBe('+10.0 m/s');
     expect(formatSignedDeltaV(-2.5)).toBe('-2.50 m/s');
     expect(formatSignedDeltaV(0.001_23)).toBe('+0.00123 m/s');

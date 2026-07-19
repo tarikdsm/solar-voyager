@@ -1,4 +1,8 @@
 const SI_PREFIXES = Object.freeze(['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'] as const);
+const PROPER_DELTA_V_FORMAT = new Intl.NumberFormat('en-US', {
+  maximumSignificantDigits: 3,
+  useGrouping: true,
+});
 
 function padInteger(value: number, width: number): string {
   return Math.trunc(value).toString().padStart(width, '0');
@@ -78,8 +82,8 @@ export function formatBodyId(bodyId: string | null): string {
 /** Formats accumulated proper delta-v with three significant digits. */
 export function formatProperDeltaV(valueMS: number): string {
   if (!Number.isFinite(valueMS) || valueMS < 0) return '—';
-  if (valueMS >= 1_000) return `${formatThreeSignificant(valueMS / 1_000)} km/s`;
-  return `${formatThreeSignificant(valueMS)} m/s`;
+  if (valueMS >= 1_000) return `${PROPER_DELTA_V_FORMAT.format(valueMS / 1_000)} km/s`;
+  return `${PROPER_DELTA_V_FORMAT.format(valueMS)} m/s`;
 }
 
 /** Formats one signed burn-axis delta-v component with an explicit positive sign. */
