@@ -19,12 +19,33 @@ const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
 );
 const SMOKE_STARTED_AT_MS = performance.now();
-export const APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS = 180_000;
+export const APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS = 60_000;
 
 function progress(stage) {
   process.stdout.write(
     `[application-smoke] ${stage} +${((performance.now() - SMOKE_STARTED_AT_MS) / 1_000).toFixed(1)}s\n`,
   );
+}
+
+/** Installs a harness-only rAF gate that preserves one complete production frame. */
+export function installProductionSmokeRafFreeze(target = globalThis) {
+  const nativeRequestAnimationFrame = target.requestAnimationFrame.bind(target);
+  const diagnostics = {
+    completedFrameObserved: false,
+    ignoredScheduleCount: 0,
+    nativeScheduleCount: 0,
+  };
+  Object.defineProperty(target, '__solarVoyagerSmokeRafFreeze', { value: diagnostics });
+  target.requestAnimationFrame = (callback) => {
+    const canvas = target.document.querySelector('#space-canvas');
+    if ((canvas?.solarVoyagerTelemetry?.frameSampleCount ?? 0) > 0) {
+      diagnostics.completedFrameObserved = true;
+      diagnostics.ignoredScheduleCount += 1;
+      return 0;
+    }
+    diagnostics.nativeScheduleCount += 1;
+    return nativeRequestAnimationFrame(callback);
+  };
 }
 
 function assertNoBrowserErrors(browserErrors) {
@@ -43,6 +64,7 @@ async function readFirstFrameDiagnostics(page) {
       cameraReady: canvas.dataset.cameraReady ?? null,
       canvas: true,
       frameSampleCount: canvas.solarVoyagerTelemetry?.frameSampleCount ?? -1,
+      rafFreeze: globalThis.__solarVoyagerSmokeRafFreeze ?? null,
       rendererReady: canvas.dataset.rendererReady ?? null,
       softwareRasterizer: canvas.dataset.softwareRasterizer ?? null,
       worldReady: canvas.dataset.worldReady ?? null,
@@ -195,6 +217,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   page.on('crash', () => browserErrors.push('page crash'));
   await disableUnrelatedTrajectoryPrediction(page);
+  if (probeStateVector) await page.addInitScript(installProductionSmokeRafFreeze);
   if (fixturePath !== null) await page.addInitScript({ path: fixturePath });
 
   try {
@@ -233,6 +256,14 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
     });
     const canvas = await probeCanvasPixels(page);
     progress(`probe canvas ${probeStateVector ? 'production' : 'fixture'}`);
+    const runtime = probeStateVector ? await readFirstFrameDiagnostics(page) : null;
+    if (runtime !== null) {
+      assert.equal(runtime.animationLoopStarts, 1, 'production started multiple animation loops');
+      assert.ok(runtime.frameSampleCount > 0, 'production freeze bypassed the real frame');
+      assert.equal(runtime.rafFreeze?.completedFrameObserved, true);
+      assert.ok(runtime.rafFreeze.nativeScheduleCount > 0, 'native rAF was never scheduled');
+      assert.ok(runtime.rafFreeze.ignoredScheduleCount > 0, 'production rAF was not frozen');
+    }
     const stateVector = probeStateVector ? await probeProductionStateVector(page) : null;
     await page.waitForTimeout(0);
     assertNoBrowserErrors(browserErrors);
@@ -242,7 +273,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       'application smoke must not start the unrelated long-horizon trajectory worker',
     );
     progress(`probe done ${probeStateVector ? 'production' : 'fixture'}`);
-    return { canvas, hud, stateVector };
+    return { canvas, hud, rafFreeze: runtime?.rafFreeze ?? null, stateVector };
   } finally {
     await page.close();
   }
