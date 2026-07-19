@@ -189,6 +189,7 @@ describe('BurnLogPanel', () => {
         ctrlKey: false,
         metaKey: false,
         repeat: false,
+        shiftKey: false,
         target: rowTarget,
         preventDefault: () => {
           flightKeyDownPrevented = true;

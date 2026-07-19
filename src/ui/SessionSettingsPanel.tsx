@@ -3,14 +3,14 @@ import { useMemo, useState } from 'preact/hooks';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import {
   INPUT_ACTIONS,
-  type GameSettingsV1,
+  type GameSettingsV2,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV1;
+  readonly settings: GameSettingsV2;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;

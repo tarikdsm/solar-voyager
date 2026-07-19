@@ -4,9 +4,9 @@ import { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import {
   DEFAULT_GAME_SETTINGS,
-  parseGameSettings,
+  parseProfileSettings,
   rebindInput,
-  type GameSettingsV1,
+  type GameSettingsV2,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
@@ -18,7 +18,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV1 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV2 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -59,7 +59,7 @@ class FakeSession implements SessionSettingsPort {
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
-    this.settings = parseGameSettings({ ...this.settings, qualityLock });
+    this.settings = parseProfileSettings({ ...this.settings, qualityLock });
     return { ok: true, message: 'Quality setting updated' };
   }
 }
