@@ -37,9 +37,9 @@ export class SceneManager {
     return this.enterSpaceAfter(this.session.loadLocal());
   }
 
-  activateLoadedSession(result: SessionActionResult): SessionActionResult {
+  activateSession(action: () => SessionActionResult): SessionActionResult {
     if (this.currentPhase === 'space') return ALREADY_ACTIVE_RESULT;
-    return this.enterSpaceAfter(result);
+    return this.enterSpaceAfter(action());
   }
 
   private enterSpaceAfter(result: SessionActionResult): SessionActionResult {

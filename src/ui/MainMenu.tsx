@@ -2,19 +2,23 @@ import { useMemo, useState } from 'preact/hooks';
 
 import type { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult } from '../game/sessionController.js';
-import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
+import {
+  SessionSettingsPanel,
+  type SessionActivationGuard,
+  type SessionSettingsPort,
+} from './SessionSettingsPanel.js';
 
 export interface MainMenuScenePort {
   readonly canContinue: boolean;
   startNewGame(): SessionActionResult;
   continueGame(): SessionActionResult;
-  activateLoadedSession(result: SessionActionResult): SessionActionResult;
+  activateSession(action: () => SessionActionResult): SessionActionResult;
 }
 
 export interface MainMenuModel {
   startNewGame(): SessionActionResult;
   continueGame(): SessionActionResult;
-  activateLoadedSession(result: SessionActionResult): SessionActionResult;
+  activateSession(action: () => SessionActionResult): SessionActionResult;
 }
 
 export function createMainMenuModel(
@@ -28,7 +32,7 @@ export function createMainMenuModel(
   return {
     startNewGame: () => enterAfter(scene.startNewGame()),
     continueGame: () => enterAfter(scene.continueGame()),
-    activateLoadedSession: (result) => enterAfter(scene.activateLoadedSession(result)),
+    activateSession: (action) => enterAfter(scene.activateSession(action)),
   };
 }
 
@@ -36,16 +40,16 @@ export interface MainMenuViewProps {
   readonly canContinue: boolean;
   readonly onContinue: () => void;
   readonly onNewGame: () => void;
-  readonly onSessionActivated: (result: SessionActionResult) => void;
+  readonly activationGuard: SessionActivationGuard;
   readonly session: SessionSettingsPort | null;
   readonly status: SessionActionResult | null;
 }
 
 export function MainMenuView({
   canContinue,
+  activationGuard,
   onContinue,
   onNewGame,
-  onSessionActivated,
   session,
   status,
 }: MainMenuViewProps) {
@@ -80,7 +84,7 @@ export function MainMenuView({
         configured before launch.
       </p>
       {session === null ? null : (
-        <SessionSettingsPanel session={session} onSessionActivated={onSessionActivated} />
+        <SessionSettingsPanel session={session} activationGuard={activationGuard} />
       )}
     </section>
   );
@@ -103,10 +107,10 @@ export function MainMenu({ scene, session, onSpacePhaseEntered }: MainMenuProps)
 
   return (
     <MainMenuView
+      activationGuard={model.activateSession}
       canContinue={scene.canContinue}
       onContinue={() => publish(model.continueGame())}
       onNewGame={() => publish(model.startNewGame())}
-      onSessionActivated={(result) => publish(model.activateLoadedSession(result))}
       session={session}
       status={status}
     />

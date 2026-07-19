@@ -72,12 +72,12 @@ describe('main menu', () => {
 
   it('offers semantic keyboard-first navigation and disables Continue without a save', () => {
     const view = MainMenuView({
+      activationGuard: (action) => action(),
       canContinue: false,
       onContinue: () => undefined,
       onNewGame: () => undefined,
       session: null,
       status: { ok: false, message: 'Unable to start new game' },
-      onSessionActivated: () => undefined,
     });
     const nodes = childNodes(view.props.children);
     const nav = nodes.find((node) => node.type === 'nav');
@@ -115,25 +115,32 @@ describe('main menu', () => {
     const model = createMainMenuModel(scenes, () => activations.push('space'));
     const loaded: SessionActionResult = { ok: true, message: 'Session loaded' };
 
-    expect(model.activateLoadedSession(loaded)).toEqual(loaded);
-    expect(model.activateLoadedSession({ ok: true, message: 'Session imported' })).toEqual({
+    expect(model.activateSession(() => loaded)).toEqual(loaded);
+    let repeatedActionCalls = 0;
+    expect(
+      model.activateSession(() => {
+        repeatedActionCalls += 1;
+        return { ok: true, message: 'Session imported' };
+      }),
+    ).toEqual({
       ok: false,
       message: 'Space phase is already active',
     });
     expect(activations).toEqual(['space']);
+    expect(repeatedActionCalls).toBe(0);
 
     const view = MainMenuView({
+      activationGuard: model.activateSession,
       canContinue: true,
       onContinue: () => undefined,
       onNewGame: () => undefined,
       session: {} as SessionSettingsPort,
       status: null,
-      onSessionActivated: () => undefined,
     });
-    expect(
-      childNodes(view.props.children).some(
-        (node) => (node.type as unknown) === SessionSettingsPanel,
-      ),
-    ).toBe(true);
+    const settingsPanel = childNodes(view.props.children).find(
+      (node) => (node.type as unknown) === SessionSettingsPanel,
+    );
+    expect(settingsPanel).toBeDefined();
+    expect(settingsPanel?.props.activationGuard).toBeTypeOf('function');
   });
 });

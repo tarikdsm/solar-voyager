@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import {
   DEFAULT_GAME_SETTINGS,
@@ -19,6 +20,8 @@ class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
   settings: GameSettingsV1 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
+  importCalls = 0;
+  loadCalls = 0;
   loadResult: SessionActionResult = { ok: true, message: 'Session loaded' };
   saveResult: SessionActionResult = { ok: true, message: 'Session saved' };
   exportResult: SessionExportResult = { ok: true, json: '{"version":2}' };
@@ -28,11 +31,13 @@ class FakeSession implements SessionSettingsPort {
   }
 
   importJson(json: string): SessionActionResult {
+    this.importCalls += 1;
     this.importedJson = json;
     return { ok: true, message: 'Session imported' };
   }
 
   loadLocal(): SessionActionResult {
+    this.loadCalls += 1;
     return this.loadResult;
   }
 
@@ -59,6 +64,14 @@ class FakeSession implements SessionSettingsPort {
   }
 }
 
+function createSceneManager(session: FakeSession): SceneManager {
+  return new SceneManager({
+    hasValidLocalSave: () => true,
+    startNewGame: () => ({ ok: true, message: 'New game started' }),
+    loadLocal: () => session.loadLocal(),
+  });
+}
+
 class FakeFiles implements SessionFilePort {
   downloaded: { readonly filename: string; readonly json: string } | null = null;
   readValue = '{"version":1}';
@@ -74,7 +87,56 @@ class FakeFiles implements SessionFilePort {
   }
 }
 
+class DeferredFiles extends FakeFiles {
+  private resolveRead: ((value: string) => void) | null = null;
+
+  override readText(): Promise<string> {
+    return new Promise((resolve) => {
+      this.resolveRead = resolve;
+    });
+  }
+
+  finishRead(value = this.readValue): void {
+    if (this.resolveRead === null) throw new Error('No file read is pending');
+    this.resolveRead(value);
+    this.resolveRead = null;
+  }
+}
+
 describe('session settings panel model', () => {
+  it('does not import after another menu action enters space during the file read', async () => {
+    const session = new FakeSession();
+    const files = new DeferredFiles();
+    const scenes = createSceneManager(session);
+    const model = createSessionSettingsModel(session, files, null, (action) =>
+      scenes.activateSession(action),
+    );
+
+    const pendingImport = model.importFile({} as File);
+    expect(scenes.startNewGame()).toMatchObject({ ok: true });
+    files.finishRead();
+
+    expect(await pendingImport).toEqual({
+      ok: false,
+      message: 'Space phase is already active',
+    });
+    expect(session.importCalls).toBe(0);
+    expect(session.importedJson).toBe('');
+  });
+
+  it('does not load again after the first guarded load activates space', () => {
+    const session = new FakeSession();
+    const scenes = createSceneManager(session);
+    const model = createSessionSettingsModel(session, new FakeFiles(), null, (action) =>
+      scenes.activateSession(action),
+    );
+
+    expect(model.load()).toEqual({ ok: true, message: 'Session loaded' });
+    expect(model.load()).toEqual({ ok: false, message: 'Space phase is already active' });
+    expect(model.load()).toEqual({ ok: false, message: 'Space phase is already active' });
+    expect(session.loadCalls).toBe(1);
+  });
+
   it('announces only successful load and import actions as playable sessions', async () => {
     const session = new FakeSession();
     const files = new FakeFiles();

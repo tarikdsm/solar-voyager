@@ -68,16 +68,28 @@ describe('SceneManager', () => {
     expect(session.loadCalls).toBe(2);
   });
 
-  it('accepts an already loaded session only when its action succeeded', () => {
+  it('runs a session activation only while the menu is active and transitions on success', () => {
     const scenes = new SceneManager(new FakeSession());
     const failed: SessionActionResult = { ok: false, message: 'Imported session is invalid' };
+    let actionCalls = 0;
 
-    expect(scenes.activateLoadedSession(failed)).toEqual(failed);
+    expect(
+      scenes.activateSession(() => {
+        actionCalls += 1;
+        return failed;
+      }),
+    ).toEqual(failed);
     expect(scenes.phase).toBe('main-menu');
 
     const imported: SessionActionResult = { ok: true, message: 'Session imported' };
-    expect(scenes.activateLoadedSession(imported)).toEqual(imported);
+    expect(
+      scenes.activateSession(() => {
+        actionCalls += 1;
+        return imported;
+      }),
+    ).toEqual(imported);
     expect(scenes.phase).toBe('space');
+    expect(actionCalls).toBe(2);
   });
 
   it('rejects repeated activation without invoking New Game or Continue again', () => {
@@ -93,11 +105,15 @@ describe('SceneManager', () => {
       ok: false,
       message: 'Space phase is already active',
     });
-    expect(scenes.activateLoadedSession({ ok: true, message: 'Session imported' })).toEqual({
-      ok: false,
-      message: 'Space phase is already active',
-    });
+    let activationCalls = 0;
+    expect(
+      scenes.activateSession(() => {
+        activationCalls += 1;
+        return { ok: true, message: 'Session imported' };
+      }),
+    ).toEqual({ ok: false, message: 'Space phase is already active' });
     expect(session.newGameCalls).toBe(1);
     expect(session.loadCalls).toBe(0);
+    expect(activationCalls).toBe(0);
   });
 });
