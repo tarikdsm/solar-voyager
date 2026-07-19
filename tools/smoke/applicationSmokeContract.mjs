@@ -184,8 +184,9 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       orbitReadout: globalThis.document.querySelectorAll('#orbit-readout').length,
       perfPanel: globalThis.document.querySelectorAll('#perf-panel').length,
       sessionSettings: globalThis.document.querySelectorAll('#session-settings').length,
-      simulationClocks: globalThis.document.querySelectorAll('[aria-label="Simulation clocks"]')
-        .length,
+      simulationClocks: globalThis.document.querySelectorAll(
+        '[aria-label="Mission UTC and ship proper-time clocks"]',
+      ).length,
       timeWarp: globalThis.document.querySelectorAll('[aria-label="Time warp control"]').length,
     }));
     assert.deepEqual(hud, {
