@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import type { TutorialController } from '../game/tutorialController.js';
@@ -164,13 +164,7 @@ export function SessionSettingsPanel({
       : { ok: false, message: session.initializationWarning },
   );
   const [capturingAction, setCapturingAction] = useState<InputAction | null>(null);
-  const [tutorialProgress, setTutorialProgress] = useState(tutorial?.progress ?? null);
-
-  useEffect(() => {
-    setTutorialProgress(tutorial?.progress ?? null);
-    if (tutorial === null) return;
-    return tutorial.subscribe(setTutorialProgress);
-  }, [tutorial]);
+  const tutorialProgress = tutorial?.progress ?? null;
 
   const publish = (result: PanelActionResult): void => {
     setStatus(result);
@@ -184,28 +178,18 @@ export function SessionSettingsPanel({
         {tutorial === null || tutorialProgress === null ? null : (
           <section aria-labelledby="tutorial-settings-title">
             <h2 id="tutorial-settings-title">Tutorial</h2>
-            <p class="tutorial-settings-status">
-              Status: <strong>{tutorialProgress.status}</strong> · step{' '}
-              <span>{tutorialProgress.stepId}</span>
+            <p class="session-status">
+              Status: <strong>{tutorialProgress.status}</strong>
             </p>
-            <div class="tutorial-settings-actions">
+            <div class="session-action-grid">
               <button
                 type="button"
                 disabled={tutorialProgress.status !== 'skipped'}
-                onClick={() => {
-                  tutorial.resume();
-                  setTutorialProgress(tutorial.progress);
-                }}
+                onClick={() => tutorial.resume()}
               >
                 Resume tutorial
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  tutorial.reset();
-                  setTutorialProgress(tutorial.progress);
-                }}
-              >
+              <button type="button" onClick={() => tutorial.reset()}>
                 Reset tutorial
               </button>
             </div>

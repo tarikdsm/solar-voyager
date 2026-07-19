@@ -20,7 +20,7 @@ import type { StateVectorSignalStore } from './stateVectorSignals.js';
 import { SystemMapPanel } from './SystemMapPanel.js';
 import type { SystemMapSignalStore } from './systemMapSignals.js';
 import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
-import { TutorialOverlay } from './TutorialOverlay.js';
+import { TutorialOverlayView } from './TutorialOverlay.js';
 import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
 import type { BurnLogSignalStore } from './burnLogSignals.js';
 
@@ -317,7 +317,9 @@ export function App({
   const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
   const [phase, setPhase] = useState<GamePhase>(startingPhase);
   const [tutorialProgress, setTutorialProgress] = useState(tutorial?.progress ?? null);
+  const [, setTutorialRevision] = useState(0);
   const enteredSpace = useRef(startingPhase === 'space');
+  const tutorialHeading = useRef<HTMLHeadingElement | null>(null);
   const enterSpace = useCallback(() => {
     if (enteredSpace.current) return;
     enteredSpace.current = true;
@@ -328,37 +330,15 @@ export function App({
   useEffect(() => {
     setTutorialProgress(tutorial?.progress ?? null);
     if (tutorial === null) return;
-    return tutorial.subscribe(setTutorialProgress);
+    return tutorial.subscribe((progress) => {
+      setTutorialProgress(progress);
+      setTutorialRevision((revision) => revision + 1);
+    });
   }, [tutorial]);
 
-  const publishBurnLogExpanded = useCallback(
-    (expanded: boolean) => {
-      onBurnLogExpandedChange?.(expanded);
-      if (expanded && burnLog !== null) {
-        tutorial?.observeBurnLog(true, burnLog.completedCount.value);
-      }
-    },
-    [burnLog, onBurnLogExpandedChange, tutorial],
-  );
-  const publishPerfPanelExpanded = useCallback(
-    (expanded: boolean) => {
-      onPerfPanelExpandedChange?.(expanded);
-      if (expanded) tutorial?.observePerformance(true, hardwareWarning !== null, false);
-    },
-    [hardwareWarning, onPerfPanelExpandedChange, tutorial],
-  );
-  const acknowledgeHardwareWarning = useCallback(() => {
-    onHardwareWarningAcknowledged?.();
-    tutorial?.observePerformance(false, true, true);
-  }, [onHardwareWarningAcknowledged, tutorial]);
-  const publishSaveSucceeded = useCallback(() => {
-    onSaveSucceeded?.();
-    tutorial?.observeSaveSucceeded();
-  }, [onSaveSucceeded, tutorial]);
-
-  const tutorialVisible =
-    tutorial !== null &&
-    (tutorialProgress?.status === 'unoffered' || tutorialProgress?.status === 'active');
+  useEffect(() => {
+    if (tutorialProgress?.status === 'active') tutorialHeading.current?.focus();
+  }, [tutorialProgress?.status, tutorialProgress?.stepId]);
 
   if (phase === 'main-menu' && sceneManager !== null) {
     return (
@@ -366,10 +346,11 @@ export function App({
         {hardwareWarning === null ? null : (
           <HardwareAccelerationWarning
             rendererName={hardwareWarning.rendererName}
-            onAcknowledged={acknowledgeHardwareWarning}
+            onAcknowledged={onHardwareWarningAcknowledged}
           />
         )}
         <MainMenu
+          key={tutorialProgress?.status}
           scene={sceneManager}
           session={session}
           onSpacePhaseEntered={enterSpace}
@@ -384,11 +365,11 @@ export function App({
       {hardwareWarning === null ? null : (
         <HardwareAccelerationWarning
           rendererName={hardwareWarning.rendererName}
-          onAcknowledged={acknowledgeHardwareWarning}
+          onAcknowledged={onHardwareWarningAcknowledged}
         />
       )}
       {perfPanel === null ? null : (
-        <PerfPanel store={perfPanel} onExpandedChange={publishPerfPanelExpanded} />
+        <PerfPanel store={perfPanel} onExpandedChange={onPerfPanelExpandedChange} />
       )}
       {systemMap === null || trajectoryPrediction === null ? null : (
         <SystemMapPanel
@@ -407,8 +388,9 @@ export function App({
         <h1 class="app-title">{scaffoldState.title}</h1>
         {session === null ? null : (
           <SessionSettingsPanel
+            key={tutorialProgress?.status}
             session={session}
-            onSaveSucceeded={publishSaveSucceeded}
+            onSaveSucceeded={onSaveSucceeded}
             tutorial={tutorial}
           />
         )}
@@ -417,7 +399,7 @@ export function App({
         <WarpControl commands={commands} hud={hud} hudState={hudState} />
         <EnergyPanel hud={hud} />
         {burnLog === null || BurnLogPanelComponent === null ? null : (
-          <BurnLogPanelComponent store={burnLog} onExpandedChange={publishBurnLogExpanded} />
+          <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />
         )}
         <TargetPanel
           bodyIds={bodyIds}
@@ -445,7 +427,18 @@ export function App({
           </p>
         </section>
       </SpaceHudSurfaces>
-      {tutorialVisible ? <TutorialOverlay controller={tutorial} /> : null}
+      {tutorial !== null &&
+      tutorialProgress !== null &&
+      (tutorialProgress.status === 'unoffered' || tutorialProgress.status === 'active') ? (
+        <TutorialOverlayView
+          controller={tutorial}
+          focusHeading={(heading) => {
+            tutorialHeading.current = heading;
+          }}
+          progress={tutorialProgress}
+          readoutsReady={tutorial.canAcknowledgeReadouts}
+        />
+      ) : null}
     </main>
   );
 }

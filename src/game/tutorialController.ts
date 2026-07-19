@@ -1,24 +1,10 @@
-import type { TutorialProgress, TutorialStepId } from './settings.js';
+import { TUTORIAL_STEP_IDS, type TutorialProgress, type TutorialStepId } from './settings.js';
 
 export interface TutorialPersistencePort {
   updateTutorial(update: (current: TutorialProgress) => TutorialProgress): { readonly ok: boolean };
 }
 
 export type TutorialProgressListener = (progress: TutorialProgress) => void;
-
-const NEXT_STEP: Readonly<Partial<Record<TutorialStepId, TutorialStepId>>> = Object.freeze({
-  'focus-target': 'camera',
-  camera: 'readouts',
-  readouts: 'attitude-thrust',
-  'attitude-thrust': 'thrust-off',
-  'thrust-off': 'warp',
-  warp: 'map-open',
-  'map-open': 'map-return',
-  'map-return': 'burn-log',
-  'burn-log': 'performance',
-  performance: 'save',
-  save: 'return-to-play',
-});
 
 function createProgress(
   status: TutorialProgress['status'],
@@ -90,8 +76,7 @@ export class TutorialController {
   }
 
   observeTargetFocus(hasTarget: boolean, targetIsFocus: boolean): boolean {
-    if (!this.isCurrentStep('focus-target') || !hasTarget || !targetIsFocus) return false;
-    return this.advance();
+    return this.completeStep('focus-target', hasTarget && targetIsFocus);
   }
 
   observeCameraOrbit(): boolean {
@@ -121,33 +106,23 @@ export class TutorialController {
   }
 
   observeAttitudeThrust(attitudeIsNonManual: boolean, throttleActive: boolean): boolean {
-    if (!this.isCurrentStep('attitude-thrust') || !attitudeIsNonManual || !throttleActive) {
-      return false;
-    }
-    return this.advance();
+    return this.completeStep('attitude-thrust', attitudeIsNonManual && throttleActive);
   }
 
   observeThrustOff(throttleIsZero: boolean, completedBurnCount: number): boolean {
-    if (!this.isCurrentStep('thrust-off') || !throttleIsZero || completedBurnCount <= 0) {
-      return false;
-    }
-    return this.advance();
+    return this.completeStep('thrust-off', throttleIsZero && completedBurnCount > 0);
   }
 
   observeWarp(requestedWarpIsOne: boolean, throttleIsZero: boolean): boolean {
-    if (!this.isCurrentStep('warp') || requestedWarpIsOne || !throttleIsZero) return false;
-    return this.advance();
+    return this.completeStep('warp', !requestedWarpIsOne && throttleIsZero);
   }
 
   observeMap(isOpen: boolean): boolean {
-    if (this.isCurrentStep('map-open') && isOpen) return this.advance();
-    if (this.isCurrentStep('map-return') && !isOpen) return this.advance();
-    return false;
+    return this.completeStep(isOpen ? 'map-open' : 'map-return', true);
   }
 
   observeBurnLog(isOpen: boolean, completedBurnCount: number): boolean {
-    if (!this.isCurrentStep('burn-log') || !isOpen || completedBurnCount <= 0) return false;
-    return this.advance();
+    return this.completeStep('burn-log', isOpen && completedBurnCount > 0);
   }
 
   observePerformance(
@@ -155,13 +130,14 @@ export class TutorialController {
     hardwareWarningPresent: boolean,
     hardwareWarningAcknowledged: boolean,
   ): boolean {
-    if (!this.isCurrentStep('performance')) return false;
-    const completed = hardwareWarningPresent ? hardwareWarningAcknowledged : panelIsOpen;
-    return completed ? this.advance() : false;
+    return this.completeStep(
+      'performance',
+      hardwareWarningPresent ? hardwareWarningAcknowledged : panelIsOpen,
+    );
   }
 
   observeSaveSucceeded(): boolean {
-    return this.isCurrentStep('save') ? this.advance() : false;
+    return this.completeStep('save', true);
   }
 
   finish(): boolean {
@@ -174,11 +150,15 @@ export class TutorialController {
   }
 
   private advanceCameraWhenReady(): boolean {
-    return this.cameraOrbited && this.cameraZoomed ? this.advance() : false;
+    return this.completeStep('camera', this.cameraOrbited && this.cameraZoomed);
+  }
+
+  private completeStep(stepId: TutorialStepId, condition: boolean): boolean {
+    return condition && this.isCurrentStep(stepId) ? this.advance() : false;
   }
 
   private advance(): boolean {
-    const nextStep = NEXT_STEP[this.currentProgress.stepId];
+    const nextStep = TUTORIAL_STEP_IDS[TUTORIAL_STEP_IDS.indexOf(this.currentProgress.stepId) + 1];
     if (nextStep === undefined) return false;
     return this.commit(createProgress('active', nextStep));
   }

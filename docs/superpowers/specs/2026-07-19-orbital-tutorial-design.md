@@ -62,7 +62,7 @@ The bootstrap wires observation at existing seams:
 
 The 10 Hz observer is a nullable stable function. Completion or skip sets it to `null`. It accepts only primitive values and allocates no observation object. The render loop allocates no tutorial objects, and completed/skipped profiles add zero gameplay frame-loop allocations.
 
-`src/ui/TutorialOverlay.tsx` renders a non-modal accessible card outside `SpaceHudSurfaces`, so map instructions remain visible. A setup-owned UI signal mirrors controller progress; `App` conditionally mounts the overlay only for `unoffered`/`active`. Skip/completion therefore unmounts the component rather than merely returning hidden markup. It uses semantic headings/buttons, moves focus to a non-editable heading for flight-control steps, and has compact/reduced-motion CSS. Hidden/completed UI has no key listener, subscription, or DOM node and cannot capture thrust or warp input.
+`src/ui/TutorialOverlay.tsx` renders a pure, non-modal accessible card outside `SpaceHudSurfaces`, so map instructions remain visible. A setup-owned, event-only `App` subscription mirrors controller progress and also makes terminal Resume/Reset actions observable; the overlay itself creates no subscription. `App` conditionally mounts it only for `unoffered`/`active`, so skip/completion removes the DOM rather than hiding markup. It uses semantic headings/buttons, moves focus to a non-editable heading for flight-control steps, and reuses compact/reduced-motion-safe UI styles. Hidden/completed UI has no key listener or DOM node and cannot capture thrust or warp input.
 
 `SessionSettingsPanel` receives a narrow optional tutorial port and displays status plus Resume/Reset controls in both menu and flight. Existing callers remain valid.
 
@@ -74,6 +74,6 @@ Skip is always a visible button. Resume and Reset are always available in sessio
 
 ## Diagnostics and verification
 
-A fixed, read-only `canvas.solarVoyagerTutorial` diagnostic object exposes identity, persisted status/step, transition count, active observer state, and observed real-control counters without replacing object identities in the frame loop. It exposes no controller or command methods.
+A fixed, read-only `canvas.solarVoyagerTutorial` diagnostic object exposes persisted status/step, transition count, active observer state, and observed real-control counters without replacing object identities in the frame loop. It exposes no controller or command methods.
 
 A permanent Playwright regression starts from cleared storage and the real main menu, completes every step only through locators, keyboard, pointer, and wheel controls, reloads to prove completion persistence and absence of the overlay, then covers skip/resume/reset and the keyboard-only path. It never invokes controller/`Commands` from page evaluation. Compact assertions prove the card remains inside 360×480 and does not cover the instructed control; reduced-motion assertions inspect computed animation/transition values; focus assertions track the active heading/button; terminal assertions require no tutorial DOM, a false diagnostic observer flag, and at most one overlay throughout. It records console/page errors and rejects orphaned overlays. Unit tests cover strict migration, save/profile separation, controller transitions/failures, camera keyboard controls, and UI semantics.

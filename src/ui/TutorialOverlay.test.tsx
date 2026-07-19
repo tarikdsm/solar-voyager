@@ -43,7 +43,7 @@ describe('TutorialOverlay', () => {
 
     expect(text).toContain('Start tutorial');
     expect(text).toContain('Not now');
-    const buttons = view?.props.children[2].props.children;
+    const buttons = view?.props.children[1].props.children;
     buttons[0].props.onClick();
     buttons[1].props.onClick();
     expect(tutorial.start).toHaveBeenCalledOnce();
@@ -52,18 +52,18 @@ describe('TutorialOverlay', () => {
 
   it('describes every real-control step', () => {
     const expected: Readonly<Record<TutorialStepId, string>> = {
-      'focus-target': 'Choose a navigation target',
-      camera: 'Orbit and zoom the camera',
-      readouts: 'Read the orbit and trajectory',
-      'attitude-thrust': 'Hold attitude and apply thrust',
-      'thrust-off': 'Complete the burn',
-      warp: 'Change time warp',
+      'focus-target': 'Select and focus a target',
+      camera: 'Orbit/zoom · Shift + Arrows/Page Up/Down',
+      readouts: 'Wait for orbit/trajectory data',
+      'attitude-thrust': 'Prograde/Retrograde, then raise throttle',
+      'thrust-off': 'Set throttle to zero',
+      warp: 'Choose warp other than 1×',
       'map-open': 'Open the system map',
-      'map-return': 'Return to flight',
-      'burn-log': 'Inspect the burn log',
-      performance: 'Open performance diagnostics',
-      save: 'Save the mission',
-      'return-to-play': 'Tutorial complete',
+      'map-return': 'Close the system map',
+      'burn-log': 'Open Burn log',
+      performance: 'Performance diagnostics (F3)',
+      save: 'Save in Session & settings',
+      'return-to-play': 'Tutorial complete · return to play',
     };
 
     for (const [stepId, heading] of Object.entries(expected)) {
@@ -85,8 +85,8 @@ describe('TutorialOverlay', () => {
       progress: progress('active', 'readouts'),
       readoutsReady: true,
     });
-    const disabledAction = disabled?.props.children[2].props.children[0];
-    const enabledAction = enabled?.props.children[2].props.children[0];
+    const disabledAction = disabled?.props.children[1].props.children[0];
+    const enabledAction = enabled?.props.children[1].props.children[0];
 
     expect(disabledAction.props.disabled).toBe(true);
     expect(enabledAction.props.disabled).toBe(false);
@@ -104,7 +104,7 @@ describe('TutorialOverlay', () => {
       readoutsReady: false,
     });
     const heading = view?.props.children[0].props.children[1];
-    const skip = view?.props.children[2].props.children.at(-1);
+    const skip = view?.props.children[1].props.children.at(-1);
 
     expect(heading.props.tabIndex).toBe(-1);
     heading.ref({ focus: focusHeading });
@@ -121,7 +121,7 @@ describe('TutorialOverlay', () => {
       progress: progress('active', 'return-to-play'),
       readoutsReady: false,
     });
-    const finish = view?.props.children[2].props.children[0];
+    const finish = view?.props.children[1].props.children[0];
     finish.props.onClick();
 
     expect(tutorial.finish).toHaveBeenCalledOnce();

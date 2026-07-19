@@ -111,17 +111,11 @@ interface BurnLogRuntimeDiagnostics {
 }
 
 interface TutorialRuntimeDiagnostics {
-  readonly identity: 'solarVoyagerTutorial.v1';
   readonly status: string;
   readonly stepId: string;
   readonly transitionCount: number;
   readonly observerActive: boolean;
   readonly snapshotObservationCount: number;
-  readonly cameraOrbitCount: number;
-  readonly cameraZoomCount: number;
-  readonly burnLogExpanded: boolean;
-  readonly perfPanelExpanded: boolean;
-  readonly hardwareWarningAcknowledged: boolean;
 }
 
 function createDiagnosticEntry(): MutableBurnLogDiagnosticEntry {
@@ -369,29 +363,31 @@ const session = new GameSessionController({
 const tutorialController = new TutorialController(session.settings.tutorial, session);
 let tutorialFrameObserver: ((snapshot: SimSnapshot) => void) | null = null;
 let tutorialSnapshotObservationCount = 0;
-let tutorialCameraOrbitCount = 0;
-let tutorialCameraZoomCount = 0;
 let tutorialBurnLogExpanded = false;
 let tutorialPerfPanelExpanded = false;
 let tutorialHardwareWarningAcknowledged = false;
-const tutorialRuntimeDiagnostics = Object.create(null) as TutorialRuntimeDiagnostics;
-Object.defineProperties(tutorialRuntimeDiagnostics, {
-  identity: { enumerable: true, value: 'solarVoyagerTutorial.v1' },
-  status: { enumerable: true, get: () => tutorialController.progress.status },
-  stepId: { enumerable: true, get: () => tutorialController.progress.stepId },
-  transitionCount: { enumerable: true, get: () => tutorialController.transitionCount },
-  observerActive: { enumerable: true, get: () => tutorialFrameObserver !== null },
-  snapshotObservationCount: { enumerable: true, get: () => tutorialSnapshotObservationCount },
-  cameraOrbitCount: { enumerable: true, get: () => tutorialCameraOrbitCount },
-  cameraZoomCount: { enumerable: true, get: () => tutorialCameraZoomCount },
-  burnLogExpanded: { enumerable: true, get: () => tutorialBurnLogExpanded },
-  perfPanelExpanded: { enumerable: true, get: () => tutorialPerfPanelExpanded },
-  hardwareWarningAcknowledged: {
-    enumerable: true,
-    get: () => tutorialHardwareWarningAcknowledged,
-  },
-});
-Object.freeze(tutorialRuntimeDiagnostics);
+const tutorialRuntimeDiagnostics = Object.freeze(
+  Object.setPrototypeOf(
+    {
+      get status() {
+        return tutorialController.progress.status;
+      },
+      get stepId() {
+        return tutorialController.progress.stepId;
+      },
+      get transitionCount() {
+        return tutorialController.transitionCount;
+      },
+      get observerActive() {
+        return tutorialFrameObserver !== null;
+      },
+      get snapshotObservationCount() {
+        return tutorialSnapshotObservationCount;
+      },
+    },
+    null,
+  ),
+) as TutorialRuntimeDiagnostics;
 Object.defineProperty(canvas, 'solarVoyagerTutorial', { value: tutorialRuntimeDiagnostics });
 tutorialController.subscribe((progress) => {
   tutorialFrameObserver = progress.status === 'active' ? observeTutorialSnapshot : null;
@@ -597,11 +593,9 @@ function observeTutorialSnapshot(snapshot: SimSnapshot): void {
 
 function handleTutorialCameraInteraction(interaction: 'orbit' | 'zoom'): void {
   if (interaction === 'orbit') {
-    tutorialCameraOrbitCount += 1;
     tutorialController.observeCameraOrbit();
     return;
   }
-  tutorialCameraZoomCount += 1;
   tutorialController.observeCameraZoom();
 }
 

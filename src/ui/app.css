@@ -767,24 +767,7 @@
   color: #fda4af;
 }
 
-.tutorial-settings-status {
-  margin: 0 0 0.5rem;
-  color: rgb(186 230 253 / 72%);
-  font-size: 0.66rem;
-}
-
-.tutorial-settings-status strong {
-  color: #86efac;
-  text-transform: capitalize;
-}
-
-.tutorial-settings-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.tutorial-settings-actions button:disabled {
+.session-settings button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -795,87 +778,7 @@
   bottom: 5rem;
   left: 1rem;
   width: min(27rem, calc(100vw - 2rem));
-  box-sizing: border-box;
   padding: 0.9rem 1rem;
-  border: 1px solid rgb(94 234 212 / 48%);
-  border-radius: 0.75rem;
-  background: linear-gradient(145deg, rgb(2 6 23 / 96%), rgb(8 47 73 / 94%));
-  box-shadow: 0 0.85rem 2.5rem rgb(0 0 0 / 48%);
-  color: #e0f2fe;
-  line-height: 1.4;
-  pointer-events: auto;
-  backdrop-filter: blur(0.7rem);
-}
-
-.tutorial-overlay header,
-.tutorial-overlay h2,
-.tutorial-overlay p {
-  margin-top: 0;
-}
-
-.tutorial-overlay h2 {
-  margin-bottom: 0.45rem;
-  color: #f0fdfa;
-  font-size: 1rem;
-}
-
-.tutorial-overlay h2:focus {
-  outline: none;
-}
-
-.tutorial-overlay h2:focus-visible {
-  border-radius: 0.2rem;
-  outline: 2px solid #5eead4;
-  outline-offset: 0.2rem;
-}
-
-.tutorial-overlay > p {
-  margin-bottom: 0.75rem;
-  color: rgb(224 242 254 / 82%);
-  font-size: 0.75rem;
-}
-
-.tutorial-kicker {
-  margin-bottom: 0.18rem;
-  color: #5eead4;
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.tutorial-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.tutorial-actions button {
-  min-height: 2rem;
-  padding: 0.38rem 0.7rem;
-  border: 1px solid rgb(125 211 252 / 34%);
-  border-radius: 0.38rem;
-  background: rgb(15 23 42 / 78%);
-  color: #e0f2fe;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.68rem;
-}
-
-.tutorial-actions button:hover,
-.tutorial-actions button:focus-visible {
-  border-color: rgb(94 234 212 / 72%);
-  background: rgb(13 148 136 / 26%);
-}
-
-.tutorial-actions .tutorial-primary {
-  border-color: rgb(94 234 212 / 65%);
-  background: rgb(13 148 136 / 38%);
-}
-
-.tutorial-actions button:disabled {
-  cursor: wait;
-  opacity: 0.5;
 }
 
 .hud-kicker {
@@ -1479,7 +1382,7 @@
 
 .hardware-warning {
   position: absolute;
-  z-index: 10;
+  z-index: 15;
   top: 1rem;
   left: 1rem;
   width: min(34rem, calc(100vw - 2rem));
@@ -1763,15 +1666,6 @@
   .system-map-toggle,
   .burn-log-panel,
   .burn-log-toggle {
-    scroll-behavior: auto !important;
-    animation: none !important;
-    transition: none !important;
-  }
-
-  .tutorial-overlay,
-  .tutorial-overlay *,
-  .tutorial-overlay *::before,
-  .tutorial-overlay *::after {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;

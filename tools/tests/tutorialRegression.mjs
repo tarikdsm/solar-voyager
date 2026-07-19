@@ -39,13 +39,7 @@ async function readTutorialDiagnostic(page) {
     const diagnostic = canvas.solarVoyagerTutorial;
     if (diagnostic === undefined) throw new Error('tutorial diagnostic missing');
     return {
-      burnLogExpanded: diagnostic.burnLogExpanded,
-      cameraOrbitCount: diagnostic.cameraOrbitCount,
-      cameraZoomCount: diagnostic.cameraZoomCount,
-      hardwareWarningAcknowledged: diagnostic.hardwareWarningAcknowledged,
-      identity: diagnostic.identity,
       observerActive: diagnostic.observerActive,
-      perfPanelExpanded: diagnostic.perfPanelExpanded,
       snapshotObservationCount: diagnostic.snapshotObservationCount,
       status: diagnostic.status,
       stepId: diagnostic.stepId,
@@ -145,9 +139,12 @@ async function startFreshTutorial(page, dismissWarningBeforeStart = false) {
   const offer = page.locator('#tutorial-overlay');
   await offer.waitFor({ state: 'visible' });
   assert.equal(await offer.count(), 1, 'fresh profile rendered an orphaned duplicate offer');
-  assert.equal((await page.locator('#tutorial-title').textContent())?.trim(), 'Learn orbital navigation');
+  assert.equal(
+    (await page.locator('#tutorial-title').textContent())?.trim(),
+    'Optional orbital navigation tutorial',
+  );
   await activateWithKeyboard(page, page.getByRole('button', { name: 'Start tutorial' }));
-  await waitForStep(page, 'focus-target', 'Choose a navigation target');
+  await waitForStep(page, 'focus-target', 'Select and focus a target');
 }
 
 async function selectMarsWithKeyboard(page) {
@@ -173,11 +170,11 @@ async function runGuidedCompletion(browser) {
     });
 
     await selectMarsWithKeyboard(page);
-    await waitForStep(page, 'camera', 'Orbit and zoom the camera');
+    await waitForStep(page, 'camera', 'Orbit/zoom · Shift + Arrows/Page Up/Down');
     await page.keyboard.press('Shift+ArrowLeft');
     assert.equal((await readTutorialDiagnostic(page)).stepId, 'camera');
     await page.keyboard.press('Shift+PageUp');
-    await waitForStep(page, 'readouts', 'Read the orbit and trajectory');
+    await waitForStep(page, 'readouts', 'Wait for orbit/trajectory data');
 
     const acknowledgeReadouts = page.getByRole('button', { name: 'I have read them' });
     await acknowledgeReadouts.waitFor({ state: 'visible' });
@@ -192,27 +189,27 @@ async function runGuidedCompletion(browser) {
       { timeout: 60_000 },
     );
     await activateWithKeyboard(page, acknowledgeReadouts);
-    await waitForStep(page, 'attitude-thrust', 'Hold attitude and apply thrust');
+    await waitForStep(page, 'attitude-thrust', 'Prograde/Retrograde, then raise throttle');
 
     await page.keyboard.press('Digit2');
     assert.equal((await readTutorialDiagnostic(page)).stepId, 'attitude-thrust');
     await page.keyboard.press('KeyR');
-    await waitForStep(page, 'thrust-off', 'Complete the burn');
+    await waitForStep(page, 'thrust-off', 'Set throttle to zero');
     await page.keyboard.press('KeyF');
-    await waitForStep(page, 'warp', 'Change time warp');
+    await waitForStep(page, 'warp', 'Choose warp other than 1×');
     await page.keyboard.press('Equal');
     await waitForStep(page, 'map-open', 'Open the system map');
     await page.keyboard.press('KeyM');
     await page.locator('#system-map-panel').waitFor({ state: 'visible' });
-    await waitForStep(page, 'map-return', 'Return to flight');
+    await waitForStep(page, 'map-return', 'Close the system map');
     await page.keyboard.press('Escape');
     await page.locator('#system-map-panel').waitFor({ state: 'hidden' });
-    await waitForStep(page, 'burn-log', 'Inspect the burn log');
+    await waitForStep(page, 'burn-log', 'Open Burn log');
 
     const burnLogToggle = page.locator('#burn-log-toggle');
     await activateWithKeyboard(page, burnLogToggle);
     await page.locator('[data-burn-row="0"]').waitFor({ state: 'visible' });
-    await waitForStep(page, 'performance', 'Open performance diagnostics');
+    await waitForStep(page, 'performance', 'Performance diagnostics (F3)');
     await page.screenshot({
       path: path.join(SCREENSHOT_DIRECTORY, 'T0099-guided-burn-log.png'),
       fullPage: true,
@@ -224,14 +221,14 @@ async function runGuidedCompletion(browser) {
       await page.keyboard.press('F3');
       await page.locator('#perf-panel-details').waitFor({ state: 'visible' });
     }
-    await waitForStep(page, 'save', 'Save the mission');
+    await waitForStep(page, 'save', 'Save in Session & settings');
 
     const settings = page.locator('#session-settings');
     if ((await settings.getAttribute('open')) === null) {
       await activateWithKeyboard(page, settings.locator('summary'));
     }
     await activateWithKeyboard(page, page.locator('#session-save'));
-    await waitForStep(page, 'return-to-play', 'Tutorial complete');
+    await waitForStep(page, 'return-to-play', 'Tutorial complete · return to play');
     await page.screenshot({
       path: path.join(SCREENSHOT_DIRECTORY, 'T0099-guided-complete.png'),
       fullPage: true,
@@ -245,9 +242,6 @@ async function runGuidedCompletion(browser) {
     assert.equal(terminal.observerActive, false);
     assert.ok(terminal.transitionCount >= 13, `unexpected transition count: ${terminal.transitionCount}`);
     assert.ok(terminal.snapshotObservationCount > 0);
-    assert.ok(terminal.cameraOrbitCount > 0);
-    assert.ok(terminal.cameraZoomCount > 0);
-    assert.equal(terminal.burnLogExpanded, true);
     assert.equal(await page.locator('#tutorial-overlay').count(), 0);
 
     const terminalObservationCount = terminal.snapshotObservationCount;
@@ -322,11 +316,12 @@ async function runSkipResumeReset(browser) {
     const settings = page.locator('#session-settings');
     await activateWithKeyboard(page, settings.locator('summary'));
     await activateWithKeyboard(page, page.getByRole('button', { name: 'Resume tutorial' }));
-    await waitForStep(page, 'focus-target', 'Choose a navigation target');
+    await waitForStep(page, 'focus-target', 'Select and focus a target');
     await activateWithKeyboard(page, page.getByRole('button', { name: 'Skip tutorial' }));
     await page.locator('#tutorial-overlay').waitFor({ state: 'detached' });
+    await activateWithKeyboard(page, settings.locator('summary'));
     await activateWithKeyboard(page, page.getByRole('button', { name: 'Reset tutorial' }));
-    await waitForStep(page, 'focus-target', 'Choose a navigation target');
+    await waitForStep(page, 'focus-target', 'Select and focus a target');
     await activateWithKeyboard(page, page.getByRole('button', { name: 'Skip tutorial' }));
     await page.locator('#tutorial-overlay').waitFor({ state: 'detached' });
     const terminal = await readTutorialDiagnostic(page);
