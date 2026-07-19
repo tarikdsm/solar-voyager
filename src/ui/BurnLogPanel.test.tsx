@@ -148,12 +148,14 @@ describe('BurnLogPanel', () => {
     const store = createBurnLogSignalStore(view);
     const model = createBurnLogPanelModel(store);
     const keyDownListeners: Array<(event: KeyboardInputEvent) => void> = [];
+    const keyUpListeners: Array<(event: KeyboardInputEvent) => void> = [];
     const target = {
       addEventListener: (
         type: 'keydown' | 'keyup',
         listener: (event: KeyboardInputEvent) => void,
       ) => {
         if (type === 'keydown') keyDownListeners.push(listener);
+        else keyUpListeners.push(listener);
       },
       removeEventListener: vi.fn(),
     };
@@ -180,19 +182,33 @@ describe('BurnLogPanel', () => {
     const rowTarget = { tagName: 'BUTTON' } as unknown as EventTarget;
 
     for (const code of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
-      const event: KeyboardInputEvent = {
+      let flightKeyDownPrevented = false;
+      const keyDownEvent: KeyboardInputEvent = {
         altKey: false,
         code,
         ctrlKey: false,
         metaKey: false,
         repeat: false,
         target: rowTarget,
-        preventDefault: vi.fn(),
+        preventDefault: () => {
+          flightKeyDownPrevented = true;
+        },
       };
-      for (const listener of keyDownListeners) listener(event);
-      model.completedSlots[0]?.handleKeyDown(event);
+      for (const listener of keyDownListeners) listener(keyDownEvent);
+      expect(flightKeyDownPrevented).toBe(false);
+      model.completedSlots[0]?.handleKeyDown(keyDownEvent);
+
+      let flightKeyUpPrevented = false;
+      const keyUpEvent: KeyboardInputEvent = {
+        ...keyDownEvent,
+        preventDefault: () => {
+          flightKeyUpPrevented = true;
+        },
+      };
+      for (const listener of keyUpListeners) listener(keyUpEvent);
+      expect(flightKeyUpPrevented).toBe(false);
+      mapper.update();
     }
-    mapper.update();
 
     expect(commands.rotate).not.toHaveBeenCalled();
     expect(commands.setThrottle).not.toHaveBeenCalled();

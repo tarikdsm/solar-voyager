@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createCommandController } from '../sim/simulationSnapshot.js';
 import {
@@ -29,8 +29,8 @@ class FakeKeyboardTarget {
     return this.emit(this.keyDownListeners, code, options);
   }
 
-  keyUp(code: string, options: Partial<KeyboardInputEvent> = {}): void {
-    this.emit(this.keyUpListeners, code, options);
+  keyUp(code: string, options: Partial<KeyboardInputEvent> = {}): { readonly prevented: boolean } {
+    return this.emit(this.keyUpListeners, code, options);
   }
 
   private emit(
@@ -107,6 +107,49 @@ describe('KeyboardCommandMapper', () => {
     target.keyUp('KeyW');
     target.keyUp('KeyD');
     target.keyUp('KeyZ');
+    mapper.update();
+    expect([...controller.state.rotationRatesRadS]).toEqual([0, 0, 0]);
+  });
+
+  it('does not dirty or consume an unchanged axis transition', () => {
+    const target = new FakeKeyboardTarget();
+    const commands = {
+      rotate: vi.fn(),
+      setAttitudeMode: vi.fn(),
+      setTarget: vi.fn(),
+      setThrottle: vi.fn(),
+      setWarp: vi.fn(),
+    };
+    const mapper = new KeyboardCommandMapper(
+      target,
+      commands,
+      () => ({ requestedWarp: 1, throttle: 0 }),
+      DEFAULT_GAME_SETTINGS.inputBindings,
+    );
+    const button = { isContentEditable: false, tagName: 'BUTTON' } as unknown as EventTarget;
+
+    expect(target.keyUp('KeyW', { target: button }).prevented).toBe(false);
+    mapper.update();
+    expect(commands.rotate).not.toHaveBeenCalled();
+
+    target.keyDown('KeyW');
+    mapper.update();
+    expect(commands.rotate).toHaveBeenCalledTimes(1);
+    target.keyDown('KeyW');
+    mapper.update();
+    expect(commands.rotate).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases a held axis when focus moves to a button before keyup', () => {
+    const target = new FakeKeyboardTarget();
+    const { controller, mapper } = createMapper(target);
+    const button = { isContentEditable: false, tagName: 'BUTTON' } as unknown as EventTarget;
+
+    target.keyDown('KeyW');
+    mapper.update();
+    expect(controller.state.rotationRatesRadS[0]).toBe(ROTATION_RATE_RAD_S);
+
+    expect(target.keyUp('KeyW', { target: button }).prevented).toBe(true);
     mapper.update();
     expect([...controller.state.rotationRatesRadS]).toEqual([0, 0, 0]);
   });
