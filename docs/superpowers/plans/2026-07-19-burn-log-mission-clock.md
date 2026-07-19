@@ -45,6 +45,7 @@ simulation interfaces or persistence schema.
 - [x] Run full unit/static/build/budgets/schema, affected browser suites,
   production heap/performance gates with before/after bench evidence, and
   desktop/compact playtest screenshots.
-- [ ] Independent final review C0/I0/M0; mark plan complete, move task to REVIEW,
-  open PR with acceptance evidence, obtain exact-head CI, move to DONE, rerun CI,
-  and merge non-force while retaining the branch.
+- [x] Independent final review C0/I0/M0.
+- [ ] Mark plan complete, move task to REVIEW, open PR with acceptance evidence,
+  obtain exact-head CI, move to DONE, rerun CI, and merge non-force while
+  retaining the branch.
