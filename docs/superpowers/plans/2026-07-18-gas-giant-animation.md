@@ -473,7 +473,7 @@ git commit -m "test(render): [T0085] verify gas giant animation in WebGL"
 **Interfaces:**
 - Produces complete acceptance evidence and REVIEW/DONE handoff.
 
-- [ ] **Step 1: Capture adjacent after evidence**
+- [x] **Step 1: Capture adjacent after evidence**
 
 Run the same benchmark command/configuration as Task 1 and save raw JSON:
 
@@ -486,7 +486,7 @@ warm-up, duration, median/p75/p99 frame and frame-work time, draw calls,
 triangles, programs, texture count, heap endpoints/growth, entry/total gzip, and
 all errors. Explicitly state any reference-hardware limitation.
 
-- [ ] **Step 2: Document implemented constants only**
+- [x] **Step 2: Document implemented constants only**
 
 Update rendering spec section 11 with ids/seeds, base periods, UV caps, spot
 mask/cycle, simulation-time behavior, hook ordering, exact fallback, and

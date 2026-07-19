@@ -39,7 +39,7 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
   1. Render scale: 1.0 → 0.85 → 0.7 → 0.55 (internal resolution; canvas CSS size unchanged)
   2. Bloom: full-res → half-res → off
   3. AA: SMAA → FXAA → off
-  4. Procedural shader octaves: full → half → minimum (ADR-010 — Sun granulation, gas-giant flow, detail noise)
+  4. Procedural shader octaves: full → half → minimum (ADR-010 — Sun granulation, gas-giant band flow/domain warp/shimmer, close-surface detail noise); gas giants map these rungs to 4 → 2 → 1 octaves without rebuilding a program or material
   5. Star count cap: 9k → 4k → 2k
   6. Texture tier cap: full → 2k max → 1k max (applies on next lazy load)
   7. Tier-3 model threshold raised (bodies stay spheres longer)

@@ -193,6 +193,26 @@ annulus as particles enter, with no runtime geometry, material, texture, or
 instance allocation. Quality tiers cap particles at 4,096 (Q5+), 2,048 (Q4),
 1,024 (Q2–Q3), or 0 (Q1).
 
+Jupiter, Saturn, Uranus, and Neptune preserve their authored tier-3 albedo maps
+while animating the map lookup in one `MeshStandardMaterial` program hook. Their
+catalog seeds are respectively 599, 699, 799, and 899; nominal band-rotation
+periods are 9.9 h, 10.7 h, 17.2 h, and 16.1 h. Four latitude zones run at
+bounded multipliers 1.000, 0.985, 1.012, and 0.975. Seeded, seam-free spherical
+noise domain-warps longitude by at most 0.006 UV and latitude by at most 0.002
+UV, and storm shimmer remains within 0.985–1.015 of the sampled color. The
+Great Red Spot is localized at UV `(0.374, 0.640)` with radii
+`(0.068, 0.046)` and completes one counter-clockwise content rotation every six
+simulation days; the shimmer cycle is 1,800 simulation seconds. All phases are
+derived from bounded modulo arithmetic over `SimSnapshot.simTimeSec`, so pause,
+time-warp, and deterministic replay share one clock without accumulating drift.
+
+The gas-giant hook is installed before ring and surface-detail hooks during
+model setup, retains their prior callbacks/cache keys, and is precompiled with
+the lazy tier-3 model. It adds no texture, geometry, material, render target, or
+draw call. `full`, `half`, and `minimum` procedural quality select 4, 2, and 1
+noise octaves. Disabling the animation selects an exact authored-map path: the
+original map sample and subsequent surface-detail composition remain unchanged.
+
 ## 12. Quality settings — adaptive governor (ADR-008)
 
 Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins) and shows the governor's current tier. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.
