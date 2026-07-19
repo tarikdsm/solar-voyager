@@ -80,4 +80,42 @@ describe('ring material preparation', () => {
     expect(() => prepared.updateSunDirection(0, 0, 0)).toThrow(/Sun direction/u);
     expect(() => prepared.setRepresentationBlend(Number.NaN)).toThrow(/blend/u);
   });
+
+  it('leaves both materials untouched when ring definition validation fails', () => {
+    const surface = new MeshStandardMaterial();
+    const rings = new MeshStandardMaterial();
+    rings.map = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
+    const previousSurfaceCompile = vi.fn();
+    const previousRingCompile = vi.fn();
+    const previousSurfaceKey = vi.fn(() => 'surface-before-failure');
+    const previousRingKey = vi.fn(() => 'rings-before-failure');
+    surface.onBeforeCompile = previousSurfaceCompile;
+    rings.onBeforeCompile = previousRingCompile;
+    surface.customProgramCacheKey = previousSurfaceKey;
+    rings.customProgramCacheKey = previousRingKey;
+    const previousSide = rings.side;
+    const previousTransparent = rings.transparent;
+    const previousDepthWrite = rings.depthWrite;
+    const definition = ringDefinitionFor('neptune');
+    const firstArc = definition?.arcs[0];
+    if (definition === null || firstArc === undefined) {
+      throw new Error('Missing Neptune arc test definition.');
+    }
+    const invalidDefinition = {
+      ...definition,
+      arcs: [{ ...firstArc, bandName: 'missing-band' }],
+    };
+
+    expect(() => prepareRingMaterials(surface, rings, invalidDefinition, 0.98)).toThrow(
+      /references missing band "missing-band"/u,
+    );
+
+    expect(surface.onBeforeCompile).toBe(previousSurfaceCompile);
+    expect(rings.onBeforeCompile).toBe(previousRingCompile);
+    expect(surface.customProgramCacheKey).toBe(previousSurfaceKey);
+    expect(rings.customProgramCacheKey).toBe(previousRingKey);
+    expect(rings.side).toBe(previousSide);
+    expect(rings.transparent).toBe(previousTransparent);
+    expect(rings.depthWrite).toBe(previousDepthWrite);
+  });
 });

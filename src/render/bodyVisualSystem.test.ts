@@ -293,7 +293,9 @@ describe('BodyVisualSystem structure', () => {
       seed: 699,
     };
     const model: LoadedBodyModel = { root, materials: [surface, rings], surfaceDetail };
+    const spaceScene = new CameraRelativeSpaceScene();
     const compileModel = vi.fn(async () => {
+      expect(root.parent).toBe(spaceScene.scene);
       expect(root.rotation.z).toBeCloseTo(tilt);
       expect(root.getObjectByName('saturn_ring_particles')).toBeDefined();
       const cacheKey = surface.customProgramCacheKey();
@@ -309,7 +311,7 @@ describe('BodyVisualSystem structure', () => {
       loadModel: vi.fn(async (id: string) => (id === 'saturn' ? model : null)),
     };
     const system = new BodyVisualSystem(
-      new CameraRelativeSpaceScene(),
+      spaceScene,
       ringDefinitions,
       new Float64Array([0, 0, 0, saturnX, 0, 0]),
       loader,
@@ -398,6 +400,8 @@ describe('BodyVisualSystem structure', () => {
     expect(albedoDispose).toHaveBeenCalledOnce();
     expect(normalDispose).toHaveBeenCalledOnce();
     expect(root.visible).toBe(false);
+    expect(root.parent).toBeNull();
+    expect(root.matrixAutoUpdate).toBe(true);
   });
 });
 

@@ -548,6 +548,9 @@ export class BodyVisualSystem {
     let baseTransparencies: Uint8Array | null = null;
     let baseForceSinglePasses: Uint8Array | null = null;
     let preparedMaterialCount = 0;
+    let modelBound = false;
+    const previousModelParent = model.root.parent;
+    const previousMatrixAutoUpdate = model.root.matrixAutoUpdate;
     try {
       gasGiantAnimation =
         surfaceMaterial === undefined
@@ -628,8 +631,9 @@ export class BodyVisualSystem {
       }
       model.root.scale.setScalar(ringDefinition?.referenceRadiusKm ?? definition.meanRadiusKm);
       model.root.visible = true;
-      await this.compileModel(model.root);
       this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
+      modelBound = true;
+      await this.compileModel(model.root);
       this.modelRoots[index] = model.root;
       this.modelMaterials[index] = model.materials;
       this.modelBaseOpacities[index] = baseOpacities;
@@ -642,6 +646,11 @@ export class BodyVisualSystem {
       this.earthSurfaceLayers[index] = earthSurfaceLayers;
       this.modelLoadStates[index] = LOAD_READY;
     } catch {
+      if (modelBound) {
+        this.spaceScene.unbindVisual(model.root);
+        previousModelParent?.add(model.root);
+        model.root.matrixAutoUpdate = previousMatrixAutoUpdate;
+      }
       earthSurfaceLayers?.dispose();
       surfaceDetail?.dispose();
       ringSystem?.dispose();

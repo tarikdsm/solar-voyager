@@ -244,12 +244,12 @@ class PreparedRingMaterialsImpl implements PreparedRingMaterials {
   }
 }
 
-function installSurfaceShader(
+function createSurfaceShaderExtension(
   material: MeshStandardMaterial,
   uniforms: RingUniforms,
 ): MeshStandardMaterial['onBeforeCompile'] {
   const previousCompile = material.onBeforeCompile;
-  const compileExtension = (
+  return (
     shader: WebGLProgramParametersWithUniforms,
     renderer: Parameters<typeof material.onBeforeCompile>[1],
   ): void => {
@@ -262,18 +262,15 @@ function installSurfaceShader(
       .replace('#include <common>', `#include <common>\n${SURFACE_FRAGMENT_DECLARATIONS}`)
       .replace('#include <map_fragment>', `#include <map_fragment>\n${SURFACE_RING_SHADOW}`);
   };
-  material.onBeforeCompile = compileExtension;
-  return compileExtension;
 }
 
-function installRingShader(
+function createRingShaderExtension(
   material: MeshStandardMaterial,
   uniforms: RingUniforms,
-  definition: RingDefinition,
+  declarations: string,
 ): MeshStandardMaterial['onBeforeCompile'] {
-  const declarations = ringFragmentDeclarations(definition);
   const previousCompile = material.onBeforeCompile;
-  const compileExtension = (
+  return (
     shader: WebGLProgramParametersWithUniforms,
     renderer: Parameters<typeof material.onBeforeCompile>[1],
   ): void => {
@@ -286,8 +283,6 @@ function installRingShader(
       .replace('#include <common>', `#include <common>\n${declarations}`)
       .replace('#include <map_fragment>', `#include <map_fragment>\n${RING_LIGHTING}`);
   };
-  material.onBeforeCompile = compileExtension;
-  return compileExtension;
 }
 
 export function prepareRingMaterials(
@@ -311,6 +306,7 @@ export function prepareRingMaterials(
     uRingRepresentationBlend: { value: 0 },
   };
 
+  const declarations = ringFragmentDeclarations(definition);
   const previousSurfaceCompile = surface.onBeforeCompile;
   const previousRingCompile = rings.onBeforeCompile;
   const previousSurfaceCacheKey = surface.customProgramCacheKey;
@@ -318,13 +314,15 @@ export function prepareRingMaterials(
   const previousRingSide = rings.side;
   const previousRingTransparent = rings.transparent;
   const previousRingDepthWrite = rings.depthWrite;
-  const surfaceCompileExtension = installSurfaceShader(surface, uniforms);
-  const ringCompileExtension = installRingShader(rings, uniforms, definition);
+  const surfaceCompileExtension = createSurfaceShaderExtension(surface, uniforms);
+  const ringCompileExtension = createRingShaderExtension(rings, uniforms, declarations);
 
   const cacheSuffix = `solar-voyager-rings-${definition.bodyId}-${PROGRAM_CACHE_VERSION}`;
   const surfaceCacheKeyExtension = (): string =>
     `${previousSurfaceCacheKey.call(surface)}|${cacheSuffix}`;
   const ringCacheKeyExtension = (): string => `${previousRingCacheKey.call(rings)}|${cacheSuffix}`;
+  surface.onBeforeCompile = surfaceCompileExtension;
+  rings.onBeforeCompile = ringCompileExtension;
   surface.customProgramCacheKey = surfaceCacheKeyExtension;
   rings.customProgramCacheKey = ringCacheKeyExtension;
   rings.side = DoubleSide;
