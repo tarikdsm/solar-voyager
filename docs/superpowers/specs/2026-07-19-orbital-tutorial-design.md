@@ -68,7 +68,7 @@ The 10 Hz observer is a nullable stable function. Completion or skip sets it to 
 
 ## Input and accessibility
 
-Camera keyboard controls are additive: Shift+Arrow keys orbit and Shift+Page Up/Page Down zoom. Camera input adopts the same editable-target guard as other global controls. The gameplay mapper ignores Shift-modified events, making the camera chord disjoint from every rebindable `KeyboardEvent.code`. Tutorial action buttons use normal Tab/Enter/Space navigation. Flight steps programmatically focus a `tabIndex=-1` heading, not a button, so rebindable thrust/warp keys reach the gameplay mapper.
+Camera keyboard controls are additive: Shift+Arrow keys orbit and Shift+Page Up/Page Down zoom. Camera input ignores text-entry and editable targets (`input`, `select`, `textarea`, and `contenteditable`), while ordinary focused buttons retain the shortcuts so closing a panel does not strand camera control. The gameplay mapper ignores Shift-modified events, making the camera chord disjoint from every rebindable `KeyboardEvent.code`. Tutorial action buttons use normal Tab/Enter/Space navigation. Flight steps programmatically focus a `tabIndex=-1` heading, not a button, so rebindable thrust/warp keys reach the gameplay mapper.
 
 Skip is always a visible button. Resume and Reset are always available in session settings. The card does not cover the full viewport and uses no animated transitions under `prefers-reduced-motion: reduce`.
 
