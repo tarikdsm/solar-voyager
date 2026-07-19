@@ -51,6 +51,10 @@ jobs:
       - name: Main menu regression
         run: npm run test:main-menu
 
+      - name: System map regression
+        timeout-minutes: 5
+        run: npm run test:system-map
+
       - name: Render depth regression
         run: npm run test:render-depth
 
