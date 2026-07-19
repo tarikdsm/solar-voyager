@@ -1,8 +1,8 @@
 id: T0099
 title: Orbital-navigation tutorial overlay
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0099-orbital-tutorial
 depends_on: [T0096, T0097, T0098]
 milestone: M6
 spec: |
