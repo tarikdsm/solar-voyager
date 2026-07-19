@@ -23,11 +23,11 @@ frame.
 **Files:** `src/game/systemMapController.ts`, tests,
 `src/ui/cameraInputController.ts`, tests.
 
-- [ ] Write RED tests for open/close/toggle idempotence, validated focus,
+- [x] Write RED tests for open/close/toggle idempotence, validated focus,
   callbacks, and unchanged focus on invalid ids.
-- [ ] Add an enabled gate to the existing camera input controller and prove
+- [x] Add an enabled gate to the existing camera input controller and prove
   disabled pointer/wheel/keyboard events have no effects or preventDefault.
-- [ ] Prove repeated toggles do not install/remove listeners or allocate new
+- [x] Prove repeated toggles do not install/remove listeners or allocate new
   controllers.
 - [ ] Run focused tests, lint, and typecheck; obtain independent review.
 
@@ -80,4 +80,3 @@ frame.
   plus an in-app real-browser playtest with screenshots and console inspection.
 - [ ] Obtain independent exact-head review, move to REVIEW, publish, require CI,
   move to DONE, require final CI, merge without force, and retain the branch.
-
