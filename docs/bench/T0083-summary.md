@@ -8,7 +8,7 @@
 - Canonical flight benchmark: 640×360 canvas, high-quality lock, 900 deterministic
   frames, two cache-priming runs, identical route and 30-second heap settle/measure windows
 - Baseline head: `cd51f0f89649468333c2bdf05a284bfdb6f1f30e`
-- Measured feature head: `8f74b7faa55441f09c3a506e30ea446e94ef391a`
+- Measured feature head: `d30916b7d9219849643a0c6c85f74ba422d98b28`
 
 The repository's unchanged `npm run bench` harness fixes its canvas at 640×360.
 This machine has a discrete GPU, not the integrated-GPU 1080p reference class in
@@ -24,16 +24,16 @@ main-thread work distributions rather than inventing GPU percentiles.
 | ----------------------- | --------: | -----------: | ------------: |
 | Frame median            |    6.1 ms |       6.1 ms |        0.0 ms |
 | Frame p75               |    6.1 ms |       6.1 ms |        0.0 ms |
-| Frame p99               | 11.404 ms |      12.0 ms |     +0.596 ms |
-| Main-thread work median |    2.8 ms |       2.6 ms |       −0.2 ms |
-| Main-thread work p75    |    3.6 ms |     3.425 ms |     −0.175 ms |
-| Main-thread work p99    |  7.901 ms |     8.805 ms |     +0.904 ms |
+| Frame p99               | 11.404 ms |     6.601 ms |     −4.803 ms |
+| Main-thread work median |    2.8 ms |       2.4 ms |       −0.4 ms |
+| Main-thread work p75    |    3.6 ms |       2.8 ms |       −0.8 ms |
+| Main-thread work p99    |  7.901 ms |     6.702 ms |     −1.199 ms |
 | Maximum draw calls      |        26 |           26 |             0 |
 | Maximum triangles       |    66,246 |       66,246 |             0 |
-| Steady retained heap    | 104,636 B |    147,077 B |     +42,441 B |
-| Route heap delta        | 830,112 B | 26,614,172 B | +25,784,060 B |
-| Entry gzip              | 269,983 B |    276,926 B |      +6,943 B |
-| Total gzip              | 541,310 B |    548,301 B |      +6,991 B |
+| Steady retained heap    | 104,636 B |     90,688 B |     −13,948 B |
+| Route heap delta        | 830,112 B | 26,630,496 B | +25,800,384 B |
+| Entry gzip              | 269,983 B |    276,989 B |      +7,006 B |
+| Total gzip              | 541,310 B |    548,363 B |      +7,053 B |
 | Browser/page errors     |         0 |            0 |             0 |
 
 The 6.1 ms median/p75 cadence remains well below the 16.6 ms floor and the
