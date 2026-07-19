@@ -33,6 +33,7 @@
     "test:main-menu": "node tools/tests/mainMenuRegression.mjs",
     "test:system-map-panel": "node tools/tests/systemMapPanelRegression.mjs",
     "test:system-map": "node tools/tests/systemMapRegression.mjs",
+    "test:burn-log": "node tools/tests/burnLogRegression.mjs",
     "test:smoke": "node tools/tests/applicationSmoke.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",

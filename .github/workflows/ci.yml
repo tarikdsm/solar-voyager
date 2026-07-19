@@ -55,6 +55,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:system-map
 
+      - name: Burn log regression
+        timeout-minutes: 5
+        run: npm run test:burn-log
+
       - name: Render depth regression
         run: npm run test:render-depth
 
