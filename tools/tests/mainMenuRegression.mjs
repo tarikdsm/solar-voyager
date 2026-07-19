@@ -163,6 +163,20 @@ async function waitForSpace(page, timeout = 30_000) {
   }
 }
 
+async function dismissHardwareWarningIfPresent(page) {
+  const warning = page.locator('#hardware-acceleration-warning');
+  if (!(await warning.isVisible())) {
+    assert.equal(await warning.count(), 0, 'hidden hardware warning remained in the document');
+    return false;
+  }
+  assert.equal(await warning.count(), 1, 'expected one visible hardware warning');
+  const acknowledgment = warning.getByRole('button', { name: 'I understand', exact: true });
+  assert.equal(await acknowledgment.count(), 1, 'hardware warning acknowledgment is ambiguous');
+  await acknowledgment.click();
+  await warning.waitFor({ state: 'detached' });
+  return true;
+}
+
 async function runFreshAndContinueFlow(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
@@ -191,6 +205,11 @@ async function runFreshAndContinueFlow(browser) {
       (await readRuntimeState(page)).frameCount,
       0,
       'menu transition must not depend on a completed WebGL frame',
+    );
+    assert.equal(
+      await dismissHardwareWarningIfPresent(page),
+      true,
+      'software fallback fixture did not render its mandatory warning',
     );
     const canonical = await page.evaluate(() => ({
       apoapsis:
@@ -249,6 +268,7 @@ async function runFreshAndContinueFlow(browser) {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await assertFreshMenu(page, true);
     assert.equal(workerRequestCount, 1, 'reload menu must not start a trajectory worker');
+    assert.equal(await dismissHardwareWarningIfPresent(page), true);
     await page.getByRole('button', { name: 'Continue' }).click();
     await waitForSpace(page);
     const continuedRuntime = await readRuntimeState(page);
@@ -376,7 +396,16 @@ const server = await preview({
 });
 let browser;
 try {
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  browser = await chromium.launch({
+    channel: 'chrome',
+    headless: true,
+    args: [
+      '--enable-webgl',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist',
+      '--use-angle=swiftshader',
+    ],
+  });
   const freshAndContinue = await runFreshAndContinueFlow(browser);
   await runInvalidSaveFlow(browser);
   const responsiveAndReducedMotion = await runResponsiveAndReducedMotionFlow(browser);
