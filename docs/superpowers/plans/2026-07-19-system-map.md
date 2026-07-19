@@ -78,5 +78,5 @@ frame.
 - [x] Add the permanent CI command and preserve all direct-play harnesses.
 - [x] Run full unit/static/build/browser/performance/budget/schema/diff gates
   plus an in-app real-browser playtest with screenshots and console inspection.
-- [ ] Obtain independent exact-head review, move to REVIEW, publish, require CI,
+- [x] Obtain independent exact-head review, move to REVIEW, publish, require CI,
   move to DONE, require final CI, merge without force, and retain the branch.
