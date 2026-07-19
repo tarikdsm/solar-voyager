@@ -451,7 +451,7 @@ npm run bench:gas-quality -- --output docs/bench/T0085-quality.json
 Expected: every regression passes with stable programs, zero errors, no new
 texture URL, and one unchanged production draw per body surface.
 
-- [ ] **Step 5: Commit WebGL evidence**
+- [x] **Step 5: Commit WebGL evidence**
 
 ```powershell
 git add tests/render tools/tests tools/bench package.json .github/workflows/ci.yml docs/bench/T0085-quality.json
