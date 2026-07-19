@@ -281,6 +281,7 @@ export interface PerfGovernorSample {
 
 export interface PerfGovernorOptions {
   readonly application: RenderQualityApplicationPort;
+  readonly initialAutoRung?: number;
   readonly initialLock?: QualityLock;
   readonly state: PerfQualityState;
   readonly telemetry: QualityActionTelemetryPort;
@@ -342,11 +343,15 @@ export class PerfGovernor {
     this.currentLock = options.initialLock ?? AUTO_QUALITY_LOCK;
     const manualLock =
       this.currentLock === 'auto' ? null : (this.currentLock as Exclude<QualityLock, 'auto'>);
-    const initialRung = manualLock === null ? 0 : lockRung(manualLock);
+    const initialRung = manualLock === null ? (options.initialAutoRung ?? 0) : lockRung(manualLock);
     this.applyProfile(initialRung);
     if (manualLock !== null) {
       this.state.governorState = lockedState(manualLock);
       this.state.lastAction = lockAction(manualLock);
+    } else {
+      const selected = QUALITY_PROFILES[initialRung];
+      if (selected === undefined) throw new RangeError('Quality rung is out of range.');
+      this.state.lastAction = selected.downAction;
     }
   }
 

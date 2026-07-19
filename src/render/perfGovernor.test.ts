@@ -143,6 +143,31 @@ describe('quality profiles', () => {
 });
 
 describe('PerfGovernor', () => {
+  it('starts auto at the detected rung while a manual lock still wins', () => {
+    const autoApplication = { apply: vi.fn() };
+    const autoState = createPerfQualityState();
+    new PerfGovernor({
+      application: autoApplication,
+      initialAutoRung: 7,
+      state: autoState,
+      telemetry: { recordQualityAction: vi.fn() },
+    });
+    expect(autoState).toMatchObject({ rung: 7, tier: 3 });
+    expect(autoApplication.apply).toHaveBeenCalledWith(QUALITY_PROFILES[7]);
+
+    const manualApplication = { apply: vi.fn() };
+    const manualState = createPerfQualityState();
+    new PerfGovernor({
+      application: manualApplication,
+      initialAutoRung: 99,
+      initialLock: 'high',
+      state: manualState,
+      telemetry: { recordQualityAction: vi.fn() },
+    });
+    expect(manualState).toMatchObject({ rung: 0, tier: 6 });
+    expect(manualApplication.apply).toHaveBeenCalledWith(QUALITY_PROFILES[0]);
+  });
+
   it('requires two unique over-budget windows and enforces a three-second cooldown', () => {
     const { actions, appliedRungs, governor, state } = fixture();
 
