@@ -17,7 +17,7 @@ acceptance:
   - Zero additional texture downloads beyond the existing base maps
   - Cost within render budget; octave fallback verified
 handoff_notes: |
-  Implementation complete through f78f719. Jupiter, Saturn, Uranus, and Neptune
+  Implementation complete through 18d2ede. Jupiter, Saturn, Uranus, and Neptune
   use deterministic simulation-time band shear, bounded spherical domain warp,
   storm shimmer, and Jupiter's counterclockwise Great Red Spot rotation while
   sampling their existing albedo/detail textures. The governor selects 4/2/1
@@ -49,6 +49,12 @@ handoff_notes: |
   lighting/post, procedural-Sun, renderer-policy, performance-governor, smoke,
   and production performance gates passed. Independent review of exact SHA
   f78f719 returned READY with no Critical, Important, or Minor findings after
-  checking precompile-in-scene and full rollback. The available hardware is an
-  RTX 3070 Laptop GPU rather than the specified integrated reference GPU; Linux
-  CI remains the final arbiter before DONE and merge.
+  checking precompile-in-scene and full rollback. The first PR CI reached the
+  five-minute application-smoke timeout because the lazy callback redundantly
+  compiled the whole scene. Commit 18d2ede now calls the Three.js targeted API
+  compileAsync(root, camera, targetScene); unit coverage locks all three
+  arguments and smoke, visual-tier, and gas-giant browsers pass. Independent
+  incremental review of 18d2ede also returned READY with no findings. The
+  available hardware is an RTX 3070 Laptop GPU rather than the specified
+  integrated reference GPU; Linux CI remains the final arbiter before DONE and
+  merge.
