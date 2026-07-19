@@ -86,6 +86,7 @@ export async function createEpochWorld(
       polarRadiusRatio: body.polarRadiusRatio,
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: parseAlbedoColor(body.albedoColor),
+      proceduralSeed: body.proceduralSeed,
     });
     if (body.id === 'sun') {
       sunIndex = index;
@@ -157,8 +158,8 @@ export async function createEpochWorld(
       renderer,
       await loadAssetManifest(`${import.meta.env.BASE_URL}assets/manifest.json`),
     );
-  const compileModel: BodyModelCompiler = async () => {
-    await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
+  const compileModel: BodyModelCompiler = async (root) => {
+    await renderer.compileAsync(root, spaceScene.camera, spaceScene.scene);
   };
   const visualSystem = new BodyVisualSystem(
     spaceScene,

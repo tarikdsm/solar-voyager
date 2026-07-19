@@ -3,7 +3,9 @@ import {
   AmbientLight,
   BoxGeometry,
   DirectionalLight,
+  Group,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   Points,
   Vector3,
@@ -20,10 +22,17 @@ describe('createEpochWorld', () => {
   it('registers every J2026 body with shared geometry and no scaffold cube', async () => {
     const compileAsync = vi.fn(async () => undefined);
     const renderer = { compileAsync, getPixelRatio: () => 2 } as unknown as WebGLRenderer;
+    const earthModelRoot = new Group();
+    const earthModelMaterial = new MeshBasicMaterial();
+    earthModelRoot.add(new Mesh(undefined, earthModelMaterial));
     const assetLoader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
       loadSphereAlbedo: vi.fn(async () => null),
-      loadModel: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) =>
+        id === 'earth'
+          ? { root: earthModelRoot, materials: [earthModelMaterial], surfaceDetail: null }
+          : null,
+      ),
     };
     const starCatalog: StarCatalog = {
       starCount: 3,
@@ -97,7 +106,18 @@ describe('createEpochWorld', () => {
     expect(world.visualSystem.getOpacity('earth', 2)).toBe(1);
     expect(assetLoader.loadModel).toHaveBeenCalledOnce();
     expect(assetLoader.loadModel).toHaveBeenCalledWith('earth');
-    expect(compileAsync).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(2));
+    expect(compileAsync).toHaveBeenNthCalledWith(
+      1,
+      world.spaceScene.scene,
+      world.spaceScene.camera,
+    );
+    expect(compileAsync).toHaveBeenNthCalledWith(
+      2,
+      earthModelRoot,
+      world.spaceScene.camera,
+      world.spaceScene.scene,
+    );
 
     let hasCube = false;
     world.spaceScene.scene.traverse((object: Object3D) => {

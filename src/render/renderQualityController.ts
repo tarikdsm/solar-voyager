@@ -26,6 +26,7 @@ export interface QualityAssetLoaderPort {
 
 export interface QualityVisualSystemPort {
   setModelThresholdScale(scale: number): void;
+  setProceduralQuality(quality: ProceduralSunQuality): void;
   setRingParticleCount(count: number): void;
 }
 
@@ -79,6 +80,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.proceduralSun.setQuality(profile.proceduralQuality);
     this.assetLoader.setTextureTierCap(profile.textureCap);
     this.visualSystem.setModelThresholdScale(profile.modelThresholdScale);
+    this.visualSystem.setProceduralQuality(profile.proceduralQuality);
     this.visualSystem.setRingParticleCount(profile.ringParticleCount);
     this.relativisticVisuals.setQualityEnabled(this.postProcessingAvailable && profile.tier >= 3);
     this.appliedRung = profile.rung;

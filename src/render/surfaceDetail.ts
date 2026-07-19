@@ -127,11 +127,14 @@ vec3 surfaceDetailProceduralNoise = vSurfaceProceduralNoise;
 `;
 
 const ALBEDO_DETAIL = /* glsl */ `
+#ifndef SOLAR_VOYAGER_SURFACE_UV
+  #define SOLAR_VOYAGER_SURFACE_UV vSurfaceDetailUv
+#endif
 if ( uSurfaceDetailBlend > 0.0 ) {
-  vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
+  vec2 surfaceDetailMacroUv = SOLAR_VOYAGER_SURFACE_UV * uSurfaceTilesPerEquator;
   vec2 surfaceDetailMicroUv =
     mat2( 0.8829, 0.4695, -0.4695, 0.8829 ) *
-    ( vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
+    ( SOLAR_VOYAGER_SURFACE_UV * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
   vec3 surfaceDetailMacroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMacroUv ).rgb;
   vec3 surfaceDetailMicroAlbedo = texture2D( uSurfaceDetailAlbedo, surfaceDetailMicroUv ).rgb;
   vec3 surfaceDetailVariation = mix( surfaceDetailMacroAlbedo, surfaceDetailMicroAlbedo, 0.35 ) - vec3( 0.21404114 );
@@ -141,10 +144,10 @@ if ( uSurfaceDetailBlend > 0.0 ) {
 
 const NORMAL_DETAIL = /* glsl */ `
 if ( uSurfaceDetailBlend > 0.0 ) {
-  vec2 surfaceDetailMacroUv = vSurfaceDetailUv * uSurfaceTilesPerEquator;
+  vec2 surfaceDetailMacroUv = SOLAR_VOYAGER_SURFACE_UV * uSurfaceTilesPerEquator;
   vec2 surfaceDetailMicroUv =
     mat2( 0.8829, 0.4695, -0.4695, 0.8829 ) *
-    ( vSurfaceDetailUv * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
+    ( SOLAR_VOYAGER_SURFACE_UV * ( uSurfaceTilesPerEquator * 7.73 ) ) + vec2( 0.371, 0.619 );
   vec3 surfaceDetailMacroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMacroUv ).xyz * 2.0 - 1.0;
   vec3 surfaceDetailMicroNormal = texture2D( uSurfaceDetailNormal, surfaceDetailMicroUv ).xyz * 2.0 - 1.0;
   vec2 surfaceDetailNormalXy = surfaceDetailMacroNormal.xy * 0.08 + surfaceDetailMicroNormal.xy * 0.03;
@@ -165,7 +168,7 @@ if ( uSurfaceDetailBlend > 0.0 ) {
     mat3 surfaceDetailFrame = surfaceDetailTangentFrame(
       -vViewPosition,
       normal,
-      vSurfaceDetailUv
+      SOLAR_VOYAGER_SURFACE_UV
     );
     normal = normalize( surfaceDetailFrame * surfaceDetailTangentNormal );
   #endif
@@ -193,6 +196,11 @@ class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
     private readonly uniforms: SurfaceDetailUniforms,
     private readonly albedo: Texture,
     private readonly normal: Texture,
+    private readonly material: MeshStandardMaterial,
+    private readonly previousCompile: MeshStandardMaterial['onBeforeCompile'],
+    private readonly previousCacheKey: MeshStandardMaterial['customProgramCacheKey'],
+    private readonly compileExtension: MeshStandardMaterial['onBeforeCompile'],
+    private readonly cacheKeyExtension: MeshStandardMaterial['customProgramCacheKey'],
   ) {}
 
   get blend(): number {
@@ -217,6 +225,13 @@ class PreparedSurfaceDetailImpl implements PreparedSurfaceDetail {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.material.onBeforeCompile === this.compileExtension) {
+      this.material.onBeforeCompile = this.previousCompile;
+    }
+    if (this.material.customProgramCacheKey === this.cacheKeyExtension) {
+      this.material.customProgramCacheKey = this.previousCacheKey;
+    }
+    this.material.needsUpdate = true;
     this.albedo.dispose();
     this.normal.dispose();
   }
@@ -245,8 +260,11 @@ export function prepareSurfaceDetail(
     },
   };
   const previousCompile = material.onBeforeCompile;
-  const previousCacheKey = material.customProgramCacheKey.bind(material);
-  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer): void => {
+  const previousCacheKey = material.customProgramCacheKey;
+  const compileExtension = (
+    shader: WebGLProgramParametersWithUniforms,
+    renderer: Parameters<typeof material.onBeforeCompile>[1],
+  ): void => {
     previousCompile.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -264,7 +282,18 @@ export function prepareSurfaceDetail(
         `${PROCEDURAL_DETAIL}\n#include <roughnessmap_fragment>\n${ROUGHNESS_DETAIL}`,
       );
   };
-  material.customProgramCacheKey = (): string => `${previousCacheKey()}|${PROGRAM_CACHE_KEY}`;
+  const cacheKeyExtension = (): string => `${previousCacheKey.call(material)}|${PROGRAM_CACHE_KEY}`;
+  material.onBeforeCompile = compileExtension;
+  material.customProgramCacheKey = cacheKeyExtension;
   material.needsUpdate = true;
-  return new PreparedSurfaceDetailImpl(uniforms, detail.albedo, detail.normal);
+  return new PreparedSurfaceDetailImpl(
+    uniforms,
+    detail.albedo,
+    detail.normal,
+    material,
+    previousCompile,
+    previousCacheKey,
+    compileExtension,
+    cacheKeyExtension,
+  );
 }

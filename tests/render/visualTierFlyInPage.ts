@@ -75,6 +75,7 @@ const definitions: BodyVisualDefinition[] = [
     polarRadiusRatio: 1,
     geometricAlbedo: 1,
     albedoColor: 0xfff4d6,
+    proceduralSeed: 10,
   },
   {
     id: 'earth',
@@ -85,6 +86,7 @@ const definitions: BodyVisualDefinition[] = [
     polarRadiusRatio: 0.9966604474686819,
     geometricAlbedo: 0.434,
     albedoColor: 0x4f78a8,
+    proceduralSeed: 399,
   },
   {
     id: 'pluto',
@@ -95,6 +97,7 @@ const definitions: BodyVisualDefinition[] = [
     polarRadiusRatio: 1,
     geometricAlbedo: 0.3,
     albedoColor: 0xb7a28c,
+    proceduralSeed: 999,
   },
 ];
 const positionsKm = new Float64Array([-2 * AU_KM, 0, 0, 0, 0, 0, 2 * AU_KM, 10 * AU_KM, 0]);

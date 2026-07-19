@@ -34,6 +34,7 @@ function definitions(): BodyVisualDefinition[] {
       polarRadiusRatio: 1,
       geometricAlbedo: 1,
       albedoColor: 0xffdd88,
+      proceduralSeed: 10,
     },
     {
       id: 'earth',
@@ -44,6 +45,7 @@ function definitions(): BodyVisualDefinition[] {
       polarRadiusRatio: 0.996,
       geometricAlbedo: 0.434,
       albedoColor: 0x4488ff,
+      proceduralSeed: 399,
     },
   ];
 }
@@ -274,19 +276,34 @@ describe('BodyVisualSystem structure', () => {
         polarRadiusRatio: 0.9020375655405853,
         geometricAlbedo: 0.499,
         albedoColor: 0xd8c49a,
+        proceduralSeed: 699,
       },
     ];
-    const surface = new MeshStandardMaterial();
+    const surface = new MeshStandardMaterial({ map: new Texture() });
     surface.name = 'mat_surface';
     const rings = new MeshStandardMaterial();
     rings.name = 'mat_rings';
     rings.map = new DataTexture(new Uint8Array([255, 220, 180, 200]), 1, 1, RGBAFormat);
     const root = new Group();
     root.add(new Mesh(undefined, surface), new Mesh(undefined, rings));
-    const model: LoadedBodyModel = { root, materials: [surface, rings], surfaceDetail: null };
+    const surfaceDetail: LoadedSurfaceDetail = {
+      albedo: new Texture(),
+      normal: new Texture(),
+      tilesPerEquator: 512,
+      seed: 699,
+    };
+    const model: LoadedBodyModel = { root, materials: [surface, rings], surfaceDetail };
+    const spaceScene = new CameraRelativeSpaceScene();
     const compileModel = vi.fn(async () => {
+      expect(root.parent).toBe(spaceScene.scene);
       expect(root.rotation.z).toBeCloseTo(tilt);
       expect(root.getObjectByName('saturn_ring_particles')).toBeDefined();
+      const cacheKey = surface.customProgramCacheKey();
+      expect(cacheKey).toContain('solar-voyager-gas-giant-v1');
+      expect(cacheKey).toContain('solar-voyager-surface-detail-v1');
+      expect(cacheKey.indexOf('solar-voyager-gas-giant-v1')).toBeLessThan(
+        cacheKey.indexOf('solar-voyager-surface-detail-v1'),
+      );
     });
     const loader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
@@ -294,7 +311,7 @@ describe('BodyVisualSystem structure', () => {
       loadModel: vi.fn(async (id: string) => (id === 'saturn' ? model : null)),
     };
     const system = new BodyVisualSystem(
-      new CameraRelativeSpaceScene(),
+      spaceScene,
       ringDefinitions,
       new Float64Array([0, 0, 0, saturnX, 0, 0]),
       loader,
@@ -305,12 +322,86 @@ describe('BodyVisualSystem structure', () => {
     system.update(ringCamera, 1_000, 1, 0, 123_456);
     await vi.waitFor(() => expect(system.getLoadState('saturn')).toBe('ready'));
     expect(root.scale.x).toBe(60_268);
+    expect(system.getGasGiantOctaves('saturn')).toBe(4);
 
     system.setRingParticleCount(1024);
     system.update(ringCamera, 1_000, 1, 300, 123_457);
+    expect(system.getGasGiantBandPhase('saturn', 0)).toBeGreaterThan(0);
+    system.setProceduralQuality('minimum');
+    expect(system.getGasGiantOctaves('saturn')).toBe(1);
+    system.setGasGiantAnimationEnabled('saturn', false);
     expect(system.getRingBlend('saturn')).toBe(1);
     expect((root.getObjectByName('saturn_ring_particles') as Mesh).count).toBe(1024);
     expect(compileModel).toHaveBeenCalledOnce();
+  });
+
+  it('unwinds every chained giant hook and controller when model compilation fails', async () => {
+    const sun = definitions()[0];
+    if (sun === undefined) throw new Error('Sun fixture is missing.');
+    const saturn: BodyVisualDefinition = {
+      id: 'saturn',
+      category: 'planet',
+      axialTiltRad: 0.4665,
+      meanRadiusKm: 58_232,
+      muKm3S2: 37_931_207.8,
+      polarRadiusRatio: 0.902,
+      geometricAlbedo: 0.499,
+      albedoColor: 0xd8c49a,
+      proceduralSeed: 699,
+    };
+    const surface = new MeshStandardMaterial({ map: new Texture() });
+    surface.name = 'mat_surface';
+    const rings = new MeshStandardMaterial();
+    rings.name = 'mat_rings';
+    rings.map = new DataTexture(new Uint8Array([255, 220, 180, 200]), 1, 1, RGBAFormat);
+    const previousSurfaceCompile = vi.fn();
+    const previousRingCompile = vi.fn();
+    const previousSurfaceKey = vi.fn(() => 'surface-authored');
+    const previousRingKey = vi.fn(() => 'ring-authored');
+    surface.onBeforeCompile = previousSurfaceCompile;
+    rings.onBeforeCompile = previousRingCompile;
+    surface.customProgramCacheKey = previousSurfaceKey;
+    rings.customProgramCacheKey = previousRingKey;
+    const root = new Group();
+    root.add(new Mesh(undefined, surface), new Mesh(undefined, rings));
+    const albedo = new Texture();
+    const normal = new Texture();
+    const albedoDispose = vi.spyOn(albedo, 'dispose');
+    const normalDispose = vi.spyOn(normal, 'dispose');
+    const model: LoadedBodyModel = {
+      root,
+      materials: [surface, rings],
+      surfaceDetail: { albedo, normal, tilesPerEquator: 512, seed: 699 },
+    };
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async (id: string) => (id === 'saturn' ? model : null)),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      [sun, saturn],
+      new Float64Array([0, 0, 0, 10 * AU_KM, 0, 0]),
+      loader,
+      vi.fn(async () => Promise.reject(new Error('compile failed'))),
+      PROCEDURAL_SUN_STUB,
+    );
+
+    system.update({ x: 10 * AU_KM + 1, y: 0, z: 0 }, 1_000, 1, 0, 123_456);
+    await vi.waitFor(() => expect(system.getLoadState('saturn')).toBe('failed'));
+
+    expect(surface.onBeforeCompile).toBe(previousSurfaceCompile);
+    expect(rings.onBeforeCompile).toBe(previousRingCompile);
+    expect(surface.customProgramCacheKey).toBe(previousSurfaceKey);
+    expect(rings.customProgramCacheKey).toBe(previousRingKey);
+    expect(system.getGasGiantOctaves('saturn')).toBeNull();
+    expect(system.getSurfaceDetailBlend('saturn')).toBe(0);
+    expect(system.getRingBlend('saturn')).toBe(0);
+    expect(albedoDispose).toHaveBeenCalledOnce();
+    expect(normalDispose).toHaveBeenCalledOnce();
+    expect(root.visible).toBe(false);
+    expect(root.parent).toBeNull();
+    expect(root.matrixAutoUpdate).toBe(true);
   });
 });
 
@@ -362,6 +453,7 @@ describe('BodyVisualSystem transitions', () => {
           polarRadiusRatio: 1,
           geometricAlbedo: 0.52,
           albedoColor: 0xccaa88,
+          proceduralSeed: 999,
         },
       ],
       positions(),

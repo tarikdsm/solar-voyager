@@ -24,8 +24,10 @@ describe('ring material preparation', () => {
     const previousRingCompile = vi.fn();
     surface.onBeforeCompile = previousSurfaceCompile;
     rings.onBeforeCompile = previousRingCompile;
-    surface.customProgramCacheKey = () => 'surface-base';
-    rings.customProgramCacheKey = () => 'rings-base';
+    const previousSurfaceKey = vi.fn(() => 'surface-base');
+    const previousRingKey = vi.fn(() => 'rings-base');
+    surface.customProgramCacheKey = previousSurfaceKey;
+    rings.customProgramCacheKey = previousRingKey;
     const definition = ringDefinitionFor('neptune');
     if (definition === null) throw new Error('Missing Neptune test definition.');
 
@@ -51,6 +53,12 @@ describe('ring material preparation', () => {
     expect(surface.customProgramCacheKey()).toBe('surface-base|solar-voyager-rings-neptune-v1');
     expect(rings.customProgramCacheKey()).toBe('rings-base|solar-voyager-rings-neptune-v1');
     expect(prepared.texture).toBe(rings.map);
+
+    prepared.dispose();
+    expect(surface.onBeforeCompile).toBe(previousSurfaceCompile);
+    expect(rings.onBeforeCompile).toBe(previousRingCompile);
+    expect(surface.customProgramCacheKey).toBe(previousSurfaceKey);
+    expect(rings.customProgramCacheKey).toBe(previousRingKey);
   });
 
   it('reuses uniform objects while normalizing Sun direction and clamping blend', () => {
@@ -71,5 +79,43 @@ describe('ring material preparation', () => {
     expect(prepared.representationBlend).toBe(0);
     expect(() => prepared.updateSunDirection(0, 0, 0)).toThrow(/Sun direction/u);
     expect(() => prepared.setRepresentationBlend(Number.NaN)).toThrow(/blend/u);
+  });
+
+  it('leaves both materials untouched when ring definition validation fails', () => {
+    const surface = new MeshStandardMaterial();
+    const rings = new MeshStandardMaterial();
+    rings.map = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
+    const previousSurfaceCompile = vi.fn();
+    const previousRingCompile = vi.fn();
+    const previousSurfaceKey = vi.fn(() => 'surface-before-failure');
+    const previousRingKey = vi.fn(() => 'rings-before-failure');
+    surface.onBeforeCompile = previousSurfaceCompile;
+    rings.onBeforeCompile = previousRingCompile;
+    surface.customProgramCacheKey = previousSurfaceKey;
+    rings.customProgramCacheKey = previousRingKey;
+    const previousSide = rings.side;
+    const previousTransparent = rings.transparent;
+    const previousDepthWrite = rings.depthWrite;
+    const definition = ringDefinitionFor('neptune');
+    const firstArc = definition?.arcs[0];
+    if (definition === null || firstArc === undefined) {
+      throw new Error('Missing Neptune arc test definition.');
+    }
+    const invalidDefinition = {
+      ...definition,
+      arcs: [{ ...firstArc, bandName: 'missing-band' }],
+    };
+
+    expect(() => prepareRingMaterials(surface, rings, invalidDefinition, 0.98)).toThrow(
+      /references missing band "missing-band"/u,
+    );
+
+    expect(surface.onBeforeCompile).toBe(previousSurfaceCompile);
+    expect(rings.onBeforeCompile).toBe(previousRingCompile);
+    expect(surface.customProgramCacheKey).toBe(previousSurfaceKey);
+    expect(rings.customProgramCacheKey).toBe(previousRingKey);
+    expect(rings.side).toBe(previousSide);
+    expect(rings.transparent).toBe(previousTransparent);
+    expect(rings.depthWrite).toBe(previousDepthWrite);
   });
 });

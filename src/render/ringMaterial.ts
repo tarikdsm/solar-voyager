@@ -180,6 +180,19 @@ class PreparedRingMaterialsImpl implements PreparedRingMaterials {
   constructor(
     private readonly uniforms: RingUniforms,
     readonly texture: Texture,
+    private readonly surface: MeshStandardMaterial,
+    private readonly rings: MeshStandardMaterial,
+    private readonly previousSurfaceCompile: MeshStandardMaterial['onBeforeCompile'],
+    private readonly previousRingCompile: MeshStandardMaterial['onBeforeCompile'],
+    private readonly previousSurfaceCacheKey: MeshStandardMaterial['customProgramCacheKey'],
+    private readonly previousRingCacheKey: MeshStandardMaterial['customProgramCacheKey'],
+    private readonly surfaceCompileExtension: MeshStandardMaterial['onBeforeCompile'],
+    private readonly ringCompileExtension: MeshStandardMaterial['onBeforeCompile'],
+    private readonly surfaceCacheKeyExtension: MeshStandardMaterial['customProgramCacheKey'],
+    private readonly ringCacheKeyExtension: MeshStandardMaterial['customProgramCacheKey'],
+    private readonly previousRingSide: MeshStandardMaterial['side'],
+    private readonly previousRingTransparent: boolean,
+    private readonly previousRingDepthWrite: boolean,
   ) {}
 
   get sunDirection(): Vector3 {
@@ -211,12 +224,35 @@ class PreparedRingMaterialsImpl implements PreparedRingMaterials {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.surface.onBeforeCompile === this.surfaceCompileExtension) {
+      this.surface.onBeforeCompile = this.previousSurfaceCompile;
+    }
+    if (this.rings.onBeforeCompile === this.ringCompileExtension) {
+      this.rings.onBeforeCompile = this.previousRingCompile;
+    }
+    if (this.surface.customProgramCacheKey === this.surfaceCacheKeyExtension) {
+      this.surface.customProgramCacheKey = this.previousSurfaceCacheKey;
+    }
+    if (this.rings.customProgramCacheKey === this.ringCacheKeyExtension) {
+      this.rings.customProgramCacheKey = this.previousRingCacheKey;
+    }
+    this.rings.side = this.previousRingSide;
+    this.rings.transparent = this.previousRingTransparent;
+    this.rings.depthWrite = this.previousRingDepthWrite;
+    this.surface.needsUpdate = true;
+    this.rings.needsUpdate = true;
   }
 }
 
-function installSurfaceShader(material: MeshStandardMaterial, uniforms: RingUniforms): void {
+function createSurfaceShaderExtension(
+  material: MeshStandardMaterial,
+  uniforms: RingUniforms,
+): MeshStandardMaterial['onBeforeCompile'] {
   const previousCompile = material.onBeforeCompile;
-  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer): void => {
+  return (
+    shader: WebGLProgramParametersWithUniforms,
+    renderer: Parameters<typeof material.onBeforeCompile>[1],
+  ): void => {
     previousCompile.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -228,14 +264,16 @@ function installSurfaceShader(material: MeshStandardMaterial, uniforms: RingUnif
   };
 }
 
-function installRingShader(
+function createRingShaderExtension(
   material: MeshStandardMaterial,
   uniforms: RingUniforms,
-  definition: RingDefinition,
-): void {
-  const declarations = ringFragmentDeclarations(definition);
+  declarations: string,
+): MeshStandardMaterial['onBeforeCompile'] {
   const previousCompile = material.onBeforeCompile;
-  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer): void => {
+  return (
+    shader: WebGLProgramParametersWithUniforms,
+    renderer: Parameters<typeof material.onBeforeCompile>[1],
+  ): void => {
     previousCompile.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -268,19 +306,46 @@ export function prepareRingMaterials(
     uRingRepresentationBlend: { value: 0 },
   };
 
-  installSurfaceShader(surface, uniforms);
-  installRingShader(rings, uniforms, definition);
+  const declarations = ringFragmentDeclarations(definition);
+  const previousSurfaceCompile = surface.onBeforeCompile;
+  const previousRingCompile = rings.onBeforeCompile;
+  const previousSurfaceCacheKey = surface.customProgramCacheKey;
+  const previousRingCacheKey = rings.customProgramCacheKey;
+  const previousRingSide = rings.side;
+  const previousRingTransparent = rings.transparent;
+  const previousRingDepthWrite = rings.depthWrite;
+  const surfaceCompileExtension = createSurfaceShaderExtension(surface, uniforms);
+  const ringCompileExtension = createRingShaderExtension(rings, uniforms, declarations);
 
   const cacheSuffix = `solar-voyager-rings-${definition.bodyId}-${PROGRAM_CACHE_VERSION}`;
-  const previousSurfaceCacheKey = surface.customProgramCacheKey.bind(surface);
-  const previousRingCacheKey = rings.customProgramCacheKey.bind(rings);
-  surface.customProgramCacheKey = (): string => `${previousSurfaceCacheKey()}|${cacheSuffix}`;
-  rings.customProgramCacheKey = (): string => `${previousRingCacheKey()}|${cacheSuffix}`;
+  const surfaceCacheKeyExtension = (): string =>
+    `${previousSurfaceCacheKey.call(surface)}|${cacheSuffix}`;
+  const ringCacheKeyExtension = (): string => `${previousRingCacheKey.call(rings)}|${cacheSuffix}`;
+  surface.onBeforeCompile = surfaceCompileExtension;
+  rings.onBeforeCompile = ringCompileExtension;
+  surface.customProgramCacheKey = surfaceCacheKeyExtension;
+  rings.customProgramCacheKey = ringCacheKeyExtension;
   rings.side = DoubleSide;
   rings.transparent = true;
   rings.depthWrite = false;
   surface.needsUpdate = true;
   rings.needsUpdate = true;
 
-  return new PreparedRingMaterialsImpl(uniforms, texture);
+  return new PreparedRingMaterialsImpl(
+    uniforms,
+    texture,
+    surface,
+    rings,
+    previousSurfaceCompile,
+    previousRingCompile,
+    previousSurfaceCacheKey,
+    previousRingCacheKey,
+    surfaceCompileExtension,
+    ringCompileExtension,
+    surfaceCacheKeyExtension,
+    ringCacheKeyExtension,
+    previousRingSide,
+    previousRingTransparent,
+    previousRingDepthWrite,
+  );
 }
