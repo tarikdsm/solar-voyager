@@ -43,8 +43,8 @@ describe('ring material preparation', () => {
     expect(ringShader.fragmentShader).toContain('RING_MAX_TRANSMISSION 0.22');
     expect(ringShader.fragmentShader).toContain('Fraternite');
     expect(ringShader.fragmentShader).toContain('ringArcRadialMask');
-    expect(ringShader.fragmentShader).toContain('2.54098692');
-    expect(ringShader.fragmentShader).toContain('2.54159263');
+    expect(ringShader.fragmentShader).toContain('2.54100711');
+    expect(ringShader.fragmentShader).toContain('2.54161283');
     expect(rings.side).toBe(DoubleSide);
     expect(rings.transparent).toBe(true);
     expect(rings.depthWrite).toBe(false);

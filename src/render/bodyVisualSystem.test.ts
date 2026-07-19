@@ -257,7 +257,7 @@ describe('BodyVisualSystem structure', () => {
   it('prepares a ringed giant before compilation and forwards simulation and quality state', async () => {
     const tilt = 0.4665265090580843;
     const saturnX = 10 * AU_KM;
-    const ringRadiusKm = (66_900 + 140_224) / 2;
+    const ringRadiusKm = (66_900 + 140_612) / 2;
     const ringCamera = {
       x: saturnX + Math.cos(tilt) * ringRadiusKm,
       y: Math.sin(tilt) * ringRadiusKm,

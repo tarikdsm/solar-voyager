@@ -129,7 +129,7 @@ git commit -m "feat(assets): [T0083] define scientific ring catalog"
 
 - [x] **Step 1: Write failing pure-Python contract tests**
 
-Assert four configs, source paths, polar ratios, normalized radii, band containment, 256 angular segments, material names, and actionable missing-file errors. Pin Saturn 1.110–2.320, Jupiter 100000/71492–270000/71492, Uranus 39600/25559–106200/25559, and Neptune 41000/24764–62940/24764.
+Assert four configs, source paths, polar ratios, normalized radii, band containment, 256 angular segments, material names, and actionable missing-file errors. Pin Saturn 66900/60268–140612/60268, Jupiter 100000/71492–270000/71492, Uranus 37850/25559–106200/25559, and Neptune 41000/24764–62940.5/24764.
 
 - [x] **Step 2: Run focused Python tests red**
 

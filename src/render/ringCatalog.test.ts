@@ -23,8 +23,12 @@ describe('ring catalog', () => {
       outerRadiusRatio: 270_000 / 71_492,
     });
     expect(ringDefinitionFor('uranus')).toMatchObject({
-      innerRadiusRatio: 36_100 / 25_559,
+      innerRadiusRatio: 37_850 / 25_559,
       outerRadiusRatio: 106_200 / 25_559,
+    });
+    expect(ringDefinitionFor('neptune')).toMatchObject({
+      innerRadiusRatio: 41_000 / 24_764,
+      outerRadiusRatio: 62_940.5 / 24_764,
     });
     const jupiter = ringDefinitionFor('jupiter');
     expect(jupiter?.bands.find((band) => band.name === 'Amalthea')).toMatchObject({
@@ -45,7 +49,63 @@ describe('ring catalog', () => {
         expect.objectContaining({ name: 'F', innerRadiusKm: 139_826, outerRadiusKm: 140_612 }),
       ]),
     );
+    const uranus = ringDefinitionFor('uranus');
+    expect(uranus?.bands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Zeta', innerRadiusKm: 37_850, outerRadiusKm: 41_350 }),
+        expect.objectContaining({
+          name: '6',
+          innerRadiusKm: 41_837.235,
+          outerRadiusKm: 41_838.765,
+        }),
+        expect.objectContaining({ name: '5', innerRadiusKm: 42_232.86, outerRadiusKm: 42_235.14 }),
+        expect.objectContaining({
+          name: '4',
+          innerRadiusKm: 42_569.835,
+          outerRadiusKm: 42_572.165,
+        }),
+        expect.objectContaining({
+          name: 'Alpha',
+          innerRadiusKm: 44_713.77,
+          outerRadiusKm: 44_722.23,
+        }),
+        expect.objectContaining({
+          name: 'Beta',
+          innerRadiusKm: 45_656.255,
+          outerRadiusKm: 45_665.745,
+        }),
+        expect.objectContaining({ name: 'Eta', innerRadiusKm: 47_175.2, outerRadiusKm: 47_176.8 }),
+        expect.objectContaining({
+          name: 'Gamma',
+          innerRadiusKm: 47_625.925,
+          outerRadiusKm: 47_628.075,
+        }),
+        expect.objectContaining({
+          name: 'Delta',
+          innerRadiusKm: 48_297.7,
+          outerRadiusKm: 48_302.3,
+        }),
+        expect.objectContaining({
+          name: 'Lambda',
+          innerRadiusKm: 50_022.85,
+          outerRadiusKm: 50_025.15,
+        }),
+        expect.objectContaining({
+          name: 'Epsilon',
+          innerRadiusKm: 51_119.95,
+          outerRadiusKm: 51_178.05,
+        }),
+      ]),
+    );
     const neptune = ringDefinitionFor('neptune');
+    expect(neptune?.bands.find((band) => band.name === 'Lassell')).toMatchObject({
+      innerRadiusKm: 53_200,
+      outerRadiusKm: 57_200,
+    });
+    expect(neptune?.bands.find((band) => band.name === 'Adams')).toMatchObject({
+      innerRadiusKm: 62_925.5,
+      outerRadiusKm: 62_940.5,
+    });
     expect(neptune?.arcs.map((arc) => arc.name)).toEqual([
       'Fraternite',
       'Egalite',

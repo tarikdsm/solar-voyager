@@ -91,7 +91,7 @@ describe('prepareRingSystem', () => {
     surface.onBeforeCompile(surfaceShader, {} as never);
     rings.onBeforeCompile(ringShader, {} as never);
     const direction = surfaceShader.uniforms.uRingSunDirection?.value;
-    const middleRadiusKm = (66_900 + 140_224) / 2;
+    const middleRadiusKm = (66_900 + 140_612) / 2;
 
     prepared.update(middleRadiusKm, 0, 0, 3, 4, 0, 123_456);
 

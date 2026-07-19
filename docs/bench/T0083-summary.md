@@ -40,8 +40,8 @@ The 6.1 ms median/p75 cadence remains well below the 16.6 ms floor and the
 canonical route adds no draw calls or triangles. The route heap increase is setup
 retention from the newly lazy-loaded Jupiter hero model and KTX2 textures; it is not
 per-frame growth. The post-warmup retained heap remains bounded, while the
-dedicated active-particle interval retains only 9,904 B after forced GC. The
-unchanged CI performance gate also passes at 195,209 B retained versus its
+dedicated active-particle interval retains only 8,652 B after forced GC. The
+unchanged CI performance gate also passes at 58,545 B retained versus its
 196,608 B ceiling, with exact 10 draw calls and 77,071 triangles.
 
 ## Dedicated Saturn-plane evidence
@@ -55,23 +55,30 @@ unchanged CI performance gate also passes at 195,209 B retained versus its
   simulation time 0 → 0.001, proving visible orbital motion/parallax;
 - symmetric plane-crossing blend:
   `0, 0.259259, 0.740741, 1, 1, 1, 0.740741, 0.259259, 0`;
-- measured retained heap after forced GC: 9,904 B, below the 65,536 B gate;
+- measured retained heap after forced GC: 8,652 B, below the 65,536 B gate;
 - no WebGL, console, request, or page errors.
 
 `npm run test:ring-systems` additionally loads all four production tier-3 assets.
 It holds 13 programs after warmup and renders 3 calls / 20,224 triangles per scene.
-Neptune's Adams-window arc contrast is 1.268, while the Le Verrier control is
-1.023, proving the azimuthal gain does not leak into inner bands. Saturn's
+Neptune's Adams-window arc contrast is 1.291, while the Le Verrier control is
+1.057, proving the azimuthal gain does not leak into inner bands. Saturn's
 ring-shadowed planet disc measures 20.508 mean luminance versus 27.406 for the
 otherwise identical no-ring-shader control (25.2% darker).
 
 ## Ring subset budgets and reproducibility
 
-Two clean Saturn Blender builds produced six byte-identical files; two clean
-canonical ingests produced 23 byte-identical files. The regenerated Saturn GLB
-has SHA-256 `747846184f73b4fa46f75082844a552ed6ac51d9c74549856fe309cb4f24b45b`;
-its radial strip has SHA-256
-`adf74e0e05052b2fe470d06849e717692c8fd0150651ad996029448e15f6e1cd`.
+Two clean sequential Blender builds per corrected planet produced six
+byte-identical files, and two clean sequential canonical ingests per corrected
+planet produced 23 byte-identical files. The regenerated GLB/radial-strip
+SHA-256 pairs are:
+
+- Saturn: `747846184f73b4fa46f75082844a552ed6ac51d9c74549856fe309cb4f24b45b` /
+  `adf74e0e05052b2fe470d06849e717692c8fd0150651ad996029448e15f6e1cd`;
+- Uranus: `70a5f90dda485920e9551f8ec9e6f71f41778af4f390f0deedf872790f50c6de` /
+  `5051c375f2feb873d16e1013eaa6a0923465a05057dcbdf816f76762fce9d063`;
+- Neptune: `be9f1f3792da59f74246e24183c320343e45803be140069e8255e0febf685b48` /
+  `592348c1452a467246bd0c5b07bdd180439e13cd54b2d02032223e4950de628a`.
+
 The complete named runtime ring-texture variants are 6,655 B (Jupiter), 8,974 B
-(Saturn), 10,551 B (Uranus), and 6,807 B (Neptune), each far below the 2 MiB
+(Saturn), 10,410 B (Uranus), and 6,906 B (Neptune), each far below the 2 MiB
 per-planet ring-subset limit. Particles remain procedural and add zero asset bytes.

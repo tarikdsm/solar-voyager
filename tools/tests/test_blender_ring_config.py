@@ -19,9 +19,9 @@ class RingPlanetConfigTests(unittest.TestCase):
         systems = []
         for body_id, ratio, reference, inner, outer in (
             ("jupiter", 0.935125609, 71_492, 100_000, 270_000),
-            ("saturn", 0.902037566, 60_268, 66_900, 140_224),
-            ("uranus", 0.977072655, 25_559, 36_100, 106_200),
-            ("neptune", 0.982918753, 24_764, 41_000, 62_940),
+            ("saturn", 0.902037566, 60_268, 66_900, 140_612),
+            ("uranus", 0.977072655, 25_559, 37_850, 106_200),
+            ("neptune", 0.982918753, 24_764, 41_000, 62_940.5),
         ):
             bodies.append(
                 {
@@ -85,9 +85,9 @@ class RingPlanetConfigTests(unittest.TestCase):
     def test_resolves_all_four_normalized_ring_contracts(self):
         expected = {
             "jupiter": (100_000 / 71_492, 270_000 / 71_492),
-            "saturn": (66_900 / 60_268, 140_224 / 60_268),
-            "uranus": (36_100 / 25_559, 106_200 / 25_559),
-            "neptune": (41_000 / 24_764, 62_940 / 24_764),
+            "saturn": (66_900 / 60_268, 140_612 / 60_268),
+            "uranus": (37_850 / 25_559, 106_200 / 25_559),
+            "neptune": (41_000 / 24_764, 62_940.5 / 24_764),
         }
         for body_id, radii in expected.items():
             with self.subTest(body_id=body_id):
