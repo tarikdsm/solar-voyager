@@ -158,7 +158,17 @@ export async function createEpochWorld(
   const { SystemMapScene } = await import('./systemMapScene.js');
   const initialViewportHeightPx =
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height);
-  const initialViewportWidthPx = options.initialViewportWidthPx ?? initialViewportHeightPx;
+  const drawingBufferWidthPx = renderer.domElement.width;
+  const drawingBufferHeightPx = renderer.domElement.height;
+  const drawingBufferAspect =
+    Number.isFinite(drawingBufferWidthPx) &&
+    drawingBufferWidthPx > 0 &&
+    Number.isFinite(drawingBufferHeightPx) &&
+    drawingBufferHeightPx > 0
+      ? drawingBufferWidthPx / drawingBufferHeightPx
+      : 1;
+  const initialViewportWidthPx =
+    options.initialViewportWidthPx ?? initialViewportHeightPx * drawingBufferAspect;
   const systemMap = new SystemMapScene(epochState.positionsKm, systemMapDefinitions, {
     viewportWidthPx: initialViewportWidthPx,
     viewportHeightPx: initialViewportHeightPx,
