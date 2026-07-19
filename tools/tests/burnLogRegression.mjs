@@ -201,8 +201,17 @@ try {
   assert.equal(active.activeAvailable, true);
   assert.ok(active.active.endTimeSec >= active.active.startTimeSec);
   await page.locator('#burn-log-toggle').click();
-  assert.deepEqual(await readMetricValues(page.locator('#burn-log-active')), expectedMetrics(active.active));
+  const activeUi = await readDiagnostic(page);
+  assert.deepEqual(
+    await readMetricValues(page.locator('#burn-log-active')),
+    expectedMetrics(activeUi.active),
+  );
 
+  await page.evaluate(() => {
+    if (globalThis.document.activeElement instanceof globalThis.HTMLElement) {
+      globalThis.document.activeElement.blur();
+    }
+  });
   await page.keyboard.press('KeyF');
   await page.waitForFunction(
     () => globalThis.document.querySelector('#space-canvas')?.solarVoyagerBurnLog?.completedCount === 1,
@@ -288,19 +297,24 @@ try {
   await compactPage.locator('#burn-log-toggle').click();
   const bounds = await compactPage.locator('#burn-log-panel').evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
+    const list = element.querySelector('.burn-log-completed-list');
+    if (!(list instanceof HTMLElement)) throw new Error('completed burn list missing');
     return {
       bottom: rect.bottom,
+      height: rect.height,
       left: rect.left,
-      overflowY: style.overflowY,
+      listClientHeight: list.clientHeight,
+      listOverflowY: getComputedStyle(list).overflowY,
+      listScrollHeight: list.scrollHeight,
       right: rect.right,
       viewportHeight: innerHeight,
       viewportWidth: innerWidth,
     };
   });
   assert.ok(bounds.left >= 0 && bounds.right <= bounds.viewportWidth);
-  assert.ok(bounds.bottom <= bounds.viewportHeight);
-  assert.equal(bounds.overflowY, 'auto');
+  assert.ok(bounds.height <= bounds.viewportHeight);
+  assert.equal(bounds.listOverflowY, 'auto');
+  assert.ok(bounds.listScrollHeight >= bounds.listClientHeight);
   await compactPage.screenshot({
     path: path.join(SCREENSHOT_DIRECTORY, 'T0098-burn-log-compact.png'),
     fullPage: true,
