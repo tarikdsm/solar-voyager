@@ -1,6 +1,6 @@
 id: T0095
 title: Stabilize retained-heap CI measurement without weakening the gate
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0095-stable-heap-growth-gate
 depends_on: [T0092]
@@ -20,4 +20,34 @@ acceptance:
   - Persistent or large retained growth and the allocation fixture are still rejected
   - Unit tests cover pass, immediate fail, confirmed pass, and confirmed fail decisions
   - Local production and negative-control gates pass, CI is green, and docs/check_plan.html includes T0095 exactly once
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent exact-head review. The fixed 196,608-byte ceiling,
+  every non-heap performance budget, the 30-second observation duration, and
+  tools/perf/performance-golden.json are unchanged. A narrow primary failure
+  in (196,608 B, 245,760 B] receives exactly one independent 30-second
+  confirmation on the already-stabilized page; the confirmation must satisfy
+  the original ceiling. Invalid metrics, large primary failures, and repeated
+  narrow failures fail closed. The retained-allocation fixture remains on the
+  original validator and is never eligible for confirmation.
+
+  The complete local gate passed with a direct production primary of +5,484 B,
+  so production.confirmationHeap was null and no confirmation was collected.
+  The allocation negative control retained +2,963,532 B and was rejected. The
+  draw control injected 29 draw calls / 65,077 triangles and was rejected for
+  both metrics. Production reported 10 draw calls / 77,071 triangles with no
+  findings.
+
+  Verification passed: npx vitest run
+  tools/perf/performanceGateUtils.test.mjs (19/19); npm test (111 passed + 1
+  skipped files, 660 passed + 3 skipped tests); npm run test:perf-gates; npm
+  run lint; npm run typecheck; npm run format:check; npm run build; npm run
+  check:tasks; and git diff --check. The independent Task 2 review covered
+  b7360a2..4b78555 and approved exact code head 4b78555 with Critical 0,
+  Important 0, Minor 0; Ready to merge: Yes.
+
+  This stabilization was motivated by T0085 CI evidence: run 29670343385
+  passed the identical production frame loop at +173,012 B, while run
+  29670710819 produced narrow failures of +202,242 B, +213,120 B, and
+  +211,256 B across retries. The new confirmation path distinguishes a
+  one-window forced-GC outlier from persistent retained growth without raising
+  the contractual ceiling.

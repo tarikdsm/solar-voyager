@@ -295,7 +295,7 @@ git commit -m "fix(perf): [T0095] confirm narrow heap gate failures"
 - Produces: complete T0095 handoff, REVIEW/DONE transitions, and green CI
 - Preserves: every existing dashboard task object and non-task roadmap action
 
-- [ ] **Step 1: Rebase and reconcile the dashboard owner first**
+- [x] **Step 1: Rebase and reconcile the dashboard owner first**
 
 Fetch `origin/main` and inspect both the T0094 branch and any local/user-owned
 `docs/check_plan.html` diff. Do not overwrite a newer dashboard snapshot. Rebase
@@ -303,7 +303,7 @@ onto the latest merged owner version, then regenerate or minimally append the
 canonical T0095 object from its YAML so it occurs exactly once and remains
 unchecked until `status: DONE`.
 
-- [ ] **Step 2: Validate the inventory and task schema**
+- [x] **Step 2: Validate the inventory and task schema**
 
 ```powershell
 npm run check:tasks
