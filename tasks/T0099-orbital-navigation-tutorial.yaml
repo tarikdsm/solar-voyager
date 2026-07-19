@@ -1,6 +1,6 @@
 id: T0099
 title: Orbital-navigation tutorial overlay
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0099-orbital-tutorial
 depends_on: [T0096, T0097, T0098]
@@ -17,4 +17,26 @@ acceptance:
   - Skip, resume, reset, keyboard-only, reduced-motion, compact viewport, and persisted completion are covered
   - Tutorial prompts never capture thrust/warp input when hidden and add zero gameplay frame-loop allocations after completion
   - A real-browser guided run reaches completion with no console/page errors or orphaned overlays
-handoff_notes: ""
+handoff_notes: |
+  Ready for independent review. A first-profile opt-in tutorial now advances
+  through 12 observable steps using the real target/focus, camera, trajectory,
+  attitude/thrust, warp, system-map, burn-log, performance, save, and return
+  controls. Progress is strictly persisted in profile settings v2; legacy v1
+  profiles migrate to skipped, save v2 keeps its v1 preferences DTO, and invalid
+  or failed storage paths fail closed without publishing stale progress.
+
+  Permanent Chrome regression completes 13 durable transitions with no
+  console/page errors, proves terminal observer shutdown and persistence across
+  reload/Continue, and covers skip/resume/reset, keyboard-only input, 360x480,
+  reduced motion, focus, and orphan-free DOM. Affected main-menu, system-map,
+  burn-log, session-settings, camera-control, production-smoke, and injected
+  negative smoke regressions pass.
+
+  Final gates at 51899cb: lint, typecheck, Prettier, build, task schema, asset
+  budgets, 790 Vitest tests (3 skipped), and 60 Python tool tests pass. The
+  performance gate reports 569,986 B total gzip (570,000 B limit), production
+  retained heap +48,256 B, 10 draw calls, and 77,071 triangles; both injected
+  allocation and draw fixtures fail as expected. The deterministic flight bench
+  reports median/p75/p99 6.1/6.1/6.301 ms, heap +105,128 B, max 26 draws and
+  49,530 triangles, with no errors. Baseline was 6.1/6.1 ms, +124,124 B, 26
+  draws, 49,146 triangles, and 567,544 B total gzip.
