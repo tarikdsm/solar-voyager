@@ -79,19 +79,23 @@ describe('SystemMapPanel', () => {
     const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
     const toggleFocus = vi.fn();
     const selectFocus = vi.fn();
+    const panel = { hidden: true };
     model.setToggleElement({ focus: toggleFocus });
     model.setBodySelectElement({ focus: selectFocus });
+    model.setPanelElement(panel);
 
     const openEvent = keyboardEvent('KeyM');
     model.handleKeyDown(openEvent);
     expect(controller.mode).toBe('system-map');
     expect(openEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(panel.hidden).toBe(false);
     expect(selectFocus).toHaveBeenCalledOnce();
 
     const closeEvent = keyboardEvent('Escape');
     model.handleKeyDown(closeEvent);
     expect(controller.mode).toBe('space');
     expect(closeEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(panel.hidden).toBe(true);
     expect(toggleFocus).toHaveBeenCalledOnce();
 
     model.handleKeyDown(keyboardEvent('Escape'));

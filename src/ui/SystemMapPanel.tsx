@@ -10,6 +10,10 @@ interface FocusableElement {
   focus(): void;
 }
 
+interface HideableElement {
+  hidden: boolean | string;
+}
+
 export interface SystemMapKeyboardEvent {
   readonly code: string;
   readonly repeat?: boolean;
@@ -54,6 +58,7 @@ export class SystemMapPanelModel {
   private readonly controller: SystemMapController;
   private toggleElement: FocusableElement | null = null;
   private bodySelectElement: FocusableElement | null = null;
+  private panelElement: HideableElement | null = null;
 
   constructor(bodyIds: readonly string[], commands: Commands, controller: SystemMapController) {
     this.bodyIds = [...bodyIds];
@@ -69,14 +74,20 @@ export class SystemMapPanelModel {
     this.bodySelectElement = element;
   };
 
+  readonly setPanelElement = (element: HideableElement | null): void => {
+    this.panelElement = element;
+  };
+
   readonly toggle = (): void => {
     const mode = this.controller.toggle();
+    if (this.panelElement !== null) this.panelElement.hidden = mode !== 'system-map';
     if (mode === 'system-map') this.bodySelectElement?.focus();
     else this.toggleElement?.focus();
   };
 
   readonly close = (): boolean => {
     if (!this.controller.close()) return false;
+    if (this.panelElement !== null) this.panelElement.hidden = true;
     this.toggleElement?.focus();
     return true;
   };
@@ -168,6 +179,7 @@ export function SystemMapPanelView({
         {map.display.toggleLabel}
       </button>
       <aside
+        ref={model.setPanelElement}
         id="system-map-panel"
         class="hud-panel system-map-panel"
         aria-labelledby="system-map-title"
@@ -249,7 +261,6 @@ export function SystemMapPanel(props: SystemMapPanelProps) {
     binding.attach(window as unknown as SystemMapKeyboardTarget);
     return () => binding.dispose();
   }, [binding]);
-
   return (
     <SystemMapPanelView
       bodyIds={props.bodyIds}
