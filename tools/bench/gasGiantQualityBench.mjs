@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 import { qualityRunOrder, summarizeQualitySamples } from './proceduralSunQualityBenchUtils.mjs';
+import { qualityMeasurementPlan } from './gasGiantQualityBenchUtils.mjs';
 import { hardwareGpuPreferenceArg } from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
@@ -89,15 +90,20 @@ try {
   if (REQUIRE_HARDWARE_GPU && /SwiftShader|llvmpipe|Software|Basic Render/iu.test(gpu.renderer)) {
     throw new Error(`Hardware benchmark selected a software renderer: ${gpu.renderer}`);
   }
-  assert.equal(gpu.timerQuery, true, 'GPU timer query extension is unavailable.');
+  const measurement = qualityMeasurementPlan(gpu.timerQuery);
 
   const rawSamples = { full: [], minimum: [] };
   const runOrder = qualityRunOrder();
   for (const quality of runOrder) {
     const samples = await page.evaluate(
-      async ({ requestedQuality, requestedSamples }) =>
-        globalThis.__gasGiantAnimationTest.measureQualityGpu(requestedQuality, requestedSamples),
-      { requestedQuality: quality, requestedSamples: samplesPerRun },
+      async ({ method, requestedQuality, requestedSamples }) => {
+        const harness = globalThis.__gasGiantAnimationTest;
+        if (harness === undefined) throw new Error('Gas-giant animation harness is unavailable.');
+        return method === 'gpu-timer'
+          ? harness.measureQualityGpu(requestedQuality, requestedSamples)
+          : harness.measureQualityCpu(requestedQuality, requestedSamples);
+      },
+      { method: measurement.method, requestedQuality: quality, requestedSamples: samplesPerRun },
     );
     rawSamples[quality].push(...samples);
   }
@@ -105,7 +111,9 @@ try {
   const summary = summarizeQualitySamples(rawSamples);
   assert.equal(rawSamples.full.length, rawSamples.minimum.length);
   assert.ok(rawSamples.full.length >= samplesPerRun * 2);
-  assert.equal(summary.minimumCheaper, true, JSON.stringify(summary));
+  if (measurement.enforceMinimumCheaper) {
+    assert.equal(summary.minimumCheaper, true, JSON.stringify(summary));
+  }
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
 
@@ -114,6 +122,7 @@ try {
     timestampUtc: new Date().toISOString(),
     sha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     adapter: gpu,
+    measurement,
     resolution: { width, height, pixelRatio: 1 },
     samplesPerRun,
     powerPreference: FORCE_LOW_POWER_GPU ? 'low-power' : 'high-performance',

@@ -166,6 +166,7 @@ if ( uGasEnabled > 0.5 ) {
   gasAnimatedUv = gasAnimateUv( vMapUv );
   gasShimmer = gasStormShimmer( gasAnimatedUv );
 }
+#define SOLAR_VOYAGER_SURFACE_UV gasAnimatedUv
 #define vMapUv gasAnimatedUv
 #include <map_fragment>
 diffuseColor.rgb *= clamp( gasShimmer, 0.985, 1.015 );

@@ -539,103 +539,128 @@ export class BodyVisualSystem {
       (material): material is MeshStandardMaterial =>
         material instanceof MeshStandardMaterial && material.name === 'mat_surface',
     );
-    const gasGiantAnimation =
-      surfaceMaterial === undefined
-        ? null
-        : prepareGasGiantAnimation(definition.id, definition.proceduralSeed, surfaceMaterial);
-    if (gasGiantAnimation !== null) {
-      gasGiantAnimation.setQuality(this.proceduralQuality);
-      this.gasGiantAnimations[index] = gasGiantAnimation;
-    } else if (
-      definition.id === 'jupiter' ||
-      definition.id === 'saturn' ||
-      definition.id === 'uranus' ||
-      definition.id === 'neptune'
-    ) {
-      throw new Error(`Gas-giant model "${definition.id}" is missing mat_surface.`);
-    }
-    const ringDefinition = ringDefinitionFor(definition.id);
-    if (ringDefinition !== null) {
-      const ringSystem = prepareRingSystem(model.root, model.materials, ringDefinition, definition);
-      if (ringSystem === null) {
-        throw new Error(`Ring model "${definition.id}" is missing its required material pair.`);
-      }
-      ringSystem.setParticleCount(this.ringParticleCount);
-      this.ringSystems[index] = ringSystem;
-    }
-    if (model.surfaceDetail !== null) {
-      if (surfaceMaterial === undefined) {
-        model.surfaceDetail.albedo.dispose();
-        model.surfaceDetail.normal.dispose();
-      } else {
-        this.surfaceDetails[index] = prepareSurfaceDetail(surfaceMaterial, model.surfaceDetail);
-      }
-    }
-    if (definition.id === 'earth') {
-      this.earthSurfaceLayers[index] = prepareEarthSurfaceLayers(model.root, model.materials);
-    }
-    const baseOpacities = new Float32Array(model.materials.length);
-    const baseDepthWrites = new Uint8Array(model.materials.length);
-    const baseTransparencies = new Uint8Array(model.materials.length);
-    const baseForceSinglePasses = new Uint8Array(model.materials.length);
-    for (let materialIndex = 0; materialIndex < model.materials.length; materialIndex += 1) {
-      const material = model.materials[materialIndex];
-      if (material === undefined) throw new Error('Loaded model material array is sparse.');
-      if (definition.category === 'sun' && material instanceof MeshStandardMaterial) {
-        material.emissiveIntensity = Math.max(SUN_EMISSIVE_INTENSITY, material.emissiveIntensity);
-      }
-      if (definition.category === 'sun') this.proceduralSun.prepareMaterial(material);
-      if (
-        definition.id === 'earth' &&
-        material instanceof MeshStandardMaterial &&
-        material.emissiveMap !== null
-      ) {
-        material.emissiveIntensity = Math.max(
-          EARTH_NIGHT_EMISSIVE_INTENSITY,
-          material.emissiveIntensity,
-        );
-      }
-      if (
-        definition.id === 'earth' &&
-        material instanceof MeshStandardMaterial &&
-        material.name === 'mat_clouds' &&
-        material.map !== null
-      ) {
-        material.alphaMap = material.map;
-        material.depthWrite = false;
-        material.needsUpdate = true;
-      }
-      baseOpacities[materialIndex] = material.opacity;
-      baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
-      baseTransparencies[materialIndex] = material.transparent ? 1 : 0;
-      baseForceSinglePasses[materialIndex] = material.forceSinglePass ? 1 : 0;
-      material.transparent = true;
-      material.forceSinglePass = true;
-      material.opacity = 0;
-      material.depthWrite = false;
-    }
-    model.root.scale.setScalar(ringDefinition?.referenceRadiusKm ?? definition.meanRadiusKm);
-    model.root.visible = true;
-    this.modelRoots[index] = model.root;
-    this.modelMaterials[index] = model.materials;
-    this.modelBaseOpacities[index] = baseOpacities;
-    this.modelBaseDepthWrites[index] = baseDepthWrites;
-    this.modelBaseTransparencies[index] = baseTransparencies;
-    this.modelBaseForceSinglePasses[index] = baseForceSinglePasses;
-    this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
-
+    let gasGiantAnimation: GasGiantAnimation | null = null;
+    let ringSystem: PreparedRingSystem | null = null;
+    let surfaceDetail: PreparedSurfaceDetail | null = null;
+    let earthSurfaceLayers: PreparedEarthSurfaceLayers | null = null;
+    let baseOpacities: Float32Array | null = null;
+    let baseDepthWrites: Uint8Array | null = null;
+    let baseTransparencies: Uint8Array | null = null;
+    let baseForceSinglePasses: Uint8Array | null = null;
+    let preparedMaterialCount = 0;
     try {
+      gasGiantAnimation =
+        surfaceMaterial === undefined
+          ? null
+          : prepareGasGiantAnimation(definition.id, definition.proceduralSeed, surfaceMaterial);
+      if (gasGiantAnimation !== null) {
+        gasGiantAnimation.setQuality(this.proceduralQuality);
+      } else if (
+        definition.id === 'jupiter' ||
+        definition.id === 'saturn' ||
+        definition.id === 'uranus' ||
+        definition.id === 'neptune'
+      ) {
+        throw new Error(`Gas-giant model "${definition.id}" is missing mat_surface.`);
+      }
+
+      const ringDefinition = ringDefinitionFor(definition.id);
+      if (ringDefinition !== null) {
+        ringSystem = prepareRingSystem(model.root, model.materials, ringDefinition, definition);
+        if (ringSystem === null) {
+          throw new Error(`Ring model "${definition.id}" is missing its required material pair.`);
+        }
+        ringSystem.setParticleCount(this.ringParticleCount);
+      }
+
+      if (model.surfaceDetail !== null) {
+        if (surfaceMaterial === undefined) {
+          model.surfaceDetail.albedo.dispose();
+          model.surfaceDetail.normal.dispose();
+        } else {
+          surfaceDetail = prepareSurfaceDetail(surfaceMaterial, model.surfaceDetail);
+        }
+      }
+      if (definition.id === 'earth') {
+        earthSurfaceLayers = prepareEarthSurfaceLayers(model.root, model.materials);
+      }
+
+      baseOpacities = new Float32Array(model.materials.length);
+      baseDepthWrites = new Uint8Array(model.materials.length);
+      baseTransparencies = new Uint8Array(model.materials.length);
+      baseForceSinglePasses = new Uint8Array(model.materials.length);
+      for (let materialIndex = 0; materialIndex < model.materials.length; materialIndex += 1) {
+        const material = model.materials[materialIndex];
+        if (material === undefined) throw new Error('Loaded model material array is sparse.');
+        if (definition.category === 'sun' && material instanceof MeshStandardMaterial) {
+          material.emissiveIntensity = Math.max(SUN_EMISSIVE_INTENSITY, material.emissiveIntensity);
+        }
+        if (definition.category === 'sun') this.proceduralSun.prepareMaterial(material);
+        if (
+          definition.id === 'earth' &&
+          material instanceof MeshStandardMaterial &&
+          material.emissiveMap !== null
+        ) {
+          material.emissiveIntensity = Math.max(
+            EARTH_NIGHT_EMISSIVE_INTENSITY,
+            material.emissiveIntensity,
+          );
+        }
+        if (
+          definition.id === 'earth' &&
+          material instanceof MeshStandardMaterial &&
+          material.name === 'mat_clouds' &&
+          material.map !== null
+        ) {
+          material.alphaMap = material.map;
+          material.depthWrite = false;
+          material.needsUpdate = true;
+        }
+        baseOpacities[materialIndex] = material.opacity;
+        baseDepthWrites[materialIndex] = material.depthWrite ? 1 : 0;
+        baseTransparencies[materialIndex] = material.transparent ? 1 : 0;
+        baseForceSinglePasses[materialIndex] = material.forceSinglePass ? 1 : 0;
+        preparedMaterialCount += 1;
+        material.transparent = true;
+        material.forceSinglePass = true;
+        material.opacity = 0;
+        material.depthWrite = false;
+      }
+      model.root.scale.setScalar(ringDefinition?.referenceRadiusKm ?? definition.meanRadiusKm);
+      model.root.visible = true;
       await this.compileModel(model.root);
+      this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
+      this.modelRoots[index] = model.root;
+      this.modelMaterials[index] = model.materials;
+      this.modelBaseOpacities[index] = baseOpacities;
+      this.modelBaseDepthWrites[index] = baseDepthWrites;
+      this.modelBaseTransparencies[index] = baseTransparencies;
+      this.modelBaseForceSinglePasses[index] = baseForceSinglePasses;
+      this.gasGiantAnimations[index] = gasGiantAnimation;
+      this.ringSystems[index] = ringSystem;
+      this.surfaceDetails[index] = surfaceDetail;
+      this.earthSurfaceLayers[index] = earthSurfaceLayers;
       this.modelLoadStates[index] = LOAD_READY;
     } catch {
-      this.surfaceDetails[index]?.dispose();
-      this.surfaceDetails[index] = null;
-      this.gasGiantAnimations[index]?.dispose();
-      this.gasGiantAnimations[index] = null;
-      this.earthSurfaceLayers[index]?.dispose();
-      this.earthSurfaceLayers[index] = null;
-      this.ringSystems[index]?.dispose();
-      this.ringSystems[index] = null;
+      earthSurfaceLayers?.dispose();
+      surfaceDetail?.dispose();
+      ringSystem?.dispose();
+      gasGiantAnimation?.dispose();
+      if (
+        baseOpacities !== null &&
+        baseDepthWrites !== null &&
+        baseTransparencies !== null &&
+        baseForceSinglePasses !== null
+      ) {
+        for (let materialIndex = 0; materialIndex < preparedMaterialCount; materialIndex += 1) {
+          const material = model.materials[materialIndex];
+          if (material === undefined) break;
+          material.opacity = baseOpacities[materialIndex] ?? material.opacity;
+          material.depthWrite = baseDepthWrites[materialIndex] === 1;
+          material.transparent = baseTransparencies[materialIndex] === 1;
+          material.forceSinglePass = baseForceSinglePasses[materialIndex] === 1;
+        }
+      }
       model.root.visible = false;
       this.modelLoadStates[index] = LOAD_FAILED;
     }

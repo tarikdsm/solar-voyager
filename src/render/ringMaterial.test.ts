@@ -24,8 +24,10 @@ describe('ring material preparation', () => {
     const previousRingCompile = vi.fn();
     surface.onBeforeCompile = previousSurfaceCompile;
     rings.onBeforeCompile = previousRingCompile;
-    surface.customProgramCacheKey = () => 'surface-base';
-    rings.customProgramCacheKey = () => 'rings-base';
+    const previousSurfaceKey = vi.fn(() => 'surface-base');
+    const previousRingKey = vi.fn(() => 'rings-base');
+    surface.customProgramCacheKey = previousSurfaceKey;
+    rings.customProgramCacheKey = previousRingKey;
     const definition = ringDefinitionFor('neptune');
     if (definition === null) throw new Error('Missing Neptune test definition.');
 
@@ -51,6 +53,12 @@ describe('ring material preparation', () => {
     expect(surface.customProgramCacheKey()).toBe('surface-base|solar-voyager-rings-neptune-v1');
     expect(rings.customProgramCacheKey()).toBe('rings-base|solar-voyager-rings-neptune-v1');
     expect(prepared.texture).toBe(rings.map);
+
+    prepared.dispose();
+    expect(surface.onBeforeCompile).toBe(previousSurfaceCompile);
+    expect(rings.onBeforeCompile).toBe(previousRingCompile);
+    expect(surface.customProgramCacheKey).toBe(previousSurfaceKey);
+    expect(rings.customProgramCacheKey).toBe(previousRingKey);
   });
 
   it('reuses uniform objects while normalizing Sun direction and clamping blend', () => {

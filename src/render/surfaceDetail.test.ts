@@ -146,16 +146,23 @@ describe('surface detail material extension', () => {
     expect(proceduralUniform.value).toBe(1);
   });
 
-  it('disposes each owned texture once', () => {
+  it('disposes each owned texture once and restores the exact preceding hooks', () => {
     const loadedDetail = detail();
     const albedoDispose = vi.spyOn(loadedDetail.albedo, 'dispose');
     const normalDispose = vi.spyOn(loadedDetail.normal, 'dispose');
-    const prepared = prepareSurfaceDetail(new MeshStandardMaterial(), loadedDetail);
+    const material = new MeshStandardMaterial();
+    const previousCompile = vi.fn();
+    const previousKey = vi.fn(() => 'preceding');
+    material.onBeforeCompile = previousCompile;
+    material.customProgramCacheKey = previousKey;
+    const prepared = prepareSurfaceDetail(material, loadedDetail);
 
     prepared.dispose();
     prepared.dispose();
 
     expect(albedoDispose).toHaveBeenCalledOnce();
     expect(normalDispose).toHaveBeenCalledOnce();
+    expect(material.onBeforeCompile).toBe(previousCompile);
+    expect(material.customProgramCacheKey).toBe(previousKey);
   });
 });

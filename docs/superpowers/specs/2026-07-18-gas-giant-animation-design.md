@@ -35,10 +35,11 @@ Approach 3 is selected.
 `src/render/gasGiantAnimationState.ts` owns stable uniforms for one gas giant.
 The state validates the body id and uint32 seed, maps the shared procedural
 quality rungs to four/two/one octaves, and converts arbitrary finite simulation
-time into bounded phase vectors. Four band phases use slightly different
-periods so adjacent latitude zones drift at different rates. A separate phase
-drives storm shimmer, and Jupiter receives a bounded counterclockwise Great Red
-Spot phase. Updates mutate existing vectors and scalars only.
+time into bounded phase vectors. Four band phases start with slightly different
+rates and return through one smooth 64-base-rotation shear cycle, keeping every
+adjacent interpolation on the same periodic branch. A separate phase drives
+storm shimmer, and Jupiter receives a bounded counterclockwise Great Red Spot
+phase. Updates mutate existing vectors and scalars only.
 
 `src/render/gasGiantMaterial.ts` chains one extension onto the loaded
 `mat_surface` `MeshStandardMaterial`. Its stable custom program cache key is
@@ -69,18 +70,22 @@ makes the field continuous at longitude 0/1. Full quality evaluates four
 fixed-bound octaves, half evaluates two, and minimum evaluates one. Uniform
 branches skip the unused work without changing the shader program.
 
-The latitude coordinate selects four broad jet zones. Their independently
-wrapped phases are interpolated with the shortest periodic offset, producing
-different longitudinal motion without growing time values in float32. A
-seeded domain warp adds at most 0.006 UV longitudinal displacement and 0.002 UV
-latitudinal displacement. These caps are small enough to preserve belts,
-ovals, and mosaic provenance while making close views visibly alive.
+The latitude coordinate selects four broad jet zones. One wrapped base phase is
+combined with a bounded sinusoidal shear over 64 base rotations:
+`phase_i = fract(basePhase + (multiplier_i - 1) * sin(shearAngle) * 64 / 2π)`.
+The cycle begins at the configured rates, returns without a discontinuity, and
+keeps every adjacent phase separation below 0.4 turns, so shortest-periodic
+interpolation never changes branch. A seeded domain warp adds at most 0.006 UV
+longitudinal displacement and 0.002 UV latitudinal displacement. These caps are
+small enough to preserve belts, ovals, and mosaic provenance while making close
+views visibly alive.
 
 The base rotation periods are 9.9 h for Jupiter, 10.7 h for Saturn, 17.2 h for
 Uranus, and 16.1 h for Neptune. Those values follow NASA's solar-system
-overview; the four visual jet phases use deterministic multipliers around the
-base period rather than claiming a scientific wind-field reconstruction.
-Animation is driven by simulation time, so time warp accelerates it naturally.
+overview; the four visual jet phases begin each bounded shear cycle at
+deterministic multipliers around the base rate rather than claiming a scientific
+wind-field reconstruction. Animation is driven by simulation time, so time warp
+accelerates it naturally.
 
 The albedo texture already contains Jupiter's Great Red Spot near UV
 `(0.374, 0.640)`. Inside a smooth elliptical mask of radii `(0.068, 0.046)`,
@@ -91,11 +96,14 @@ storm shimmer; it never recolours or replaces the source feature.
 
 ## Shader-hook ordering and lifecycle
 
-Gas animation is installed before close-range surface detail. The later detail
-hook chains the gas hook and injects its map-dependent code while the animated
-UV macro is active, so the real mosaic and its existing detail pair move as one
-surface. Ring, lighting, opacity, ACES, bloom, and tier-crossfade behavior stay
-unchanged.
+Gas animation is installed before ring and close-range surface detail. The later
+hooks chain their exact predecessors; both detail albedo and normal samples use
+the persistent animated-surface UV macro, so the real mosaic and its existing
+detail pair move as one surface. Setup remains local until compilation succeeds.
+On any setup/compile failure, atmosphere, detail, ring, and gas controllers
+dispose in reverse order, restoring their exact preceding callbacks/cache keys
+before the model is marked failed. Lighting, opacity, ACES, bloom, and
+tier-crossfade behavior stay unchanged.
 
 The material must be a mapped `MeshStandardMaterial` named `mat_surface` and
 the body id must be one of the four catalogued gas giants. Unsupported bodies
@@ -143,10 +151,12 @@ A production WebGL fixture renders each real tier-3 model at fixed close-view
 cameras. It captures static, animated start, animated later, full, half, and
 minimum states after warm-up. Pixel comparisons require both measurable motion
 and high structural similarity to the static source; Jupiter also requires a
-larger signed rotational delta inside the Great Red Spot crop than in its
-control crop. The fixture records zero WebGL errors, stable program count after
-warm-up and quality switches, unchanged draw count, exact octave uniforms, and
-all texture network requests. The regression rejects any new texture URL.
+crop delta at least 1.25 times its control and lower error against a
+counterclockwise rotated static reference than against the clockwise negative
+control. Surface detail must be active in the same compiled shader. The fixture
+records zero WebGL errors, stable program count after warm-up and quality
+switches, unchanged draw count, exact octave uniforms, and all texture network
+requests. The regression rejects any new texture URL.
 
 An isolated quality benchmark compares full and minimum on the same close
 Jupiter view, renderer, resolution, warm-up, and sample count. Repository

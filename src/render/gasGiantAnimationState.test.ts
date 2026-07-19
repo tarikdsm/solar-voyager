@@ -6,6 +6,15 @@ import {
   isGasGiantId,
 } from './gasGiantAnimationState.js';
 
+function wrappedOffset(fromPhase: number, toPhase: number): number {
+  return ((((toPhase - fromPhase + 0.5) % 1) + 1) % 1) - 0.5;
+}
+
+function transitionMidpoint(state: GasGiantAnimationState): number {
+  const phases = state.uniforms.uGasBandPhases.value;
+  return (((phases.x + wrappedOffset(phases.x, phases.y) * 0.5) % 1) + 1) % 1;
+}
+
 describe('gas-giant animation configuration', () => {
   it('locks the four catalogued bodies and visual rotation periods', () => {
     expect(Object.keys(GAS_GIANT_CONFIG)).toEqual(['jupiter', 'saturn', 'uranus', 'neptune']);
@@ -74,6 +83,31 @@ describe('GasGiantAnimationState', () => {
     state.update(6 * 24 * 60 * 60);
 
     expect(state.uniforms.uGasStormPhase.value.toArray()).toEqual(start);
+  });
+
+  it('keeps latitude interpolation continuous through the former half-turn crossing', () => {
+    const state = new GasGiantAnimationState('jupiter', 599);
+    const baseRotationSec = GAS_GIANT_CONFIG.jupiter.baseRotationHours * 3_600;
+    const formerCrossingSec = baseRotationSec * (0.5 / (1 - 0.985));
+
+    state.update(formerCrossingSec - 1);
+    const before = transitionMidpoint(state);
+    state.update(formerCrossingSec + 1);
+    const after = transitionMidpoint(state);
+
+    expect(Math.abs(wrappedOffset(before, after))).toBeLessThan(0.001);
+  });
+
+  it('keeps every adjacent phase inside one stable interpolation branch', () => {
+    const state = new GasGiantAnimationState('jupiter', 599);
+    const baseRotationSec = GAS_GIANT_CONFIG.jupiter.baseRotationHours * 3_600;
+    for (let sample = -512; sample <= 512; sample += 1) {
+      state.update((sample / 8) * baseRotationSec);
+      const phases = state.uniforms.uGasBandPhases.value.toArray();
+      for (let zone = 0; zone < phases.length - 1; zone += 1) {
+        expect(Math.abs(wrappedOffset(phases[zone] ?? 0, phases[zone + 1] ?? 0))).toBeLessThan(0.4);
+      }
+    }
   });
 
   it.each([

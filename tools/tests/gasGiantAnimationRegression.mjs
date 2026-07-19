@@ -99,6 +99,58 @@ function cropDelta(first, second, centerX, centerY, halfWidth, halfHeight) {
   return total / samples;
 }
 
+function sampledLuminance(subject, x, y) {
+  const boundedX = Math.min(subject.width - 1, Math.max(0, x));
+  const boundedY = Math.min(subject.height - 1, Math.max(0, y));
+  const left = Math.floor(boundedX);
+  const top = Math.floor(boundedY);
+  const right = Math.min(subject.width - 1, left + 1);
+  const bottom = Math.min(subject.height - 1, top + 1);
+  const horizontal = boundedX - left;
+  const vertical = boundedY - top;
+  const topLeft = luminance(subject, (top * subject.width + left) * subject.channels);
+  const topRight = luminance(subject, (top * subject.width + right) * subject.channels);
+  const bottomLeft = luminance(subject, (bottom * subject.width + left) * subject.channels);
+  const bottomRight = luminance(subject, (bottom * subject.width + right) * subject.channels);
+  return (
+    (topLeft + (topRight - topLeft) * horizontal) * (1 - vertical) +
+    (bottomLeft + (bottomRight - bottomLeft) * horizontal) * vertical
+  );
+}
+
+function rotatedSpotReferenceDelta(
+  reference,
+  observed,
+  centerX,
+  centerY,
+  halfWidth,
+  halfHeight,
+  sourceAngleRad,
+) {
+  const cosine = Math.cos(sourceAngleRad);
+  const sine = Math.sin(sourceAngleRad);
+  let total = 0;
+  let samples = 0;
+  for (let y = centerY - halfHeight; y <= centerY + halfHeight; y += 1) {
+    for (let x = centerX - halfWidth; x <= centerX + halfWidth; x += 1) {
+      const normalizedX = (x - centerX) / halfWidth;
+      const normalizedY = (y - centerY) / halfHeight;
+      if (normalizedX * normalizedX + normalizedY * normalizedY > 0.58 ** 2) continue;
+      const sourceNormalizedX = cosine * normalizedX - sine * normalizedY;
+      const sourceNormalizedY = sine * normalizedX + cosine * normalizedY;
+      const expected = sampledLuminance(
+        reference,
+        centerX + sourceNormalizedX * halfWidth,
+        centerY + sourceNormalizedY * halfHeight,
+      );
+      const observedOffset = (y * observed.width + x) * observed.channels;
+      total += Math.abs(expected - luminance(observed, observedOffset));
+      samples += 1;
+    }
+  }
+  return total / samples;
+}
+
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -172,6 +224,7 @@ try {
     assert.equal(captures.minimum.snapshot.octaves, 1);
     assert.equal(captures.static.snapshot.calls, captures.animatedStart.snapshot.calls);
     assert.equal(captures.static.snapshot.programs, captures.minimum.snapshot.programs);
+    assert.ok(captures.animatedStart.snapshot.detailBlend > 0, `${bodyId}: surface detail inactive`);
 
     const identity = comparison(captures.static.image, captures.animatedStart.image);
     const motion = comparison(captures.animatedStart.image, captures.animatedLater.image);
@@ -201,10 +254,33 @@ try {
   const spotDelta = cropDelta(spotStatic, spotAnimated, spotCenter.x, spotCenter.y, 38, 28);
   const controlY = spotCenter.y < SIZE / 2 ? SIZE - spotCenter.y : SIZE - spotCenter.y;
   const controlDelta = cropDelta(spotStatic, spotAnimated, spotCenter.x, controlY, 38, 28);
+  const spotAngleRad = (9.9 * 3_600 * Math.PI * 2) / (6 * 24 * 60 * 60);
+  const counterClockwiseDelta = rotatedSpotReferenceDelta(
+    spotStatic,
+    spotAnimated,
+    spotCenter.x,
+    spotCenter.y,
+    38,
+    28,
+    spotAngleRad,
+  );
+  const clockwiseDelta = rotatedSpotReferenceDelta(
+    spotStatic,
+    spotAnimated,
+    spotCenter.x,
+    spotCenter.y,
+    38,
+    28,
+    -spotAngleRad,
+  );
   assert.ok(spotCenter.score > 8, `Great Red Spot was not found: ${JSON.stringify(spotCenter)}`);
   assert.ok(
-    spotDelta >= controlDelta * 1.1,
+    spotDelta >= controlDelta * 1.25,
     `Great Red Spot rotation is not localized: ${JSON.stringify({ spotCenter, spotDelta, controlDelta })}`,
+  );
+  assert.ok(
+    counterClockwiseDelta < clockwiseDelta * 0.9,
+    `Great Red Spot did not follow the counter-clockwise reference: ${JSON.stringify({ counterClockwiseDelta, clockwiseDelta })}`,
   );
 
   const textureRequests = requests.filter((url) => /\/textures\/.*\.ktx2(?:$|\?)/u.test(url));
@@ -230,7 +306,7 @@ try {
   }
 
   process.stdout.write(
-    `${JSON.stringify({ programs: setup.programs, metrics, spot: { center: spotCenter, spotDelta, controlDelta }, textureRequests }, null, 2)}\n`,
+    `${JSON.stringify({ programs: setup.programs, metrics, spot: { center: spotCenter, spotDelta, controlDelta, counterClockwiseDelta, clockwiseDelta }, textureRequests }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();

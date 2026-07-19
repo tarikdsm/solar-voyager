@@ -49,6 +49,7 @@ export interface GasGiantUniforms extends Record<string, IUniform> {
 }
 
 const BAND_PHASE_MULTIPLIERS = [1, 0.985, 1.012, 0.975] as const;
+export const GAS_GIANT_SHEAR_CYCLE_ROTATIONS = 64;
 const GREAT_RED_SPOT_PERIOD_SEC = 6 * 24 * 60 * 60;
 const STORM_SHIMMER_PERIOD_SEC = 1_800;
 const TWO_PI = Math.PI * 2;
@@ -64,6 +65,10 @@ function wrappedFraction(timeSec: number, periodSec: number): number {
 
 function periodicAngle(timeSec: number, periodSec: number): number {
   return wrappedFraction(timeSec, periodSec) * TWO_PI;
+}
+
+function wrappedUnit(value: number): number {
+  return ((value % 1) + 1) % 1;
 }
 
 /** Owns allocation-free, bounded uniforms for one animated gas-giant mosaic. */
@@ -96,11 +101,17 @@ export class GasGiantAnimationState {
       throw new RangeError('Gas-giant simulation time must be finite.');
     }
     const phases = this.uniforms.uGasBandPhases.value;
+    const basePhase = wrappedFraction(simTimeSec, this.baseRotationSec);
+    const shearAngle = periodicAngle(
+      simTimeSec,
+      this.baseRotationSec * GAS_GIANT_SHEAR_CYCLE_ROTATIONS,
+    );
+    const boundedShear = (Math.sin(shearAngle) * GAS_GIANT_SHEAR_CYCLE_ROTATIONS) / TWO_PI;
     phases.set(
-      wrappedFraction(simTimeSec, this.baseRotationSec / BAND_PHASE_MULTIPLIERS[0]),
-      wrappedFraction(simTimeSec, this.baseRotationSec / BAND_PHASE_MULTIPLIERS[1]),
-      wrappedFraction(simTimeSec, this.baseRotationSec / BAND_PHASE_MULTIPLIERS[2]),
-      wrappedFraction(simTimeSec, this.baseRotationSec / BAND_PHASE_MULTIPLIERS[3]),
+      wrappedUnit(basePhase + (BAND_PHASE_MULTIPLIERS[0] - 1) * boundedShear),
+      wrappedUnit(basePhase + (BAND_PHASE_MULTIPLIERS[1] - 1) * boundedShear),
+      wrappedUnit(basePhase + (BAND_PHASE_MULTIPLIERS[2] - 1) * boundedShear),
+      wrappedUnit(basePhase + (BAND_PHASE_MULTIPLIERS[3] - 1) * boundedShear),
     );
     const spotAngle = periodicAngle(simTimeSec, GREAT_RED_SPOT_PERIOD_SEC);
     const shimmerAngle = periodicAngle(simTimeSec, STORM_SHIMMER_PERIOD_SEC);

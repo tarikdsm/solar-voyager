@@ -140,9 +140,12 @@ this.uniforms = {
 };
 ```
 
-Use phase multipliers `[1, 0.985, 1.012, 0.975]`; write four wrapped fractions
-into `uGasBandPhases`; write counterclockwise six-day spot cosine/sine and a
-1,800-second shimmer cosine/sine into `uGasStormPhase`. `setQuality` maps
+Use phase multipliers `[1, 0.985, 1.012, 0.975]`. Combine one wrapped base
+phase with `sin(2π * time / (64 * basePeriod)) * 64 / 2π` times each
+`(multiplier - 1)` and wrap the four results into `uGasBandPhases`. This keeps
+adjacent separation below 0.4 and closes the shear cycle without changing the
+shortest interpolation branch. Write counterclockwise six-day spot cosine/sine
+and a 1,800-second shimmer cosine/sine into `uGasStormPhase`. `setQuality` maps
 four/two/one and rejects all other values.
 
 - [x] **Step 5: Verify GREEN and commit**
@@ -241,9 +244,11 @@ vec3 gasSphericalDirection( vec2 uv ) {
 }
 ```
 
-Choose/interpolate the four wrapped band phases by absolute latitude, rotate
-Jupiter's elliptical spot with `mat2(c, -s, s, c)`, then add domain warp clamped
-to `uGasWarp.xy`. Wrap the map chunk exactly:
+Choose/interpolate the four branch-stable wrapped band phases by latitude,
+rotate Jupiter's elliptical spot with `mat2(c, -s, s, c)`, then add domain warp
+clamped to `uGasWarp.xy`. Expose `gasAnimatedUv` as the persistent
+`SOLAR_VOYAGER_SURFACE_UV` macro so later albedo and normal detail samples move
+with the mosaic. Wrap the map chunk exactly:
 
 ```glsl
 vec2 gasAnimatedUv = vMapUv;
@@ -402,6 +407,9 @@ Use these exact acceptance bounds after masking background pixels:
   Neptune, >= 0.35/255 for Saturn and Uranus;
 - mean luminance drift between static and animated <= 2%;
 - Jupiter Great Red Spot crop delta >= 1.25 times an equal-area control crop;
+- the animated Great Red Spot crop matches the counter-clockwise rotated static
+  reference materially better than the clockwise negative control;
+- close-range surface detail blend is nonzero in the same compiled body shader;
 - program count identical after warm-up, time change, enable toggle, and all
   three quality switches;
 - draw count identical between static and animated captures;

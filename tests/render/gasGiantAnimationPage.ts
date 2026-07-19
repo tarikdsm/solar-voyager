@@ -42,6 +42,7 @@ interface FixtureBody {
 interface RenderSnapshot {
   readonly bodyId: BodyId | 'jupiter-spot';
   readonly calls: number;
+  readonly detailBlend: number;
   readonly glError: number;
   readonly octaves: number;
   readonly programs: number;
@@ -57,6 +58,7 @@ interface GasGiantAnimationHarness {
     enabled: boolean,
   ): RenderSnapshot;
   renderSpot(simTimeSec: number, enabled: boolean): RenderSnapshot;
+  measureQualityCpu(quality: ProceduralQuality, sampleCount: number): Promise<readonly number[]>;
   measureQualityGpu(quality: ProceduralQuality, sampleCount: number): Promise<readonly number[]>;
   setupSnapshot(): {
     readonly glError: number;
@@ -160,11 +162,13 @@ function renderSnapshot(
   bodyId: BodyId | 'jupiter-spot',
   seed: number,
   animation: GasGiantAnimation,
+  detail: PreparedSurfaceDetail | null = null,
 ): RenderSnapshot {
   renderer.render(scene, camera);
   return {
     bodyId,
     calls: renderer.info.render.calls,
+    detailBlend: detail?.blend ?? 0,
     glError: renderer.getContext().getError(),
     octaves: animation.state.uniforms.uGasOctaves.value,
     programs: renderer.info.programs?.length ?? 0,
@@ -214,6 +218,32 @@ const programsAfterWarmUp = renderer.info.programs?.length ?? 0;
 const setupGlError = renderer.getContext().getError();
 
 globalThis.__gasGiantAnimationTest = {
+  async measureQualityCpu(quality, sampleCount) {
+    if (!Number.isInteger(sampleCount) || sampleCount <= 0) {
+      throw new RangeError('CPU sample count must be a positive integer.');
+    }
+    const fixture = showOnly('jupiter');
+    if (fixture === null) throw new Error('Jupiter quality fixture is missing.');
+    configureBodyCamera();
+    fixture.animation.setEnabled(true);
+    fixture.animation.setQuality(quality);
+    fixture.animation.update(3_900);
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+    for (let frame = 0; frame < 60; frame += 1) {
+      await nextFrame();
+      renderer.render(scene, camera);
+    }
+    const samples: number[] = [];
+    while (samples.length < sampleCount) {
+      await nextFrame();
+      const startMs = performance.now();
+      renderer.render(scene, camera);
+      const elapsedMs = performance.now() - startMs;
+      if (Number.isFinite(elapsedMs) && elapsedMs > 0) samples.push(elapsedMs);
+    }
+    return samples;
+  },
   async measureQualityGpu(quality, sampleCount) {
     if (!Number.isInteger(sampleCount) || sampleCount <= 0) {
       throw new RangeError('GPU sample count must be a positive integer.');
@@ -266,7 +296,7 @@ globalThis.__gasGiantAnimationTest = {
     fixture.animation.setQuality(quality);
     fixture.animation.setEnabled(enabled);
     fixture.animation.update(simTimeSec);
-    return renderSnapshot(bodyId, fixture.seed, fixture.animation);
+    return renderSnapshot(bodyId, fixture.seed, fixture.animation, fixture.detail);
   },
   renderSpot(simTimeSec, enabled) {
     showOnly(null);
@@ -274,6 +304,12 @@ globalThis.__gasGiantAnimationTest = {
     spotAnimation.setQuality('full');
     spotAnimation.setEnabled(enabled);
     spotAnimation.update(simTimeSec);
+    spotAnimation.state.uniforms.uGasBandPhases.value.set(0, 0, 0, 0);
+    spotAnimation.state.uniforms.uGasStormPhase.value.z = 1;
+    spotAnimation.state.uniforms.uGasStormPhase.value.w = 0;
+    spotAnimation.state.uniforms.uGasWarp.value.x = 0;
+    spotAnimation.state.uniforms.uGasWarp.value.y = 0;
+    spotAnimation.state.uniforms.uGasWarp.value.z = 0;
     return renderSnapshot('jupiter-spot', jupiter.seed, spotAnimation);
   },
   setupSnapshot() {

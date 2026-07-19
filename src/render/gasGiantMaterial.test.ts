@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GasGiantAnimationState } from './gasGiantAnimationState.js';
 import { prepareGasGiantMaterial } from './gasGiantMaterial.js';
+import { prepareSurfaceDetail } from './surfaceDetail.js';
 
 interface ShaderFixture extends WebGLProgramParametersWithUniforms {
   uniforms: Record<string, { value: unknown }>;
@@ -25,6 +26,8 @@ function shaderFixture(): ShaderFixture {
       'void main() {',
       '  vec4 diffuseColor = vec4( 1.0 );',
       '  #include <map_fragment>',
+      '  #include <normal_fragment_maps>',
+      '  #include <roughnessmap_fragment>',
       '  #include <opaque_fragment>',
       '}',
     ].join('\n'),
@@ -100,6 +103,35 @@ describe('gas-giant material extension', () => {
     expect(shader.fragmentShader).toContain('vec2 gasAnimatedUv = vMapUv;');
     expect(shader.fragmentShader).toContain('float gasShimmer = 1.0;');
     expect(shader.fragmentShader).toContain('if ( uGasEnabled > 0.5 )');
+  });
+
+  it('shares the animated surface UV with chained albedo and normal detail', () => {
+    const material = mappedSurfaceMaterial();
+    const previousCompile = material.onBeforeCompile;
+    const previousKey = material.customProgramCacheKey;
+    const gas = prepareGasGiantMaterial(
+      material,
+      new GasGiantAnimationState('jupiter', 599).uniforms,
+    );
+    const detail = prepareSurfaceDetail(material, {
+      albedo: new Texture(),
+      normal: new Texture(),
+      seed: 599,
+      tilesPerEquator: 512,
+    });
+    const shader = shaderFixture();
+
+    material.onBeforeCompile(shader, {} as WebGLRenderer);
+
+    expect(shader.fragmentShader).toContain('#define SOLAR_VOYAGER_SURFACE_UV gasAnimatedUv');
+    expect(
+      shader.fragmentShader.match(/SOLAR_VOYAGER_SURFACE_UV \* uSurfaceTilesPerEquator/gu),
+    ).toHaveLength(2);
+
+    detail.dispose();
+    gas.dispose();
+    expect(material.onBeforeCompile).toBe(previousCompile);
+    expect(material.customProgramCacheKey).toBe(previousKey);
   });
 
   it('rejects unsupported, unnamed, and unmapped materials', () => {
