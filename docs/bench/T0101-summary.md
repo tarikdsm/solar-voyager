@@ -118,3 +118,14 @@ minutes. No product assertion failed, including the fixed 5-second first-playabl
 ceiling. The startup step's operational envelope is therefore eight minutes;
 the product deadlines, assertions, and permanent workflow coverage are unchanged,
 and the workflow regression pins this distinction.
+
+Follow-up PR CI run `29706876853` confirmed that separation: startup passed all
+unchanged assertions in 6m34s under its eight-minute operational envelope. The
+same heavily contended runner then killed `Trajectory overlay regression` at its
+independent four-minute workflow limit (`23:06:38`-`23:10:50`) without an
+assertion or error log, skipping every later gate. This is the same operational
+failure mode previously observed for the real-worker regression; its dedicated
+local run remains green. The trajectory step therefore receives the same
+eight-minute runner envelope. Its real Vite worker, predictor/integrator path,
+readiness assertions, production ceilings, and all product behavior remain
+unchanged, and workflow regression coverage pins the envelope explicitly.

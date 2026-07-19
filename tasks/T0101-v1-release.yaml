@@ -66,3 +66,11 @@ handoff_notes: |
   killed the recovery scenarios at its five-minute outer limit. The operational
   step timeout is eight minutes while the 5-second first-playable ceiling and all
   product assertions remain unchanged. Workflow regression coverage pins it.
+
+  Follow-up exact-head CI run 29706876853 passed the unchanged startup gate in
+  6m34s under that envelope, then killed Trajectory overlay regression at its
+  separate four-minute workflow timeout (23:06:38-23:10:50) without an assertion
+  or error log. The real-worker regression remains green locally. Its workflow
+  envelope is therefore also eight minutes; predictor behavior, internal waits,
+  production horizon/point contracts, readiness and visual assertions remain
+  unchanged, with the exact timeout pinned by the workflow regression test.
