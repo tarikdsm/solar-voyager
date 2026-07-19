@@ -1,4 +1,5 @@
 const DEFAULT_STABILITY_LIMIT = 0.05;
+const HEAP_CONFIRMATION_FACTOR = 1.25;
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -116,6 +117,34 @@ export function validateHeapGrowth(measurement, maxRetainedGrowthBytes) {
     ];
   }
   return [];
+}
+
+export function classifyHeapConfirmation(measurement, maxRetainedGrowthBytes) {
+  if (validateHeapGrowth(measurement, maxRetainedGrowthBytes).length === 0) return 'pass';
+  if (
+    measurement.beforeBytes === null ||
+    measurement.afterBytes === null ||
+    !validNonnegativeNumber(measurement.beforeBytes) ||
+    !validNonnegativeNumber(measurement.afterBytes) ||
+    !Number.isInteger(maxRetainedGrowthBytes) ||
+    maxRetainedGrowthBytes < 0
+  ) {
+    return 'fail';
+  }
+  const growthBytes = measurement.afterBytes - measurement.beforeBytes;
+  return growthBytes <= maxRetainedGrowthBytes * HEAP_CONFIRMATION_FACTOR ? 'confirm' : 'fail';
+}
+
+export function validateConfirmedHeapGrowth(primary, confirmation, maxRetainedGrowthBytes) {
+  const decision = classifyHeapConfirmation(primary, maxRetainedGrowthBytes);
+  if (decision === 'pass') return [];
+  if (decision === 'fail') return validateHeapGrowth(primary, maxRetainedGrowthBytes);
+  if (confirmation === null) {
+    return ['Narrow retained heap failure requires a confirmation measurement.'];
+  }
+  return validateHeapGrowth(confirmation, maxRetainedGrowthBytes).map((finding) =>
+    finding.replace('Retained heap growth', 'Confirmed retained heap growth'),
+  );
 }
 
 export function validateBundleSizes(measured, golden) {

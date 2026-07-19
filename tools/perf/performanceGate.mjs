@@ -10,8 +10,10 @@ import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installHighQualitySetting } from './browserSettings.mjs';
 import { measureBundleSizes } from './bundleMeasurement.mjs';
 import {
+  classifyHeapConfirmation,
   parsePerformanceGolden,
   validateBundleSizes,
+  validateConfirmedHeapGrowth,
   validateHeapGrowth,
   validateWorkload,
 } from './performanceGateUtils.mjs';
@@ -153,7 +155,22 @@ async function waitForStableWorkload(page) {
   throw new Error('Production workload did not settle into four identical snapshots.');
 }
 
-async function measurePage(browser, durationMs, allocationFixture, label) {
+async function measureHeapWindow(page, durationMs, label) {
+  const beforeBytes = await forceGc(page);
+  console.log(`Performance gate measuring: ${label}`);
+  await page.waitForTimeout(durationMs);
+  const afterBytes = await forceGc(page);
+  console.log(`Performance gate measured: ${label}`);
+  return { afterBytes, beforeBytes, deltaBytes: afterBytes - beforeBytes };
+}
+
+async function measurePage(
+  browser,
+  durationMs,
+  allocationFixture,
+  label,
+  confirmationCeilingBytes = null,
+) {
   console.log(`Performance gate page: ${label}`);
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const browserErrors = [];
@@ -174,16 +191,20 @@ async function measurePage(browser, durationMs, allocationFixture, label) {
     await page.waitForTimeout(allocationFixture ? FIXTURE_SETTLE_MS : HEAP_SETTLE_MS);
     console.log(`Performance gate settled: ${label}`);
     workload = await waitForStableWorkload(page);
-    const beforeBytes = await forceGc(page);
-    console.log(`Performance gate measuring: ${label}`);
-    await page.waitForTimeout(durationMs);
-    const afterBytes = await forceGc(page);
-    console.log(`Performance gate measured: ${label}`);
+    const heap = await measureHeapWindow(page, durationMs, label);
+    let confirmationHeap = null;
+    if (
+      confirmationCeilingBytes !== null &&
+      classifyHeapConfirmation(heap, confirmationCeilingBytes) === 'confirm'
+    ) {
+      confirmationHeap = await measureHeapWindow(
+        page,
+        durationMs,
+        `${label} confirmation`,
+      );
+    }
     assert.deepEqual(browserErrors, []);
-    return {
-      heap: { afterBytes, beforeBytes, deltaBytes: afterBytes - beforeBytes },
-      workload,
-    };
+    return { confirmationHeap, heap, workload };
   } finally {
     await page.close();
   }
@@ -246,9 +267,19 @@ async function main() {
       headless: true,
       args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'],
     });
-    const production = await measurePage(browser, golden.heap.durationMs, false, 'production');
+    const production = await measurePage(
+      browser,
+      golden.heap.durationMs,
+      false,
+      'production',
+      golden.heap.maxRetainedGrowthBytes,
+    );
     const workloadFindings = validateWorkload(production.workload, golden.workload);
-    const heapFindings = validateHeapGrowth(production.heap, golden.heap.maxRetainedGrowthBytes);
+    const heapFindings = validateConfirmedHeapGrowth(
+      production.heap,
+      production.confirmationHeap,
+      golden.heap.maxRetainedGrowthBytes,
+    );
     if (PRODUCTION_ONLY) {
       const findings = [...bundleFindings, ...workloadFindings, ...heapFindings];
       process.stdout.write(
@@ -264,6 +295,7 @@ async function main() {
       golden.heap.fixtureDurationMs,
       true,
       'allocation fixture',
+      null,
     );
     const allocationFixtureFindings = validateHeapGrowth(
       allocationFixture.heap,
@@ -273,10 +305,15 @@ async function main() {
       allocationFixtureFindings.some((finding) => finding.startsWith('Retained heap growth')),
       `allocation fixture unexpectedly passed: ${JSON.stringify(allocationFixture)}`,
     );
+    assert.equal(allocationFixture.confirmationHeap, null);
     const drawFixture = await runDrawFixture(browser, production.workload, golden);
     const findings = [...bundleFindings, ...workloadFindings, ...heapFindings];
     const result = {
-      allocationFixture: { findings: allocationFixtureFindings, ...allocationFixture },
+      allocationFixture: {
+        findings: allocationFixtureFindings,
+        heap: allocationFixture.heap,
+        workload: allocationFixture.workload,
+      },
       bundle,
       drawFixture,
       findings,
