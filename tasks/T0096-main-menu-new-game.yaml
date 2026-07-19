@@ -20,7 +20,7 @@ acceptance:
   - Keyboard focus, reduced-motion behavior, reload, and repeated menu-to-game attempts are covered by unit and real-browser tests
   - Existing smoke, performance, save/load, and gameplay regressions pass with no duplicate canvas, renderer, worker, or event listener
 handoff_notes: |
-  Ready for merge after CI on exact implementation head 6874706. The normal
+  Ready for merge after CI on exact implementation head d5f8bb2. The normal
   production URL now opens an accessible responsive MainMenu; New Game enters
   the canonical 400 km LEO and valid Continue/import operations replace the
   session atomically before entering SpacePhase. Explicit ?autostart=1 keeps
@@ -33,6 +33,13 @@ handoff_notes: |
   invalid/missing saves, Mars save-reload-Continue restoration, keyboard focus,
   reduced-motion computed styles, compact vertical scrolling, canonical orbit,
   and duplicate-resource prevention.
+
+  CI exposed that SwiftShader can delay the first completed WebGL frame even
+  after menu activation is complete. A deterministic rAF-freeze regression now
+  proves the menu transition from visible orbit HUD, camera readiness, and the
+  exact one-shot resource counters, including a successfully scheduled rAF.
+  Application smoke remains the independent gate for completed frames and real
+  framebuffer pixels. Independent re-review of this correction reported C0/I0/M0.
 
   Exact-head verification passed: 706 Vitest tests with 3 expected skips; lint,
   typecheck, format, build, task schema, asset budgets, and diff check; main-menu,
