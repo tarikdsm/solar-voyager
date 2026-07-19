@@ -45,6 +45,7 @@ class FakeKeyboardTarget {
       ctrlKey: false,
       metaKey: false,
       repeat: false,
+      shiftKey: false,
       target: null,
       preventDefault: () => {
         prevented = true;
@@ -160,12 +161,26 @@ describe('KeyboardCommandMapper', () => {
 
     expect(target.keyDown('KeyR', { repeat: true }).prevented).toBe(false);
     expect(target.keyDown('KeyR', { ctrlKey: true }).prevented).toBe(false);
+    expect(target.keyDown('KeyR', { shiftKey: true }).prevented).toBe(false);
     expect(
       target.keyDown('KeyR', {
         target: { isContentEditable: false, tagName: 'INPUT' } as unknown as EventTarget,
       }).prevented,
     ).toBe(false);
     expect(controller.state.throttle).toBe(0);
+  });
+
+  it('still releases a held axis when Shift is pressed before keyup', () => {
+    const target = new FakeKeyboardTarget();
+    const { controller, mapper } = createMapper(target);
+
+    target.keyDown('KeyW');
+    mapper.update();
+    expect(controller.state.rotationRatesRadS[0]).toBe(ROTATION_RATE_RAD_S);
+
+    expect(target.keyUp('KeyW', { shiftKey: true }).prevented).toBe(true);
+    mapper.update();
+    expect([...controller.state.rotationRatesRadS]).toEqual([0, 0, 0]);
   });
 
   it('releases held axes when bindings change and routes later input to the new key', () => {

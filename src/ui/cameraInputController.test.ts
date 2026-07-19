@@ -55,19 +55,21 @@ function createFixture(initiallyEnabled = true) {
       return focusId;
     }),
   };
+  const interactions: string[] = [];
   const input = new CameraInputController(
     canvas as unknown as HTMLCanvasElement,
     keyboard as unknown as Window,
     label as unknown as HTMLElement,
     controls,
     initiallyEnabled,
+    (interaction) => interactions.push(interaction),
   );
-  return { canvas, controls, input, keyboard, label };
+  return { canvas, controls, input, interactions, keyboard, label };
 }
 
 describe('CameraInputController', () => {
   it('drags with pointer capture and forwards wheel zoom', () => {
-    const { canvas, controls } = createFixture();
+    const { canvas, controls, interactions } = createFixture();
     const dragPreventDefault = vi.fn();
     canvas.emit('pointerdown', {
       pointerId: 7,
@@ -92,6 +94,54 @@ describe('CameraInputController', () => {
     canvas.emit('wheel', { deltaY: -120, preventDefault: wheelPreventDefault });
     expect(wheelPreventDefault).toHaveBeenCalledOnce();
     expect(controls.zoomByWheel).toHaveBeenCalledWith(-120);
+    expect(interactions).toEqual(['orbit', 'zoom']);
+  });
+
+  it('orbits and zooms with collision-free Shift keyboard chords', () => {
+    const { controls, interactions, keyboard } = createFixture();
+    const preventDefault = vi.fn();
+    const base = {
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      repeat: false,
+      shiftKey: true,
+      target: null,
+      preventDefault,
+    };
+
+    keyboard.emit('keydown', { ...base, code: 'ArrowLeft', key: 'ArrowLeft' });
+    keyboard.emit('keydown', { ...base, code: 'ArrowUp', key: 'ArrowUp' });
+    keyboard.emit('keydown', { ...base, code: 'PageUp', key: 'PageUp' });
+    keyboard.emit('keydown', { ...base, code: 'PageDown', key: 'PageDown' });
+
+    expect(controls.orbitBy).toHaveBeenNthCalledWith(1, 0.12, 0);
+    expect(controls.orbitBy).toHaveBeenNthCalledWith(2, 0, 0.12);
+    expect(controls.zoomByWheel).toHaveBeenNthCalledWith(1, -120);
+    expect(controls.zoomByWheel).toHaveBeenNthCalledWith(2, 120);
+    expect(interactions).toEqual(['orbit', 'orbit', 'zoom', 'zoom']);
+    expect(preventDefault).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not steer from editable targets or unmodified camera keys', () => {
+    const { controls, interactions, keyboard } = createFixture();
+    const button = { isContentEditable: false, tagName: 'BUTTON' };
+    const base = {
+      altKey: false,
+      code: 'ArrowLeft',
+      ctrlKey: false,
+      key: 'ArrowLeft',
+      metaKey: false,
+      repeat: false,
+      preventDefault: vi.fn(),
+    };
+
+    keyboard.emit('keydown', { ...base, shiftKey: false, target: null });
+    keyboard.emit('keydown', { ...base, shiftKey: true, target: button });
+
+    expect(controls.orbitBy).not.toHaveBeenCalled();
+    expect(interactions).toEqual([]);
+    expect(base.preventDefault).not.toHaveBeenCalled();
   });
 
   it('supports target cycling and direct Earth/Jupiter shortcuts', () => {
