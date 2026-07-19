@@ -1,6 +1,6 @@
 id: T0097
 title: Interactive solar-system map view
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0097-system-map-view
 depends_on: [T0044, T0071, T0096]
@@ -25,3 +25,5 @@ handoff_notes: |
   all 43 bodies, delayed first prediction, inner/outer alignment, and 100
   frame-interleaved toggles with stable GPU resources. Production perf: 10
   draws, 77,071 triangles, heap -131,840 B; entry bundle 284,681/285,000 B gzip.
+  PR #54 CI run 29684531801 passed on the REVIEW head. The final DONE commit is
+  verified by a second CI run before a non-force merge; the task branch remains.
