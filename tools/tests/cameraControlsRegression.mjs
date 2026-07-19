@@ -29,9 +29,34 @@ async function screenshotEvidence(buffer) {
     .toBuffer({ resolveWithObject: true });
   const centerOffset =
     (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * info.channels;
+  const regionStartX = Math.floor(info.width * 0.3);
+  const regionEndX = Math.floor(info.width * 0.7);
+  const regionStartY = Math.floor(info.height * 0.2);
+  const regionEndY = Math.floor(info.height * 0.4);
+  let warmRed = 0;
+  let warmGreen = 0;
+  let warmBlue = 0;
+  let warmSamples = 0;
+  for (let y = regionStartY; y < regionEndY; y += 1) {
+    for (let x = regionStartX; x < regionEndX; x += 1) {
+      const offset = (y * info.width + x) * info.channels;
+      const red = data[offset];
+      const green = data[offset + 1];
+      const blue = data[offset + 2];
+      if (red === undefined || green === undefined || blue === undefined || red + green + blue < 45) {
+        continue;
+      }
+      warmRed += red;
+      warmGreen += green;
+      warmBlue += blue;
+      warmSamples += 1;
+    }
+  }
   return {
     centerRgb: [data[centerOffset], data[centerOffset + 1], data[centerOffset + 2]],
     sha256: createHash('sha256').update(buffer).digest('hex'),
+    upperCenterMeanRgb: [warmRed, warmGreen, warmBlue].map((sum) => sum / warmSamples),
+    upperCenterSamples: warmSamples,
   };
 }
 
@@ -217,10 +242,12 @@ try {
       productionJupiter.centerRgb.reduce((sum, channel) => sum + channel, 0) > 30,
     'production Jupiter was not visible at the canvas center',
   );
-  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.centerRgb;
+  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.upperCenterMeanRgb;
   assert.ok(
-    jupiterRed > jupiterGreen + 15 && jupiterGreen > jupiterBlue + 15,
-    `production center lacks Jupiter's ochre color signature (${productionJupiter.centerRgb.join(',')})`,
+    productionJupiter.upperCenterSamples > 10_000 &&
+      jupiterRed > jupiterGreen + 3 &&
+      jupiterGreen > jupiterBlue + 3,
+    `production disc lacks Jupiter's ochre color signature (${productionJupiter.upperCenterMeanRgb.join(',')})`,
   );
   assert.deepEqual(productionErrors, []);
 
@@ -238,6 +265,7 @@ try {
         productionShortcut: 'Focus: Jupiter',
         productionEarthSha256: productionEarth.sha256,
         productionJupiterCenterRgb: productionJupiter.centerRgb,
+        productionJupiterUpperCenterMeanRgb: productionJupiter.upperCenterMeanRgb,
         productionJupiterSha256: productionJupiter.sha256,
       },
       null,

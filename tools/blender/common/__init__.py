@@ -6,6 +6,7 @@ from .geometry import create_quad_sphere, create_uv_sphere
 from .glb import canonicalize_ellipsoid_normals
 from .manifest import build_manifest, print_manifest
 from .materials import create_pbr_material
+from .rings import create_ring_annulus, create_ring_material
 from .scene import reset_scene, select_only
 
 __all__ = [
@@ -16,6 +17,8 @@ __all__ = [
     "canonicalize_ellipsoid_normals",
     "create_pbr_material",
     "create_quad_sphere",
+    "create_ring_annulus",
+    "create_ring_material",
     "create_uv_sphere",
     "export_glb",
     "print_manifest",

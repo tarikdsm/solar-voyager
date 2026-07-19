@@ -20,6 +20,7 @@ export interface RenderQualityProfile {
   readonly modelThresholdScale: number;
   readonly proceduralQuality: ProceduralSunQuality;
   readonly renderScale: number;
+  readonly ringParticleCount: number;
   readonly rung: number;
   readonly starCountCap: number;
   readonly textureCap: TextureQualityCap;
@@ -40,6 +41,7 @@ function profile(
   downAction: string,
   upAction: string,
 ): RenderQualityProfile {
+  const ringParticleCount = tier >= 5 ? 4096 : tier === 4 ? 2048 : tier >= 2 ? 1024 : 0;
   return Object.freeze({
     antiAliasing,
     bloom,
@@ -47,6 +49,7 @@ function profile(
     modelThresholdScale,
     proceduralQuality,
     renderScale,
+    ringParticleCount,
     rung,
     starCountCap,
     textureCap,

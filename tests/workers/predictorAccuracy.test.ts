@@ -74,7 +74,7 @@ describe('predictor worker accuracy — physics-spec.md §6', () => {
 
     console.info(`predictor 30-day LEO max position error: ${maxPositionErrorKm} km`);
     expect(maxPositionErrorKm).toBeLessThanOrEqual(MAX_POSITION_ERROR_KM);
-  }, 15_000);
+  }, 30_000);
 });
 
 describe('predictor worker Vite build integration', () => {

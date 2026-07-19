@@ -132,6 +132,35 @@ class TextureFetchTests(unittest.TestCase):
         self.assertIn("contrast-enhanced", attribution)
         self.assertIn("luminance-normalized and filtered", attribution)
 
+    def test_ringed_giant_recipes_pin_solar_system_scope_sources(self):
+        expected = {
+            "jupiter-albedo": (
+                "jupiter",
+                "0bd844bf20822c4e3e80882b077859833c0dac44c7e4e1e0cd63d1b1b6d43085",
+                90,
+            ),
+            "uranus-albedo": (
+                "uranus",
+                "d15239d46f82d3ea13d2b260b5b29b2a382f42f2916dae0694d0387b1204a09d",
+                92,
+            ),
+            "neptune-albedo": (
+                "neptune",
+                "cb42ea82709741d28b0af44d8b283cbc6dbd0c521a7f0e1e1e010ade00977df6",
+                92,
+            ),
+        }
+        for recipe_id, (body_id, sha256, quality) in expected.items():
+            with self.subTest(recipe_id=recipe_id):
+                recipe = self.fetch.RECIPES[recipe_id]
+                self.assertEqual(recipe.body_id, body_id)
+                self.assertEqual((recipe.width, recipe.height), (4096, 2048))
+                self.assertEqual((recipe.output_format, recipe.quality), ("jpeg", quality))
+                self.assertEqual(recipe.output_name, f"{body_id}_albedo.jpg")
+                self.assertEqual(recipe.sha256, sha256)
+                self.assertIn("solarsystemscope.com/textures", recipe.source_url)
+                self.assertEqual(recipe.license.split(" (")[0], "CC BY 4.0")
+
     def test_process_image_forwards_recipe_owned_output_options(self):
         recipe = self.fetch.TextureRecipe.test("options", output_name="texture.jpg")
         recipe.width = 4

@@ -21,12 +21,15 @@ from common import (  # noqa: E402
     build_manifest,
     canonicalize_ellipsoid_normals,
     create_pbr_material,
+    create_ring_annulus,
+    create_ring_material,
     create_uv_sphere,
     export_glb,
     print_manifest,
     reset_scene,
 )
 from planet_config import MODELS_ROOT, planet_config  # noqa: E402
+from ring_config import RINGED_PLANET_IDS, ring_planet_config  # noqa: E402
 
 
 CLOUD_SHELL_RATIO = 1.004
@@ -105,7 +108,7 @@ def _surface_axes(obj):
     return equatorial, polar
 
 
-def build(body_id, output_root):
+def _build_earth(body_id, output_root):
     config = planet_config(body_id)
     output_dir = pathlib.Path(output_root).resolve() / config.category / body_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -151,6 +154,73 @@ def build(body_id, output_root):
             f"Planet polar ratio is {measured_ratio}, expected {config.polar_radius_ratio}"
         )
     return manifest
+
+
+def _build_ringed(body_id, output_root):
+    config = ring_planet_config(body_id)
+    output_dir = pathlib.Path(output_root).resolve() / config.category / body_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    reset_scene()
+    surface = create_uv_sphere(body_id, segments=128, rings=64, radius=1.0)
+    _apply_polar_ratio(surface, config.polar_radius_ratio)
+    source_by_role = {source.role: source for source in config.source_files}
+    surface_material = create_pbr_material(
+        config.surface_material_name,
+        roughness=0.9,
+        albedo_path=source_by_role["planet albedo"].path,
+    )
+    surface.data.materials.append(surface_material)
+
+    rings = create_ring_annulus(
+        f"{body_id}_rings",
+        config.inner_radius_ratio,
+        config.outer_radius_ratio,
+        segments=config.angular_segments,
+        radial_segments=config.radial_segments,
+    )
+    rings.data.materials.append(
+        create_ring_material(config.ring_material_name, source_by_role["ring texture"].path)
+    )
+
+    glb_path = export_glb((surface, rings), output_dir / f"{body_id}.glb", active=surface)
+    published = []
+    for source in config.source_files:
+        output_path = output_dir / source.output_name
+        shutil.copyfile(source.path, output_path)
+        if output_path.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            published.append(output_path)
+    manifest = build_manifest(body_id, config.category, (surface, rings), glb_path, published)
+    manifest["equatorialRadius"] = 1.0
+    manifest["polarRadiusRatio"] = config.polar_radius_ratio
+    manifest["ringInnerRadiusRatio"] = config.inner_radius_ratio
+    manifest["ringOuterRadiusRatio"] = config.outer_radius_ratio
+    print_manifest(manifest)
+
+    equatorial, polar = _surface_axes(surface)
+    expected_surface_triangles = 16_128
+    expected_ring_triangles = config.angular_segments * config.radial_segments * 2
+    if manifest["triangles"] != expected_surface_triangles + expected_ring_triangles:
+        raise RuntimeError(
+            f'Ringed planet emitted {manifest["triangles"]} triangles, '
+            f"expected {expected_surface_triangles + expected_ring_triangles}"
+        )
+    if expected_ring_triangles > 5_000:
+        raise RuntimeError(f"Ring annulus emitted {expected_ring_triangles} triangles")
+    if abs(equatorial - 1.0) > 1e-6:
+        raise RuntimeError(f"Planet equatorial radius is {equatorial}, expected 1.0")
+    measured_ratio = polar / equatorial
+    if abs(measured_ratio - config.polar_radius_ratio) > 1e-6:
+        raise RuntimeError(
+            f"Planet polar ratio is {measured_ratio}, expected {config.polar_radius_ratio}"
+        )
+    return manifest
+
+
+def build(body_id, output_root):
+    if body_id in RINGED_PLANET_IDS:
+        return _build_ringed(body_id, output_root)
+    return _build_earth(body_id, output_root)
 
 
 def main(argv=None):

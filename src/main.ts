@@ -308,6 +308,7 @@ function renderFrame(nowMs: number): void {
     Math.max(1, canvas.clientHeight),
     spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
+    snapshot.simTimeSec,
   );
   lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
   lighting.update();

@@ -18,9 +18,12 @@ export const HERO_IDS = new Set(['earth', 'mars', 'moon']);
 export const MAJOR_MOON_IDS = new Set(['moon', 'io', 'europa', 'ganymede', 'callisto', 'titan', 'triton']);
 export const SURFACE_DETAIL_CONFIG = Object.freeze({
   earth: Object.freeze({ tilesPerEquator: 32, seed: 399 }),
+  jupiter: Object.freeze({ tilesPerEquator: 32, seed: 599 }),
   moon: Object.freeze({ tilesPerEquator: 16, seed: 301 }),
+  neptune: Object.freeze({ tilesPerEquator: 32, seed: 899 }),
   pluto: Object.freeze({ tilesPerEquator: 12, seed: 999 }),
   saturn: Object.freeze({ tilesPerEquator: 32, seed: 699 }),
+  uranus: Object.freeze({ tilesPerEquator: 32, seed: 799 }),
 });
 
 export function triangleLimitFor(category, id) {

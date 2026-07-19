@@ -10,11 +10,14 @@ describe('runtime asset manifest', () => {
     const manifest = parseAssetManifest(source);
     expect(manifest.assets.map((asset) => asset.id)).toEqual([
       'earth',
+      'jupiter',
       'moon',
+      'neptune',
       'pluto',
       'saturn',
       'ship',
       'sun',
+      'uranus',
     ]);
     expect(manifest.assets.find((asset) => asset.id === 'earth')?.files).toContain(
       'models/earth.glb',

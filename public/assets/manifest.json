@@ -1,154 +1,241 @@
 {
-  "schemaVersion": 2,
-  "assets": [
-    {
-      "id": "earth",
-      "category": "planet",
-      "triangles": 32256,
-      "files": [
-        "models/earth_1k.glb",
-        "models/earth_2k.glb",
-        "models/earth.glb",
-        "textures/earth_albedo_1k.ktx2",
-        "textures/earth_albedo_2k.ktx2",
-        "textures/earth_albedo_tier2.ktx2",
-        "textures/earth_albedo.ktx2",
-        "textures/earth_clouds_1k.ktx2",
-        "textures/earth_clouds_2k.ktx2",
-        "textures/earth_clouds.ktx2",
-        "textures/earth_detail_albedo_1k.ktx2",
-        "textures/earth_detail_albedo_2k.ktx2",
-        "textures/earth_detail_albedo.ktx2",
-        "textures/earth_detail_normal_1k.ktx2",
-        "textures/earth_detail_normal_2k.ktx2",
-        "textures/earth_detail_normal.ktx2",
-        "textures/earth_emissive_night_1k.ktx2",
-        "textures/earth_emissive_night_2k.ktx2",
-        "textures/earth_emissive_night.ktx2",
-        "textures/earth_normal_1k.ktx2",
-        "textures/earth_normal_2k.ktx2",
-        "textures/earth_normal.ktx2"
-      ],
-      "surfaceDetail": {
-        "albedo": "textures/earth_detail_albedo.ktx2",
-        "normal": "textures/earth_detail_normal.ktx2",
-        "tilesPerEquator": 32,
-        "seed": 399
-      }
-    },
-    {
-      "id": "moon",
-      "category": "moon",
-      "triangles": 16128,
-      "files": [
-        "models/moon_1k.glb",
-        "models/moon_2k.glb",
-        "models/moon.glb",
-        "textures/moon_albedo_1k.ktx2",
-        "textures/moon_albedo_2k.ktx2",
-        "textures/moon_albedo_tier2.ktx2",
-        "textures/moon_albedo.ktx2",
-        "textures/moon_detail_albedo_1k.ktx2",
-        "textures/moon_detail_albedo_2k.ktx2",
-        "textures/moon_detail_albedo.ktx2",
-        "textures/moon_detail_normal_1k.ktx2",
-        "textures/moon_detail_normal_2k.ktx2",
-        "textures/moon_detail_normal.ktx2",
-        "textures/moon_normal_1k.ktx2",
-        "textures/moon_normal_2k.ktx2",
-        "textures/moon_normal.ktx2"
-      ],
-      "surfaceDetail": {
-        "albedo": "textures/moon_detail_albedo.ktx2",
-        "normal": "textures/moon_detail_normal.ktx2",
-        "tilesPerEquator": 16,
-        "seed": 301
-      }
-    },
-    {
-      "id": "pluto",
-      "category": "dwarf",
-      "triangles": 3968,
-      "files": [
-        "models/pluto_1k.glb",
-        "models/pluto_2k.glb",
-        "models/pluto.glb",
-        "textures/pluto_albedo_1k.ktx2",
-        "textures/pluto_albedo_2k.ktx2",
-        "textures/pluto_albedo_tier2.ktx2",
-        "textures/pluto_albedo.ktx2",
-        "textures/pluto_detail_albedo_1k.ktx2",
-        "textures/pluto_detail_albedo_2k.ktx2",
-        "textures/pluto_detail_albedo.ktx2",
-        "textures/pluto_detail_normal_1k.ktx2",
-        "textures/pluto_detail_normal_2k.ktx2",
-        "textures/pluto_detail_normal.ktx2"
-      ],
-      "surfaceDetail": {
-        "albedo": "textures/pluto_detail_albedo.ktx2",
-        "normal": "textures/pluto_detail_normal.ktx2",
-        "tilesPerEquator": 12,
-        "seed": 999
-      }
-    },
-    {
-      "id": "saturn",
-      "category": "planet",
-      "triangles": 37568,
-      "files": [
-        "models/saturn_1k.glb",
-        "models/saturn_2k.glb",
-        "models/saturn.glb",
-        "textures/saturn_albedo_1k.ktx2",
-        "textures/saturn_albedo_2k.ktx2",
-        "textures/saturn_albedo_tier2.ktx2",
-        "textures/saturn_albedo.ktx2",
-        "textures/saturn_detail_albedo_1k.ktx2",
-        "textures/saturn_detail_albedo_2k.ktx2",
-        "textures/saturn_detail_albedo.ktx2",
-        "textures/saturn_detail_normal_1k.ktx2",
-        "textures/saturn_detail_normal_2k.ktx2",
-        "textures/saturn_detail_normal.ktx2",
-        "textures/saturn_rings_1k.ktx2",
-        "textures/saturn_rings_2k.ktx2",
-        "textures/saturn_rings.ktx2"
-      ],
-      "surfaceDetail": {
-        "albedo": "textures/saturn_detail_albedo.ktx2",
-        "normal": "textures/saturn_detail_normal.ktx2",
-        "tilesPerEquator": 32,
-        "seed": 699
-      }
-    },
-    {
-      "id": "ship",
-      "category": "ship",
-      "triangles": 5538,
-      "files": [
-        "models/ship_1k.glb",
-        "models/ship_2k.glb",
-        "models/ship.glb",
-        "textures/ship_mat_engine_glow__emissive_1k.ktx2",
-        "textures/ship_mat_engine_glow__emissive_2k.ktx2",
-        "textures/ship_mat_engine_glow__emissive.ktx2",
-        "textures/ship_mat_hull__albedo_1k.ktx2",
-        "textures/ship_mat_hull__albedo_2k.ktx2",
-        "textures/ship_mat_hull__albedo.ktx2",
-        "textures/ship_mat_hull__metallic_1k.ktx2",
-        "textures/ship_mat_hull__metallic_2k.ktx2",
-        "textures/ship_mat_hull__metallic.ktx2",
-        "textures/ship_mat_hull__normal_1k.ktx2",
-        "textures/ship_mat_hull__normal_2k.ktx2",
-        "textures/ship_mat_hull__normal.ktx2"
-      ]
-    },
-    {
-      "id": "sun",
-      "category": "sun",
-      "triangles": 16128,
-      "files": [
-        "models/sun.glb"
-      ]
-    }
-  ]
+    "schemaVersion":  2,
+    "assets":  [
+                   {
+                       "id":  "earth",
+                       "category":  "planet",
+                       "triangles":  32256,
+                       "files":  [
+                                     "models/earth_1k.glb",
+                                     "models/earth_2k.glb",
+                                     "models/earth.glb",
+                                     "textures/earth_albedo_1k.ktx2",
+                                     "textures/earth_albedo_2k.ktx2",
+                                     "textures/earth_albedo_tier2.ktx2",
+                                     "textures/earth_albedo.ktx2",
+                                     "textures/earth_clouds_1k.ktx2",
+                                     "textures/earth_clouds_2k.ktx2",
+                                     "textures/earth_clouds.ktx2",
+                                     "textures/earth_detail_albedo_1k.ktx2",
+                                     "textures/earth_detail_albedo_2k.ktx2",
+                                     "textures/earth_detail_albedo.ktx2",
+                                     "textures/earth_detail_normal_1k.ktx2",
+                                     "textures/earth_detail_normal_2k.ktx2",
+                                     "textures/earth_detail_normal.ktx2",
+                                     "textures/earth_emissive_night_1k.ktx2",
+                                     "textures/earth_emissive_night_2k.ktx2",
+                                     "textures/earth_emissive_night.ktx2",
+                                     "textures/earth_normal_1k.ktx2",
+                                     "textures/earth_normal_2k.ktx2",
+                                     "textures/earth_normal.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/earth_detail_albedo.ktx2",
+                                             "normal":  "textures/earth_detail_normal.ktx2",
+                                             "tilesPerEquator":  32,
+                                             "seed":  399
+                                         }
+                   },
+                   {
+                       "id":  "jupiter",
+                       "category":  "planet",
+                       "triangles":  18176,
+                       "files":  [
+                                     "models/jupiter_1k.glb",
+                                     "models/jupiter_2k.glb",
+                                     "models/jupiter.glb",
+                                     "textures/jupiter_albedo_1k.ktx2",
+                                     "textures/jupiter_albedo_2k.ktx2",
+                                     "textures/jupiter_albedo_tier2.ktx2",
+                                     "textures/jupiter_albedo.ktx2",
+                                     "textures/jupiter_detail_albedo_1k.ktx2",
+                                     "textures/jupiter_detail_albedo_2k.ktx2",
+                                     "textures/jupiter_detail_albedo.ktx2",
+                                     "textures/jupiter_detail_normal_1k.ktx2",
+                                     "textures/jupiter_detail_normal_2k.ktx2",
+                                     "textures/jupiter_detail_normal.ktx2",
+                                     "textures/jupiter_rings_1k.ktx2",
+                                     "textures/jupiter_rings_2k.ktx2",
+                                     "textures/jupiter_rings.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/jupiter_detail_albedo.ktx2",
+                                             "normal":  "textures/jupiter_detail_normal.ktx2",
+                                             "tilesPerEquator":  32,
+                                             "seed":  599
+                                         }
+                   },
+                   {
+                       "id":  "moon",
+                       "category":  "moon",
+                       "triangles":  16128,
+                       "files":  [
+                                     "models/moon_1k.glb",
+                                     "models/moon_2k.glb",
+                                     "models/moon.glb",
+                                     "textures/moon_albedo_1k.ktx2",
+                                     "textures/moon_albedo_2k.ktx2",
+                                     "textures/moon_albedo_tier2.ktx2",
+                                     "textures/moon_albedo.ktx2",
+                                     "textures/moon_detail_albedo_1k.ktx2",
+                                     "textures/moon_detail_albedo_2k.ktx2",
+                                     "textures/moon_detail_albedo.ktx2",
+                                     "textures/moon_detail_normal_1k.ktx2",
+                                     "textures/moon_detail_normal_2k.ktx2",
+                                     "textures/moon_detail_normal.ktx2",
+                                     "textures/moon_normal_1k.ktx2",
+                                     "textures/moon_normal_2k.ktx2",
+                                     "textures/moon_normal.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/moon_detail_albedo.ktx2",
+                                             "normal":  "textures/moon_detail_normal.ktx2",
+                                             "tilesPerEquator":  16,
+                                             "seed":  301
+                                         }
+                   },
+                   {
+                       "id":  "neptune",
+                       "category":  "planet",
+                       "triangles":  18176,
+                       "files":  [
+                                     "models/neptune_1k.glb",
+                                     "models/neptune_2k.glb",
+                                     "models/neptune.glb",
+                                     "textures/neptune_albedo_1k.ktx2",
+                                     "textures/neptune_albedo_2k.ktx2",
+                                     "textures/neptune_albedo_tier2.ktx2",
+                                     "textures/neptune_albedo.ktx2",
+                                     "textures/neptune_detail_albedo_1k.ktx2",
+                                     "textures/neptune_detail_albedo_2k.ktx2",
+                                     "textures/neptune_detail_albedo.ktx2",
+                                     "textures/neptune_detail_normal_1k.ktx2",
+                                     "textures/neptune_detail_normal_2k.ktx2",
+                                     "textures/neptune_detail_normal.ktx2",
+                                     "textures/neptune_rings_1k.ktx2",
+                                     "textures/neptune_rings_2k.ktx2",
+                                     "textures/neptune_rings.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/neptune_detail_albedo.ktx2",
+                                             "normal":  "textures/neptune_detail_normal.ktx2",
+                                             "tilesPerEquator":  32,
+                                             "seed":  899
+                                         }
+                   },
+                   {
+                       "id":  "pluto",
+                       "category":  "dwarf",
+                       "triangles":  3968,
+                       "files":  [
+                                     "models/pluto_1k.glb",
+                                     "models/pluto_2k.glb",
+                                     "models/pluto.glb",
+                                     "textures/pluto_albedo_1k.ktx2",
+                                     "textures/pluto_albedo_2k.ktx2",
+                                     "textures/pluto_albedo_tier2.ktx2",
+                                     "textures/pluto_albedo.ktx2",
+                                     "textures/pluto_detail_albedo_1k.ktx2",
+                                     "textures/pluto_detail_albedo_2k.ktx2",
+                                     "textures/pluto_detail_albedo.ktx2",
+                                     "textures/pluto_detail_normal_1k.ktx2",
+                                     "textures/pluto_detail_normal_2k.ktx2",
+                                     "textures/pluto_detail_normal.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/pluto_detail_albedo.ktx2",
+                                             "normal":  "textures/pluto_detail_normal.ktx2",
+                                             "tilesPerEquator":  12,
+                                             "seed":  999
+                                         }
+                   },
+                   {
+                       "id":  "saturn",
+                       "category":  "planet",
+                       "triangles":  18176,
+                       "files":  [
+                                     "models/saturn_1k.glb",
+                                     "models/saturn_2k.glb",
+                                     "models/saturn.glb",
+                                     "textures/saturn_albedo_1k.ktx2",
+                                     "textures/saturn_albedo_2k.ktx2",
+                                     "textures/saturn_albedo_tier2.ktx2",
+                                     "textures/saturn_albedo.ktx2",
+                                     "textures/saturn_detail_albedo_1k.ktx2",
+                                     "textures/saturn_detail_albedo_2k.ktx2",
+                                     "textures/saturn_detail_albedo.ktx2",
+                                     "textures/saturn_detail_normal_1k.ktx2",
+                                     "textures/saturn_detail_normal_2k.ktx2",
+                                     "textures/saturn_detail_normal.ktx2",
+                                     "textures/saturn_rings_1k.ktx2",
+                                     "textures/saturn_rings_2k.ktx2",
+                                     "textures/saturn_rings.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/saturn_detail_albedo.ktx2",
+                                             "normal":  "textures/saturn_detail_normal.ktx2",
+                                             "tilesPerEquator":  32,
+                                             "seed":  699
+                                         }
+                   },
+                   {
+                       "id":  "ship",
+                       "category":  "ship",
+                       "triangles":  5538,
+                       "files":  [
+                                     "models/ship_1k.glb",
+                                     "models/ship_2k.glb",
+                                     "models/ship.glb",
+                                     "textures/ship_mat_engine_glow__emissive_1k.ktx2",
+                                     "textures/ship_mat_engine_glow__emissive_2k.ktx2",
+                                     "textures/ship_mat_engine_glow__emissive.ktx2",
+                                     "textures/ship_mat_hull__albedo_1k.ktx2",
+                                     "textures/ship_mat_hull__albedo_2k.ktx2",
+                                     "textures/ship_mat_hull__albedo.ktx2",
+                                     "textures/ship_mat_hull__metallic_1k.ktx2",
+                                     "textures/ship_mat_hull__metallic_2k.ktx2",
+                                     "textures/ship_mat_hull__metallic.ktx2",
+                                     "textures/ship_mat_hull__normal_1k.ktx2",
+                                     "textures/ship_mat_hull__normal_2k.ktx2",
+                                     "textures/ship_mat_hull__normal.ktx2"
+                                 ]
+                   },
+                   {
+                       "id":  "sun",
+                       "category":  "sun",
+                       "triangles":  16128,
+                       "files":  [
+                                     "models/sun.glb"
+                                 ]
+                   },
+                   {
+                       "id":  "uranus",
+                       "category":  "planet",
+                       "triangles":  18176,
+                       "files":  [
+                                     "models/uranus_1k.glb",
+                                     "models/uranus_2k.glb",
+                                     "models/uranus.glb",
+                                     "textures/uranus_albedo_1k.ktx2",
+                                     "textures/uranus_albedo_2k.ktx2",
+                                     "textures/uranus_albedo_tier2.ktx2",
+                                     "textures/uranus_albedo.ktx2",
+                                     "textures/uranus_detail_albedo_1k.ktx2",
+                                     "textures/uranus_detail_albedo_2k.ktx2",
+                                     "textures/uranus_detail_albedo.ktx2",
+                                     "textures/uranus_detail_normal_1k.ktx2",
+                                     "textures/uranus_detail_normal_2k.ktx2",
+                                     "textures/uranus_detail_normal.ktx2",
+                                     "textures/uranus_rings_1k.ktx2",
+                                     "textures/uranus_rings_2k.ktx2",
+                                     "textures/uranus_rings.ktx2"
+                                 ],
+                       "surfaceDetail":  {
+                                             "albedo":  "textures/uranus_detail_albedo.ktx2",
+                                             "normal":  "textures/uranus_detail_normal.ktx2",
+                                             "tilesPerEquator":  32,
+                                             "seed":  799
+                                         }
+                   }
+               ]
 }

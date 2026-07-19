@@ -173,7 +173,25 @@ Real scale means a 4k equirectangular map on Earth is ~10 km/pixel — sharp fro
 5. **Atmosphere & clouds:** Earth cloud layer as a slightly larger shell (independent rotation), rim/fresnel atmosphere shader — both mask the surface transition zone naturally.
 6. **Geometry:** tier-3 meshes (≤50k tris) are enough for orbital-only v1 (no terrain landing); silhouette smoothness is guaranteed by the quad-sphere subdivision, not displacement. If landing arrives post-v1, a CDLOD/quadtree patch system becomes its own ADR.
 
-Ring systems (Saturn, Uranus, Jupiter, Neptune): annulus at true radial ratios, 2048×64 radial strip where alpha = optical depth; shader adds planet shadow across the ring, ring shadow on the planet, and backlit transmission (unlit side glows faintly when the Sun is behind) — the three cues that read as "real rings".
+Ring systems (Saturn, Uranus, Jupiter, Neptune) are driven by the versioned
+`data/rings.json` catalog. Each tier-3 model uses the catalog's equatorial
+reference radius, a 256×4-segment annulus at the exact inner/outer ratios, and a
+2048×64 radial strip whose alpha is exposed optical depth. Runtime applies the
+catalogued axial tilt, samples radial structure, and localizes Neptune's four
+named arc sectors only inside the narrow Adams band. It casts the oblate
+planet's shadow across the annulus, casts the ring shadow onto the planet, and
+permits at most 0.22 backlit transmission. Material shader hooks and
+program-cache keys are stable and are installed during model setup.
+
+Saturn alone has a close-plane particle representation. One seeded icosahedron
+`InstancedMesh` covers a 2,400 km camera-local patch, samples the same radial
+density profile, spans the catalogued 0.12 km thickness and 0.15–8 m physical
+sizes, and advances at local Keplerian angular velocity. Subpixel chunks retain
+a bounded 0.0012-radian view-space proxy so the procedural field remains visible;
+physical geometry is used once larger. A cubic radial/vertical blend fades the
+annulus as particles enter, with no runtime geometry, material, texture, or
+instance allocation. Quality tiers cap particles at 4,096 (Q5+), 2,048 (Q4),
+1,024 (Q2–Q3), or 0 (Q1).
 
 ## 12. Quality settings — adaptive governor (ADR-008)
 

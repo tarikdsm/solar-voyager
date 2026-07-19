@@ -21,7 +21,10 @@ Assets are authored **one per body, at normalized scale**, in the `assets/` sour
 - Deterministic: procedural scripts take an explicit `seed`; same inputs → same output bytes (modulo Blender version).
 - Idempotent: each script starts from an empty scene (`bpy.ops.wm.read_factory_settings(use_empty=True)`).
 - Each run prints an **asset manifest** (name, tris, texture sizes, byte size) that must fit the budget table below.
-- Parameters come from `data/bodies.json` (radius, oblateness, ring geometry, procedural seed) — one source of truth shared with the sim.
+- Body parameters come from `data/bodies.json`; scientific ring radii, optical
+  depths, colors, Neptune arcs, exposures, and Saturn particle policy come from
+  schema-versioned `data/rings.json`. Builders validate that both catalogs agree
+  on identity and equatorial reference radius before authoring.
 
 `tools/blender/common/` is the shared authoring boundary for scene reset,
 normalized UV/quad spheres, Principled PBR materials, strict GLB export, catalog
@@ -39,6 +42,13 @@ the exported position and catalogued polar ratio; this avoids Blender 5.1's
 process-dependent smooth-normal calculation while preserving ellipsoid shading.
 Quad spheres receive longitude/latitude UVs compatible with the required 2:1
 equirectangular surface maps, including per-loop seam and pole handling.
+The shared `common/rings.py` annulus adapter consumes pure, Blender-free geometry
+from `ring_geometry.py`: 256 angular segments × 4 radial strips produce 2,048
+triangles, radial U and angular V, smooth normals, no n-gons, and exact catalog
+ratios. Radial appearance belongs in the 2048×64 strip rather than redundant mesh
+subdivision. `render_ring_previews.py` relinks external authoring textures and
+renders lit, edge-on, and backlit review views without modifying or reexporting
+the source GLB.
 
 ## glTF export settings
 
@@ -102,6 +112,15 @@ pair for planets, moons, and dwarfs.
 | Detail maps (close range) | authored/procedural, per surface class | 1k tiling pairs (MODELING-GUIDE §5) |
 
 **Licenses:** Solar System Scope textures are **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** (attribution mandatory — every body folder carries a `SOURCES.md`, and the game credits screen aggregates them); NASA/USGS sources are public domain (still recorded in SOURCES.md).
+
+Ring structure is transcribed with stable SETI/PDS Rings Node table URLs in
+`data/rings.json` for Saturn, Jupiter, Uranus, and Neptune. The Saturn table is
+the source of record for the D-through-F boundaries; Neptune's named arcs are
+runtime masks constrained radially to the Adams ring.
+`tools/textures/generateRingTextures.mjs` deterministically turns the band
+records into the four project-authored 2048×64 RGBA strips; `SOURCES.md` records
+the scientific inputs, texture-albedo license, hashes, and modifications per
+body.
 
 The reproducible Earth albedo recipe uses Solar System Scope's official
 `8k_earth_daymap.jpg`, pins source SHA-256

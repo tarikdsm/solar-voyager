@@ -114,6 +114,9 @@ describe('quality profiles', () => {
     expect(QUALITY_PROFILES.map((profile) => profile.modelThresholdScale)).toEqual([
       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2,
     ]);
+    expect(QUALITY_PROFILES.map((profile) => profile.ringParticleCount)).toEqual([
+      4096, 4096, 4096, 4096, 4096, 2048, 2048, 1024, 1024, 1024, 1024, 1024, 0, 0, 0,
+    ]);
     expect(QUALITY_PROFILES.map((profile) => profile.tier)).toEqual([
       6, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 2, 1, 1, 1,
     ]);

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solar-voyager.local/schemas/rings.schema.json",
+  "title": "Solar Voyager ring systems",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "systems"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "systems": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/system" }
+    }
+  },
+  "$defs": {
+    "hexColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "band": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "innerRadiusKm", "outerRadiusKm", "opticalDepth", "color"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "innerRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "outerRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "opticalDepth": { "type": "number", "minimum": 0 },
+        "color": { "$ref": "#/$defs/hexColor" }
+      }
+    },
+    "arc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "bandName", "centerDeg", "widthDeg", "gain"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "bandName": { "type": "string", "minLength": 1 },
+        "centerDeg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "widthDeg": { "type": "number", "exclusiveMinimum": 0, "maximum": 360 },
+        "gain": { "type": "number", "minimum": 1 }
+      }
+    },
+    "particles": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["seed", "maxCount", "patchRadiusKm", "verticalThicknessKm", "minSizeM", "maxSizeM"],
+      "properties": {
+        "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "maxCount": { "type": "integer", "minimum": 1 },
+        "patchRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "verticalThicknessKm": { "type": "number", "exclusiveMinimum": 0 },
+        "minSizeM": { "type": "number", "exclusiveMinimum": 0 },
+        "maxSizeM": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bodyId", "referenceRadiusKm", "innerRadiusKm", "outerRadiusKm", "exposure", "baseColor", "bands", "arcs", "particles", "sources"],
+      "properties": {
+        "bodyId": { "type": "string", "pattern": "^[a-z0-9]+$" },
+        "referenceRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "innerRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "outerRadiusKm": { "type": "number", "exclusiveMinimum": 0 },
+        "exposure": { "type": "number", "exclusiveMinimum": 0 },
+        "baseColor": { "$ref": "#/$defs/hexColor" },
+        "bands": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/band" } },
+        "arcs": { "type": "array", "items": { "$ref": "#/$defs/arc" } },
+        "particles": { "$ref": "#/$defs/particles" },
+        "sources": { "type": "array", "minItems": 1, "items": { "type": "string", "format": "uri" } }
+      }
+    }
+  }
+}
