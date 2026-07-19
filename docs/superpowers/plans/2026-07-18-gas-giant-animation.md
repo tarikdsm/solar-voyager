@@ -50,10 +50,10 @@ Vitest 4, Playwright 1.61, Sharp 0.35.
 - Produces: `GasGiantUniforms` with stable `IUniform` objects
 - Produces: `GasGiantAnimationState(id, seed)` with `update`, `setQuality`, and `setEnabled`
 
-- [ ] **Step 1: Capture the untouched baseline**
+- [x] **Step 1: Capture the untouched baseline**
 
 Install exact dependencies and run the normal benchmark against commit
-`46ec46a` with the repository-default route, renderer, resolution, warm-up, and
+`95298f0` with the repository-default route, renderer, resolution, warm-up, and
 duration. Save its raw JSON as `docs/bench/T0085-before.json` and record the
 actual renderer/resolution rather than claiming unavailable reference hardware.
 
@@ -65,7 +65,7 @@ npm run bench -- --output docs/bench/T0085-before.json
 Expected: exit 0, zero page/console errors, and `gitSha` equal to the clean
 pre-feature head.
 
-- [ ] **Step 2: Write the failing state tests**
+- [x] **Step 2: Write the failing state tests**
 
 Create focused tests with these exact behavioral assertions:
 
@@ -109,7 +109,7 @@ Reject `-1`, `2 ** 32`, `1.5`, and `NaN` seeds; unknown body ids; non-finite
 time; and unknown quality. Verify `setEnabled(false)` mutates the original
 uniform to zero.
 
-- [ ] **Step 3: Run the state test and verify RED**
+- [x] **Step 3: Run the state test and verify RED**
 
 ```powershell
 npx vitest run src/render/gasGiantAnimationState.test.ts
@@ -117,7 +117,7 @@ npx vitest run src/render/gasGiantAnimationState.test.ts
 
 Expected: FAIL because `gasGiantAnimationState.ts` does not exist.
 
-- [ ] **Step 4: Implement the minimal stable state**
+- [x] **Step 4: Implement the minimal stable state**
 
 Export the shared quality alias without breaking current Sun consumers:
 
@@ -145,7 +145,7 @@ into `uGasBandPhases`; write counterclockwise six-day spot cosine/sine and a
 1,800-second shimmer cosine/sine into `uGasStormPhase`. `setQuality` maps
 four/two/one and rejects all other values.
 
-- [ ] **Step 5: Verify GREEN and commit**
+- [x] **Step 5: Verify GREEN and commit**
 
 ```powershell
 npx vitest run src/render/gasGiantAnimationState.test.ts src/render/proceduralSunState.test.ts

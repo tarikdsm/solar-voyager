@@ -1,6 +1,7 @@
 import { Vector2, Vector4, type IUniform } from 'three';
 
-export type ProceduralSunQuality = 'full' | 'half' | 'minimum';
+export type ProceduralQuality = 'full' | 'half' | 'minimum';
+export type ProceduralSunQuality = ProceduralQuality;
 
 export interface ProceduralSunUniforms extends Record<string, IUniform> {
   readonly uSunEnabled: IUniform<number>;
