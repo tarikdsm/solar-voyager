@@ -98,6 +98,11 @@ export class CameraInputController {
   }
 
   setEnabled(enabled: boolean): void {
+    if (!enabled && this.activePointerId >= 0) {
+      const pointerId = this.activePointerId;
+      this.activePointerId = -1;
+      if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
+    }
     this.enabled = enabled;
   }
 

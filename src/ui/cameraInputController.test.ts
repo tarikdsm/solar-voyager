@@ -23,8 +23,16 @@ class FakeEventTarget {
 }
 
 class FakeCanvas extends FakeEventTarget {
-  readonly setPointerCapture = vi.fn();
-  readonly releasePointerCapture = vi.fn();
+  private readonly capturedPointerIds = new Set<number>();
+  readonly setPointerCapture = vi.fn((pointerId: number): void => {
+    this.capturedPointerIds.add(pointerId);
+  });
+  readonly releasePointerCapture = vi.fn((pointerId: number): void => {
+    this.capturedPointerIds.delete(pointerId);
+  });
+  readonly hasPointerCapture = vi.fn((pointerId: number): boolean =>
+    this.capturedPointerIds.has(pointerId),
+  );
 }
 
 function createFixture(initiallyEnabled = true) {
@@ -227,5 +235,52 @@ describe('CameraInputController', () => {
     expect(keyboard.addEventListener.mock.calls).toEqual(keyboardAdds);
     expect(canvas.removeEventListener).not.toHaveBeenCalled();
     expect(keyboard.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it('ends an active capture when disabled so the next drag can start', () => {
+    const { canvas, controls, input } = createFixture();
+    const firstPreventDefault = vi.fn();
+    canvas.emit('pointerdown', {
+      pointerId: 7,
+      clientX: 100,
+      clientY: 80,
+      button: 0,
+      preventDefault: firstPreventDefault,
+    });
+    expect(canvas.hasPointerCapture(7)).toBe(true);
+
+    input.setEnabled(false);
+    expect(canvas.releasePointerCapture).toHaveBeenCalledWith(7);
+    expect(canvas.hasPointerCapture(7)).toBe(false);
+
+    const disabledPreventDefault = vi.fn();
+    canvas.emit('pointermove', {
+      pointerId: 7,
+      clientX: 120,
+      clientY: 70,
+      preventDefault: disabledPreventDefault,
+    });
+    canvas.emit('pointerup', { pointerId: 7 });
+    expect(controls.orbitBy).not.toHaveBeenCalled();
+    expect(disabledPreventDefault).not.toHaveBeenCalled();
+
+    input.setEnabled(true);
+    const nextPreventDefault = vi.fn();
+    canvas.emit('pointerdown', {
+      pointerId: 8,
+      clientX: 20,
+      clientY: 30,
+      button: 0,
+      preventDefault: nextPreventDefault,
+    });
+    canvas.emit('pointermove', {
+      pointerId: 8,
+      clientX: 30,
+      clientY: 35,
+      preventDefault: nextPreventDefault,
+    });
+
+    expect(canvas.setPointerCapture).toHaveBeenNthCalledWith(2, 8);
+    expect(controls.orbitBy).toHaveBeenCalledWith(-0.04, -0.02);
   });
 });
