@@ -167,6 +167,20 @@ describe('TrajectoryOverlay', () => {
     expect(material.depthWrite).toBe(false);
   });
 
+  it('exposes nonempty setup-only draw ranges for shader compilation', () => {
+    const overlay = new TrajectoryOverlay(new CameraRelativeSpaceScene(), BODY_IDS);
+
+    overlay.prepareCompilationPass();
+
+    expect(overlay.line.visible).toBe(true);
+    expect(overlay.markers.visible).toBe(true);
+    expect(overlay.line.geometry.instanceCount).toBe(1);
+    expect(overlay.markers.geometry.drawRange.count).toBe(1);
+    overlay.hide();
+    expect(overlay.line.geometry.instanceCount).toBe(0);
+    expect(overlay.markers.geometry.drawRange.count).toBe(0);
+  });
+
   it('hides and disposes its setup resources deterministically', () => {
     const spaceScene = new CameraRelativeSpaceScene();
     const overlay = new TrajectoryOverlay(spaceScene, BODY_IDS);

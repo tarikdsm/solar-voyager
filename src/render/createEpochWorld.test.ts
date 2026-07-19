@@ -39,10 +39,12 @@ function expectAttributeRangeInFrustum(
 describe('createEpochWorld', () => {
   it('registers every J2026 body with shared geometry and no scaffold cube', async () => {
     const compileAsync = vi.fn(async () => undefined);
+    const render = vi.fn();
     const renderer = {
       compileAsync,
       domElement: { width: 2_560, height: 1_440 },
       getPixelRatio: () => 2,
+      render,
     } as unknown as WebGLRenderer;
     const earthModelRoot = new Group();
     const earthModelMaterial = new MeshBasicMaterial();
@@ -183,6 +185,12 @@ describe('createEpochWorld', () => {
       earthModelRoot,
       world.spaceScene.camera,
       world.spaceScene.scene,
+    );
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenCalledWith(world.spaceScene.scene, world.spaceScene.camera);
+    expect(render).toHaveBeenCalledWith(
+      world.systemMap.spaceScene.scene,
+      world.systemMap.spaceScene.camera,
     );
 
     let hasCube = false;

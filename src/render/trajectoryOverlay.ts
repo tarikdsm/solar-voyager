@@ -293,6 +293,14 @@ export class TrajectoryOverlay {
     pixelRatioUniform.value = pixelRatio;
   }
 
+  /** Makes both fixed resources nonempty for the setup-time renderer compilation pass. */
+  prepareCompilationPass(): void {
+    this.lineBinding.setPointCount(2);
+    this.markers.geometry.setDrawRange(0, 1);
+    this.line.visible = true;
+    this.markers.visible = true;
+  }
+
   hide(): void {
     this.startTime = Number.NaN;
     this.intervalSec = Number.NaN;
