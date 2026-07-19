@@ -15,7 +15,7 @@ simulation interfaces or persistence schema.
   preallocated completed slot graphs, a stable active graph, indexed event-only
   ring copies, and explicit synchronous `rebind()`.
 - [x] Run focused tests, full unit, lint, typecheck, format, diff-check.
-- [ ] Independent review: layering, ring correctness, persistence assumptions,
+- [x] Independent review: layering, ring correctness, persistence assumptions,
   mutation/identity behavior, and hot-path allocation/iteration.
 
 ## Task 2: Accessible panel and responsive layout
