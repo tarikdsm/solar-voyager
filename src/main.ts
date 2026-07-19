@@ -58,7 +58,6 @@ import {
 
 const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
-const { BurnLogPanel, createBurnLogSignalStore } = await import('./ui/burnLogRuntime.js');
 
 interface RuntimeResourceCounts {
   animationLoopStarts: number;
@@ -245,6 +244,24 @@ Object.defineProperty(canvas, 'solarVoyagerStartup', {
 });
 startupLoadingElements.retry.addEventListener('click', () => window.location.reload());
 updateStartupLoadingView(startupLoadingElements, startupTracker);
+
+function waitForStartupRetry(cause: unknown): Promise<never> {
+  startupTracker.fail(cause);
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = 'failed';
+  startupLoadingElements.retry.focus();
+  return new Promise<never>(() => undefined);
+}
+
+async function loadBurnLogRuntimeOrWait() {
+  try {
+    return await import('./ui/burnLogRuntime.js');
+  } catch (cause: unknown) {
+    return waitForStartupRetry(cause);
+  }
+}
+
+const { BurnLogPanel, createBurnLogSignalStore } = await loadBurnLogRuntimeOrWait();
 const runtimeResources: RuntimeResourceCounts = {
   animationLoopStarts: 0,
   cameraInputControllers: 0,
@@ -269,11 +286,7 @@ async function createRendererOrWait() {
   try {
     return createRenderer(canvas);
   } catch (cause: unknown) {
-    startupTracker.fail(cause);
-    updateStartupLoadingView(startupLoadingElements, startupTracker);
-    canvas.dataset.startupStage = 'failed';
-    startupLoadingElements.retry.focus();
-    return new Promise<never>(() => undefined);
+    return waitForStartupRetry(cause);
   }
 }
 

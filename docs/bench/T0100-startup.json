@@ -6,11 +6,41 @@
     "platform": "win32"
   },
   "coldLoad": {
-    "encodedBodyBytes": 1386117,
+    "criticalRequests": [
+      {
+        "encodedBodyBytes": 254688,
+        "path": "data/stars.bin",
+        "status": 200,
+        "transferBytes": 254988
+      },
+      {
+        "encodedBodyBytes": 1000,
+        "path": "public/assets/manifest.json",
+        "status": 200,
+        "transferBytes": 1300
+      },
+      {
+        "encodedBodyBytes": 168332,
+        "path": "public/assets/textures/earth_albedo_tier2.ktx2",
+        "status": 200,
+        "transferBytes": 168632
+      },
+      {
+        "encodedBodyBytes": 74524,
+        "path": "public/assets/textures/moon_albedo_tier2.ktx2",
+        "status": 200,
+        "transferBytes": 74824
+      }
+    ],
+    "encodedBodyBytes": 1386193,
     "depthStrategy": "reversed",
     "devicePixelRatio": 1,
-    "firstPlayableMs": 1041.5,
-    "probeMeanMs": 0.5333333313465118,
+    "errors": {
+      "consoleErrors": [],
+      "pageErrors": []
+    },
+    "firstPlayableMs": 1054.9000000059605,
+    "probeMeanMs": 0.40000000099341076,
     "programCountAfterFirstFrame": 34,
     "programCountAtReady": 34,
     "requestedCriticalFiles": [
@@ -23,13 +53,40 @@
     "rendererName": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
     "selectedRung": 14,
     "softwareRasterizer": "true",
-    "transferBytes": 1391217
+    "transferBytes": 1391293
   },
   "manualBypass": {
+    "errors": {
+      "consoleErrors": [],
+      "pageErrors": []
+    },
     "probeMeanMs": null,
     "selectedRung": 0
   },
-  "recoverableFailure": {
+  "recoverableBootstrapFailure": {
+    "chunkAttempts": 2,
+    "errors": {
+      "consoleErrors": ["Failed to load resource: net::ERR_FAILED"],
+      "pageErrors": []
+    },
+    "failedStage": "boot"
+  },
+  "recoverableHeroFailure": {
+    "errors": {
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_FAILED",
+        "Failed to load sphere texture /solar-voyager/assets/textures/earth_albedo_tier2.ktx2. TypeError: Failed to fetch\n    at Ya.load (http://127.0.0.1:4202/solar-voyager/assets/three.core-C2xWSgOk.js:5:25870)\n    at e.load (http://127.0.0.1:4202/solar-voyager/assets/KTX2Loader-dzQriEyU.js:2:819)\n    at http://127.0.0.1:4202/solar-voyager/assets/three.core-C2xWSgOk.js:5:24678\n    at new Promise (<anonymous>)\n    at e.loadAsync (http://127.0.0.1:4202/solar-voyager/assets/three.core-C2xWSgOk.js:5:24650)\n    at Object.loadTexture (http://127.0.0.1:4202/solar-voyager/assets/index-Dsf7FteO.js:2:79677)\n    at http://127.0.0.1:4202/solar-voyager/assets/index-Dsf7FteO.js:2:80604\n    at async Promise.all (index 0)\n    at async ea.preloadHeroSpheres (http://127.0.0.1:4202/solar-voyager/assets/index-Dsf7FteO.js:2:81685)\n    at async Xa.initializeEager (http://127.0.0.1:4202/solar-voyager/assets/index-Dsf7FteO.js:2:120236)"
+      ],
+      "pageErrors": []
+    },
+    "failedStage": "asset-manifest",
+    "textureAttempts": 2
+  },
+  "recoverableManifestFailure": {
+    "errors": {
+      "consoleErrors": ["Failed to load resource: net::ERR_FAILED"],
+      "pageErrors": []
+    },
     "failedStage": "star-catalog",
     "manifestAttempts": 2
   }

@@ -153,6 +153,29 @@ describe('BodyAssetLoader', () => {
     expect(modelUrls).toEqual([]);
   });
 
+  it('rejects eager startup when an available hero sphere cannot load', async () => {
+    const loadTexture = vi.fn(async (url: string) => {
+      if (url.includes('earth_albedo')) throw new Error('network failed');
+      return new Texture();
+    });
+    const reportError = vi.fn();
+    const loader = new BodyAssetLoader(
+      renderer,
+      manifest(
+        entry('earth', 'planet', ['textures/earth_albedo_tier2.ktx2']),
+        entry('moon', 'moon', ['textures/moon_albedo_tier2.ktx2']),
+      ),
+      async () => ({ loadTexture, loadModel: vi.fn() }),
+      '/',
+      reportError,
+    );
+
+    await expect(loader.preloadHeroSpheres()).rejects.toThrow(
+      'Critical startup sphere texture failed: earth.',
+    );
+    expect(reportError).toHaveBeenCalledOnce();
+  });
+
   it('loads and caches one model, collecting each material once', async () => {
     const shared = new MeshStandardMaterial();
     const secondary = new MeshBasicMaterial();

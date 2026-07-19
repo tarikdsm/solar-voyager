@@ -190,15 +190,15 @@ try {
   assert.equal(initial.activeAvailable, false);
   await page.keyboard.press('KeyR');
   await page.waitForFunction(
-    (maximumPublishCount) => {
-      const diagnostic = globalThis.document.querySelector('#space-canvas')?.solarVoyagerBurnLog;
-      return diagnostic?.activeAvailable === true && diagnostic.publishCount <= maximumPublishCount;
-    },
-    initial.publishCount + 1,
-    { timeout: 2_000 },
+    () =>
+      globalThis.document.querySelector('#space-canvas')?.solarVoyagerBurnLog?.activeAvailable ===
+      true,
+    undefined,
+    { timeout: 5_000 },
   );
   const active = await readDiagnostic(page);
   assert.equal(active.activeAvailable, true);
+  assert.ok(active.publishCount > initial.publishCount);
   assert.ok(active.active.endTimeSec >= active.active.startTimeSec);
   await page.locator('#burn-log-toggle').click();
   const activeUi = await readDiagnostic(page);

@@ -207,12 +207,24 @@ export class BodyAssetLoader {
   }
 
   async preloadHeroSpheres(): Promise<void> {
+    const ids: string[] = [];
     const promises: Promise<Texture | null>[] = [];
     for (const id of HERO_IDS) {
       const entry = this.entries.get(id);
-      if (entry !== undefined) promises.push(this.loadSphereAlbedo(id, entry.category));
+      if (entry === undefined) continue;
+      const hasSphereTexture =
+        findFile(entry, `textures/${id}_albedo_tier2.ktx2`) !== null ||
+        findFile(entry, `textures/${id}_albedo.ktx2`) !== null;
+      if (!hasSphereTexture) continue;
+      ids.push(id);
+      promises.push(this.loadSphereAlbedo(id, entry.category));
     }
-    await Promise.all(promises);
+    const textures = await Promise.all(promises);
+    for (let index = 0; index < textures.length; index += 1) {
+      if (textures[index] === null) {
+        throw new Error(`Critical startup sphere texture failed: ${String(ids[index])}.`);
+      }
+    }
   }
 
   setTextureTierCap(cap: TextureQualityCap): void {

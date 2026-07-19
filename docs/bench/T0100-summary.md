@@ -5,18 +5,22 @@ Chromium context and a 1280x720 viewport. The raw report is
 `T0100-startup.json`; CI runs the same permanent `npm run test:startup` contract.
 
 The local browser used reversed depth through ANGLE/SwiftShader, so the automatic
-selector correctly chose conservative rung 14. First playable was 1041.5 ms,
-well below the 5000 ms contract. The same cold run transferred 1,391,217 bytes
+selector correctly chose conservative rung 14. First playable was 1054.9 ms,
+well below the 5000 ms contract. The same cold run transferred 1,391,293 bytes
 across 17 resources and fetched exactly the four canonical runtime files in
 `data/initial-path.json`; all remaining requests were production code/codec
-resources covered by the build budget.
+resources covered by the build budget. The raw evidence preserves each critical
+request's HTTP 200 status plus encoded and transferred bytes, without collapsing
+duplicates, and records empty console/page-error arrays for the successful run.
 
 Program count was 34 both at ready and after the first ordinary gameplay frame,
 proving that eager visuals did not compile on first use. The manual-high browser
 fixture selected rung 0 with a null timing sample, proving that persisted locks
-bypass the automatic probe. A separately isolated manifest failure stopped at
-the truthful `star-catalog` stage, exposed the accessible retry action, and
-reached ready on the second request without a page error.
+bypass the automatic probe. Separately isolated manifest, Earth hero-texture,
+and bootstrap-chunk failures stopped at the truthful `star-catalog`,
+`asset-manifest`, and `boot` stages. Each exposed the accessible retry action,
+reached ready on the second request, and produced no unhandled page error. The
+expected network/decode console diagnostics are retained in the raw report.
 
 This software-renderer timing is local/CI startup evidence, not a reference-GPU
 frame-rate claim.

@@ -117,6 +117,7 @@ async function runColdLoad(browser) {
     });
   });
   const requestedCriticalFiles = new Set();
+  const criticalResponses = [];
   let startupReady = false;
   let releaseStar;
   let reportStarSeen;
@@ -130,6 +131,11 @@ async function runColdLoad(browser) {
     if (startupReady) return;
     const criticalFile = criticalFileFor(request.url());
     if (criticalFile !== null) requestedCriticalFiles.add(criticalFile);
+  });
+  page.on('response', (response) => {
+    if (startupReady) return;
+    const path = criticalFileFor(response.url());
+    if (path !== null) criticalResponses.push({ path, status: response.status() });
   });
   await page.route(/\/assets\/stars-[^/]+\.bin$/u, async (route) => {
     reportStarSeen();
@@ -174,6 +180,41 @@ async function runColdLoad(browser) {
     assert.equal(ready.nullPrototype, true);
     assert.equal(ready.readOnly, true);
     assert.deepEqual([...requestedCriticalFiles].sort(), [...EXPECTED_CRITICAL_FILES].sort());
+    const criticalResourceMetrics = await page.evaluate(() =>
+      globalThis.performance
+        .getEntriesByType('resource')
+        .map((entry) => ({
+          encodedBodyBytes: entry.encodedBodySize,
+          transferBytes: entry.transferSize,
+          url: entry.name,
+        })),
+    );
+    const metricsByPath = new Map();
+    for (const metric of criticalResourceMetrics) {
+      const path = criticalFileFor(metric.url);
+      if (path === null) continue;
+      const metrics = metricsByPath.get(path) ?? [];
+      metrics.push(metric);
+      metricsByPath.set(path, metrics);
+    }
+    const criticalRequests = criticalResponses
+      .map((response) => {
+        const metric = metricsByPath.get(response.path)?.shift();
+        assert.ok(metric !== undefined, `resource timing missing for ${response.path}`);
+        return {
+          encodedBodyBytes: metric.encodedBodyBytes,
+          path: response.path,
+          status: response.status,
+          transferBytes: metric.transferBytes,
+        };
+      })
+      .sort((left, right) => left.path.localeCompare(right.path));
+    assert.equal(criticalRequests.length, EXPECTED_CRITICAL_FILES.length);
+    for (const request of criticalRequests) {
+      assert.equal(request.status, 200, `${request.path} returned ${String(request.status)}`);
+      assert.ok(request.encodedBodyBytes > 0, `${request.path} encoded no response body`);
+      assert.ok(request.transferBytes > 0, `${request.path} transferred no response bytes`);
+    }
     assert.equal(await page.locator('#startup-loading').evaluate((element) => element.hidden), true);
     const linkedProgramCountAtReady = await page.evaluate(
       () => globalThis.__solarVoyagerLinkedPrograms.length,
@@ -204,9 +245,11 @@ async function runColdLoad(browser) {
     );
     assert.deepEqual(errors, { consoleErrors: [], pageErrors: [] });
     return {
+      criticalRequests,
       encodedBodyBytes: ready.encodedBodyBytes,
       depthStrategy: ready.depthStrategy,
       devicePixelRatio: ready.devicePixelRatio,
+      errors: { consoleErrors: [...errors.consoleErrors], pageErrors: [...errors.pageErrors] },
       firstPlayableMs: ready.firstPlayableMs,
       probeMeanMs: ready.probeMeanMs,
       programCountAfterFirstFrame: afterFirstFrame.programCountAfterFirstFrame,
@@ -237,13 +280,17 @@ async function runManualBypass(browser) {
     assert.equal(ready.probeMeanMs, null);
     assert.equal(ready.selectedRung, 0);
     assert.deepEqual(errors, { consoleErrors: [], pageErrors: [] });
-    return { probeMeanMs: ready.probeMeanMs, selectedRung: ready.selectedRung };
+    return {
+      errors: { consoleErrors: [...errors.consoleErrors], pageErrors: [...errors.pageErrors] },
+      probeMeanMs: ready.probeMeanMs,
+      selectedRung: ready.selectedRung,
+    };
   } finally {
     await context.close();
   }
 }
 
-async function runRecoverableFailure(browser) {
+async function runRecoverableManifestFailure(browser) {
   const context = await browser.newContext({ viewport: { width: 640, height: 360 } });
   const page = await context.newPage();
   const errors = collectBrowserErrors(page);
@@ -270,7 +317,81 @@ async function runRecoverableFailure(browser) {
     assert.equal(manifestAttempts, 2);
     assert.equal((await readStartup(page)).errorCount, 0);
     assert.deepEqual(errors.pageErrors, []);
-    return { failedStage: failed.failedStage, manifestAttempts };
+    return {
+      errors: { consoleErrors: [...errors.consoleErrors], pageErrors: [...errors.pageErrors] },
+      failedStage: failed.failedStage,
+      manifestAttempts,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function runRecoverableHeroFailure(browser) {
+  const context = await browser.newContext({ viewport: { width: 640, height: 360 } });
+  const page = await context.newPage();
+  const errors = collectBrowserErrors(page);
+  let textureAttempts = 0;
+  await page.route('**/assets/textures/earth_albedo_tier2.ktx2', async (route) => {
+    textureAttempts += 1;
+    if (textureAttempts === 1) await route.abort('failed');
+    else await route.continue();
+  });
+  try {
+    await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
+    await page.locator('#startup-retry').waitFor({ state: 'visible', timeout: 30_000 });
+    const failed = await readStartup(page);
+    assert.equal(failed.stage, 'failed');
+    assert.equal(failed.failedStage, 'asset-manifest');
+    assert.equal(failed.errorCount, 1);
+    assert.equal(await page.locator('#startup-loading').getAttribute('role'), 'alert');
+    assert.deepEqual(errors.pageErrors, []);
+
+    await page.locator('#startup-retry').click();
+    await waitForReady(page);
+    assert.equal(textureAttempts, 2);
+    assert.equal((await readStartup(page)).errorCount, 0);
+    assert.deepEqual(errors.pageErrors, []);
+    return {
+      errors: { consoleErrors: [...errors.consoleErrors], pageErrors: [...errors.pageErrors] },
+      failedStage: failed.failedStage,
+      textureAttempts,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function runRecoverableBootstrapFailure(browser) {
+  const context = await browser.newContext({ viewport: { width: 640, height: 360 } });
+  const page = await context.newPage();
+  const errors = collectBrowserErrors(page);
+  let chunkAttempts = 0;
+  await page.route('**/assets/burnLogRuntime-*.js', async (route) => {
+    chunkAttempts += 1;
+    if (chunkAttempts === 1) await route.abort('failed');
+    else await route.continue();
+  });
+  try {
+    await page.goto(PAGE_URL, { waitUntil: 'commit' });
+    await page.locator('#startup-retry').waitFor({ state: 'visible', timeout: 30_000 });
+    const failed = await readStartup(page);
+    assert.equal(failed.stage, 'failed');
+    assert.equal(failed.failedStage, 'boot');
+    assert.equal(failed.errorCount, 1);
+    assert.equal(await page.locator('#startup-loading').getAttribute('role'), 'alert');
+    assert.deepEqual(errors.pageErrors, []);
+
+    await page.locator('#startup-retry').click();
+    await waitForReady(page);
+    assert.equal(chunkAttempts, 2);
+    assert.equal((await readStartup(page)).errorCount, 0);
+    assert.deepEqual(errors.pageErrors, []);
+    return {
+      chunkAttempts,
+      errors: { consoleErrors: [...errors.consoleErrors], pageErrors: [...errors.pageErrors] },
+      failedStage: failed.failedStage,
+    };
   } finally {
     await context.close();
   }
@@ -289,7 +410,9 @@ async function main() {
     browser = await chromium.launch({ headless: true });
     const coldLoad = await runColdLoad(browser);
     const manualBypass = await runManualBypass(browser);
-    const recoverableFailure = await runRecoverableFailure(browser);
+    const recoverableManifestFailure = await runRecoverableManifestFailure(browser);
+    const recoverableHeroFailure = await runRecoverableHeroFailure(browser);
+    const recoverableBootstrapFailure = await runRecoverableBootstrapFailure(browser);
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -301,7 +424,9 @@ async function main() {
           },
           coldLoad,
           manualBypass,
-          recoverableFailure,
+          recoverableBootstrapFailure,
+          recoverableHeroFailure,
+          recoverableManifestFailure,
         },
         null,
         2,
