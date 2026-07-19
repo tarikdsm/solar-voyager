@@ -48,6 +48,9 @@ jobs:
         timeout-minutes: 5
         run: npm run test:smoke
 
+      - name: Main menu regression
+        run: npm run test:main-menu
+
       - name: Render depth regression
         run: npm run test:render-depth
 

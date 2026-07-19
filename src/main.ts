@@ -6,6 +6,7 @@ import {
 } from './game/createNewGameSimulation.js';
 import { KeyboardCommandMapper, type KeyboardInputTarget } from './game/inputMapping.js';
 import { SaveRepository } from './game/saveLoad.js';
+import { SceneManager } from './game/sceneManager.js';
 import { GameSessionController } from './game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { readTrajectoryEventSummary } from './game/trajectoryPredictionModel.js';
@@ -155,7 +156,8 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
   }
 }
 
-if (isTrajectoryPredictionRuntimeEnabled(window)) {
+function startTrajectoryPredictionRuntime(): void {
+  if (!isTrajectoryPredictionRuntimeEnabled(window) || trajectoryPredictorClient !== null) return;
   const testHorizonSec = readTrajectoryPredictionTestHorizonSec(window);
   const testPointCount = readTrajectoryPredictionTestPointCount(window);
   const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
@@ -174,10 +176,12 @@ if (isTrajectoryPredictionRuntimeEnabled(window)) {
 }
 
 function handlePageHide(event: PageTransitionEvent): void {
-  if (!event.persisted) trajectoryPredictorClient?.dispose();
+  if (event.persisted) return;
+  trajectoryPredictorClient?.dispose();
+  cameraInput?.dispose();
+  commandInput?.dispose();
+  disposeStateVectorLayoutObservation?.();
 }
-
-window.addEventListener('pagehide', handlePageHide);
 
 function currentInputSnapshot() {
   return session.simulation.snapshot;
@@ -221,13 +225,6 @@ const sessionCommands: Commands = {
   setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
   setWarp: (warp) => session.simulation.commands.setWarp(warp),
 };
-
-commandInput = new KeyboardCommandMapper(
-  window as unknown as KeyboardInputTarget,
-  sessionCommands,
-  currentInputSnapshot,
-  session.settings.inputBindings,
-);
 
 function resizeRenderer(): void {
   const clientWidth = canvas.clientWidth;
@@ -334,7 +331,15 @@ function renderFrame(nowMs: number): void {
   requestAnimationFrame(renderFrame);
 }
 
-async function startApplication(): Promise<void> {
+const sceneManager = new SceneManager(session);
+const autostart = new URLSearchParams(window.location.search).get('autostart') === '1';
+if (autostart) {
+  const result = sceneManager.startNewGame();
+  if (!result.ok) throw new Error(`Solar Voyager autostart failed: ${result.message}`);
+}
+let spacePhaseActivation: Promise<void> | null = null;
+
+function renderApplication(): void {
   render(
     h(App, {
       bodyIds: session.simulation.snapshot.bodyIds,
@@ -343,22 +348,25 @@ async function startApplication(): Promise<void> {
       hud: hudStore.display,
       hudState: hudStore.signals,
       perfPanel: perfPanelStore,
+      sceneManager,
       session,
       stateVectors: stateVectorStore,
       stateVectorViewportRef: setStateVectorViewportElement,
       trajectoryPrediction: trajectoryPredictionStore,
+      onSpacePhaseEntered: () => {
+        void activateSpacePhase();
+      },
     }),
     appRoot,
   );
+}
+
+async function prepareApplication(): Promise<void> {
+  renderApplication();
   const appOverlay = appRoot.querySelector('.app-overlay');
   if (!(appOverlay instanceof HTMLElement)) {
     throw new Error('Solar Voyager application overlay was not found.');
   }
-  disposeStateVectorLayoutObservation?.();
-  disposeStateVectorLayoutObservation = observeStateVectorLayout(
-    appOverlay,
-    updateStateVectorViewport,
-  );
   canvas.dataset.depthStrategy = contextReport.depthStrategy;
   canvas.dataset.rendererName = contextReport.rendererName;
   canvas.dataset.rendererReady = 'true';
@@ -401,19 +409,53 @@ async function startApplication(): Promise<void> {
   postPipeline.warmUp(postProcessingEnabled);
   await stateVectorWidget.prepare(renderer);
   updateStateVectorViewport();
+  canvas.dataset.worldReady = 'true';
+}
+
+async function activateSpacePhaseRuntime(): Promise<void> {
+  await applicationReady;
+  await Promise.resolve();
+  const activeWorld = world;
+  if (activeWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
   }
-  cameraInput?.dispose();
-  cameraInput = new CameraInputController(canvas, window, focusLabel, world.cameraController);
+  commandInput = new KeyboardCommandMapper(
+    window as unknown as KeyboardInputTarget,
+    sessionCommands,
+    currentInputSnapshot,
+    session.settings.inputBindings,
+  );
+  cameraInput = new CameraInputController(canvas, window, focusLabel, activeWorld.cameraController);
+  startTrajectoryPredictionRuntime();
+  const appOverlay = appRoot.querySelector('.app-overlay');
+  if (!(appOverlay instanceof HTMLElement)) {
+    throw new Error('Solar Voyager application overlay was not found.');
+  }
+  disposeStateVectorLayoutObservation = observeStateVectorLayout(
+    appOverlay,
+    updateStateVectorViewport,
+  );
   canvas.dataset.cameraReady = 'true';
+  canvas.dataset.runtimeActivationCount = '1';
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
   window.addEventListener('scroll', updateStateVectorViewport, true);
+  window.addEventListener('pagehide', handlePageHide);
   invalidateTrajectoryPrediction();
   requestAnimationFrame(renderFrame);
 }
 
-void startApplication().catch((cause: unknown) => {
+function activateSpacePhase(): Promise<void> {
+  spacePhaseActivation ??= activateSpacePhaseRuntime();
+  return spacePhaseActivation;
+}
+
+const applicationReady = prepareApplication();
+if (autostart) {
+  void activateSpacePhase();
+}
+
+void applicationReady.catch((cause: unknown) => {
   throw new Error('Solar Voyager failed to initialize the epoch world.', { cause });
 });

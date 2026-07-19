@@ -20,7 +20,7 @@ import {
 
 const HOST = '127.0.0.1';
 const PORT = 4176;
-const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const GOLDEN_PATH = fileURLToPath(new URL('./performance-golden.json', import.meta.url));
 const ALLOCATION_BYTES_PER_FRAME = 256 * 1024;

@@ -180,7 +180,7 @@ try {
   productionPage.on('console', (message) => {
     if (message.type() === 'error') productionErrors.push(message.text());
   });
-  await productionPage.goto(`http://${HOST}:${PORT}/solar-voyager/`, {
+  await productionPage.goto(`http://${HOST}:${PORT}/solar-voyager/?autostart=1`, {
     waitUntil: 'domcontentloaded',
   });
   try {

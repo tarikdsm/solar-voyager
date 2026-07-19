@@ -17,7 +17,7 @@ const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
 const FORCE_LOW_POWER_GPU = process.argv.includes('--force-low-power-gpu');
-const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const VITE_BIN_PATH = fileURLToPath(
   new URL('../../node_modules/vite/bin/vite.js', import.meta.url),

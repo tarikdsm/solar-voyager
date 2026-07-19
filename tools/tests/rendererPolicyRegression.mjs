@@ -7,7 +7,7 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
 
 const HOST = '127.0.0.1';
 const PORT = 4179;
-const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/`;
+const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/?autostart=1`;
 const CONTROL_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/hardwareWarning.html`;
 
 const server = await createServer({
