@@ -19,6 +19,7 @@ const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
 );
 const SMOKE_STARTED_AT_MS = performance.now();
+export const APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS = 180_000;
 
 function progress(stage) {
   process.stdout.write(
@@ -30,6 +31,23 @@ function assertNoBrowserErrors(browserErrors) {
   if (browserErrors.length > 0) {
     throw new Error(`browser errors detected: ${browserErrors.join(' | ')}`);
   }
+}
+
+async function readFirstFrameDiagnostics(page) {
+  return page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    if (!(canvas instanceof globalThis.HTMLCanvasElement)) return { canvas: false };
+    return {
+      animationLoopStarts: canvas.solarVoyagerRuntimeResources?.animationLoopStarts ?? -1,
+      burnLogRows: globalThis.document.querySelectorAll('[data-burn-slot]').length,
+      cameraReady: canvas.dataset.cameraReady ?? null,
+      canvas: true,
+      frameSampleCount: canvas.solarVoyagerTelemetry?.frameSampleCount ?? -1,
+      rendererReady: canvas.dataset.rendererReady ?? null,
+      softwareRasterizer: canvas.dataset.softwareRasterizer ?? null,
+      worldReady: canvas.dataset.worldReady ?? null,
+    };
+  });
 }
 
 async function probeProductionStateVector(page) {
@@ -111,17 +129,24 @@ async function probeProductionStateVector(page) {
 }
 
 async function probeCanvasPixels(page) {
-  await page.waitForFunction(
-    () => {
-      const canvas = globalThis.document.querySelector('#space-canvas');
-      return (
-        canvas instanceof globalThis.HTMLCanvasElement &&
-        canvas.solarVoyagerTelemetry?.frameSampleCount > 0
-      );
-    },
-    undefined,
-    { timeout: 60_000 },
-  );
+  progress(`first frame wait ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
+  try {
+    await page.waitForFunction(
+      () => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        return (
+          canvas instanceof globalThis.HTMLCanvasElement &&
+          canvas.solarVoyagerTelemetry?.frameSampleCount > 0
+        );
+      },
+      undefined,
+      { timeout: APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS },
+    );
+  } catch (cause) {
+    progress(`first frame timeout ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
+    throw cause;
+  }
+  progress(`first frame ready ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
   const metrics = await page.evaluate(() => {
     const canvas = globalThis.document.querySelector('#space-canvas');
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
