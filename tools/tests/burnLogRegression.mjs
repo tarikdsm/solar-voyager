@@ -298,17 +298,17 @@ try {
   const bounds = await compactPage.locator('#burn-log-panel').evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const list = element.querySelector('.burn-log-completed-list');
-    if (!(list instanceof HTMLElement)) throw new Error('completed burn list missing');
+    if (!(list instanceof globalThis.HTMLElement)) throw new Error('completed burn list missing');
     return {
       bottom: rect.bottom,
       height: rect.height,
       left: rect.left,
       listClientHeight: list.clientHeight,
-      listOverflowY: getComputedStyle(list).overflowY,
+      listOverflowY: globalThis.getComputedStyle(list).overflowY,
       listScrollHeight: list.scrollHeight,
       right: rect.right,
-      viewportHeight: innerHeight,
-      viewportWidth: innerWidth,
+      viewportHeight: globalThis.innerHeight,
+      viewportWidth: globalThis.innerWidth,
     };
   });
   assert.ok(bounds.left >= 0 && bounds.right <= bounds.viewportWidth);
