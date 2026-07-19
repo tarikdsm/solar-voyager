@@ -45,7 +45,7 @@ frame.
   resize/update/render/dispose boundaries, and dynamic map chunk loading.
 - [x] Precompile every map shader/resource and prove repeated updates preserve
   object/material/geometry/buffer identity with zero update-time allocations.
-- [ ] Run focused render tests, lint, typecheck, build, and an allocation check;
+- [x] Run focused render tests, lint, typecheck, build, and an allocation check;
   obtain independent review.
 
 ### Task 3: Accessible map panel and shared navigation state
