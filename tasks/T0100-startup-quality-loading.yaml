@@ -1,8 +1,8 @@
 id: T0100
 title: Startup quality auto-detection and load-time optimization
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0100-startup-quality-loading
 depends_on: [T0041, T0091, T0092, T0096]
 milestone: M6
 spec: |
