@@ -19,12 +19,11 @@
    step. Cover empty-cache metrics, critical request allowlist, program stability,
    all selector fixtures, manual bypass, compact accessible loading UI, injected
    critical-request failure/retry, and zero console/page errors on success.
-6. Extend the deterministic Terser post-pass to all JavaScript chunks, prove two
-   identical production builds, and run bundle, critical-path, asset, heap, draw,
-   smoke, visual-tier, governor, tutorial and startup gates without changing any
-   ceiling.
+6. Extend the deterministic Terser post-pass to copied standalone JavaScript
+   assets only when gzip size improves, prove two identical production builds,
+   and run bundle, critical-path, asset, heap, draw, smoke, visual-tier, governor,
+   tutorial and startup gates without changing any ceiling.
 7. Record local/CI startup evidence under `docs/bench/`, update architecture and
    task handoff notes, run the complete TypeScript/Python/browser suite, obtain an
    independent C/I/M review, require exact-head CI, transition REVIEW to DONE,
    and merge without deleting the branch/worktree.
-

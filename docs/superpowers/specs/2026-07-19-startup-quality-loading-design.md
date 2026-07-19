@@ -92,9 +92,9 @@ the recoverable failure route, and no eager first-use compilation.
 
 ## Bundle strategy
 
-T0099 left 12 gzip bytes under the fixed total ceiling. The existing deterministic
-Terser post-pass therefore applies the same safe `module`/mangle/four-pass
-configuration to every JavaScript chunk, not only the entry. This removes more
-bytes than T0100 adds while preserving the fixed 570000-byte gate and stable
-cache identity. No budget is raised and no runtime dependency is added.
-
+T0099 left 12 gzip bytes under the fixed total ceiling. The deterministic Terser
+post-pass keeps its safe entry-chunk configuration and also minifies copied
+standalone JavaScript assets in script mode. It preserves license comments and
+retains the original whenever gzip size does not improve. This removes redundant
+decoder bytes while preserving the fixed 570000-byte gate and stable cache
+identity. No budget is raised and no runtime dependency is added.
