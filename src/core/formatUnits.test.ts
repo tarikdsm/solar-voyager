@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatEnergyWh, formatPowerW } from './formatUnits.js';
+import {
+  formatBodyId,
+  formatDurationSec,
+  formatEnergyWh,
+  formatPowerW,
+  formatProperDeltaV,
+  formatSignedDeltaV,
+  formatUtcTimeMs,
+} from './formatUnits.js';
 
 describe('energy HUD formatters — physics-spec.md §5', () => {
   it('formats joules as three-significant-digit watt-hours', () => {
@@ -20,5 +28,24 @@ describe('energy HUD formatters — physics-spec.md §5', () => {
   it('rejects non-finite or negative physical totals', () => {
     expect(() => formatEnergyWh(-1)).toThrow(/energy/u);
     expect(() => formatPowerW(Number.NaN)).toThrow(/power/u);
+  });
+
+  it('shares deterministic burn-log labels and physical readouts', () => {
+    expect(formatDurationSec(90_061.25)).toBe('1d 01:01:01.250');
+    expect(formatUtcTimeMs(Date.UTC(2026, 6, 17, 12, 30, 45, 6))).toBe(
+      '2026-07-17 12:30:45.006 UTC',
+    );
+    expect(formatBodyId('alpha-centauri')).toBe('Alpha Centauri');
+    expect(formatBodyId(null)).toBe('—');
+    expect(formatProperDeltaV(1)).toBe('1 m/s');
+    expect(formatProperDeltaV(12.5)).toBe('12.5 m/s');
+    expect(formatProperDeltaV(0.001_23)).toBe('0.00123 m/s');
+    expect(formatProperDeltaV(999.6)).toBe('1,000 m/s');
+    expect(formatProperDeltaV(1_000)).toBe('1 km/s');
+    expect(formatProperDeltaV(999_600)).toBe('1,000 km/s');
+    expect(formatSignedDeltaV(10)).toBe('+10.0 m/s');
+    expect(formatSignedDeltaV(-2.5)).toBe('-2.50 m/s');
+    expect(formatSignedDeltaV(0.001_23)).toBe('+0.00123 m/s');
+    expect(formatSignedDeltaV(0)).toBe('0 m/s');
   });
 });

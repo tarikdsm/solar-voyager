@@ -1,6 +1,13 @@
 import { batch, computed, signal, type ReadonlySignal, type Signal } from '@preact/signals';
 
-import { formatEnergyWh, formatPowerW } from '../core/formatUnits.js';
+import {
+  formatBodyId,
+  formatDurationSec,
+  formatEnergyWh,
+  formatPowerW,
+  formatProperDeltaV,
+  formatUtcTimeMs,
+} from '../core/formatUnits.js';
 import type { WarpFactor } from '../core/time.js';
 import {
   WarpClampReason,
@@ -20,11 +27,9 @@ const ORBIT_NUMBER_FORMAT = new Intl.NumberFormat('en-US', {
   maximumSignificantDigits: 6,
   useGrouping: true,
 });
-const HUD_METRIC_FORMAT = new Intl.NumberFormat('en-US', {
-  maximumSignificantDigits: 3,
-  useGrouping: true,
-});
 const SIGNED_SI_PREFIXES = Object.freeze(['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'] as const);
+
+export { formatDurationSec, formatUtcTimeMs } from '../core/formatUnits.js';
 
 export interface HudSignals {
   readonly requestedWarp: Signal<WarpFactor>;
@@ -87,27 +92,8 @@ export interface HudSignalStore {
   publish(snapshot: SimSnapshot, nowMs: number): boolean;
 }
 
-function titleCaseBodyId(bodyId: string | null): string {
-  if (bodyId === null || bodyId.length === 0) return '—';
-  return bodyId.replace(
-    /(^|[-_])(\p{L})/gu,
-    (_match, separator: string, letter: string) =>
-      `${separator.length === 0 ? '' : ' '}${letter.toUpperCase()}`,
-  );
-}
-
-function padInteger(value: number, width: number): string {
-  return Math.trunc(value).toString().padStart(width, '0');
-}
-
 function formatWarp(warp: WarpFactor): string {
   return `${ORBIT_NUMBER_FORMAT.format(warp)}×`;
-}
-
-function formatProperDeltaV(valueMS: number): string {
-  if (!Number.isFinite(valueMS) || valueMS < 0) return '—';
-  if (valueMS >= 1_000) return `${HUD_METRIC_FORMAT.format(valueMS / 1_000)} km/s`;
-  return `${HUD_METRIC_FORMAT.format(valueMS)} m/s`;
 }
 
 function formatSignedEnergyJ(valueJ: number): string {
@@ -142,29 +128,6 @@ export function formatOrbitDistanceKm(valueKm: number): string {
     return `${ORBIT_NUMBER_FORMAT.format(valueKm / 1_000_000)} Mkm`;
   }
   return `${ORBIT_NUMBER_FORMAT.format(valueKm)} km`;
-}
-
-/** Formats a nonnegative duration as Dd HH:MM:SS.mmm. */
-export function formatDurationSec(valueSec: number): string {
-  if (valueSec === Number.POSITIVE_INFINITY) return '∞';
-  if (!Number.isFinite(valueSec) || valueSec < 0) return '—';
-  const totalMilliseconds = Math.round(valueSec * 1_000);
-  const milliseconds = totalMilliseconds % 1_000;
-  const totalSeconds = Math.floor(totalMilliseconds / 1_000);
-  const seconds = totalSeconds % 60;
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  const minutes = totalMinutes % 60;
-  const totalHours = Math.floor(totalMinutes / 60);
-  const hours = totalHours % 24;
-  const days = Math.floor(totalHours / 24);
-  const clock = `${padInteger(hours, 2)}:${padInteger(minutes, 2)}:${padInteger(seconds, 2)}.${padInteger(milliseconds, 3)}`;
-  return days === 0 ? clock : `${days}d ${clock}`;
-}
-
-/** Formats the snapshot's display timestamp independently of local timezone. */
-export function formatUtcTimeMs(utcTimeMs: number): string {
-  if (!Number.isFinite(utcTimeMs)) return '—';
-  return new Date(utcTimeMs).toISOString().replace('T', ' ').replace('Z', ' UTC');
 }
 
 function createSignals(): HudSignals {
@@ -211,7 +174,7 @@ function createDisplaySignals(signals: HudSignals): HudDisplaySignals {
           return '';
       }
     }),
-    dominantBody: computed(() => titleCaseBodyId(signals.dominantBodyId.value)),
+    dominantBody: computed(() => formatBodyId(signals.dominantBodyId.value)),
     apoapsis: computed(() =>
       signals.orbitValid.value ? formatOrbitDistanceKm(signals.apoapsisRadiusKm.value) : '—',
     ),
@@ -252,7 +215,7 @@ function createDisplaySignals(signals: HudSignals): HudDisplaySignals {
         ? formatProperDeltaV(signals.burnProperDeltaVMS.value)
         : '—',
     ),
-    targetBody: computed(() => titleCaseBodyId(signals.targetBodyId.value)),
+    targetBody: computed(() => formatBodyId(signals.targetBodyId.value)),
     targetDistance: computed(() => formatOrbitDistanceKm(signals.targetDistanceKm.value)),
     targetRelativeSpeed: computed(() =>
       formatRelativeSpeedKmS(signals.targetRelativeSpeedKmS.value),

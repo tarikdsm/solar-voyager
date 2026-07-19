@@ -31,6 +31,7 @@ import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
 import { RelativisticVisualController } from './render/relativisticVisualController.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
+import type { BurnLogEntry, BurnLogView } from './sim/ship/ledger.js';
 import type { Commands } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
@@ -49,6 +50,7 @@ import {
 
 const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
+const { BurnLogPanel, createBurnLogSignalStore } = await import('./ui/burnLogRuntime.js');
 
 interface RuntimeResourceCounts {
   animationLoopStarts: number;
@@ -80,6 +82,78 @@ interface SystemMapRuntimeDiagnostics {
   mapRenderCount: number;
   trajectoryLineVisible: boolean;
   trajectoryMarkersVisible: boolean;
+}
+
+interface MutableBurnLogDiagnosticEntry {
+  startTimeSec: number;
+  endTimeSec: number;
+  startProperTimeSec: number;
+  endProperTimeSec: number;
+  energySpentJ: number;
+  properDeltaVMS: number;
+  peakPowerW: number;
+  dominantBodyId: string | null;
+  progradeDeltaVMS: number;
+  normalDeltaVMS: number;
+  radialDeltaVMS: number;
+}
+
+interface BurnLogRuntimeDiagnostics {
+  readonly identity: 'solarVoyagerBurnLog.v1';
+  readonly active: MutableBurnLogDiagnosticEntry;
+  readonly latest: MutableBurnLogDiagnosticEntry;
+  activeAvailable: boolean;
+  latestAvailable: boolean;
+  completedCount: number;
+  publishCount: number;
+  structuralRebuildCount: number;
+}
+
+function createDiagnosticEntry(): MutableBurnLogDiagnosticEntry {
+  return {
+    startTimeSec: 0,
+    endTimeSec: 0,
+    startProperTimeSec: 0,
+    endProperTimeSec: 0,
+    energySpentJ: 0,
+    properDeltaVMS: 0,
+    peakPowerW: 0,
+    dominantBodyId: null,
+    progradeDeltaVMS: 0,
+    normalDeltaVMS: 0,
+    radialDeltaVMS: 0,
+  };
+}
+
+function copyDiagnosticEntry(
+  target: MutableBurnLogDiagnosticEntry,
+  source: BurnLogEntry | null,
+): void {
+  if (source === null) {
+    target.startTimeSec = 0;
+    target.endTimeSec = 0;
+    target.startProperTimeSec = 0;
+    target.endProperTimeSec = 0;
+    target.energySpentJ = 0;
+    target.properDeltaVMS = 0;
+    target.peakPowerW = 0;
+    target.dominantBodyId = null;
+    target.progradeDeltaVMS = 0;
+    target.normalDeltaVMS = 0;
+    target.radialDeltaVMS = 0;
+    return;
+  }
+  target.startTimeSec = source.startTimeSec;
+  target.endTimeSec = source.endTimeSec;
+  target.startProperTimeSec = source.startProperTimeSec;
+  target.endProperTimeSec = source.endProperTimeSec;
+  target.energySpentJ = source.energySpentJ;
+  target.properDeltaVMS = source.properDeltaVMS;
+  target.peakPowerW = source.peakPowerW;
+  target.dominantBodyId = source.dominantBodyId;
+  target.progradeDeltaVMS = source.progradeDeltaVMS;
+  target.normalDeltaVMS = source.normalDeltaVMS;
+  target.radialDeltaVMS = source.radialDeltaVMS;
 }
 
 class SharedCameraControls implements CameraControlPort {
@@ -216,14 +290,43 @@ function createTrackedPersistentSimulation(
   return simulation;
 }
 
+const initialSimulation = createTrackedNewGameSimulation();
+const burnLogStore = createBurnLogSignalStore(initialSimulation.burnLog);
+const burnLogRuntimeDiagnostics: BurnLogRuntimeDiagnostics = {
+  identity: 'solarVoyagerBurnLog.v1',
+  active: createDiagnosticEntry(),
+  latest: createDiagnosticEntry(),
+  activeAvailable: false,
+  latestAvailable: false,
+  completedCount: 0,
+  publishCount: burnLogStore.publishCount,
+  structuralRebuildCount: burnLogStore.structuralRebuildCount,
+};
+Object.defineProperty(canvas, 'solarVoyagerBurnLog', { value: burnLogRuntimeDiagnostics });
+
+function updateBurnLogRuntime(view: BurnLogView): void {
+  const count = view.count;
+  const active = view.activeBurn;
+  const latest = count === 0 ? null : view.get(count - 1);
+  burnLogRuntimeDiagnostics.completedCount = count;
+  burnLogRuntimeDiagnostics.activeAvailable = active !== null;
+  burnLogRuntimeDiagnostics.latestAvailable = latest !== null;
+  copyDiagnosticEntry(burnLogRuntimeDiagnostics.active, active);
+  copyDiagnosticEntry(burnLogRuntimeDiagnostics.latest, latest);
+  burnLogRuntimeDiagnostics.publishCount = burnLogStore.publishCount;
+  burnLogRuntimeDiagnostics.structuralRebuildCount = burnLogStore.structuralRebuildCount;
+}
+
 const session = new GameSessionController({
-  initialSimulation: createTrackedNewGameSimulation(),
+  initialSimulation,
   createNewSimulation: createTrackedNewGameSimulation,
   saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: createTrackedPersistentSimulation,
   onSimulationReplaced: (replacement) => {
     runtimeResources.sessionSimulationReplacements += 1;
+    burnLogStore.rebind(replacement.burnLog);
+    updateBurnLogRuntime(replacement.burnLog);
     hudStore.publish(replacement.snapshot, performance.now());
     world?.trajectoryOverlay.hide();
     world?.systemMap.trajectoryOverlay.hide();
@@ -246,6 +349,8 @@ const session = new GameSessionController({
   },
 });
 hudStore.publish(session.simulation.snapshot, 0);
+burnLogStore.publish();
+updateBurnLogRuntime(session.simulation.burnLog);
 stateVectorStore.publish(session.simulation.snapshot, 0);
 
 function handleTrajectoryPredictionResult(result: PredictorResponseMessage): void {
@@ -473,7 +578,10 @@ function renderFrame(nowMs: number): void {
   trajectoryPredictorClient?.update(snapshot);
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
-  hudStore.publish(snapshot, nowMs);
+  if (hudStore.publish(snapshot, nowMs)) {
+    burnLogStore.publish();
+    updateBurnLogRuntime(session.simulation.burnLog);
+  }
   stateVectorStore.publish(snapshot, nowMs);
   const hudEndMs = performance.now();
   const renderStartMs = performance.now();
@@ -542,6 +650,8 @@ function renderApplication(): void {
   render(
     h(App, {
       bodyIds: session.simulation.snapshot.bodyIds,
+      burnLog: burnLogStore,
+      burnLogPanel: BurnLogPanel,
       commands: sessionCommands,
       hardwareWarning,
       hud: hudStore.display,

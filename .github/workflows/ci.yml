@@ -44,9 +44,13 @@ jobs:
       - name: Performance gates
         run: npm run test:perf-gates
 
+      - name: Injected smoke error regressions
+        timeout-minutes: 5
+        run: npm run test:smoke -- --negative-fixtures-only
+
       - name: Application smoke
         timeout-minutes: 5
-        run: npm run test:smoke
+        run: npm run test:smoke -- --production-only
 
       - name: Main menu regression
         run: npm run test:main-menu
@@ -54,6 +58,10 @@ jobs:
       - name: System map regression
         timeout-minutes: 5
         run: npm run test:system-map
+
+      - name: Burn log regression
+        timeout-minutes: 5
+        run: npm run test:burn-log
 
       - name: Render depth regression
         run: npm run test:render-depth

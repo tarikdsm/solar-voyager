@@ -5,6 +5,12 @@ import { INPUT_ACTIONS, type InputAction, type InputBindings } from './settings.
 export const ROTATION_RATE_RAD_S = 0.6;
 const THROTTLE_STEP = 0.1;
 
+const enum AxisTransition {
+  NOT_AXIS,
+  UNCHANGED,
+  CHANGED,
+}
+
 export interface KeyboardInputEvent {
   readonly altKey: boolean;
   readonly code: string;
@@ -80,7 +86,7 @@ export class KeyboardCommandMapper {
     const action = this.codeMap.get(event.code);
     if (action === undefined) return;
     event.preventDefault();
-    if (this.setHeld(action, 1)) return;
+    if (this.setHeld(action, 1) !== AxisTransition.NOT_AXIS) return;
     const snapshot = this.snapshotProvider();
     switch (action) {
       case 'throttleIncrease':
@@ -111,7 +117,7 @@ export class KeyboardCommandMapper {
 
   private readonly handleKeyUp = (event: KeyboardInputEvent): void => {
     const action = this.codeMap.get(event.code);
-    if (action === undefined || !this.setHeld(action, 0)) return;
+    if (action === undefined || this.setHeld(action, 0) !== AxisTransition.CHANGED) return;
     event.preventDefault();
   };
 
@@ -162,34 +168,40 @@ export class KeyboardCommandMapper {
     this.keyboardTarget.removeEventListener('keyup', this.handleKeyUp);
   }
 
-  private setHeld(action: InputAction, value: 0 | 1): boolean {
+  private setHeld(action: InputAction, value: 0 | 1): AxisTransition {
     switch (action) {
       case 'pitchUp':
+        if (this.pitchUp === value) return AxisTransition.UNCHANGED;
         this.pitchUp = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       case 'pitchDown':
+        if (this.pitchDown === value) return AxisTransition.UNCHANGED;
         this.pitchDown = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       case 'yawLeft':
+        if (this.yawLeft === value) return AxisTransition.UNCHANGED;
         this.yawLeft = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       case 'yawRight':
+        if (this.yawRight === value) return AxisTransition.UNCHANGED;
         this.yawRight = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       case 'rollLeft':
+        if (this.rollLeft === value) return AxisTransition.UNCHANGED;
         this.rollLeft = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       case 'rollRight':
+        if (this.rollRight === value) return AxisTransition.UNCHANGED;
         this.rollRight = value;
         this.axesDirty = true;
-        return true;
+        return AxisTransition.CHANGED;
       default:
-        return false;
+        return AxisTransition.NOT_AXIS;
     }
   }
 

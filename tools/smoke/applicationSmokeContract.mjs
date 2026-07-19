@@ -18,11 +18,58 @@ const FRAMEBUFFER_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_FRAMEBUFFER_RUNTIME_ERR
 const FRAMEBUFFER_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/framebufferRuntimeError.fixture.js', import.meta.url),
 );
+const SMOKE_STARTED_AT_MS = performance.now();
+export const APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS = 60_000;
+
+function progress(stage) {
+  process.stdout.write(
+    `[application-smoke] ${stage} +${((performance.now() - SMOKE_STARTED_AT_MS) / 1_000).toFixed(1)}s\n`,
+  );
+}
+
+/** Installs a harness-only rAF gate that preserves one complete production frame. */
+export function installProductionSmokeRafFreeze(target = globalThis) {
+  const nativeRequestAnimationFrame = target.requestAnimationFrame.bind(target);
+  const diagnostics = {
+    completedFrameObserved: false,
+    ignoredScheduleCount: 0,
+    nativeScheduleCount: 0,
+  };
+  Object.defineProperty(target, '__solarVoyagerSmokeRafFreeze', { value: diagnostics });
+  target.requestAnimationFrame = (callback) => {
+    const canvas = target.document.querySelector('#space-canvas');
+    if ((canvas?.solarVoyagerTelemetry?.frameSampleCount ?? 0) > 0) {
+      diagnostics.completedFrameObserved = true;
+      diagnostics.ignoredScheduleCount += 1;
+      return 0;
+    }
+    diagnostics.nativeScheduleCount += 1;
+    return nativeRequestAnimationFrame(callback);
+  };
+}
 
 function assertNoBrowserErrors(browserErrors) {
   if (browserErrors.length > 0) {
     throw new Error(`browser errors detected: ${browserErrors.join(' | ')}`);
   }
+}
+
+async function readFirstFrameDiagnostics(page) {
+  return page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    if (!(canvas instanceof globalThis.HTMLCanvasElement)) return { canvas: false };
+    return {
+      animationLoopStarts: canvas.solarVoyagerRuntimeResources?.animationLoopStarts ?? -1,
+      burnLogRows: globalThis.document.querySelectorAll('[data-burn-slot]').length,
+      cameraReady: canvas.dataset.cameraReady ?? null,
+      canvas: true,
+      frameSampleCount: canvas.solarVoyagerTelemetry?.frameSampleCount ?? -1,
+      rafFreeze: globalThis.__solarVoyagerSmokeRafFreeze ?? null,
+      rendererReady: canvas.dataset.rendererReady ?? null,
+      softwareRasterizer: canvas.dataset.softwareRasterizer ?? null,
+      worldReady: canvas.dataset.worldReady ?? null,
+    };
+  });
 }
 
 async function probeProductionStateVector(page) {
@@ -104,17 +151,24 @@ async function probeProductionStateVector(page) {
 }
 
 async function probeCanvasPixels(page) {
-  await page.waitForFunction(
-    () => {
-      const canvas = globalThis.document.querySelector('#space-canvas');
-      return (
-        canvas instanceof globalThis.HTMLCanvasElement &&
-        canvas.solarVoyagerTelemetry?.frameSampleCount > 0
-      );
-    },
-    undefined,
-    { timeout: 60_000 },
-  );
+  progress(`first frame wait ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
+  try {
+    await page.waitForFunction(
+      () => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        return (
+          canvas instanceof globalThis.HTMLCanvasElement &&
+          canvas.solarVoyagerTelemetry?.frameSampleCount > 0
+        );
+      },
+      undefined,
+      { timeout: APPLICATION_SMOKE_FIRST_FRAME_TIMEOUT_MS },
+    );
+  } catch (cause) {
+    progress(`first frame timeout ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
+    throw cause;
+  }
+  progress(`first frame ready ${JSON.stringify(await readFirstFrameDiagnostics(page))}`);
   const metrics = await page.evaluate(() => {
     const canvas = globalThis.document.querySelector('#space-canvas');
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -150,6 +204,7 @@ async function probeCanvasPixels(page) {
 }
 
 async function runProbe(browser, fixturePath = null, probeStateVector = false) {
+  progress(`probe start ${probeStateVector ? 'production' : 'fixture'}`);
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   const browserErrors = [];
   let trajectoryWorkerRequestCount = 0;
@@ -162,6 +217,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   page.on('crash', () => browserErrors.push('page crash'));
   await disableUnrelatedTrajectoryPrediction(page);
+  if (probeStateVector) await page.addInitScript(installProductionSmokeRafFreeze);
   if (fixturePath !== null) await page.addInitScript({ path: fixturePath });
 
   try {
@@ -176,6 +232,7 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       { timeout: 30_000 },
     );
     await page.waitForTimeout(250);
+    progress(`probe ready ${probeStateVector ? 'production' : 'fixture'}`);
 
     assertNoBrowserErrors(browserErrors);
 
@@ -184,8 +241,9 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       orbitReadout: globalThis.document.querySelectorAll('#orbit-readout').length,
       perfPanel: globalThis.document.querySelectorAll('#perf-panel').length,
       sessionSettings: globalThis.document.querySelectorAll('#session-settings').length,
-      simulationClocks: globalThis.document.querySelectorAll('[aria-label="Simulation clocks"]')
-        .length,
+      simulationClocks: globalThis.document.querySelectorAll(
+        '[aria-label="Mission UTC and ship proper-time clocks"]',
+      ).length,
       timeWarp: globalThis.document.querySelectorAll('[aria-label="Time warp control"]').length,
     }));
     assert.deepEqual(hud, {
@@ -197,6 +255,15 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       timeWarp: 1,
     });
     const canvas = await probeCanvasPixels(page);
+    progress(`probe canvas ${probeStateVector ? 'production' : 'fixture'}`);
+    const runtime = probeStateVector ? await readFirstFrameDiagnostics(page) : null;
+    if (runtime !== null) {
+      assert.equal(runtime.animationLoopStarts, 1, 'production started multiple animation loops');
+      assert.ok(runtime.frameSampleCount > 0, 'production freeze bypassed the real frame');
+      assert.equal(runtime.rafFreeze?.completedFrameObserved, true);
+      assert.ok(runtime.rafFreeze.nativeScheduleCount > 0, 'native rAF was never scheduled');
+      assert.ok(runtime.rafFreeze.ignoredScheduleCount > 0, 'production rAF was not frozen');
+    }
     const stateVector = probeStateVector ? await probeProductionStateVector(page) : null;
     await page.waitForTimeout(0);
     assertNoBrowserErrors(browserErrors);
@@ -205,13 +272,15 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
       0,
       'application smoke must not start the unrelated long-horizon trajectory worker',
     );
-    return { canvas, hud, stateVector };
+    progress(`probe done ${probeStateVector ? 'production' : 'fixture'}`);
+    return { canvas, hud, rafFreeze: runtime?.rafFreeze ?? null, stateVector };
   } finally {
     await page.close();
   }
 }
 
 async function expectRuntimeFixtureFailure(browser, fixturePath, marker, triggerReadPixels = false) {
+  progress(`negative fixture start ${marker}`);
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   await disableUnrelatedTrajectoryPrediction(page);
   let timeout;
@@ -258,6 +327,7 @@ async function expectRuntimeFixtureFailure(browser, fixturePath, marker, trigger
     }
     const message = await failure;
     assert.match(message, new RegExp(marker, 'u'));
+    progress(`negative fixture done ${marker}`);
     return message;
   } finally {
     clearTimeout(timeout);
@@ -268,9 +338,11 @@ async function expectRuntimeFixtureFailure(browser, fixturePath, marker, trigger
 export async function runApplicationSmokeContract({
   delayedFixtureOnly = false,
   fixtureOnly = false,
+  negativeFixturesOnly = false,
   productionOnly = false,
 } = {}) {
   await assertPortAvailable(PORT, HOST);
+  progress('preview start');
   const server = await preview({
     root: process.cwd(),
     base: '/solar-voyager/',
@@ -279,7 +351,9 @@ export async function runApplicationSmokeContract({
   });
   let browser;
   try {
+    progress('browser launch');
     browser = await chromium.launch({ channel: 'chrome', headless: true });
+    progress('browser ready');
     if (fixtureOnly) return await runProbe(browser, RUNTIME_ERROR_FIXTURE);
     if (delayedFixtureOnly) return await runProbe(browser, FRAMEBUFFER_ERROR_FIXTURE);
     if (productionOnly) return await runProbe(browser, null, true);
@@ -294,6 +368,7 @@ export async function runApplicationSmokeContract({
       FRAMEBUFFER_ERROR_MARKER,
       true,
     );
+    if (negativeFixturesOnly) return { rejectedFixture, rejectedFramebufferFixture };
     const production = await runProbe(browser, null, true);
     return { production, rejectedFixture, rejectedFramebufferFixture };
   } finally {
