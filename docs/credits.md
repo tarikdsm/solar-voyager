@@ -17,7 +17,10 @@ usage terms recorded in their source files.
   scripts are build inputs; Blender is not shipped as part of the web application.
 
 The exact dependency versions are locked in `package-lock.json`; dependency packages retain their
-own notices and licenses.
+own notices and licenses. The deployed, machine-checked
+[third-party software notices](../public/THIRD_PARTY_LICENSES.txt) include the complete license text
+and copyrights for Three.js, Preact, signals, Basis Universal, and Draco. Vite copies that file to
+the root of every production build.
 
 ## Astronomical data
 

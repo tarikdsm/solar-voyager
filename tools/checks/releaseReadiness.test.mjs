@@ -10,6 +10,7 @@ import { verifyReleaseReadiness } from './releaseReadiness.mjs';
 
 const REQUIRED_DOCS = [
   'LICENSE',
+  'public/THIRD_PARTY_LICENSES.txt',
   'docs/accessibility.md',
   'docs/controls.md',
   'docs/credits.md',
@@ -35,6 +36,7 @@ function task(id, status) {
 async function createRepository() {
   const root = await mkdtemp(join(tmpdir(), 'solar-voyager-release-'));
   await mkdir(join(root, 'docs'), { recursive: true });
+  await mkdir(join(root, 'public'), { recursive: true });
   await mkdir(join(root, 'tasks'));
   await writeFile(join(root, 'package.json'), '{"version":"1.0.0"}\n');
   for (const file of REQUIRED_DOCS) await writeFile(join(root, file), `# ${file}\n`);

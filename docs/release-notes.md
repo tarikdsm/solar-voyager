@@ -1,5 +1,8 @@
 # Release notes
 
+The public build includes complete, machine-checked
+[third-party software notices](../public/THIRD_PARTY_LICENSES.txt) at its root.
+
 ## Solar Voyager 1.0.0 — 2026-07-19
 
 The first public release delivers the complete M0–M3 and M5–M6 orbital-exploration experience. It

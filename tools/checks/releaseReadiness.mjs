@@ -6,6 +6,7 @@ import { loadCanonicalTasks, renderDashboard } from './taskDashboard.mjs';
 
 const REQUIRED_FILES = [
   'LICENSE',
+  'public/THIRD_PARTY_LICENSES.txt',
   'docs/accessibility.md',
   'docs/controls.md',
   'docs/credits.md',

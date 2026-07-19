@@ -17,7 +17,17 @@ describe('CI workflow', () => {
     expect(workflow.match(/^\s*run: npm run check:budgets\s*$/gmu)).toHaveLength(1);
     expect(workflow.match(/^\s*run: npm run check:tasks\s*$/gmu)).toHaveLength(1);
     expect(workflow.match(/^\s*run: npm run check:dashboard\s*$/gmu)).toHaveLength(1);
+    expect(workflow).toContain(
+      "- name: Public release readiness check\n        if: github.event_name == 'pull_request'\n        run: npm run check:release",
+    );
+    expect(workflow).toContain(
+      "- name: Final public release readiness check\n        if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n        run: npm run check:release -- --final",
+    );
+    expect(workflow).toContain(
+      '- name: Third-party license notices\n        run: npm run check:licenses -- --dist',
+    );
     expect(workflow.match(/^\s*run: npm run check:release\s*$/gmu)).toHaveLength(1);
+    expect(workflow.match(/^\s*run: npm run check:release -- --final\s*$/gmu)).toHaveLength(1);
     expect(workflow).toContain('actions/setup-python@v5');
     expect(workflow.match(/^\s*run: npm run test:tools\s*$/gmu)).toHaveLength(1);
     expect(workflow.match(/^\s*run: npm run test:trajectory-overlay\s*$/gmu)).toHaveLength(1);

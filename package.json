@@ -48,6 +48,7 @@
     "textures:rings": "node tools/textures/generateRingTextures.mjs",
     "generate:dashboard": "node tools/checks/taskDashboard.mjs --write",
     "check:dashboard": "node tools/checks/taskDashboard.mjs",
+    "check:licenses": "node tools/checks/thirdPartyLicenses.mjs",
     "check:release": "node tools/checks/releaseReadiness.mjs",
     "check:tasks": "node tools/checks/taskSchema.mjs",
     "check:budgets": "node tools/checks/assetBudgets.mjs",

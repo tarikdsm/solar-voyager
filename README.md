@@ -106,6 +106,7 @@ npm run build
 npm run check:budgets
 npm run check:tasks
 npm run check:dashboard
+npm run check:licenses
 npm run check:release
 ```
 
@@ -128,4 +129,5 @@ Browser/render/performance gates are individual `test:*` and `bench:*` scripts i
 
 Solar Voyager source code is available under the [MIT License](LICENSE). Data, textures, models, and
 other media retain the terms recorded for each source or generated artifact; see
-[credits](docs/credits.md) and each asset's `SOURCES.md`.
+[credits](docs/credits.md), the distributable [third-party software notices](public/THIRD_PARTY_LICENSES.txt),
+and each asset's `SOURCES.md`.

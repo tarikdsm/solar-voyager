@@ -18,6 +18,21 @@ commit passes CI, Pages deployment, and a cache-disabled live audit.
 - Repository content: 183,861,574 B / 300 MiB; runtime assets: 32,655,463 B /
   150 MiB; critical path: 4,354,239 B / 8 MiB.
 
+## Independent-review corrections
+
+The first exact-head review reported two important release-integrity gaps. The
+public build now includes `THIRD_PARTY_LICENSES.txt` with the complete installed
+Three.js, Preact, and signals MIT texts plus the Basis Universal and Draco
+copyright notices and full Apache License 2.0 terms. A permanent gate compares
+those texts to installed dependencies and requires the built copy to be
+byte-identical. The production build and built-copy check pass.
+
+CI now runs branch readiness only for pull requests and final readiness only for
+pushes to `main`; the latter rejects any state where T0101 is not `DONE`. Focused
+license, workflow, and release-readiness regressions pass 8/8. The post-correction
+bundle remains 125,975 B entry gzip and 555,755 B total gzip, unchanged from the
+audited candidate.
+
 ## Browser and performance gates
 
 Every permanent CI browser gate passed against the production build: positive

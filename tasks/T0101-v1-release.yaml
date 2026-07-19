@@ -33,6 +33,14 @@ handoff_notes: |
   compact scrolling, and empty warning/error logs. Full evidence is in
   docs/bench/T0101-summary.md.
 
+  Independent review of head 0a22f63 found two important release-integrity gaps:
+  missing distributable notices for runtime libraries/codecs and no permanent CI
+  invocation of final readiness on main. Both are corrected with complete public
+  third-party notices, a source/built-copy license gate, PR-only branch readiness,
+  main-push-only final readiness, and focused regression coverage. The corrected
+  production build, built notice, performance limits, lint, typecheck, formatting,
+  task/dashboard/release checks, and 8 focused tests pass locally.
+
   Publication is intentionally pending independent C/I/M review, exact-head PR CI,
   DONE transition/merge, green main CI + Pages deploy, cache-disabled live audit,
   and only then creation/push/verification of annotated tag v1.0.0 on that exact

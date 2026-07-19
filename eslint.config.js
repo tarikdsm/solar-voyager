@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       'assets/**',
+      'build/**',
       'coverage/**',
       'dist/**',
       'node_modules/**',
