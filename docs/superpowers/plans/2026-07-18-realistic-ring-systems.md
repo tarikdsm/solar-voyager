@@ -368,11 +368,11 @@ Update rendering spec §11 with catalog/shader/cross-fade/quality behavior, asse
 Run: `npm test`, `npm run test:tools`, `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm run build`, `npm run check:tasks`, `npm run check:budgets`, all browser regressions, `npm run test:smoke`, and `git diff --check`.
 Expected: every command exits 0; only documented skips remain.
 
-- [ ] **Step 4: Request independent review**
+- [x] **Step 4: Request independent review**
 
 Reviewer checks every acceptance criterion, exact ring radii/provenance, shader geometry, actual WebGL screenshots, one-draw particle evidence, zero-allocation design, budgets, and exact-head tests. Address findings and repeat affected/full gates.
 
-- [ ] **Step 5: Move task to REVIEW and commit**
+- [x] **Step 5: Move task to REVIEW and commit**
 
 Fill `handoff_notes` with hashes, sizes, visual metrics, performance results, review verdict, and commands.
 

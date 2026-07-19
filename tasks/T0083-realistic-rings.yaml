@@ -1,6 +1,6 @@
 id: T0083
 title: Realistic ring systems (Saturn, Uranus, Jupiter, Neptune)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0083-realistic-rings
 depends_on: [T0041, T0043]
@@ -24,9 +24,38 @@ acceptance:
   - Flythrough: flying through the ring plane shows parallax ice chunks with no visible pop to the annulus; 60 fps floor held on reference hardware
   - Ring set within the 2 MB per-planet budget (particles are procedural, ~0 bytes)
 handoff_notes: |
-  A Saturn source model and annulus texture were committed directly to main in
-  b8d7cd9 with build_saturn.py, saturn.glb, albedo/ring maps, and SOURCES.md.
-  This is partial prior art only: the task still requires all four ringed planets,
-  runtime shadow/backlight shaders, close-range flythrough particles, ingest,
-  performance evidence, and its T0041/T0043 dependencies. Keep TODO until the
-  dependencies are DONE and the full task can be claimed.
+  Implementation complete on task/T0083-realistic-rings at 46a7030. The catalog
+  in data/rings.json records published PDS radii and optical-depth bands for
+  Jupiter, Saturn, Uranus, and Neptune; its JSON schema is validated by Ajv and
+  the runtime loader cross-checks every arc against its named parent band.
+  Deterministic Blender authoring and canonical ingest produced byte-identical
+  results in two sequential runs for every changed body. Final GLB SHA-256:
+  Saturn 747846184f73b4fa46f75082844a552ed6ac51d9c74549856fe309cb4f24b45b,
+  Uranus 70a5f90d4d29f51e350466255b30151fc3e0c4342bd076e3c43464657de1205c,
+  Neptune be9f1f37cd4a36bcc4e342c6812d526d1ea17d151b8278959b6eb27388ff47d9.
+  The named ring textures total 6,655 B (Jupiter), 8,974 B (Saturn), 10,410 B
+  (Uranus), and 6,906 B (Neptune), all far below the 2 MiB acceptance budget.
+
+  Runtime evidence uses actual WebGL pixels, not shader-source assertions:
+  ring-systems passes with 13 stable programs and zero GL errors, including a
+  cloned no-ring-shader control for Saturn's planet shadow and an Adams-vs-Le
+  Verrier radial control for Neptune's arcs. Ring flythrough passes with four
+  precompiled/stable programs, one InstancedMesh draw, exact quality counts
+  4,096/2,048/1,024/0, continuous annulus/particle coverage, moving parallax,
+  and latest local stress heap growth 8,652 B. The production perf gate passes
+  at 10 draw calls, 77,071 triangles, and 58,545 B heap growth (196,608 B cap).
+  Paired benchmark evidence is in docs/bench/T0083-*.json/.md: after median/p75
+  frame time 6.1/6.1 ms, p99 6.601 ms, steady-state heap growth 90,688 B, and
+  entry/total gzip 276,989/548,363 B. Public assets are 31.14 MiB and critical
+  startup assets 4.19 MiB; all repository budget gates pass. The documented
+  limitation remains that the available machine is an RTX 3070 Laptop GPU at
+  640x360, so the 1920x1080 integrated-reference certification remains a
+  maintainer hardware gate rather than a locally claimed result.
+
+  Verification on the final implementation: Vitest 111 files passed plus one
+  skipped (655 tests passed, 3 skipped); 60 Python tool tests passed; lint,
+  typecheck, format, build, task validation, budgets, browser regressions,
+  Blender smoke, production perf, and git diff checks passed. Independent review
+  of exact HEAD 46a70305542c7e48aa07784027403b8c2292c2c3 returned PASS with no
+  Critical, Important, or Minor findings after verifying PDS values, generated
+  assets and hashes, WebGL controls, flythrough behavior, budgets, and gates.
