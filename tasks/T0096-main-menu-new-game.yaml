@@ -1,6 +1,6 @@
 id: T0096
 title: Main menu and deterministic new-game flow
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0096-main-menu-new-game
 depends_on: [T0050, T0058]
@@ -56,3 +56,7 @@ handoff_notes: |
   .playwright-mcp/. Independent final review reported Critical 0, Important 0,
   Minor 0 and Ready YES. SimSnapshot, Commands, physics formulas, and schemas are
   unchanged.
+
+  PR #53 CI run 29678498583 passed on e74893f before the DONE transition.
+  The merger requires final CI on this status commit before the non-force merge;
+  the task branch will be retained.

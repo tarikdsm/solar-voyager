@@ -53,5 +53,5 @@ deterministic while the normal URL proves the menu.
 - [x] Reconcile T0096-T0101 in the dashboard exactly once and remove converted
   non-task actions.
 - [x] Run all repository, browser, performance, schema, budget, and diff gates.
-- [ ] Obtain independent exact-head review, move to REVIEW, publish, require CI,
+- [x] Obtain independent exact-head review, move to REVIEW, publish, require CI,
   move to DONE, require final CI, and merge while retaining the branch.
