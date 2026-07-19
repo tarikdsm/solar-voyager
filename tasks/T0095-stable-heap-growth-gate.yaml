@@ -1,6 +1,6 @@
 id: T0095
 title: Stabilize retained-heap CI measurement without weakening the gate
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0095-stable-heap-growth-gate
 depends_on: [T0092]
