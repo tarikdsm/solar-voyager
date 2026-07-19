@@ -96,6 +96,7 @@ unsupported features such as post-processing on software rendering stay off.
 - `render/telemetry.ts` is the single source of perf truth (frame times ring buffer, ms splits, renderer.info snapshots) — consumed by the perf HUD, the governor, and the bench harness. Sim exposes its own step time in the snapshot.
 - **Bench harness (`npm run bench`):** deterministic scripted flight (fixed seed, fixed 3-minute path: LEO → Moon flyby → Jupiter approach) driven headlessly via Playwright; reports median/p75/p99 frame time, draw calls, triangles, JS heap growth (must be ~0 after warmup — the allocation rule, verified).
 - **CI perf gates (every PR):** bundle-size budget; draw-call/triangle counts from the smoke test scene vs golden values (±10%); **heap-growth-zero check** on 30 s of simulated frames (catches frame-loop allocations mechanically, since CI GPUs are software and absolute fps is meaningless there).
+- **CI startup gate:** a cold production context must reach first playable within 5 s, request exactly the reviewed runtime critical path, keep eager program count stable through the first ordinary frame, prove manual probe bypass, and recover from an injected critical-request failure.
 - Absolute fps regressions are caught on reference hardware: the bench report is committed with perf-relevant PRs (`docs/bench/` history), and any PR touching `render/` or the frame loop must include before/after bench numbers in its description.
 
 A production sample that exceeds the fixed heap ceiling by no more than 25% is

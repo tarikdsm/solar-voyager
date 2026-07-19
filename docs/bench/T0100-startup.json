@@ -1,0 +1,36 @@
+{
+  "environment": {
+    "browser": "149.0.7827.55",
+    "ci": false,
+    "node": "v25.8.2",
+    "platform": "win32"
+  },
+  "coldLoad": {
+    "encodedBodyBytes": 1386117,
+    "depthStrategy": "reversed",
+    "devicePixelRatio": 1,
+    "firstPlayableMs": 1041.5,
+    "probeMeanMs": 0.5333333313465118,
+    "programCountAfterFirstFrame": 34,
+    "programCountAtReady": 34,
+    "requestedCriticalFiles": [
+      "data/stars.bin",
+      "public/assets/manifest.json",
+      "public/assets/textures/earth_albedo_tier2.ktx2",
+      "public/assets/textures/moon_albedo_tier2.ktx2"
+    ],
+    "resourceCount": 17,
+    "rendererName": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "selectedRung": 14,
+    "softwareRasterizer": "true",
+    "transferBytes": 1391217
+  },
+  "manualBypass": {
+    "probeMeanMs": null,
+    "selectedRung": 0
+  },
+  "recoverableFailure": {
+    "failedStage": "star-catalog",
+    "manifestAttempts": 2
+  }
+}
