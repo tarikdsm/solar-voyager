@@ -4,14 +4,16 @@ import { CameraInputController, type CameraControlPort } from './cameraInputCont
 
 class FakeEventTarget {
   private readonly listeners = new Map<string, EventListenerOrEventListenerObject>();
-
-  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-    this.listeners.set(type, listener);
-  }
-
-  removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-    if (this.listeners.get(type) === listener) this.listeners.delete(type);
-  }
+  readonly addEventListener = vi.fn(
+    (type: string, listener: EventListenerOrEventListenerObject): void => {
+      this.listeners.set(type, listener);
+    },
+  );
+  readonly removeEventListener = vi.fn(
+    (type: string, listener: EventListenerOrEventListenerObject): void => {
+      if (this.listeners.get(type) === listener) this.listeners.delete(type);
+    },
+  );
 
   emit(type: string, event: object): void {
     const listener = this.listeners.get(type);
@@ -25,7 +27,7 @@ class FakeCanvas extends FakeEventTarget {
   readonly releasePointerCapture = vi.fn();
 }
 
-function createFixture() {
+function createFixture(initiallyEnabled = true) {
   const canvas = new FakeCanvas();
   const keyboard = new FakeEventTarget();
   const label = { textContent: '' };
@@ -50,6 +52,7 @@ function createFixture() {
     keyboard as unknown as Window,
     label as unknown as HTMLElement,
     controls,
+    initiallyEnabled,
   );
   return { canvas, controls, input, keyboard, label };
 }
@@ -164,5 +167,65 @@ describe('CameraInputController', () => {
     });
     expect(controls.zoomByWheel).not.toHaveBeenCalled();
     expect(controls.focusBody).not.toHaveBeenCalled();
+  });
+
+  it('has no camera or event effects while disabled', () => {
+    const { canvas, controls, input, keyboard } = createFixture(false);
+    const pointerPreventDefault = vi.fn();
+    const wheelPreventDefault = vi.fn();
+    const keyPreventDefault = vi.fn();
+
+    canvas.emit('pointerdown', {
+      pointerId: 7,
+      clientX: 100,
+      clientY: 80,
+      button: 0,
+      preventDefault: pointerPreventDefault,
+    });
+    canvas.emit('pointermove', {
+      pointerId: 7,
+      clientX: 125,
+      clientY: 70,
+      preventDefault: pointerPreventDefault,
+    });
+    canvas.emit('pointerup', { pointerId: 7 });
+    canvas.emit('wheel', { deltaY: -120, preventDefault: wheelPreventDefault });
+    keyboard.emit('keydown', {
+      key: 'j',
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      preventDefault: keyPreventDefault,
+    });
+
+    expect(canvas.setPointerCapture).not.toHaveBeenCalled();
+    expect(canvas.releasePointerCapture).not.toHaveBeenCalled();
+    expect(controls.orbitBy).not.toHaveBeenCalled();
+    expect(controls.zoomByWheel).not.toHaveBeenCalled();
+    expect(controls.focusBody).not.toHaveBeenCalled();
+    expect(pointerPreventDefault).not.toHaveBeenCalled();
+    expect(wheelPreventDefault).not.toHaveBeenCalled();
+    expect(keyPreventDefault).not.toHaveBeenCalled();
+
+    input.setEnabled(true);
+    canvas.emit('wheel', { deltaY: -120, preventDefault: wheelPreventDefault });
+    expect(controls.zoomByWheel).toHaveBeenCalledWith(-120);
+    expect(wheelPreventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('toggles the enabled gate without listener churn', () => {
+    const { canvas, input, keyboard } = createFixture();
+    const canvasAdds = canvas.addEventListener.mock.calls.slice();
+    const keyboardAdds = keyboard.addEventListener.mock.calls.slice();
+
+    for (let index = 0; index < 100; index += 1) {
+      input.setEnabled(index % 2 === 0);
+    }
+
+    expect(canvas.addEventListener.mock.calls).toEqual(canvasAdds);
+    expect(keyboard.addEventListener.mock.calls).toEqual(keyboardAdds);
+    expect(canvas.removeEventListener).not.toHaveBeenCalled();
+    expect(keyboard.removeEventListener).not.toHaveBeenCalled();
   });
 });

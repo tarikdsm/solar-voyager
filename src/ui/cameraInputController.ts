@@ -19,8 +19,10 @@ export class CameraInputController {
   private lastPointerX = 0;
   private lastPointerY = 0;
   private disposed = false;
+  private enabled: boolean;
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (!this.enabled) return;
     if (event.button !== 0 || this.activePointerId >= 0) return;
     this.activePointerId = event.pointerId;
     this.lastPointerX = event.clientX;
@@ -30,6 +32,7 @@ export class CameraInputController {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (!this.enabled) return;
     if (event.pointerId !== this.activePointerId) return;
     const deltaX = event.clientX - this.lastPointerX;
     const deltaY = event.clientY - this.lastPointerY;
@@ -40,17 +43,20 @@ export class CameraInputController {
   };
 
   private readonly handlePointerEnd = (event: PointerEvent): void => {
+    if (!this.enabled) return;
     if (event.pointerId !== this.activePointerId) return;
     this.activePointerId = -1;
     this.canvas.releasePointerCapture(event.pointerId);
   };
 
   private readonly handleWheel = (event: WheelEvent): void => {
+    if (!this.enabled) return;
     event.preventDefault();
     this.controls.zoomByWheel(event.deltaY);
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (!this.enabled) return;
     if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
     let handled = true;
     switch (event.key.toLowerCase()) {
@@ -79,7 +85,9 @@ export class CameraInputController {
     private readonly keyboardTarget: Window,
     private readonly focusLabel: HTMLElement,
     private readonly controls: CameraControlPort,
+    initiallyEnabled = true,
   ) {
+    this.enabled = initiallyEnabled;
     this.updateFocusLabel();
     canvas.addEventListener('pointerdown', this.handlePointerDown);
     canvas.addEventListener('pointermove', this.handlePointerMove);
@@ -87,6 +95,10 @@ export class CameraInputController {
     canvas.addEventListener('pointercancel', this.handlePointerEnd);
     canvas.addEventListener('wheel', this.handleWheel, NON_PASSIVE_LISTENER_OPTIONS);
     keyboardTarget.addEventListener('keydown', this.handleKeyDown);
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
   }
 
   dispose(): void {
