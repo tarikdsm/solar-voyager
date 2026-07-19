@@ -295,6 +295,9 @@ try {
   await dismissWarning(compactPage);
   await startSpace(compactPage, 'Continue');
   await compactPage.locator('#burn-log-toggle').click();
+  await compactPage.locator('#burn-log-panel').evaluate((element) => {
+    element.scrollIntoView({ block: 'center' });
+  });
   const bounds = await compactPage.locator('#burn-log-panel').evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const list = element.querySelector('.burn-log-completed-list');
@@ -307,11 +310,13 @@ try {
       listOverflowY: globalThis.getComputedStyle(list).overflowY,
       listScrollHeight: list.scrollHeight,
       right: rect.right,
+      top: rect.top,
       viewportHeight: globalThis.innerHeight,
       viewportWidth: globalThis.innerWidth,
     };
   });
   assert.ok(bounds.left >= 0 && bounds.right <= bounds.viewportWidth);
+  assert.ok(bounds.top >= 0 && bounds.bottom <= bounds.viewportHeight);
   assert.ok(bounds.height <= bounds.viewportHeight);
   assert.equal(bounds.listOverflowY, 'auto');
   assert.ok(bounds.listScrollHeight >= bounds.listClientHeight);

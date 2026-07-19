@@ -17,4 +17,14 @@ acceptance:
   - Active, completed, wrapped-capacity, empty, save/load, and relativistic clock-divergence states have unit coverage
   - Panel interaction is accessible and does not allocate or iterate the 256-entry history on every animation frame
   - Real-browser evidence shows the panel readable at desktop and compact viewport sizes with no console errors
-handoff_notes: ""
+handoff_notes: |
+  Implementation complete through Task 3; independent final review remains.
+  Runtime commits: 7b9c2d3, cdab2fd, d6dd0da, 50a8a1e, cb90e6b.
+  Permanent browser regression proves a real KeyR/KeyF burn within one HUD
+  publish, every raw/formatted field, stable diagnostics/rebuild count,
+  keyboard navigation, and exact Save/reload/Continue restoration. Desktop and
+  390 px screenshots are under .playwright-mcp/T0098-burn-log-*.png.
+  Full Vitest: 750 passed, 3 skipped. Lint/typecheck/build/budgets/task schema,
+  burn component/runtime, session, menu, map, and application smoke passed.
+  Exact-head perf gate: 39,348 B retained heap, 10 draws, 77,071 triangles,
+  entry/total gzip 120,945/567,544 B. Paired evidence: docs/bench/T0098-*.

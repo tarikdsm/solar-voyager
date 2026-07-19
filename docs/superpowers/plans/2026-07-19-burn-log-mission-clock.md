@@ -33,16 +33,16 @@ simulation interfaces or persistence schema.
 
 ## Task 3: Runtime, persistence, browser, and delivery
 
-- [ ] Add RED integration/browser coverage for a real scripted burn appearing
+- [x] Add RED integration/browser coverage for a real scripted burn appearing
   within one HUD update via `page.keyboard`, active-to-completed transition,
   equality of every field against raw-core diagnostics, real Save/reload/
   Continue restoration, fixed diagnostic identity, and unchanged structural
   rebuild count across ordinary frames and multiple unchanged HUD commits.
-- [ ] Instantiate/rebind/publish the store in `main.ts`, expose fixed in-place
+- [x] Instantiate/rebind/publish the store in `main.ts`, expose fixed in-place
   raw-core diagnostics, add permanent package command and workflow CI step, and
   update `docs/architecture.md` to document this bounded direct BurnLogView UI
   read plus task handoff/acceptance evidence.
-- [ ] Run full unit/static/build/budgets/schema, affected browser suites,
+- [x] Run full unit/static/build/budgets/schema, affected browser suites,
   production heap/performance gates with before/after bench evidence, and
   desktop/compact playtest screenshots.
 - [ ] Independent final review C0/I0/M0; mark plan complete, move task to REVIEW,
