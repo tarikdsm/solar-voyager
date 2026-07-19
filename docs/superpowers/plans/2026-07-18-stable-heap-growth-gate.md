@@ -324,7 +324,7 @@ same-page independence, fail-closed behavior, negative fixture, JSON evidence,
 spec wording, dashboard reconciliation, and full gates. Address every finding
 with a failing test before production changes.
 
-- [ ] **Step 4: Move T0095 to REVIEW and publish**
+- [x] **Step 4: Move T0095 to REVIEW and publish**
 
 Fill `handoff_notes` with primary/confirmation values, negative-control values,
 commands, exact review SHA/verdict, and the T0085 CI runs that motivated the
