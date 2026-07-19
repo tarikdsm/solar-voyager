@@ -11,6 +11,7 @@ import { SceneManager } from './game/sceneManager.js';
 import { GameSessionController } from './game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { SystemMapController, type SystemMapMode } from './game/systemMapController.js';
+import { TutorialController } from './game/tutorialController.js';
 import { readTrajectoryEventSummary } from './game/trajectoryPredictionModel.js';
 import {
   createTrajectoryPredictorClient,
@@ -32,7 +33,7 @@ import { RenderQualityController } from './render/renderQualityController.js';
 import { RelativisticVisualController } from './render/relativisticVisualController.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
 import type { BurnLogEntry, BurnLogView } from './sim/ship/ledger.js';
-import type { Commands } from './sim/simulationSnapshot.js';
+import type { Commands, SimSnapshot } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
@@ -107,6 +108,20 @@ interface BurnLogRuntimeDiagnostics {
   completedCount: number;
   publishCount: number;
   structuralRebuildCount: number;
+}
+
+interface TutorialRuntimeDiagnostics {
+  readonly identity: 'solarVoyagerTutorial.v1';
+  readonly status: string;
+  readonly stepId: string;
+  readonly transitionCount: number;
+  readonly observerActive: boolean;
+  readonly snapshotObservationCount: number;
+  readonly cameraOrbitCount: number;
+  readonly cameraZoomCount: number;
+  readonly burnLogExpanded: boolean;
+  readonly perfPanelExpanded: boolean;
+  readonly hardwareWarningAcknowledged: boolean;
 }
 
 function createDiagnosticEntry(): MutableBurnLogDiagnosticEntry {
@@ -237,14 +252,17 @@ const trajectoryPredictionStore = createTrajectoryPredictionSignalStore();
 const trajectoryPredictionRefresh = new TrajectoryPredictionRefresh();
 let trajectoryPredictorClient: TrajectoryPredictorClient | null = null;
 let trajectoryPredictionPending = false;
+let trajectoryPredictionComplete = false;
 
 function invalidateTrajectoryPrediction(): void {
   trajectoryPredictionPending = true;
+  trajectoryPredictionComplete = false;
   trajectoryPredictorClient?.invalidate();
 }
 
 function invalidateTrajectoryPredictionForWarpElapsed(): void {
   trajectoryPredictionPending = true;
+  trajectoryPredictionComplete = false;
   trajectoryPredictorClient?.invalidateForWarpElapsed();
 }
 
@@ -348,6 +366,38 @@ const session = new GameSessionController({
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
+const tutorialController = new TutorialController(session.settings.tutorial, session);
+let tutorialFrameObserver: ((snapshot: SimSnapshot) => void) | null = null;
+let tutorialSnapshotObservationCount = 0;
+let tutorialCameraOrbitCount = 0;
+let tutorialCameraZoomCount = 0;
+let tutorialBurnLogExpanded = false;
+let tutorialPerfPanelExpanded = false;
+let tutorialHardwareWarningAcknowledged = false;
+const tutorialRuntimeDiagnostics = Object.create(null) as TutorialRuntimeDiagnostics;
+Object.defineProperties(tutorialRuntimeDiagnostics, {
+  identity: { enumerable: true, value: 'solarVoyagerTutorial.v1' },
+  status: { enumerable: true, get: () => tutorialController.progress.status },
+  stepId: { enumerable: true, get: () => tutorialController.progress.stepId },
+  transitionCount: { enumerable: true, get: () => tutorialController.transitionCount },
+  observerActive: { enumerable: true, get: () => tutorialFrameObserver !== null },
+  snapshotObservationCount: { enumerable: true, get: () => tutorialSnapshotObservationCount },
+  cameraOrbitCount: { enumerable: true, get: () => tutorialCameraOrbitCount },
+  cameraZoomCount: { enumerable: true, get: () => tutorialCameraZoomCount },
+  burnLogExpanded: { enumerable: true, get: () => tutorialBurnLogExpanded },
+  perfPanelExpanded: { enumerable: true, get: () => tutorialPerfPanelExpanded },
+  hardwareWarningAcknowledged: {
+    enumerable: true,
+    get: () => tutorialHardwareWarningAcknowledged,
+  },
+});
+Object.freeze(tutorialRuntimeDiagnostics);
+Object.defineProperty(canvas, 'solarVoyagerTutorial', { value: tutorialRuntimeDiagnostics });
+tutorialController.subscribe((progress) => {
+  tutorialFrameObserver = progress.status === 'active' ? observeTutorialSnapshot : null;
+});
+tutorialFrameObserver =
+  tutorialController.progress.status === 'active' ? observeTutorialSnapshot : null;
 hudStore.publish(session.simulation.snapshot, 0);
 burnLogStore.publish();
 updateBurnLogRuntime(session.simulation.burnLog);
@@ -356,6 +406,7 @@ stateVectorStore.publish(session.simulation.snapshot, 0);
 function handleTrajectoryPredictionResult(result: PredictorResponseMessage): void {
   trajectoryPredictionPending = false;
   if (result.type === 'error') {
+    trajectoryPredictionComplete = false;
     world?.trajectoryOverlay.hide();
     world?.systemMap.trajectoryOverlay.hide();
     if (systemMapRuntimeDiagnostics !== null) {
@@ -377,6 +428,7 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
       snapshot.bodyIds,
       snapshot.simTimeSec,
     );
+    trajectoryPredictionComplete = true;
     canvas.dataset.trajectoryReady = 'true';
     if (world !== null && systemMapRuntimeDiagnostics !== null) {
       systemMapRuntimeDiagnostics.trajectoryLineVisible =
@@ -385,6 +437,7 @@ function handleTrajectoryPredictionResult(result: PredictorResponseMessage): voi
         world.systemMap.trajectoryOverlay.markers.visible;
     }
   } catch {
+    trajectoryPredictionComplete = false;
     world?.trajectoryOverlay.hide();
     world?.systemMap.trajectoryOverlay.hide();
     if (systemMapRuntimeDiagnostics !== null) {
@@ -496,6 +549,7 @@ function handleSystemMapModeChange(mode: SystemMapMode): void {
     systemMapRuntimeDiagnostics.spaceRenderCountAtModeChange =
       systemMapRuntimeDiagnostics.spaceRenderCount;
   }
+  tutorialController.observeMap(mode === 'system-map');
 }
 
 function handleSystemMapFocusChange(bodyId: string): void {
@@ -512,6 +566,67 @@ const systemMapController = new SystemMapController({
   onModeChange: handleSystemMapModeChange,
   onFocusChange: handleSystemMapFocusChange,
 });
+
+function observeTutorialSnapshot(snapshot: SimSnapshot): void {
+  tutorialSnapshotObservationCount += 1;
+  const targetIndex = snapshot.targetBodyIndex;
+  const targetId = targetIndex < 0 ? null : (snapshot.bodyIds[targetIndex] ?? null);
+  const completedBurnCount = session.simulation.burnLog.count;
+  const throttleIsZero = snapshot.throttle === 0;
+  tutorialController.observeTargetFocus(
+    targetId !== null,
+    targetId !== null && targetId === systemMapController.focusId,
+  );
+  tutorialController.observeReadouts(
+    snapshot.osculatingElements.valid,
+    trajectoryPredictionComplete,
+  );
+  tutorialController.observeAttitudeThrust(
+    snapshot.attitudeMode !== 'manual',
+    snapshot.throttle > 0,
+  );
+  tutorialController.observeThrustOff(throttleIsZero, completedBurnCount);
+  tutorialController.observeWarp(snapshot.requestedWarp === 1, throttleIsZero);
+  tutorialController.observeBurnLog(tutorialBurnLogExpanded, completedBurnCount);
+  tutorialController.observePerformance(
+    tutorialPerfPanelExpanded,
+    hardwareWarning !== null,
+    tutorialHardwareWarningAcknowledged,
+  );
+}
+
+function handleTutorialCameraInteraction(interaction: 'orbit' | 'zoom'): void {
+  if (interaction === 'orbit') {
+    tutorialCameraOrbitCount += 1;
+    tutorialController.observeCameraOrbit();
+    return;
+  }
+  tutorialCameraZoomCount += 1;
+  tutorialController.observeCameraZoom();
+}
+
+function handleTutorialBurnLogExpanded(expanded: boolean): void {
+  tutorialBurnLogExpanded = expanded;
+  tutorialController.observeBurnLog(expanded, session.simulation.burnLog.count);
+}
+
+function handleTutorialPerfPanelExpanded(expanded: boolean): void {
+  tutorialPerfPanelExpanded = expanded;
+  tutorialController.observePerformance(
+    expanded,
+    hardwareWarning !== null,
+    tutorialHardwareWarningAcknowledged,
+  );
+}
+
+function handleTutorialHardwareWarningAcknowledged(): void {
+  tutorialHardwareWarningAcknowledged = true;
+  tutorialController.observePerformance(tutorialPerfPanelExpanded, true, true);
+}
+
+function handleTutorialSaveSucceeded(): void {
+  tutorialController.observeSaveSucceeded();
+}
 
 function resizeRenderer(): void {
   const clientWidth = canvas.clientWidth;
@@ -581,6 +696,7 @@ function renderFrame(nowMs: number): void {
   if (hudStore.publish(snapshot, nowMs)) {
     burnLogStore.publish();
     updateBurnLogRuntime(session.simulation.burnLog);
+    tutorialFrameObserver?.(snapshot);
   }
   stateVectorStore.publish(snapshot, nowMs);
   const hudEndMs = performance.now();
@@ -666,6 +782,11 @@ function renderApplication(): void {
         signals: systemMapSignals,
       },
       trajectoryPrediction: trajectoryPredictionStore,
+      tutorial: tutorialController,
+      onBurnLogExpandedChange: handleTutorialBurnLogExpanded,
+      onHardwareWarningAcknowledged: handleTutorialHardwareWarningAcknowledged,
+      onPerfPanelExpandedChange: handleTutorialPerfPanelExpanded,
+      onSaveSucceeded: handleTutorialSaveSucceeded,
       onSpacePhaseEntered: () => {
         void activateSpacePhase();
       },
@@ -784,13 +905,21 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     systemMapController,
     sessionCommands,
   );
-  cameraInput = new CameraInputController(canvas, window, focusLabel, spaceCameraControls, true);
+  cameraInput = new CameraInputController(
+    canvas,
+    window,
+    focusLabel,
+    spaceCameraControls,
+    true,
+    handleTutorialCameraInteraction,
+  );
   systemMapCameraInput = new CameraInputController(
     canvas,
     window,
     focusLabel,
     mapCameraControls,
     false,
+    handleTutorialCameraInteraction,
   );
   runtimeResources.cameraInputControllers += 2;
   startTrajectoryPredictionRuntime();
