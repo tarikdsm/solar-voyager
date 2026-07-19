@@ -2,18 +2,18 @@ import { TUTORIAL_STEP_IDS, type TutorialProgress } from '../game/settings.js';
 import type { TutorialController } from '../game/tutorialController.js';
 
 const STEP_HEADINGS = Object.freeze([
-  'Select and focus a target',
+  'Focus a target',
   'Orbit/zoom · Shift + Arrows/Page Up/Down',
-  'Wait for orbit/trajectory data',
-  'Prograde/Retrograde, then raise throttle',
-  'Set throttle to zero',
-  'Choose warp other than 1×',
+  'Read orbit/trajectory data',
+  'Choose attitude, raise throttle',
+  'Throttle to zero',
+  'Change warp from 1×',
   'Open the system map',
   'Close the system map',
   'Open Burn log',
-  'Performance diagnostics (F3)',
-  'Save in Session & settings',
-  'Tutorial complete · return to play',
+  'Performance (F3)',
+  'Save the session',
+  'Return to play',
 ] as const);
 
 export interface TutorialOverlayViewProps {
@@ -31,6 +31,9 @@ export function TutorialOverlayView({
   readoutsReady,
 }: TutorialOverlayViewProps) {
   if (progress.status === 'skipped' || progress.status === 'completed') return null;
+  const attempt = (ok: boolean): void => {
+    if (!ok) globalThis.alert('Tutorial could not be saved.');
+  };
 
   if (progress.status === 'unoffered') {
     return (
@@ -40,13 +43,17 @@ export function TutorialOverlayView({
         aria-labelledby="tutorial-title"
       >
         <header>
-          <h2 id="tutorial-title">Optional orbital navigation tutorial</h2>
+          <h2 id="tutorial-title">Optional navigation tutorial</h2>
         </header>
         <div class="main-menu-actions">
-          <button type="button" class="main-menu-primary" onClick={() => controller.start()}>
+          <button
+            type="button"
+            class="main-menu-primary"
+            onClick={() => attempt(controller.start())}
+          >
             Start tutorial
           </button>
-          <button type="button" onClick={() => controller.skip()}>
+          <button type="button" onClick={() => attempt(controller.skip())}>
             Not now
           </button>
         </div>
@@ -86,7 +93,7 @@ export function TutorialOverlayView({
       </header>
       <div class="main-menu-actions">
         {contextualAction}
-        <button type="button" onClick={() => controller.skip()}>
+        <button type="button" onClick={() => attempt(controller.skip())}>
           Skip tutorial
         </button>
       </div>

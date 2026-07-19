@@ -13,7 +13,7 @@ export default defineConfig({
           if (output.type !== 'chunk' || !output.isEntry) continue;
           // Deterministic post-processing preserves cache identity because the Oxc output is its input.
           const result = await minify(output.code, {
-            compress: { passes: 3 },
+            compress: { passes: 4 },
             ecma: 2022,
             mangle: true,
             module: true,

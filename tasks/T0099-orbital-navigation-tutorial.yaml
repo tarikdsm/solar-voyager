@@ -24,6 +24,9 @@ handoff_notes: |
   controls. Progress is strictly persisted in profile settings v2; legacy v1
   profiles migrate to skipped, save v2 keeps its v1 preferences DTO, and invalid
   or failed storage paths fail closed without publishing stale progress.
+  Tutorial-only settings publications do not rebind input or release held
+  attitude axes; runtime storage failures retain durable state and surface an
+  accessible retry message instead of leaving actions silently inert.
 
   Permanent Chrome regression completes 13 durable transitions with no
   console/page errors, proves terminal observer shutdown and persistence across
@@ -32,11 +35,11 @@ handoff_notes: |
   burn-log, session-settings, camera-control, production-smoke, and injected
   negative smoke regressions pass.
 
-  Final gates at 51899cb: lint, typecheck, Prettier, build, task schema, asset
-  budgets, 790 Vitest tests (3 skipped), and 60 Python tool tests pass. The
-  performance gate reports 569,986 B total gzip (570,000 B limit), production
-  retained heap +48,256 B, 10 draw calls, and 77,071 triangles; both injected
-  allocation and draw fixtures fail as expected. The deterministic flight bench
+  Final gates: lint, typecheck, Prettier, build, task schema, asset budgets,
+  792 Vitest tests (3 skipped), and 60 Python tool tests pass. The performance
+  gate reports 569,988 B total gzip (570,000 B limit), production retained heap
+  -87,299 B, 10 draw calls, and 77,071 triangles; both injected allocation and
+  draw fixtures fail as expected. The deterministic flight bench at 51899cb
   reports median/p75/p99 6.1/6.1/6.301 ms, heap +105,128 B, max 26 draws and
   49,530 triangles, with no errors. Baseline was 6.1/6.1 ms, +124,124 B, 26
   draws, 49,146 triangles, and 567,544 B total gzip.

@@ -171,7 +171,7 @@ export class GameSessionController {
         this.currentSettings,
         transition(this.currentSettings.tutorial),
       );
-      return this.commitSettings(candidate, 'Tutorial progress updated');
+      return this.commitSettings(candidate, 'Tutorial progress updated', false);
     } catch (error: unknown) {
       return {
         ok: false,
@@ -217,13 +217,17 @@ export class GameSessionController {
     this.onSimulationReplaced?.(simulation);
   }
 
-  private commitSettings(settings: GameSettingsV2, successMessage: string): SessionActionResult {
+  private commitSettings(
+    settings: GameSettingsV2,
+    successMessage: string,
+    publish = true,
+  ): SessionActionResult {
     const result = this.settingsRepository.save(settings);
     if (!result.ok) {
       return { ok: false, message: 'Unable to save settings', detail: result.error };
     }
     this.currentSettings = settings;
-    this.onSettingsChanged?.(settings, 'user');
+    if (publish) this.onSettingsChanged?.(settings, 'user');
     return { ok: true, message: successMessage };
   }
 }

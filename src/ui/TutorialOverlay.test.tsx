@@ -50,20 +50,35 @@ describe('TutorialOverlay', () => {
     expect(tutorial.skip).toHaveBeenCalledOnce();
   });
 
+  it('reports a persistence failure instead of leaving offer actions silently inert', () => {
+    const alert = vi.fn();
+    vi.stubGlobal('alert', alert);
+    const view = TutorialOverlayView({
+      controller: controller({ skip: vi.fn(() => false) }),
+      focusHeading: () => undefined,
+      progress: progress('unoffered', 'focus-target'),
+      readoutsReady: false,
+    });
+    view?.props.children[1].props.children[1].props.onClick();
+
+    expect(alert).toHaveBeenCalledWith('Tutorial could not be saved.');
+    vi.unstubAllGlobals();
+  });
+
   it('describes every real-control step', () => {
     const expected: Readonly<Record<TutorialStepId, string>> = {
-      'focus-target': 'Select and focus a target',
+      'focus-target': 'Focus a target',
       camera: 'Orbit/zoom · Shift + Arrows/Page Up/Down',
-      readouts: 'Wait for orbit/trajectory data',
-      'attitude-thrust': 'Prograde/Retrograde, then raise throttle',
-      'thrust-off': 'Set throttle to zero',
-      warp: 'Choose warp other than 1×',
+      readouts: 'Read orbit/trajectory data',
+      'attitude-thrust': 'Choose attitude, raise throttle',
+      'thrust-off': 'Throttle to zero',
+      warp: 'Change warp from 1×',
       'map-open': 'Open the system map',
       'map-return': 'Close the system map',
       'burn-log': 'Open Burn log',
-      performance: 'Performance diagnostics (F3)',
-      save: 'Save in Session & settings',
-      'return-to-play': 'Tutorial complete · return to play',
+      performance: 'Performance (F3)',
+      save: 'Save the session',
+      'return-to-play': 'Return to play',
     };
 
     for (const [stepId, heading] of Object.entries(expected)) {

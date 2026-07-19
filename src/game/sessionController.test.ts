@@ -83,7 +83,7 @@ describe('GameSessionController', () => {
     expect(copySessionState(controller.simulation)).toEqual(before);
   });
 
-  it('preserves restored manual rotation through the production input-frame order', () => {
+  it('preserves manual rotation through restore and tutorial-only settings publications', () => {
     const storage = new MemoryStorage();
     let mapper: KeyboardCommandMapper | null = null;
     const controller = new GameSessionController({
@@ -122,6 +122,13 @@ describe('GameSessionController', () => {
     mapper.update();
     controller.simulation.step(1 / 60);
 
+    expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([
+      0.1, 0.2, 0.3,
+    ]);
+
+    expect(controller.updateTutorial(() => ({ status: 'active', stepId: 'camera' }))).toMatchObject(
+      { ok: true },
+    );
     expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([
       0.1, 0.2, 0.3,
     ]);
@@ -184,7 +191,7 @@ describe('GameSessionController', () => {
     expect(controller.settings).toBe(before);
   });
 
-  it('owns functional tutorial transitions and commits before publishing them', () => {
+  it('owns functional tutorial transitions without publishing preferences', () => {
     const storage = new MemoryStorage();
     const published: string[] = [];
     const controller = new GameSessionController({
@@ -200,10 +207,28 @@ describe('GameSessionController', () => {
       controller.updateTutorial((current) => ({ ...current, status: 'active', stepId: 'camera' })),
     ).toEqual({ ok: true, message: 'Tutorial progress updated' });
     expect(controller.settings.tutorial).toEqual({ status: 'active', stepId: 'camera' });
-    expect(published).toEqual(['camera']);
+    expect(published).toEqual([]);
     expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '').tutorial).toEqual(
       controller.settings.tutorial,
     );
+  });
+
+  it('keeps tutorial-only changes out of the preference callback', () => {
+    const storage = new MemoryStorage();
+    const origins: string[] = [];
+    const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+      onSettingsChanged: (_settings, origin) => origins.push(origin),
+    });
+
+    expect(controller.updateTutorial(() => ({ status: 'active', stepId: 'camera' }))).toMatchObject(
+      { ok: true },
+    );
+    expect(origins).toEqual([]);
   });
 
   it('rejects an invalid tutorial transition without changing or publishing settings', () => {
