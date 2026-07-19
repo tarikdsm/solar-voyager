@@ -33,11 +33,11 @@ deterministic while the normal URL proves the menu.
 **Files:** `src/ui/MainMenu.tsx`, tests, `App.tsx`, `SessionSettingsPanel.tsx`,
 `app.css`.
 
-- [ ] Write RED component/model tests for New Game, disabled Continue, errors,
+- [x] Write RED component/model tests for New Game, disabled Continue, errors,
   successful load/import activation, keyboard focus, and repeated events.
-- [ ] Implement menu-vs-HUD rendering and accessible responsive styling.
-- [ ] Verify reduced motion and session/settings availability.
-- [ ] Commit the UI boundary.
+- [x] Implement menu-vs-HUD rendering and accessible responsive styling.
+- [x] Verify reduced motion and session/settings availability.
+- [x] Commit the UI boundary.
 
 ### Task 3: Bootstrap, browser regression, and dashboard
 
