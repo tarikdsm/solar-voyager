@@ -195,7 +195,7 @@ class PreallocatedBurnLogSignalStore implements BurnLogSignalStore {
 
   private commit(): void {
     const count = this.view.count;
-    this.validateCount(count);
+    this.validateCount(count, this.view.capacity);
     let newest: BurnLogEntry | null = null;
     if (count > 0) {
       newest = this.view.get(count - 1);
@@ -270,14 +270,15 @@ class PreallocatedBurnLogSignalStore implements BurnLogSignalStore {
   }
 
   private validateView(view: BurnLogView): void {
-    if (view.capacity > DEFAULT_BURN_LOG_CAPACITY) {
-      throw new RangeError(`burn log UI capacity must not exceed ${DEFAULT_BURN_LOG_CAPACITY}`);
+    const capacity = view.capacity;
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > DEFAULT_BURN_LOG_CAPACITY) {
+      throw new RangeError('burn log UI capacity must be an integer from 1 through 256');
     }
-    this.validateCount(view.count);
+    this.validateCount(view.count, capacity);
   }
 
-  private validateCount(count: number): void {
-    if (!Number.isInteger(count) || count < 0 || count > this.view.capacity) {
+  private validateCount(count: number, capacity: number): void {
+    if (!Number.isInteger(count) || count < 0 || count > capacity) {
       throw new RangeError('burn log view count must fit its capacity');
     }
   }

@@ -30,10 +30,11 @@ function burnEntry(sequence: number, bodyId: string | null = 'earth'): BurnLogEn
 }
 
 class InstrumentedBurnLogView implements BurnLogView {
-  readonly capacity = DEFAULT_BURN_LOG_CAPACITY;
   readonly entries: BurnLogEntry[] = [];
   activeBurn: BurnLogEntry | null = null;
   getCalls = 0;
+
+  constructor(readonly capacity = DEFAULT_BURN_LOG_CAPACITY) {}
 
   get count(): number {
     return this.entries.length;
@@ -246,5 +247,58 @@ describe('burn log signal store', () => {
     expect(store.completedRows[1]?.visible.value).toBe(false);
     expect(store.activeRow.visible.value).toBe(false);
     expect(store.structuralRebuildCount).toBe(rebuilds + 1);
+  });
+
+  it('rebinds from a smaller valid view to a larger valid view', () => {
+    const smaller = new InstrumentedBurnLogView(1);
+    smaller.entries.push(burnEntry(1));
+    const store = createBurnLogSignalStore(smaller);
+    const larger = new InstrumentedBurnLogView(2);
+    larger.entries.push(burnEntry(2), burnEntry(3));
+
+    store.rebind(larger);
+
+    expect(store.completedCount.value).toBe(2);
+    expect(store.completedRows[0]?.signals.startTimeSec.value).toBe(30);
+    expect(store.completedRows[1]?.signals.startTimeSec.value).toBe(20);
+  });
+
+  it('rejects invalid candidate structure without changing the bound view or signal state', () => {
+    const invalidViews = [
+      new InstrumentedBurnLogView(Number.NaN),
+      new InstrumentedBurnLogView(1.5),
+      new InstrumentedBurnLogView(0),
+      new InstrumentedBurnLogView(DEFAULT_BURN_LOG_CAPACITY + 1),
+      new InstrumentedBurnLogView(1),
+    ];
+    invalidViews[4]?.entries.push(burnEntry(7), burnEntry(8));
+
+    for (let index = 0; index < invalidViews.length; index += 1) {
+      const original = new InstrumentedBurnLogView(1);
+      const mutableOriginal = burnEntry(1) as {
+        -readonly [Key in keyof BurnLogEntry]: BurnLogEntry[Key];
+      };
+      original.entries.push(mutableOriginal);
+      original.activeBurn = burnEntry(2);
+      const store = createBurnLogSignalStore(original);
+      const rows = store.completedRows;
+      const rowZero = rows[0];
+      const active = store.activeRow;
+      const rebuilds = store.structuralRebuildCount;
+
+      expect(() => store.rebind(invalidViews[index] as BurnLogView)).toThrow(RangeError);
+
+      expect(store.completedRows).toBe(rows);
+      expect(store.completedRows[0]).toBe(rowZero);
+      expect(store.activeRow).toBe(active);
+      expect(store.completedCount.value).toBe(1);
+      expect(store.completedRows[0]?.signals.startTimeSec.value).toBe(10);
+      expect(store.activeRow.signals.startTimeSec.value).toBe(20);
+      expect(store.structuralRebuildCount).toBe(rebuilds);
+
+      mutableOriginal.startTimeSec += 1;
+      expect(store.publish()).toBe(true);
+      expect(store.completedRows[0]?.signals.startTimeSec.value).toBe(11);
+    }
   });
 });
