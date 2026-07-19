@@ -1,6 +1,6 @@
 id: T0097
 title: Interactive solar-system map view
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0097-system-map-view
 depends_on: [T0044, T0071, T0096]
