@@ -24,11 +24,28 @@ export interface SystemMapKeyboardTarget {
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (target === null) return false;
-  const candidate = target as EventTarget & { matches?: (selectors: string) => boolean };
-  return (
-    typeof candidate.matches === 'function' &&
-    candidate.matches('input, select, textarea, button, [contenteditable="true"]')
-  );
+  const candidate = target as EventTarget & {
+    readonly isContentEditable?: boolean;
+    closest?: (selectors: string) => {
+      readonly isContentEditable?: boolean;
+      getAttribute?: (name: string) => string | null;
+    } | null;
+    matches?: (selectors: string) => boolean;
+  };
+  if (
+    (typeof candidate.matches === 'function' && candidate.matches('input, select, textarea')) ||
+    (typeof candidate.closest === 'function' &&
+      candidate.closest('input, select, textarea') !== null)
+  ) {
+    return true;
+  }
+  if (candidate.isContentEditable === true) return true;
+  if (typeof candidate.closest !== 'function') return false;
+  const editableOwner = candidate.closest('[contenteditable]');
+  if (editableOwner === null) return false;
+  if (editableOwner.isContentEditable === true) return true;
+  const attributeValue = editableOwner.getAttribute?.('contenteditable');
+  return attributeValue === '' || attributeValue?.toLowerCase() === 'true';
 }
 
 export class SystemMapPanelModel {

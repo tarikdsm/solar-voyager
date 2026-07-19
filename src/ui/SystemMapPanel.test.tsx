@@ -98,15 +98,36 @@ describe('SystemMapPanel', () => {
     expect(toggleFocus).toHaveBeenCalledOnce();
   });
 
-  it('ignores M from editable controls while allowing Escape to close the map', () => {
+  it('ignores M from form and inherited contenteditable targets while keeping buttons operable', () => {
     const { commands, controller } = createFixture();
     const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
-    const editableTarget = { matches: () => true } as unknown as EventTarget;
+    const formTarget = {
+      matches: (selectors: string) => selectors.includes('input'),
+    } as unknown as EventTarget;
+    const directEditableTarget = {
+      isContentEditable: true,
+      matches: () => false,
+    } as unknown as EventTarget;
+    const inheritedEditableTarget = {
+      isContentEditable: false,
+      matches: () => false,
+      closest: (selectors: string) =>
+        selectors === '[contenteditable]'
+          ? { getAttribute: () => '', isContentEditable: false }
+          : null,
+    } as unknown as EventTarget;
+    const buttonTarget = {
+      matches: (selectors: string) => selectors.includes('button'),
+    } as unknown as EventTarget;
 
-    model.handleKeyDown(keyboardEvent('KeyM', editableTarget));
+    model.handleKeyDown(keyboardEvent('KeyM', formTarget));
+    model.handleKeyDown(keyboardEvent('KeyM', directEditableTarget));
+    model.handleKeyDown(keyboardEvent('KeyM', inheritedEditableTarget));
     expect(controller.mode).toBe('space');
-    controller.open();
-    model.handleKeyDown(keyboardEvent('Escape', editableTarget));
+
+    model.handleKeyDown(keyboardEvent('KeyM', buttonTarget));
+    expect(controller.mode).toBe('system-map');
+    model.handleKeyDown(keyboardEvent('Escape', formTarget));
     expect(controller.mode).toBe('space');
   });
 
