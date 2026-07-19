@@ -6,15 +6,15 @@ simulation interfaces or persistence schema.
 
 ## Task 1: Store and shared formatting
 
-- [ ] Add RED tests for empty, active, completed, wrapped-capacity, exact newest
+- [x] Add RED tests for empty, active, completed, wrapped-capacity, exact newest
   fields including body, the 257th burn, a short burn entirely between samples,
   empty no-step taps, immediate simulation replacement, relativistic UTC/proper
   divergence, signed axes, stable identities, and no history walk on unchanged
   publishes.
-- [ ] Implement shared burn formatters and `BurnLogSignalStore` with 256
+- [x] Implement shared burn formatters and `BurnLogSignalStore` with 256
   preallocated completed slot graphs, a stable active graph, indexed event-only
   ring copies, and explicit synchronous `rebind()`.
-- [ ] Run focused tests, full unit, lint, typecheck, format, diff-check.
+- [x] Run focused tests, full unit, lint, typecheck, format, diff-check.
 - [ ] Independent review: layering, ring correctness, persistence assumptions,
   mutation/identity behavior, and hot-path allocation/iteration.
 
