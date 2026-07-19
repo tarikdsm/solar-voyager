@@ -1,6 +1,6 @@
 id: T0101
 title: Public landing page, final release audit, and v1.0 tag
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0101-v1-release
 depends_on: [T0081, T0083, T0085, T0093, T0096, T0097, T0098, T0099, T0100]
@@ -17,4 +17,45 @@ acceptance:
   - README, controls, save compatibility, hardware acceleration guidance, credits, known limitations, and deferred M4 scope are accurate
   - All repository gates plus a production playtest and GitHub Pages no-404/console-error audit pass on the release commit
   - Every eligible task is DONE, only T0060-T0062 remain explicitly deferred, and annotated tag v1.0.0 points to the deployed green main commit
-handoff_notes: ""
+handoff_notes: |
+  Public landing, v1 player/contributor documentation, MIT license, credits,
+  privacy/accessibility notes, release notes, package version 1.0.0, canonical
+  dashboard generation, and permanent release-readiness CI checks are implemented.
+
+  Local release audit at runtime commit 8553f9b passed lint, typecheck, formatting,
+  821 Vitest tests (3 skipped), 60 Python tests, every permanent browser/render/
+  performance regression, task/schema/dashboard/release checks, budgets, asset
+  verification, two deterministic Blender builds, and two byte-identical complete
+  production builds. Production measured 10 draws / 77,071 triangles, +60,184 B
+  retained heap, and 555,755 B total gzip. The RTX 3070 flight benchmark measured
+  6.1 ms median/p75 and 6.301 ms p99 with no errors or stability findings. Desktop
+  and 360x480 playtests covered landing, keyboard-accessible launch, flight, map,
+  compact scrolling, and empty warning/error logs. Full evidence is in
+  docs/bench/T0101-summary.md.
+
+  Independent review of head 0a22f63 found two important release-integrity gaps:
+  missing distributable notices for runtime libraries/codecs and no permanent CI
+  invocation of final readiness on main. Both are corrected with complete public
+  third-party notices, a source/built-copy license gate, PR-only branch readiness,
+  main-push-only final readiness, and focused regression coverage. The corrected
+  production build, built notice, performance limits, lint, typecheck, formatting,
+  task/dashboard/release checks, and 9 focused tests pass locally. The Basis
+  Universal NOTICE is pinned to its normalized upstream SHA-256 so a mutually
+  altered fixture and public copy cannot make the gate pass.
+
+  Independent review approved head 382523a at C0/I0/M0. Exact-head PR CI run
+  29704315912 passed all gates, including licenses, release readiness, performance,
+  smoke, trajectory, and browser regressions. T0101 is DONE for the merger commit;
+  publication remains intentionally gated on exact-head DONE CI, merge, green main
+  final-mode CI + Pages deploy, cache-disabled live audit, and only then creation/
+  push/verification of annotated tag v1.0.0 on that exact deployed main commit.
+  T0060-T0062 remain the only post-v1 deferrals.
+
+  Task-state CI runs 29704741932 and 29705322179 then exhausted the five-minute
+  startup-fixture timeout inside cold load without a product assertion. The
+  externally released promise that held the star-catalog route is removed: the
+  handler captures loading state and always continues in finally, while the
+  snapshot consumer has a separate 30-second Node deadline. Five internal
+  checkpoints localize any future stall. The outer timeout and all startup
+  performance assertions remain unchanged; focused liveness coverage and the
+  complete startup fixture pass locally.

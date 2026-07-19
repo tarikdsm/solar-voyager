@@ -10,6 +10,7 @@ const HOST = '127.0.0.1';
 const PORT = 4202;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const FIRST_PLAYABLE_CEILING_MS = 5_000;
+const PLAYWRIGHT_OPERATION_TIMEOUT_MS = 30_000;
 const EXPECTED_CRITICAL_FILES = [
   'data/stars.bin',
   'public/assets/manifest.json',
@@ -36,6 +37,29 @@ function criticalFileFor(url) {
     return `public/${path}`;
   }
   return null;
+}
+
+function reportPhase(phase) {
+  process.stdout.write(`Startup regression phase: ${phase}\n`);
+}
+
+function reportColdLoadCheckpoint(checkpoint) {
+  process.stdout.write(`Startup cold-load checkpoint: ${checkpoint}\n`);
+}
+
+async function withTimeout(promise, label) {
+  let timeoutId;
+  const deadline = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} exceeded ${String(PLAYWRIGHT_OPERATION_TIMEOUT_MS)} ms`)),
+      PLAYWRIGHT_OPERATION_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function readStartup(page) {
@@ -123,13 +147,9 @@ async function runColdLoad(browser) {
   const requestedCriticalFiles = new Set();
   const criticalResponses = [];
   let startupReady = false;
-  let releaseStar;
-  let reportStarSeen;
-  const starRelease = new Promise((resolve) => {
-    releaseStar = resolve;
-  });
-  const starSeen = new Promise((resolve) => {
-    reportStarSeen = resolve;
+  let resolveStarLoading;
+  const starLoading = new Promise((resolve) => {
+    resolveStarLoading = resolve;
   });
   page.on('request', (request) => {
     if (startupReady) return;
@@ -142,31 +162,39 @@ async function runColdLoad(browser) {
     if (path !== null) criticalResponses.push({ path, status: response.status() });
   });
   await page.route(/\/assets\/stars-[^/]+\.bin$/u, async (route) => {
-    reportStarSeen();
-    await starRelease;
-    await route.continue();
+    try {
+      const loading = await page.locator('#startup-loading').evaluate((element) => ({
+        ariaBusy: element.getAttribute('aria-busy'),
+        role: element.getAttribute('role'),
+        stage: element.getAttribute('data-startup-stage'),
+        visible: !element.hidden,
+      }));
+      resolveStarLoading({ loading });
+    } catch (error) {
+      resolveStarLoading({ error: error instanceof Error ? error : new Error(String(error)) });
+    } finally {
+      await route.continue();
+    }
   });
 
   try {
     const navigation = page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
-    await starSeen;
-    const loading = await page.locator('#startup-loading').evaluate((element) => ({
-      ariaBusy: element.getAttribute('aria-busy'),
-      role: element.getAttribute('role'),
-      stage: element.getAttribute('data-startup-stage'),
-      visible: !element.hidden,
-    }));
+    const starLoadingResult = await withTimeout(starLoading, 'star loading snapshot');
+    if (starLoadingResult.error !== undefined) throw starLoadingResult.error;
+    const { loading } = starLoadingResult;
+    reportColdLoadCheckpoint('star loading captured');
     assert.deepEqual(loading, {
       ariaBusy: 'true',
       role: 'status',
       stage: 'context',
       visible: true,
     });
-    releaseStar();
     const response = await navigation;
     assert.ok(response?.ok(), `production page returned ${String(response?.status())}`);
+    reportColdLoadCheckpoint('navigation complete');
     await waitForReady(page);
     startupReady = true;
+    reportColdLoadCheckpoint('startup ready');
     const ready = await readStartup(page);
     assert.equal(ready.stage, 'ready');
     assert.equal(ready.progress, 1);
@@ -219,6 +247,7 @@ async function runColdLoad(browser) {
       assert.ok(request.encodedBodyBytes > 0, `${request.path} encoded no response body`);
       assert.ok(request.transferBytes > 0, `${request.path} transferred no response bytes`);
     }
+    reportColdLoadCheckpoint('critical metrics verified');
     assert.equal(await page.locator('#startup-loading').evaluate((element) => element.hidden), true);
     const linkedProgramCountAtReady = await page.evaluate(
       () => globalThis.__solarVoyagerLinkedPrograms.length,
@@ -255,6 +284,7 @@ async function runColdLoad(browser) {
       afterFirstFrame.programCountAtReady,
       `first ordinary frame compiled eager shaders: ${firstFrameProgramLabels.join(', ')}`,
     );
+    reportColdLoadCheckpoint('first frame verified');
     assert.deepEqual(errors, { consoleErrors: [], pageErrors: [] });
     return {
       criticalRequests,
@@ -274,7 +304,6 @@ async function runColdLoad(browser) {
       transferBytes: ready.transferBytes,
     };
   } finally {
-    releaseStar?.();
     await context.close();
   }
 }
@@ -420,10 +449,15 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
+    reportPhase('cold load');
     const coldLoad = await runColdLoad(browser);
+    reportPhase('manual quality bypass');
     const manualBypass = await runManualBypass(browser);
+    reportPhase('recoverable manifest failure');
     const recoverableManifestFailure = await runRecoverableManifestFailure(browser);
+    reportPhase('recoverable hero failure');
     const recoverableHeroFailure = await runRecoverableHeroFailure(browser);
+    reportPhase('recoverable bootstrap failure');
     const recoverableBootstrapFailure = await runRecoverableBootstrapFailure(browser);
     process.stdout.write(
       `${JSON.stringify(
