@@ -38,6 +38,10 @@ function criticalFileFor(url) {
   return null;
 }
 
+function reportPhase(phase) {
+  process.stdout.write(`Startup regression phase: ${phase}\n`);
+}
+
 async function readStartup(page) {
   return page.evaluate(() => {
     const canvas = globalThis.document.querySelector('#space-canvas');
@@ -124,13 +128,13 @@ async function runColdLoad(browser) {
   const criticalResponses = [];
   let startupReady = false;
   let releaseStar;
-  let reportStarSeen;
   const starRelease = new Promise((resolve) => {
     releaseStar = resolve;
   });
-  const starSeen = new Promise((resolve) => {
-    reportStarSeen = resolve;
-  });
+  const starSeen = page.waitForRequest(
+    (request) => criticalFileFor(request.url()) === 'data/stars.bin',
+    { timeout: 30_000 },
+  );
   page.on('request', (request) => {
     if (startupReady) return;
     const criticalFile = criticalFileFor(request.url());
@@ -142,7 +146,6 @@ async function runColdLoad(browser) {
     if (path !== null) criticalResponses.push({ path, status: response.status() });
   });
   await page.route(/\/assets\/stars-[^/]+\.bin$/u, async (route) => {
-    reportStarSeen();
     await starRelease;
     await route.continue();
   });
@@ -420,10 +423,15 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
+    reportPhase('cold load');
     const coldLoad = await runColdLoad(browser);
+    reportPhase('manual quality bypass');
     const manualBypass = await runManualBypass(browser);
+    reportPhase('recoverable manifest failure');
     const recoverableManifestFailure = await runRecoverableManifestFailure(browser);
+    reportPhase('recoverable hero failure');
     const recoverableHeroFailure = await runRecoverableHeroFailure(browser);
+    reportPhase('recoverable bootstrap failure');
     const recoverableBootstrapFailure = await runRecoverableBootstrapFailure(browser);
     process.stdout.write(
       `${JSON.stringify(

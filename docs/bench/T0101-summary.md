@@ -97,3 +97,12 @@ at C0/I0/M0. GitHub Actions CI run `29704315912` passed on that exact SHA,
 including the license/built-copy gate, branch-mode release readiness, performance,
 smoke, trajectory, and all browser regressions. The final task-state commit is
 validated separately in final mode before merge.
+
+The first task-state CI run (`29704741932`) exposed a liveness defect in the
+startup regression itself: its intercepted star-catalog request used an
+unbounded custom promise, so an early navigation/request failure could remain
+silent until the workflow's five-minute timeout. The fixture now uses
+Playwright's request wait with an explicit 30-second timeout and prints all five
+serial scenario phases. The five-minute outer limit and every product/startup
+assertion remain unchanged. The focused liveness test and the complete startup
+regression pass locally; exact-head CI is rerun after this correction.

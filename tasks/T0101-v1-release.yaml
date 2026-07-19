@@ -50,3 +50,10 @@ handoff_notes: |
   final-mode CI + Pages deploy, cache-disabled live audit, and only then creation/
   push/verification of annotated tag v1.0.0 on that exact deployed main commit.
   T0060-T0062 remain the only post-v1 deferrals.
+
+  Final task-state CI run 29704741932 then exposed an unbounded wait in the
+  startup browser fixture, not a product assertion: an absent intercepted star
+  request could stay silent until the five-minute workflow timeout. The wait is
+  now a Playwright request wait capped at 30 seconds, every serial phase is
+  reported, and the outer timeout plus all startup performance assertions remain
+  unchanged. A focused liveness regression and the complete startup fixture pass.
