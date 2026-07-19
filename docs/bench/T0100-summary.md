@@ -34,12 +34,12 @@ substantial headroom.
 
 | Production gate    | T0099 baseline | T0100 final |
 | ------------------ | -------------: | ----------: |
-| Entry gzip         |      123,281 B |   125,568 B |
-| Total JS/CSS gzip  |      569,988 B |   555,034 B |
+| Entry gzip         |      123,281 B |   125,644 B |
+| Total JS/CSS gzip  |      569,988 B |   555,110 B |
 | Draw calls         |             10 |          10 |
 | Triangles          |         77,071 |      77,071 |
-| 30 s retained heap |      -84,815 B |  -199,866 B |
+| 30 s retained heap |      -84,815 B |  -256,026 B |
 
 The startup UI increases the entry slightly, while safe standalone-decoder
-minification reduces total transfer by 14,954 bytes from the preceding release
+minification reduces total transfer by 14,878 bytes from the preceding release
 head. Runtime workload remains identical and retained heap remains non-positive.
