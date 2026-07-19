@@ -1,6 +1,6 @@
 id: T0098
 title: Burn log panel and UTC mission clock
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0098-burn-log-utc
 depends_on: [T0053, T0054, T0058, T0096]
@@ -32,3 +32,5 @@ handoff_notes: |
   and 390px compact layouts, menu, system map, settings, and smoke are green.
   Production perf: 10 draws, 77,071 triangles, heap -162,791 B; entry/total
   bundle 120,945/567,544 B gzip. Bench median/p75 stayed 6.1/6.1 ms.
+  PR #55 CI run 29689906723 passed on the exact REVIEW head. The final DONE
+  commit is verified by a second CI run before non-force merge; branch retained.
