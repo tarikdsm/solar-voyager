@@ -11,7 +11,7 @@ A profile with no settings document starts with tutorial status `unoffered`. Aft
 The active sequence is:
 
 1. `focus-target`: select a navigation target and make it the real camera/map focus.
-2. `camera`: orbit and zoom the real camera. Pointer controls remain supported; Arrow keys orbit and Page Up/Page Down zoom for keyboard-only play.
+2. `camera`: orbit and zoom the real camera. Pointer controls remain supported; Shift+Arrow keys orbit and Shift+Page Up/Page Down zoom for keyboard-only play. The gameplay mapper ignores Shift-modified commands, so a rebound flight action can never execute beside a camera action.
 3. `readouts`: wait for a valid real orbit and a completed real trajectory prediction, then acknowledge the highlighted readouts.
 4. `attitude-thrust`: change attitude mode and start a real photon-drive burn.
 5. `thrust-off`: return real throttle to zero, producing a completed burn.
@@ -41,7 +41,7 @@ interface GameSettingsV2 {
 }
 ```
 
-The independent profile key becomes `solar-voyager.settings.v2`. Repository load order is v2, then the legacy v1 key, then defaults. A valid v1 profile migrates preferences and becomes `skipped` at `focus-target`; a missing profile becomes `unoffered`. Documents remain strict and frozen.
+The independent profile key becomes `solar-voyager.settings.v2`. Repository load precedence is exact: an existing valid v2 wins; an existing invalid v2 reports corruption and returns defaults without consulting v1; only an absent v2 allows reading v1. A valid v1 profile migrates preferences, becomes `skipped` at `focus-target`, and is written immediately as v2. If that write fails, migration fails closed with defaults and a warning. A missing profile becomes `unoffered`. Documents remain strict and frozen, and the legacy key is never deleted.
 
 Save v2 intentionally retains its existing `GameSettingsV1` preferences DTO. Saving projects v2 profile settings to `{version: 1, qualityLock, inputBindings}`. Loading/importing merges only those preferences into the current profile, preserving tutorial progress. This keeps all existing save documents valid and prevents an old or shared save from overwriting profile onboarding.
 
@@ -49,30 +49,31 @@ No protected interface changes: `SimSnapshot`, `Commands`, `bodies.json`, and ph
 
 ## Runtime architecture
 
-`src/game/tutorialController.ts` is a DOM-free state machine. It owns current persisted progress plus setup-time booleans for facts such as camera orbit/zoom, readout readiness, burn completion, map open/return, and panel actions. A persistence port validates and commits every transition before the controller publishes it. It exposes a small subscription API for UI rendering.
+`src/game/tutorialController.ts` is a DOM-free state machine. `GameSessionController` remains the sole owner of the full profile envelope and exposes a functional tutorial update that merges against its current settings, validates, persists, and only then publishes. The tutorial controller retains only tutorial progress and setup-time facts for the current step; it can never write a stale quality/binding snapshot. Each transition goes through that session port before publication.
+
+Every resumable step is self-contained. Current snapshot/view state can re-establish target/focus, valid readouts, non-manual attitude with live thrust, throttle off, non-1× warp, map mode, and a non-empty burn log. Orbit/zoom, panel opening, and acknowledgements can simply be repeated after resume. No step depends exclusively on an in-memory fact produced by an earlier step, so reload, skip/resume, load, or New Game cannot strand progress.
 
 The bootstrap wires observation at existing seams:
 
-- `sessionCommands` observes target, attitude, throttle, and warp only after forwarding the real command.
+- `sessionCommands` only forwards gameplay commands; target, attitude, throttle, and warp completion is confirmed from the subsequent real snapshot/view publication, so repeated or no-op commands cannot advance the tutorial.
 - camera and system-map callbacks report completed real interactions.
 - the existing 10 Hz HUD publication reports primitive snapshot/readout and burn-count facts while the tutorial is active.
 - burn-log, performance-panel, hardware-warning, and successful-save handlers emit explicit UI events.
 
-The 10 Hz observer is a nullable stable function. Completion or skip sets it to `null`. The render loop allocates no tutorial objects, and completed/skipped profiles add zero gameplay frame-loop allocations.
+The 10 Hz observer is a nullable stable function. Completion or skip sets it to `null`. It accepts only primitive values and allocates no observation object. The render loop allocates no tutorial objects, and completed/skipped profiles add zero gameplay frame-loop allocations.
 
-`src/ui/TutorialOverlay.tsx` renders a non-modal accessible card outside `SpaceHudSurfaces`, so map instructions remain visible. It subscribes only while mounted, uses semantic headings/buttons, moves focus to a non-editable heading for flight-control steps, and has compact/reduced-motion CSS. Hidden/completed UI has no key listener and cannot capture thrust or warp input.
+`src/ui/TutorialOverlay.tsx` renders a non-modal accessible card outside `SpaceHudSurfaces`, so map instructions remain visible. A setup-owned UI signal mirrors controller progress; `App` conditionally mounts the overlay only for `unoffered`/`active`. Skip/completion therefore unmounts the component rather than merely returning hidden markup. It uses semantic headings/buttons, moves focus to a non-editable heading for flight-control steps, and has compact/reduced-motion CSS. Hidden/completed UI has no key listener, subscription, or DOM node and cannot capture thrust or warp input.
 
 `SessionSettingsPanel` receives a narrow optional tutorial port and displays status plus Resume/Reset controls in both menu and flight. Existing callers remain valid.
 
 ## Input and accessibility
 
-Camera keyboard controls are additive: Arrow keys orbit and Page Up/Page Down zoom. Camera input adopts the same editable-target guard as other global controls, so typing or focused buttons do not steer the camera. Tutorial action buttons use normal Tab/Enter/Space navigation. Flight steps programmatically focus a `tabIndex=-1` heading, not a button, so rebindable thrust/warp keys reach the gameplay mapper.
+Camera keyboard controls are additive: Shift+Arrow keys orbit and Shift+Page Up/Page Down zoom. Camera input adopts the same editable-target guard as other global controls. The gameplay mapper ignores Shift-modified events, making the camera chord disjoint from every rebindable `KeyboardEvent.code`. Tutorial action buttons use normal Tab/Enter/Space navigation. Flight steps programmatically focus a `tabIndex=-1` heading, not a button, so rebindable thrust/warp keys reach the gameplay mapper.
 
 Skip is always a visible button. Resume and Reset are always available in session settings. The card does not cover the full viewport and uses no animated transitions under `prefers-reduced-motion: reduce`.
 
 ## Diagnostics and verification
 
-A fixed `canvas.solarVoyagerTutorial` diagnostic object exposes identity, persisted status/step, transition count, active observer state, and observed real-control counters without replacing object identities in the frame loop.
+A fixed, read-only `canvas.solarVoyagerTutorial` diagnostic object exposes identity, persisted status/step, transition count, active observer state, and observed real-control counters without replacing object identities in the frame loop. It exposes no controller or command methods.
 
-A permanent Playwright regression starts from cleared storage and the real main menu, completes every step with UI/keyboard/pointer controls, reloads to prove completion persistence and absence of the overlay, then covers skip/resume/reset, keyboard-only, compact viewport, and reduced motion. It records console/page errors and rejects orphaned overlays. Unit tests cover strict migration, save/profile separation, controller transitions/failures, camera keyboard controls, and UI semantics.
-
+A permanent Playwright regression starts from cleared storage and the real main menu, completes every step only through locators, keyboard, pointer, and wheel controls, reloads to prove completion persistence and absence of the overlay, then covers skip/resume/reset and the keyboard-only path. It never invokes controller/`Commands` from page evaluation. Compact assertions prove the card remains inside 360×480 and does not cover the instructed control; reduced-motion assertions inspect computed animation/transition values; focus assertions track the active heading/button; terminal assertions require no tutorial DOM, a false diagnostic observer flag, and at most one overlay throughout. It records console/page errors and rejects orphaned overlays. Unit tests cover strict migration, save/profile separation, controller transitions/failures, camera keyboard controls, and UI semantics.
