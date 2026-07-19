@@ -19,5 +19,23 @@ the truthful `star-catalog` stage, exposed the accessible retry action, and
 reached ready on the second request without a page error.
 
 This software-renderer timing is local/CI startup evidence, not a reference-GPU
-frame-rate claim. Hardware 60 fps remains governed by the existing reference
-bench evidence and the unchanged performance gates.
+frame-rate claim.
+
+The final current-head hardware flight benchmark used the NVIDIA GeForce RTX
+3070 Laptop GPU at 640x360 for the deterministic 900-frame LEO/Moon/Jupiter
+route. It recorded 6.1 ms median/p75 frame time, 6.3 ms p99, 1.6 ms work p75,
+103,952 bytes steady heap growth, at most 26 draw calls and 49,530 triangles,
+with no browser errors or stability findings. This clears the 60 fps floor with
+substantial headroom.
+
+| Production gate    | T0099 baseline | T0100 final |
+| ------------------ | -------------: | ----------: |
+| Entry gzip         |      123,281 B |   125,568 B |
+| Total JS/CSS gzip  |      569,988 B |   555,034 B |
+| Draw calls         |             10 |          10 |
+| Triangles          |         77,071 |      77,071 |
+| 30 s retained heap |      -84,815 B |  -199,866 B |
+
+The startup UI increases the entry slightly, while safe standalone-decoder
+minification reduces total transfer by 14,954 bytes from the preceding release
+head. Runtime workload remains identical and retained heap remains non-positive.
