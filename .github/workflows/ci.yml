@@ -70,6 +70,9 @@ jobs:
       - name: Procedural Sun regression
         run: npm run test:procedural-sun
 
+      - name: Gas giant animation regression
+        run: npm run test:gas-giants
+
       - name: Camera controls regression
         run: npm run test:camera-controls
 

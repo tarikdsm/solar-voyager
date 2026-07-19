@@ -153,7 +153,8 @@ float gasStormShimmer( vec2 animatedUv ) {
   vec3 direction = gasSphericalDirection( animatedUv );
   vec3 motion = vec3( uGasStormPhase.zw, uGasWarp.w );
   float shimmerNoise = gasFbm( direction * ( uGasWarp.z * 2.0 ) + motion );
-  float gasShimmer = 1.0 + ( shimmerNoise - 0.5 ) * 0.03;
+  float shimmerSignal = smoothstep( 0.32, 0.68, shimmerNoise ) * 2.0 - 1.0;
+  float gasShimmer = 1.0 + shimmerSignal * 0.015;
   return clamp( gasShimmer, 0.985, 1.015 );
 }
 `;

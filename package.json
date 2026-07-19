@@ -18,6 +18,7 @@
     "test:ring-systems": "node tools/tests/ringSystemsRegression.mjs",
     "test:ring-flythrough": "node tools/tests/ringFlythroughRegression.mjs",
     "test:procedural-sun": "node tools/tests/proceduralSunRegression.mjs",
+    "test:gas-giants": "node tools/tests/gasGiantAnimationRegression.mjs",
     "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
@@ -44,6 +45,7 @@
     "bench:scaffold": "node tools/bench/scaffoldBench.mjs",
     "bench": "node tools/bench/flightBench.mjs",
     "bench:sun-quality": "node tools/bench/proceduralSunQualityBench.mjs",
+    "bench:gas-quality": "node tools/bench/gasGiantQualityBench.mjs",
     "bench:sim": "node --expose-gc tools/bench/simulationCoreBench.mjs",
     "golden:regen": "node tools/generateGoldenTrajectories.mjs"
   },

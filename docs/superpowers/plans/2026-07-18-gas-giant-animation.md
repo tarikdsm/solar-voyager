@@ -388,7 +388,7 @@ git commit -m "feat(render): [T0085] wire gas giant animation quality"
 - Produces: `npm run bench:gas-quality`
 - Produces fixture API: `renderBody`, `programSnapshot`, `networkSnapshot`, and `qualitySnapshot`
 
-- [ ] **Step 1: Write the browser regression before the fixture**
+- [x] **Step 1: Write the browser regression before the fixture**
 
 The Playwright script starts Vite, records every response URL and page/console
 error, and requires WebGL hardware context. For each body it captures 512x512
@@ -418,7 +418,7 @@ npm run test:gas-giants
 
 Expected: FAIL because the fixture page does not exist.
 
-- [ ] **Step 2: Implement the deterministic fixture**
+- [x] **Step 2: Implement the deterministic fixture**
 
 Create the real epoch world, force one eligible body into tier 3, wait for its
 model load and `compileAsync`, hide unrelated overlays, and use fixed camera,
@@ -427,7 +427,7 @@ public enable/quality methods; they do not replace production shaders or maps.
 Return numeric program/draw/octave values and raw canvas pixels only after two
 warm-up renders.
 
-- [ ] **Step 3: Implement the full/minimum quality benchmark**
+- [x] **Step 3: Implement the full/minimum quality benchmark**
 
 Mirror `proceduralSunQualityBench.mjs`: render the same close Jupiter camera at
 full and minimum quality, discard warm-up samples, alternate run order, and
@@ -436,7 +436,7 @@ Require identical draw/program counts and minimum p75 lower than full p75 when
 the GPU timer is available; otherwise record the limitation without inventing a
 GPU result.
 
-- [ ] **Step 4: Run acceptance and neighboring browsers**
+- [x] **Step 4: Run acceptance and neighboring browsers**
 
 ```powershell
 npm run test:gas-giants
