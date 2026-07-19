@@ -767,6 +767,20 @@
   color: #fda4af;
 }
 
+.session-settings button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.tutorial-overlay {
+  position: fixed;
+  z-index: 14;
+  bottom: 5rem;
+  left: 1rem;
+  width: min(27rem, calc(100vw - 2rem));
+  padding: 0.9rem 1rem;
+}
+
 .hud-kicker {
   margin: 0;
   color: rgb(125 211 252 / 72%);
@@ -1368,7 +1382,7 @@
 
 .hardware-warning {
   position: absolute;
-  z-index: 10;
+  z-index: 15;
   top: 1rem;
   left: 1rem;
   width: min(34rem, calc(100vw - 2rem));
@@ -1476,7 +1490,8 @@
 
   .hud-panel,
   .camera-help,
-  .session-settings {
+  .session-settings,
+  .tutorial-overlay {
     position: relative;
     inset: auto;
     flex: 0 0 auto;
@@ -1529,6 +1544,13 @@
 
   .session-settings {
     order: 1;
+  }
+
+  .tutorial-overlay {
+    z-index: 14;
+    order: -1;
+    align-self: stretch;
+    padding: 0.7rem 0.8rem;
   }
 
   .perf-panel {

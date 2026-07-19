@@ -7,12 +7,16 @@ import {
   serializeSaveEnvelope,
 } from './saveLoad.js';
 import {
-  parseGameSettings,
+  mergeGameSettingsPreferences,
+  parseProfileSettings,
+  projectGameSettingsV1,
   rebindInput,
-  type GameSettingsV1,
+  updateTutorialSettings,
+  type GameSettingsV2,
   type InputAction,
   type QualityLock,
   type SettingsRepository,
+  type TutorialProgress,
 } from './settings.js';
 
 export type SessionActionResult =
@@ -31,13 +35,13 @@ export interface GameSessionControllerOptions {
   readonly createNewSimulation: () => SimulationCore;
   readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV1, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV2, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV1;
+  private currentSettings: GameSettingsV2;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -45,7 +49,7 @@ export class GameSessionController {
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV1, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV2, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -64,7 +68,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV1 {
+  get settings(): GameSettingsV2 {
     return this.currentSettings;
   }
 
@@ -141,7 +145,7 @@ export class GameSessionController {
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
     try {
-      const candidate = parseGameSettings({ ...this.currentSettings, qualityLock });
+      const candidate = parseProfileSettings({ ...this.currentSettings, qualityLock });
       return this.commitSettings(candidate, 'Quality setting updated');
     } catch (error: unknown) {
       return {
@@ -161,10 +165,26 @@ export class GameSessionController {
     }
   }
 
+  updateTutorial(transition: (current: TutorialProgress) => TutorialProgress): SessionActionResult {
+    try {
+      const candidate = updateTutorialSettings(
+        this.currentSettings,
+        transition(this.currentSettings.tutorial),
+      );
+      return this.commitSettings(candidate, 'Tutorial progress updated', false);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update tutorial progress',
+        detail: describeError(error),
+      };
+    }
+  }
+
   private createCurrentEnvelope(): SaveEnvelopeV2 {
     return createSaveEnvelope(
       this.currentSimulation.exportPersistentState(),
-      this.currentSettings,
+      projectGameSettingsV1(this.currentSettings),
       this.currentSimulation.snapshot.bodyIds,
     );
   }
@@ -180,14 +200,15 @@ export class GameSessionController {
     } catch (error: unknown) {
       return { ok: false, message: failureMessage, detail: describeError(error) };
     }
-    const settingsResult = this.settingsRepository.save(envelope.settings);
+    const candidateSettings = mergeGameSettingsPreferences(this.currentSettings, envelope.settings);
+    const settingsResult = this.settingsRepository.save(candidateSettings);
     if (!settingsResult.ok) {
       return { ok: false, message: failureMessage, detail: settingsResult.error };
     }
     this.currentSimulation = candidateSimulation;
-    this.currentSettings = envelope.settings;
+    this.currentSettings = candidateSettings;
     this.onSimulationReplaced?.(candidateSimulation);
-    this.onSettingsChanged?.(envelope.settings, 'restore');
+    this.onSettingsChanged?.(candidateSettings, 'restore');
     return { ok: true, message: successMessage };
   }
 
@@ -196,13 +217,17 @@ export class GameSessionController {
     this.onSimulationReplaced?.(simulation);
   }
 
-  private commitSettings(settings: GameSettingsV1, successMessage: string): SessionActionResult {
+  private commitSettings(
+    settings: GameSettingsV2,
+    successMessage: string,
+    publish = true,
+  ): SessionActionResult {
     const result = this.settingsRepository.save(settings);
     if (!result.ok) {
       return { ok: false, message: 'Unable to save settings', detail: result.error };
     }
     this.currentSettings = settings;
-    this.onSettingsChanged?.(settings, 'user');
+    if (publish) this.onSettingsChanged?.(settings, 'user');
     return { ok: true, message: successMessage };
   }
 }

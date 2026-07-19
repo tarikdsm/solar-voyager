@@ -1,11 +1,12 @@
 import { useComputed, type ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren, ComponentType } from 'preact';
-import { useCallback, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { createScaffoldState } from '../game/createScaffoldState.js';
 import type { GamePhase, SceneManager } from '../game/sceneManager.js';
 import type { SystemMapController } from '../game/systemMapController.js';
+import type { TutorialController } from '../game/tutorialController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
@@ -19,6 +20,7 @@ import type { StateVectorSignalStore } from './stateVectorSignals.js';
 import { SystemMapPanel } from './SystemMapPanel.js';
 import type { SystemMapSignalStore } from './systemMapSignals.js';
 import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
+import { TutorialOverlayView } from './TutorialOverlay.js';
 import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
 import type { BurnLogSignalStore } from './burnLogSignals.js';
 
@@ -35,10 +37,17 @@ export interface AppProps {
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
   readonly burnLog?: BurnLogSignalStore | null;
-  readonly burnLogPanel?: ComponentType<{ readonly store: BurnLogSignalStore }> | null;
+  readonly burnLogPanel?: ComponentType<{
+    readonly store: BurnLogSignalStore;
+    readonly onExpandedChange?: ((expanded: boolean) => void) | null;
+  }> | null;
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
   readonly initialPhase?: GamePhase;
   readonly onSpacePhaseEntered?: (() => void) | null;
+  readonly onBurnLogExpandedChange?: ((expanded: boolean) => void) | null;
+  readonly onHardwareWarningAcknowledged?: (() => void) | null;
+  readonly onPerfPanelExpandedChange?: ((expanded: boolean) => void) | null;
+  readonly onSaveSucceeded?: (() => void) | null;
   readonly perfPanel?: PerfPanelStore | null;
   readonly sceneManager?: SceneManager | null;
   readonly session?: SessionSettingsPort | null;
@@ -46,6 +55,7 @@ export interface AppProps {
   readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
   readonly systemMap?: SystemMapUiPort | null;
   readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
+  readonly tutorial?: TutorialController | null;
 }
 
 export interface SystemMapUiPort {
@@ -248,7 +258,10 @@ export function TargetPanel({
   );
 }
 
-function HardwareAccelerationWarning({ rendererName }: HardwareAccelerationWarningData) {
+export function HardwareAccelerationWarning({
+  rendererName,
+  onAcknowledged = null,
+}: HardwareAccelerationWarningData & { readonly onAcknowledged?: (() => void) | null }) {
   const [acknowledged, setAcknowledged] = useState(false);
   if (acknowledged) return null;
   return (
@@ -264,7 +277,13 @@ function HardwareAccelerationWarning({ rendererName }: HardwareAccelerationWarni
           settings and hardware acceleration.
         </li>
       </ul>
-      <button type="button" onClick={() => setAcknowledged(true)}>
+      <button
+        type="button"
+        onClick={() => {
+          setAcknowledged(true);
+          onAcknowledged?.();
+        }}
+      >
         I understand
       </button>
     </aside>
@@ -281,6 +300,10 @@ export function App({
   hudState,
   hardwareWarning = null,
   initialPhase,
+  onBurnLogExpandedChange = null,
+  onHardwareWarningAcknowledged = null,
+  onPerfPanelExpandedChange = null,
+  onSaveSucceeded = null,
   onSpacePhaseEntered = null,
   perfPanel = null,
   sceneManager = null,
@@ -289,10 +312,14 @@ export function App({
   stateVectorViewportRef = null,
   systemMap = null,
   trajectoryPrediction = null,
+  tutorial = null,
 }: AppProps) {
   const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
   const [phase, setPhase] = useState<GamePhase>(startingPhase);
+  const [tutorialProgress, setTutorialProgress] = useState(tutorial?.progress ?? null);
+  const [, setTutorialRevision] = useState(0);
   const enteredSpace = useRef(startingPhase === 'space');
+  const tutorialHeading = useRef<HTMLHeadingElement | null>(null);
   const enterSpace = useCallback(() => {
     if (enteredSpace.current) return;
     enteredSpace.current = true;
@@ -300,13 +327,35 @@ export function App({
     onSpacePhaseEntered?.();
   }, [onSpacePhaseEntered]);
 
+  useEffect(() => {
+    setTutorialProgress(tutorial?.progress ?? null);
+    if (tutorial === null) return;
+    return tutorial.subscribe((progress) => {
+      setTutorialProgress(progress);
+      setTutorialRevision((revision) => revision + 1);
+    });
+  }, [tutorial]);
+
+  useEffect(() => {
+    if (tutorialProgress?.status === 'active') tutorialHeading.current?.focus();
+  }, [tutorialProgress?.status, tutorialProgress?.stepId]);
+
   if (phase === 'main-menu' && sceneManager !== null) {
     return (
       <main class="app-overlay app-overlay-menu">
         {hardwareWarning === null ? null : (
-          <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
+          <HardwareAccelerationWarning
+            rendererName={hardwareWarning.rendererName}
+            onAcknowledged={onHardwareWarningAcknowledged}
+          />
         )}
-        <MainMenu scene={sceneManager} session={session} onSpacePhaseEntered={enterSpace} />
+        <MainMenu
+          key={tutorialProgress?.status}
+          scene={sceneManager}
+          session={session}
+          onSpacePhaseEntered={enterSpace}
+          tutorial={tutorial}
+        />
       </main>
     );
   }
@@ -314,9 +363,14 @@ export function App({
   return (
     <main class="app-overlay">
       {hardwareWarning === null ? null : (
-        <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
+        <HardwareAccelerationWarning
+          rendererName={hardwareWarning.rendererName}
+          onAcknowledged={onHardwareWarningAcknowledged}
+        />
       )}
-      {perfPanel === null ? null : <PerfPanel store={perfPanel} />}
+      {perfPanel === null ? null : (
+        <PerfPanel store={perfPanel} onExpandedChange={onPerfPanelExpandedChange} />
+      )}
       {systemMap === null || trajectoryPrediction === null ? null : (
         <SystemMapPanel
           bodyIds={bodyIds}
@@ -332,13 +386,20 @@ export function App({
           <TrajectoryImpactWarning display={trajectoryPrediction.display} />
         )}
         <h1 class="app-title">{scaffoldState.title}</h1>
-        {session === null ? null : <SessionSettingsPanel session={session} />}
+        {session === null ? null : (
+          <SessionSettingsPanel
+            key={tutorialProgress?.status}
+            session={session}
+            onSaveSucceeded={onSaveSucceeded}
+            tutorial={tutorial}
+          />
+        )}
         <OrbitReadout hud={hud} />
         <DualClock hud={hud} />
         <WarpControl commands={commands} hud={hud} hudState={hudState} />
         <EnergyPanel hud={hud} />
         {burnLog === null || BurnLogPanelComponent === null ? null : (
-          <BurnLogPanelComponent store={burnLog} />
+          <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />
         )}
         <TargetPanel
           bodyIds={bodyIds}
@@ -361,10 +422,23 @@ export function App({
             Focus: Earth
           </p>
           <p class="camera-instructions">
-            Drag to orbit · Scroll to zoom · [ / ] change target · E Earth · J Jupiter
+            Drag to orbit · Scroll to zoom · Shift + Arrows/Page Up/Page Down · [ / ] change target
+            · E Earth · J Jupiter
           </p>
         </section>
       </SpaceHudSurfaces>
+      {tutorial !== null &&
+      tutorialProgress !== null &&
+      (tutorialProgress.status === 'unoffered' || tutorialProgress.status === 'active') ? (
+        <TutorialOverlayView
+          controller={tutorial}
+          focusHeading={(heading) => {
+            tutorialHeading.current = heading;
+          }}
+          progress={tutorialProgress}
+          readoutsReady={tutorial.canAcknowledgeReadouts}
+        />
+      ) : null}
     </main>
   );
 }

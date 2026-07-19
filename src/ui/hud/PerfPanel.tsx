@@ -16,6 +16,7 @@ const FRAME_STROKE = 'rgb(125 211 252 / 82%)';
 
 export interface PerfPanelProps {
   readonly store: PerfPanelStore;
+  readonly onExpandedChange?: ((expanded: boolean) => void) | null;
 }
 
 interface MetricProps {
@@ -69,7 +70,7 @@ class CanvasSparklineSink implements PerfPanelSparklineSink {
 }
 
 /** Compact performance truth with an on-demand diagnostic expansion. */
-export function PerfPanel({ store }: PerfPanelProps) {
+export function PerfPanel({ store, onExpandedChange = null }: PerfPanelProps) {
   const display = store.display;
   const [expanded, setExpanded] = useState(false);
   const sparklineCanvas = useRef<HTMLCanvasElement>(null);
@@ -83,14 +84,29 @@ export function PerfPanel({ store }: PerfPanelProps) {
   }, [store]);
 
   useEffect(() => {
+    const toggle = (): void => {
+      setExpanded((current) => {
+        const next = !current;
+        onExpandedChange?.(next);
+        return next;
+      });
+    };
     const toggleWithF3 = (event: KeyboardEvent): void => {
       if (event.code !== 'F3' || event.repeat) return;
       event.preventDefault();
-      setExpanded((current) => !current);
+      toggle();
     };
     window.addEventListener('keydown', toggleWithF3);
     return () => window.removeEventListener('keydown', toggleWithF3);
-  }, []);
+  }, [onExpandedChange]);
+
+  const toggleExpanded = (): void => {
+    setExpanded((current) => {
+      const next = !current;
+      onExpandedChange?.(next);
+      return next;
+    });
+  };
 
   return (
     <section
@@ -107,7 +123,7 @@ export function PerfPanel({ store }: PerfPanelProps) {
         aria-controls="perf-panel-details"
         aria-expanded={expanded}
         title="Toggle performance details (F3)"
-        onClick={() => setExpanded((current) => !current)}
+        onClick={toggleExpanded}
       >
         <strong id="perf-panel-fps" class="perf-panel-fps">
           {display.fps}

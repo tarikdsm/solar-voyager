@@ -17,6 +17,7 @@ export interface KeyboardInputEvent {
   readonly ctrlKey: boolean;
   readonly metaKey: boolean;
   readonly repeat: boolean;
+  readonly shiftKey: boolean;
   readonly target: EventTarget | null;
   preventDefault(): void;
 }
@@ -79,6 +80,7 @@ export class KeyboardCommandMapper {
       event.ctrlKey ||
       event.altKey ||
       event.metaKey ||
+      event.shiftKey ||
       isEditableTarget(event.target)
     ) {
       return;

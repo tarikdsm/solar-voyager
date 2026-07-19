@@ -1,6 +1,6 @@
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v2';
 const HIGH_QUALITY_SETTINGS = JSON.stringify({
-  version: 1,
+  version: 2,
   qualityLock: 'high',
   inputBindings: {
     throttleIncrease: 'KeyR',
@@ -17,6 +17,10 @@ const HIGH_QUALITY_SETTINGS = JSON.stringify({
     attitudePrograde: 'Digit2',
     attitudeRetrograde: 'Digit3',
   },
+  tutorial: {
+    status: 'skipped',
+    stepId: 'focus-target',
+  },
 });
 
 export async function installHighQualitySetting(page) {
@@ -27,4 +31,3 @@ export async function installHighQualitySetting(page) {
     { key: SETTINGS_STORAGE_KEY, value: HIGH_QUALITY_SETTINGS },
   );
 }
-

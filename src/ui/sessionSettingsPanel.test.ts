@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import {
   DEFAULT_GAME_SETTINGS,
-  parseGameSettings,
+  parseProfileSettings,
   rebindInput,
-  type GameSettingsV1,
+  type GameSettingsV2,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
@@ -18,7 +18,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV1 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV2 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -59,7 +59,7 @@ class FakeSession implements SessionSettingsPort {
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
-    this.settings = parseGameSettings({ ...this.settings, qualityLock });
+    this.settings = parseProfileSettings({ ...this.settings, qualityLock });
     return { ok: true, message: 'Quality setting updated' };
   }
 }
@@ -177,6 +177,18 @@ describe('session settings panel model', () => {
     expect(model.load()).toEqual({ ok: true, message: 'Session loaded' });
     session.loadResult = { ok: false, message: 'No local save found' };
     expect(model.load()).toEqual({ ok: false, message: 'No local save found' });
+  });
+
+  it('reports only successful saves through the optional tutorial seam', () => {
+    const session = new FakeSession();
+    const onSaveSucceeded = vi.fn();
+    const model = createSessionSettingsModel(session, new FakeFiles(), null, null, onSaveSucceeded);
+
+    expect(model.save()).toMatchObject({ ok: true });
+    expect(onSaveSucceeded).toHaveBeenCalledOnce();
+    session.saveResult = { ok: false, message: 'Storage unavailable' };
+    expect(model.save()).toMatchObject({ ok: false });
+    expect(onSaveSucceeded).toHaveBeenCalledOnce();
   });
 
   it('exports through the injected file port and reports file failures', () => {

@@ -63,6 +63,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:burn-log
 
+      - name: Orbital tutorial regression
+        timeout-minutes: 5
+        run: npm run test:tutorial
+
       - name: Render depth regression
         run: npm run test:render-depth
 

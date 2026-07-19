@@ -1,5 +1,10 @@
 const ORBIT_RADIANS_PER_PIXEL = 0.004;
+const KEYBOARD_ORBIT_STEP_RAD = 0.12;
+const KEYBOARD_ZOOM_STEP = 120;
 const NON_PASSIVE_LISTENER_OPTIONS: AddEventListenerOptions = { passive: false };
+
+export type CameraInteraction = 'orbit' | 'zoom';
+export type CameraInteractionListener = (interaction: CameraInteraction) => void;
 
 export interface CameraControlPort {
   readonly focusId: string;
@@ -11,6 +16,22 @@ export interface CameraControlPort {
 
 function formatFocusLabel(id: string): string {
   return `Focus: ${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (target === null || typeof target !== 'object') return false;
+  const candidate = target as EventTarget & {
+    readonly isContentEditable?: boolean;
+    readonly tagName?: string;
+    closest?: (selectors: string) => Element | null;
+  };
+  if (candidate.isContentEditable === true) return true;
+  const tagName = candidate.tagName?.toUpperCase();
+  if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
+    return true;
+  }
+  if (typeof candidate.closest !== 'function') return false;
+  return candidate.closest('input, select, textarea, [contenteditable="true"]') !== null;
 }
 
 /** Owns disposable DOM input listeners for the orbit camera. */
@@ -38,7 +59,10 @@ export class CameraInputController {
     const deltaY = event.clientY - this.lastPointerY;
     this.lastPointerX = event.clientX;
     this.lastPointerY = event.clientY;
-    this.controls.orbitBy(-deltaX * ORBIT_RADIANS_PER_PIXEL, -deltaY * ORBIT_RADIANS_PER_PIXEL);
+    if (deltaX !== 0 || deltaY !== 0) {
+      this.controls.orbitBy(-deltaX * ORBIT_RADIANS_PER_PIXEL, -deltaY * ORBIT_RADIANS_PER_PIXEL);
+      this.onInteraction?.('orbit');
+    }
     event.preventDefault();
   };
 
@@ -52,12 +76,52 @@ export class CameraInputController {
   private readonly handleWheel = (event: WheelEvent): void => {
     if (!this.enabled) return;
     event.preventDefault();
+    if (event.deltaY === 0) return;
     this.controls.zoomByWheel(event.deltaY);
+    this.onInteraction?.('zoom');
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (!this.enabled) return;
-    if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (
+      event.repeat ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+    if (event.shiftKey) {
+      let interaction: CameraInteraction | null = 'orbit';
+      switch (event.code) {
+        case 'ArrowLeft':
+          this.controls.orbitBy(KEYBOARD_ORBIT_STEP_RAD, 0);
+          break;
+        case 'ArrowRight':
+          this.controls.orbitBy(-KEYBOARD_ORBIT_STEP_RAD, 0);
+          break;
+        case 'ArrowUp':
+          this.controls.orbitBy(0, KEYBOARD_ORBIT_STEP_RAD);
+          break;
+        case 'ArrowDown':
+          this.controls.orbitBy(0, -KEYBOARD_ORBIT_STEP_RAD);
+          break;
+        case 'PageUp':
+          interaction = 'zoom';
+          this.controls.zoomByWheel(-KEYBOARD_ZOOM_STEP);
+          break;
+        case 'PageDown':
+          interaction = 'zoom';
+          this.controls.zoomByWheel(KEYBOARD_ZOOM_STEP);
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      this.onInteraction?.(interaction);
+      return;
+    }
     let handled = true;
     switch (event.key.toLowerCase()) {
       case '[':
@@ -86,6 +150,7 @@ export class CameraInputController {
     private readonly focusLabel: HTMLElement,
     private readonly controls: CameraControlPort,
     initiallyEnabled = true,
+    private readonly onInteraction: CameraInteractionListener | null = null,
   ) {
     this.enabled = initiallyEnabled;
     this.updateFocusLabel();
