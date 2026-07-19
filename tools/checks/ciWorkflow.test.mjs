@@ -39,6 +39,9 @@ describe('CI workflow', () => {
       '- name: Trajectory overlay regression\n        timeout-minutes: 4\n        run: npm run test:trajectory-overlay',
     );
     expect(workflow).toContain(
+      '- name: Startup quality and loading regression\n        timeout-minutes: 8\n        run: npm run test:startup',
+    );
+    expect(workflow).toContain(
       '- name: Relativistic visuals regression\n        timeout-minutes: 2\n        run: npm run test:relativistic-visuals',
     );
     expect(workflow.match(/^\s*run: npm run format:check\s*$/gmu)).toHaveLength(1);

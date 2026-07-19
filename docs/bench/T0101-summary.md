@@ -109,3 +109,12 @@ checkpoints make any remaining stall observable. The five-minute outer limit and
 every product/startup assertion remain unchanged. The focused liveness test and
 complete startup regression pass locally; exact-head CI is rerun after this
 correction.
+
+The first post-merge `main` CI run (`29706373941`) provided the remaining timing
+evidence: all cold-load checks reached `startup ready` in under two seconds, but
+the first-frame shader assertion completed at 5m04s on that runner. The fixture
+then advanced through recovery scenarios before the workflow killed it at five
+minutes. No product assertion failed, including the fixed 5-second first-playable
+ceiling. The startup step's operational envelope is therefore eight minutes;
+the product deadlines, assertions, and permanent workflow coverage are unchanged,
+and the workflow regression pins this distinction.

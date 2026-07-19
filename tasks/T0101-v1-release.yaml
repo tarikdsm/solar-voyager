@@ -59,3 +59,10 @@ handoff_notes: |
   checkpoints localize any future stall. The outer timeout and all startup
   performance assertions remain unchanged; focused liveness coverage and the
   complete startup fixture pass locally.
+
+  Post-merge main CI run 29706373941 proved the remaining limit mismatch: startup
+  reached ready in under two seconds and every cold-load assertion passed, but a
+  SwiftShader first-frame operation took 5m04s before passing; the workflow then
+  killed the recovery scenarios at its five-minute outer limit. The operational
+  step timeout is eight minutes while the 5-second first-playable ceiling and all
+  product assertions remain unchanged. Workflow regression coverage pins it.
