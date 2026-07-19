@@ -20,6 +20,8 @@ import { SystemMapPanel } from './SystemMapPanel.js';
 import type { SystemMapSignalStore } from './systemMapSignals.js';
 import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
 import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
+import { BurnLogPanel } from './BurnLogPanel.js';
+import type { BurnLogSignalStore } from './burnLogSignals.js';
 
 const scaffoldState = createScaffoldState();
 const WARP_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -33,6 +35,7 @@ export interface AppProps {
   readonly hudState: HudSignals;
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
+  readonly burnLog?: BurnLogSignalStore | null;
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
   readonly initialPhase?: GamePhase;
   readonly onSpacePhaseEntered?: (() => void) | null;
@@ -99,9 +102,13 @@ export function OrbitReadout({ hud }: { readonly hud: HudDisplaySignals }) {
 
 export function DualClock({ hud }: { readonly hud: HudDisplaySignals }) {
   return (
-    <section id="dual-clock" class="hud-panel dual-clock" aria-label="Simulation clocks">
+    <section
+      id="dual-clock"
+      class="hud-panel dual-clock"
+      aria-label="Mission UTC and ship proper-time clocks"
+    >
       <div class="clock-block">
-        <span class="hud-kicker">Coordinate UTC</span>
+        <span class="hud-kicker">Mission UTC · TDB display mapping</span>
         <time id="coordinate-clock">{hud.coordinateUtc}</time>
       </div>
       <span id="relativistic-gamma" class="clock-gamma">
@@ -267,6 +274,7 @@ function HardwareAccelerationWarning({ rendererName }: HardwareAccelerationWarni
 /** Renders the Solar Voyager overlay and setup warnings. */
 export function App({
   bodyIds,
+  burnLog = null,
   commands,
   hud,
   hudState,
@@ -328,6 +336,7 @@ export function App({
         <DualClock hud={hud} />
         <WarpControl commands={commands} hud={hud} hudState={hudState} />
         <EnergyPanel hud={hud} />
+        {burnLog === null ? null : <BurnLogPanel store={burnLog} />}
         <TargetPanel
           bodyIds={bodyIds}
           commands={commands}
