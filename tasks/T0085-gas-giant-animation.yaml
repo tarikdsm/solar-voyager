@@ -1,6 +1,6 @@
 id: T0085
 title: Gas giant animated band shaders (texture base + procedural flow)
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0085-gas-giant-animation
 depends_on: [T0041, T0043]
@@ -56,5 +56,16 @@ handoff_notes: |
   arguments and smoke, visual-tier, and gas-giant browsers pass. Independent
   incremental review of 18d2ede also returned READY with no findings. The
   available hardware is an RTX 3070 Laptop GPU rather than the specified
-  integrated reference GPU; Linux CI remains the final arbiter before DONE and
-  merge.
+  integrated reference GPU.
+
+  After T0095 merged, commit cc9c268 integrated origin/main without rewriting
+  branch history. Fresh verification on that merge passed 115 Vitest files plus
+  one skipped (689 tests passed, 3 skipped), lint, typecheck, formatting, build,
+  task schema, application smoke, visual-tier fly-in, gas-giant regression, and
+  the complete performance gate. Production measured -200,947 B retained with
+  exactly 10 draw calls / 77,071 triangles; the allocation fixture retained
+  +2,938,036 B and the draw fixture injected 29 calls / 65,077 triangles, so
+  both negative controls were rejected. PR #51 CI run 29673611149, job
+  88156853813, passed in 8m29s on exact SHA cc9c268. This DONE transition rides
+  in the merge; the merger must require the final CI on this status commit to
+  pass before merging while retaining the branch.
