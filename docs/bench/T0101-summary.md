@@ -89,3 +89,11 @@ Local ignored captures:
 - `.playwright-mcp/T0101-landing-compact-actions.png`
 
 The dedicated server was stopped and port 5199 was verified released.
+
+## Independent review and exact-head CI
+
+Independent review approved implementation head `382523ade764547ce37a0dae783e90edb3bb5306`
+at C0/I0/M0. GitHub Actions CI run `29704315912` passed on that exact SHA,
+including the license/built-copy gate, branch-mode release readiness, performance,
+smoke, trajectory, and all browser regressions. The final task-state commit is
+validated separately in final mode before merge.

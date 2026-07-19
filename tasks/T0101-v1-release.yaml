@@ -1,6 +1,6 @@
 id: T0101
 title: Public landing page, final release audit, and v1.0 tag
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0101-v1-release
 depends_on: [T0081, T0083, T0085, T0093, T0096, T0097, T0098, T0099, T0100]
@@ -43,7 +43,10 @@ handoff_notes: |
   Universal NOTICE is pinned to its normalized upstream SHA-256 so a mutually
   altered fixture and public copy cannot make the gate pass.
 
-  Publication is intentionally pending independent C/I/M review, exact-head PR CI,
-  DONE transition/merge, green main CI + Pages deploy, cache-disabled live audit,
-  and only then creation/push/verification of annotated tag v1.0.0 on that exact
-  deployed main commit. T0060-T0062 remain the only post-v1 deferrals.
+  Independent review approved head 382523a at C0/I0/M0. Exact-head PR CI run
+  29704315912 passed all gates, including licenses, release readiness, performance,
+  smoke, trajectory, and browser regressions. T0101 is DONE for the merger commit;
+  publication remains intentionally gated on exact-head DONE CI, merge, green main
+  final-mode CI + Pages deploy, cache-disabled live audit, and only then creation/
+  push/verification of annotated tag v1.0.0 on that exact deployed main commit.
+  T0060-T0062 remain the only post-v1 deferrals.
