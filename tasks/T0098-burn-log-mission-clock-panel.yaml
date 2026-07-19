@@ -1,8 +1,8 @@
 id: T0098
 title: Burn log panel and UTC mission clock
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0098-burn-log-utc
 depends_on: [T0053, T0054, T0058, T0096]
 milestone: M5
 spec: |
