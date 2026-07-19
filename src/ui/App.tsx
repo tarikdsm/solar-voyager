@@ -340,6 +340,10 @@ export function App({
     if (tutorialProgress?.status === 'active') tutorialHeading.current?.focus();
   }, [tutorialProgress?.status, tutorialProgress?.stepId]);
 
+  useEffect(() => {
+    if (enteredSpace.current) onSpacePhaseEntered?.();
+  }, [onSpacePhaseEntered]);
+
   if (phase === 'main-menu' && sceneManager !== null) {
     return (
       <main class="app-overlay app-overlay-menu">

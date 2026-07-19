@@ -28,3 +28,51 @@ body {
   height: 100vh;
   touch-action: none;
 }
+
+.startup-loading {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.8rem;
+  padding: 1.5rem;
+  background: radial-gradient(circle at center, #0f3650, #020617 68%);
+  color: #e0f2fe;
+  text-align: center;
+}
+
+.startup-loading[hidden] {
+  display: none;
+}
+
+.startup-loading h1,
+.startup-loading p {
+  margin: 0;
+}
+
+.startup-kicker {
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.startup-loading progress {
+  width: min(26rem, calc(100vw - 3rem));
+  accent-color: #2dd4bf;
+}
+
+.startup-loading button {
+  min-width: 8rem;
+  min-height: 2.75rem;
+  border: 1px solid #5eead4;
+  border-radius: 0.55rem;
+  background: #0f766e;
+  color: #f0fdfa;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}

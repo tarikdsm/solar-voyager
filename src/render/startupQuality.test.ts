@@ -71,6 +71,7 @@ describe('startup quality selection', () => {
     expect(selectStartupQualityRung('high', invalid, Number.NaN)).toBe(0);
     expect(selectStartupQualityRung('medium', invalid, Number.NaN)).toBe(7);
     expect(selectStartupQualityRung('low', invalid, Number.NaN)).toBe(14);
+    expect(selectStartupQualityRung('high', null, null)).toBe(0);
   });
 
   it('rejects malformed automatic capability and timing evidence', () => {

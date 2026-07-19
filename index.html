@@ -15,6 +15,20 @@
       id="space-canvas"
       aria-label="Solar Voyager space view. Drag to orbit, scroll to zoom, and use bracket keys to change focus."
     ></canvas>
+    <section
+      id="startup-loading"
+      class="startup-loading"
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      data-startup-stage="boot"
+    >
+      <p class="startup-kicker">Solar Voyager</p>
+      <h1 id="startup-title">Preparing mission control</h1>
+      <progress id="startup-progress" max="1" value="0" aria-labelledby="startup-title"></progress>
+      <p id="startup-message">Starting renderer</p>
+      <button id="startup-retry" type="button" hidden>Retry</button>
+    </section>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

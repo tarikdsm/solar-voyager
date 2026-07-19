@@ -13,10 +13,11 @@ export interface StartupCapabilities {
 /** Selects the documented representative governor rung without side effects. */
 export function selectStartupQualityRung(
   lock: QualityLock,
-  capabilities: StartupCapabilities,
-  probeMeanMs: number,
+  capabilities: StartupCapabilities | null,
+  probeMeanMs: number | null,
 ): 0 | 7 | 14 {
   if (lock !== 'auto') return lock === 'high' ? 0 : lock === 'medium' ? 7 : 14;
+  if (capabilities === null) throw new RangeError('Automatic startup requires capabilities.');
   if (!Number.isFinite(capabilities.devicePixelRatio) || capabilities.devicePixelRatio <= 0) {
     throw new RangeError('Startup device pixel ratio must be positive and finite.');
   }
@@ -26,7 +27,7 @@ export function selectStartupQualityRung(
   if (!Number.isInteger(capabilities.maxTextureSize) || capabilities.maxTextureSize <= 0) {
     throw new RangeError('Startup maximum texture size must be a positive integer.');
   }
-  if (!Number.isFinite(probeMeanMs) || probeMeanMs < 0) {
+  if (probeMeanMs === null || !Number.isFinite(probeMeanMs) || probeMeanMs < 0) {
     throw new RangeError('Startup probe duration must be finite and nonnegative.');
   }
   if (capabilities.softwareRenderer || capabilities.usedPerformanceCaveatFallback) return 14;

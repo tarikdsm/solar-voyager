@@ -10,6 +10,7 @@ import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
 import { GameSessionController } from './game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
+import { StartupTracker } from './game/startupTracker.js';
 import { SystemMapController, type SystemMapMode } from './game/systemMapController.js';
 import { TutorialController } from './game/tutorialController.js';
 import { readTrajectoryEventSummary } from './game/trajectoryPredictionModel.js';
@@ -23,7 +24,11 @@ import {
   readTrajectoryPredictionTestHorizonSec,
   readTrajectoryPredictionTestPointCount,
 } from './game/trajectoryPredictionRuntimePolicy.js';
-import { createEpochWorld, type EpochWorld } from './render/createEpochWorld.js';
+import {
+  createEpochWorld,
+  type EpochWorld,
+  type EpochWorldMilestone,
+} from './render/createEpochWorld.js';
 import { createRenderer } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
@@ -32,6 +37,7 @@ import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
 import { RelativisticVisualController } from './render/relativisticVisualController.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
+import { measureStartupProbe, selectStartupQualityRung } from './render/startupQuality.js';
 import type { BurnLogEntry, BurnLogView } from './sim/ship/ledger.js';
 import type { Commands, SimSnapshot } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
@@ -43,6 +49,7 @@ import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
 import { createSystemMapSignalStore } from './ui/systemMapSignals.js';
 import { observeStateVectorLayout } from './ui/stateVectorLayoutObserver.js';
+import { updateStartupLoadingView, type StartupLoadingElements } from './ui/startupLoadingView.js';
 import { createTrajectoryPredictionSignalStore } from './ui/trajectoryPredictionSignals.js';
 import {
   STATE_VECTOR_VIEWPORT_COMPONENT_COUNT,
@@ -200,6 +207,10 @@ class SharedCameraControls implements CameraControlPort {
 
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
+const startupLoadingElement = document.querySelector('#startup-loading');
+const startupMessageElement = document.querySelector('#startup-message');
+const startupProgressElement = document.querySelector('#startup-progress');
+const startupRetryElement = document.querySelector('#startup-retry');
 
 if (!(canvasElement instanceof HTMLCanvasElement)) {
   throw new Error('Solar Voyager canvas was not found.');
@@ -208,9 +219,29 @@ if (!(canvasElement instanceof HTMLCanvasElement)) {
 if (!(appElement instanceof HTMLElement)) {
   throw new Error('Solar Voyager application root was not found.');
 }
+if (
+  !(startupLoadingElement instanceof HTMLElement) ||
+  !(startupMessageElement instanceof HTMLElement) ||
+  !(startupProgressElement instanceof HTMLProgressElement) ||
+  !(startupRetryElement instanceof HTMLButtonElement)
+) {
+  throw new Error('Solar Voyager startup loading shell was not found.');
+}
 
 const canvas = canvasElement;
 const appRoot = appElement;
+const startupLoadingElements: StartupLoadingElements = {
+  message: startupMessageElement,
+  progress: startupProgressElement,
+  retry: startupRetryElement,
+  root: startupLoadingElement,
+};
+const startupTracker = new StartupTracker(performance.now());
+Object.defineProperty(canvas, 'solarVoyagerStartup', {
+  value: startupTracker.createDiagnostic(),
+});
+startupLoadingElements.retry.addEventListener('click', () => window.location.reload());
+updateStartupLoadingView(startupLoadingElements, startupTracker);
 const runtimeResources: RuntimeResourceCounts = {
   animationLoopStarts: 0,
   cameraInputControllers: 0,
@@ -230,7 +261,20 @@ const runtimeResources: RuntimeResourceCounts = {
 };
 runtimeResources.canvasBindings += 1;
 Object.defineProperty(canvas, 'solarVoyagerRuntimeResources', { value: runtimeResources });
-const rendererBootstrap = createRenderer(canvas);
+
+async function createRendererOrWait() {
+  try {
+    return createRenderer(canvas);
+  } catch (cause: unknown) {
+    startupTracker.fail(cause);
+    updateStartupLoadingView(startupLoadingElements, startupTracker);
+    canvas.dataset.startupStage = 'failed';
+    startupLoadingElements.retry.focus();
+    return new Promise<never>(() => undefined);
+  }
+}
+
+const rendererBootstrap = await createRendererOrWait();
 runtimeResources.rendererCreations += 1;
 const { contextReport, renderer } = rendererBootstrap;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
@@ -360,6 +404,9 @@ const session = new GameSessionController({
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
+startupTracker.advance('context');
+updateStartupLoadingView(startupLoadingElements, startupTracker);
+canvas.dataset.startupStage = startupTracker.stage;
 const tutorialController = new TutorialController(session.settings.tutorial, session);
 let tutorialFrameObserver: ((snapshot: SimSnapshot) => void) | null = null;
 let tutorialSnapshotObservationCount = 0;
@@ -789,12 +836,33 @@ function renderApplication(): void {
   );
 }
 
-async function prepareApplication(): Promise<void> {
-  renderApplication();
-  const appOverlay = appRoot.querySelector('.app-overlay');
-  if (!(appOverlay instanceof HTMLElement)) {
-    throw new Error('Solar Voyager application overlay was not found.');
+function publishStartupMilestone(milestone: EpochWorldMilestone): void {
+  startupTracker.advance(milestone);
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = startupTracker.stage;
+}
+
+function readStartupResourceMetrics() {
+  const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+  let encodedBodyBytes = 0;
+  let transferBytes = 0;
+  for (const resource of resources) {
+    if (Number.isFinite(resource.encodedBodySize) && resource.encodedBodySize > 0) {
+      encodedBodyBytes += resource.encodedBodySize;
+    }
+    if (Number.isFinite(resource.transferSize) && resource.transferSize > 0) {
+      transferBytes += resource.transferSize;
+    }
   }
+  return {
+    encodedBodyBytes,
+    programCount: renderer.info.programs?.length ?? 0,
+    resourceCount: resources.length,
+    transferBytes,
+  };
+}
+
+async function prepareApplication(): Promise<void> {
   canvas.dataset.depthStrategy = contextReport.depthStrategy;
   canvas.dataset.rendererName = contextReport.rendererName;
   canvas.dataset.rendererReady = 'true';
@@ -803,6 +871,7 @@ async function prepareApplication(): Promise<void> {
   world = await createEpochWorld(renderer, {
     initialViewportWidthPx: Math.max(1, canvas.clientWidth),
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
+    onProgress: publishStartupMilestone,
   });
   runtimeResources.epochWorldCreations += 1;
   world.systemMap.focusBody(systemMapController.focusId);
@@ -823,6 +892,41 @@ async function prepareApplication(): Promise<void> {
     value: systemMapRuntimeDiagnostics,
   });
   canvas.dataset.systemMapMode = systemMapController.mode;
+  const preparedWorld = world;
+  if (preparedWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
+  const qualityLock = session.settings.qualityLock;
+  let probeMeanMs: number | null = null;
+  let initialAutoRung: 0 | 7 | 14;
+  if (qualityLock === 'auto') {
+    const context = renderer.getContext() as WebGL2RenderingContext;
+    probeMeanMs = measureStartupProbe(
+      () => {
+        renderer.render(preparedWorld.spaceScene.scene, preparedWorld.spaceScene.camera);
+        context.finish();
+      },
+      () => performance.now(),
+    );
+    initialAutoRung = selectStartupQualityRung(
+      qualityLock,
+      {
+        devicePixelRatio: window.devicePixelRatio,
+        maxSamples: Number(context.getParameter(context.MAX_SAMPLES)),
+        maxTextureSize: Number(context.getParameter(context.MAX_TEXTURE_SIZE)),
+        softwareRenderer: contextReport.softwareRasterizer,
+        usedPerformanceCaveatFallback: contextReport.usedPerformanceCaveatFallback,
+      },
+      probeMeanMs,
+    );
+  } else {
+    initialAutoRung = selectStartupQualityRung(qualityLock, null, null);
+  }
+  startupTracker.recordQuality(
+    initialAutoRung,
+    qualityLock === 'auto' ? 'auto' : 'manual',
+    probeMeanMs,
+  );
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = startupTracker.stage;
   stateVectorWidget = new StateVectorWidget();
   postPipeline = new LightingPostPipeline(
     renderer,
@@ -846,6 +950,7 @@ async function prepareApplication(): Promise<void> {
   });
   perfGovernor = new PerfGovernor({
     application: qualityController,
+    initialAutoRung,
     initialLock: session.settings.qualityLock,
     state: perfQualityState,
     telemetry,
@@ -868,16 +973,25 @@ async function prepareApplication(): Promise<void> {
   world.trajectoryOverlay.hide();
   world.systemMap.trajectoryOverlay.hide();
   await stateVectorWidget.prepare(renderer);
+  startupTracker.advance('post-ready');
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = startupTracker.stage;
+  renderApplication();
   updateStateVectorViewport();
   canvas.dataset.worldReady = 'true';
+  startupTracker.recordReady(performance.now(), readStartupResourceMetrics());
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = startupTracker.stage;
 }
 
 async function activateSpacePhaseRuntime(): Promise<void> {
   runtimeResources.spacePhaseActivations += 1;
   await applicationReady;
+  if (startupFailed) return;
   await Promise.resolve();
   const activeWorld = world;
   if (activeWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
+  activeWorld.visualSystem.enableLazyLoading();
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
@@ -944,11 +1058,11 @@ function activateSpacePhase(): Promise<void> {
   return spacePhaseActivation;
 }
 
-const applicationReady = prepareApplication();
-if (autostart) {
-  void activateSpacePhase();
-}
-
-void applicationReady.catch((cause: unknown) => {
-  throw new Error('Solar Voyager failed to initialize the epoch world.', { cause });
+let startupFailed = false;
+const applicationReady = prepareApplication().catch((cause: unknown) => {
+  startupFailed = true;
+  startupTracker.fail(cause);
+  updateStartupLoadingView(startupLoadingElements, startupTracker);
+  canvas.dataset.startupStage = 'failed';
+  startupLoadingElements.retry.focus();
 });
