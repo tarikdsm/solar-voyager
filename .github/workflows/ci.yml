@@ -67,6 +67,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:tutorial
 
+      - name: Startup quality and loading regression
+        timeout-minutes: 5
+        run: npm run test:startup
+
       - name: Render depth regression
         run: npm run test:render-depth
 

@@ -127,6 +127,7 @@ export class BodyVisualSystem {
     private readonly assetLoader: BodyVisualAssetLoader,
     private readonly compileModel: BodyModelCompiler,
     private readonly proceduralSun: ProceduralSunMaterialPort,
+    private lazyLoadingEnabled = true,
   ) {
     if (definitions.length === 0 || positionsKm.length !== definitions.length * 3) {
       throw new RangeError('Body definitions and packed positions must have matching counts.');
@@ -353,10 +354,18 @@ export class BodyVisualSystem {
       );
       this.selectedTiers[index] = selectedTier;
 
-      if (selectedTier >= 2 && this.sphereLoadStates[index] === LOAD_IDLE) {
+      if (
+        this.lazyLoadingEnabled &&
+        selectedTier >= 2 &&
+        this.sphereLoadStates[index] === LOAD_IDLE
+      ) {
         this.beginSphereLoad(index);
       }
-      if (selectedTier === 3 && this.modelLoadStates[index] === LOAD_IDLE) {
+      if (
+        this.lazyLoadingEnabled &&
+        selectedTier === 3 &&
+        this.modelLoadStates[index] === LOAD_IDLE
+      ) {
         this.beginModelLoad(index);
       }
 
@@ -399,6 +408,10 @@ export class BodyVisualSystem {
       throw new RangeError('Model threshold scale must be finite and at least one.');
     }
     this.modelThresholdScale = scale;
+  }
+
+  enableLazyLoading(): void {
+    this.lazyLoadingEnabled = true;
   }
 
   setRingParticleCount(count: number): void {

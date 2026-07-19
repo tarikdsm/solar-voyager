@@ -1,4 +1,12 @@
-import { Euler, Mesh, PerspectiveCamera, Vector4, type Camera, type Scene } from 'three';
+import {
+  Euler,
+  Mesh,
+  PerspectiveCamera,
+  Vector4,
+  type Camera,
+  type Scene,
+  type WebGLRenderer,
+} from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +70,19 @@ function createSnapshot() {
 }
 
 describe('StateVectorWidget', () => {
+  it('forces one setup render after asynchronous compilation', async () => {
+    const widget = new StateVectorWidget();
+    const renderer = {
+      compileAsync: vi.fn(async () => undefined),
+      render: vi.fn(),
+    } as unknown as WebGLRenderer;
+
+    await widget.prepare(renderer);
+
+    expect(renderer.compileAsync).toHaveBeenCalledWith(widget.scene, widget.camera);
+    expect(renderer.render).toHaveBeenCalledWith(widget.scene, widget.camera);
+  });
+
   it('owns a screen-facing backdrop behind the oriented vectors', () => {
     const widget = new StateVectorWidget();
     const backdrop = widget.scene.getObjectByName('state-vector-backdrop');

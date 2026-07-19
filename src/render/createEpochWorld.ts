@@ -41,8 +41,12 @@ export interface CreateEpochWorldOptions {
   readonly assetLoader?: BodyVisualAssetLoader;
   readonly initialViewportWidthPx?: number;
   readonly initialViewportHeightPx?: number;
+  readonly onProgress?: ((milestone: EpochWorldMilestone) => void) | null;
   readonly starCatalog?: StarCatalog;
 }
+
+export type EpochWorldMilestone =
+  'star-catalog' | 'asset-manifest' | 'hero-spheres' | 'flight-shaders' | 'map-shaders';
 
 function runtimeCategory(kind: string): BodyVisualDefinition['category'] {
   switch (kind) {
@@ -197,6 +201,7 @@ export async function createEpochWorld(
   );
 
   const starCatalog = options.starCatalog ?? (await loadStarCatalog(starCatalogUrl));
+  options.onProgress?.('star-catalog');
   const starfield = new Starfield(starCatalog, renderer.getPixelRatio());
   spaceScene.scene.add(starfield.points);
 
@@ -206,6 +211,7 @@ export async function createEpochWorld(
       renderer,
       await loadAssetManifest(`${import.meta.env.BASE_URL}assets/manifest.json`),
     );
+  options.onProgress?.('asset-manifest');
   const compileModel: BodyModelCompiler = async (root) => {
     await renderer.compileAsync(root, spaceScene.camera, spaceScene.scene);
   };
@@ -216,9 +222,11 @@ export async function createEpochWorld(
     assetLoader,
     compileModel,
     proceduralSun,
+    false,
   );
 
   await visualSystem.initializeEager();
+  options.onProgress?.('hero-spheres');
   spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
   osculatingConic.line.visible = true;
   trajectoryOverlay.prepareCompilationPass(
@@ -227,6 +235,7 @@ export async function createEpochWorld(
   );
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   renderer.render(spaceScene.scene, spaceScene.camera);
+  options.onProgress?.('flight-shaders');
   osculatingConic.line.visible = false;
   trajectoryOverlay.hide();
   visualSystem.initializeView(
@@ -240,6 +249,7 @@ export async function createEpochWorld(
   );
   await renderer.compileAsync(systemMap.spaceScene.scene, systemMap.spaceScene.camera);
   renderer.render(systemMap.spaceScene.scene, systemMap.spaceScene.camera);
+  options.onProgress?.('map-shaders');
   systemMap.trajectoryOverlay.hide();
 
   return {

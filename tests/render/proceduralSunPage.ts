@@ -63,6 +63,7 @@ renderer.setSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, false);
 renderer.setClearColor(0x000000, 1);
 
 const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_HEIGHT });
+world.visualSystem.enableLazyLoading();
 const sunIndex = bodiesDocument.bodies.findIndex((body) => body.id === 'sun');
 if (sunIndex < 0) throw new Error('Sun is missing from the procedural fixture.');
 const sunDefinition = bodiesDocument.bodies[sunIndex];

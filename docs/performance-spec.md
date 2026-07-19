@@ -46,6 +46,16 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 - Every change is logged to telemetry and surfaced in the perf HUD as the current tier (e.g. `Q4/6`). The governor must never fight the user: a settings lock disables it.
 - **Degradation is invisible-first:** the ladder was ordered so the player notices the FPS drop being fixed before they notice what paid for it.
 
+Initial unlocked quality uses a fixed three-render loading-screen probe after
+eager shader compilation plus WebGL context evidence. Auto starts at rung 0/Q6
+only with a strict hardware context, DPR <= 1.5, `MAX_TEXTURE_SIZE >= 16384`,
+`MAX_SAMPLES >= 4`, and probe mean <= 8 ms. Auto starts at rung 7/Q3 with a
+strict hardware context, DPR <= 2, `MAX_TEXTURE_SIZE >= 8192`,
+`MAX_SAMPLES >= 2`, and probe mean <= 16.6 ms. Every other device, software
+renderer, or major-caveat fallback starts at rung 14/Q1. Manual high/medium/low
+select rungs 0/7/14 without running the probe and remain authoritative; hard
+unsupported features such as post-processing on software rendering stay off.
+
 ## 4. Perf HUD (top-left, elegant)
 
 `ui/hud/PerfPanel.tsx` + `render/telemetry.ts`. Two states:
@@ -86,6 +96,7 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 - `render/telemetry.ts` is the single source of perf truth (frame times ring buffer, ms splits, renderer.info snapshots) — consumed by the perf HUD, the governor, and the bench harness. Sim exposes its own step time in the snapshot.
 - **Bench harness (`npm run bench`):** deterministic scripted flight (fixed seed, fixed 3-minute path: LEO → Moon flyby → Jupiter approach) driven headlessly via Playwright; reports median/p75/p99 frame time, draw calls, triangles, JS heap growth (must be ~0 after warmup — the allocation rule, verified).
 - **CI perf gates (every PR):** bundle-size budget; draw-call/triangle counts from the smoke test scene vs golden values (±10%); **heap-growth-zero check** on 30 s of simulated frames (catches frame-loop allocations mechanically, since CI GPUs are software and absolute fps is meaningless there).
+- **CI startup gate:** a cold production context must reach first playable within 5 s, request exactly the reviewed runtime critical path, keep eager program count stable through the first ordinary frame, prove manual probe bypass, and recover from an injected critical-request failure.
 - Absolute fps regressions are caught on reference hardware: the bench report is committed with perf-relevant PRs (`docs/bench/` history), and any PR touching `render/` or the frame loop must include before/after bench numbers in its description.
 
 A production sample that exceeds the fixed heap ceiling by no more than 25% is

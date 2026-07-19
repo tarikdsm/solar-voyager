@@ -396,6 +396,7 @@ export class StateVectorWidget {
 
   async prepare(renderer: WebGLRenderer): Promise<void> {
     await renderer.compileAsync(this.scene, this.camera);
+    renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {

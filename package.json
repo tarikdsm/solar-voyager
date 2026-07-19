@@ -35,6 +35,7 @@
     "test:system-map": "node tools/tests/systemMapRegression.mjs",
     "test:burn-log": "node tools/tests/burnLogRegression.mjs",
     "test:tutorial": "node tools/tests/tutorialRegression.mjs",
+    "test:startup": "node tools/tests/startupRegression.mjs",
     "test:smoke": "node tools/tests/applicationSmoke.mjs",
     "test:tools": "python -m unittest discover -s tools/tests -p \"test_*.py\" -v",
     "test:blender": "python tools/run_blender_smoke.py",

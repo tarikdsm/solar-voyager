@@ -86,6 +86,7 @@ renderer.setPixelRatio(1);
 renderer.setSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, false);
 renderer.setClearColor(0x020617, 1);
 const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_HEIGHT });
+world.visualSystem.enableLazyLoading();
 const pipeline = new LightingPostPipeline(
   renderer,
   world.spaceScene.scene,

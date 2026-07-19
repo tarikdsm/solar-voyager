@@ -1,6 +1,6 @@
 id: T0100
 title: Startup quality auto-detection and load-time optimization
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0100-startup-quality-loading
 depends_on: [T0041, T0091, T0092, T0096]
@@ -17,4 +17,12 @@ acceptance:
   - Production startup fetches only critical-path assets before play and performs no first-use shader compile for eager visuals
   - Cold-load timing, transfer bytes, programs, errors, and first-playable milestone are recorded for local hardware and CI
   - Smoke, visual tiers, governor, bundle, asset, heap, and 60 fps contracts remain green
-handoff_notes: ""
+handoff_notes: |
+  Approved implementation head cabd400; exact CI 29701161658 green and
+  independent review C0/I0/M0. Functional fix f28ae78 closes bootstrap-chunk and eager hero-texture
+  recovery, stabilizes the burn-log regression, and records request status/bytes
+  plus error arrays. Local verification: format/lint/typecheck; 813 Vitest and
+  60 Python tests; startup and burn-log regressions; budgets/task schema; full
+  performance gates. Bundle 125644 entry / 555110 total gzip; workload 10 draws /
+  77071 triangles; 30 s heap -256026 B. Hardware flight benchmark on RTX 3070
+  Laptop: p75 6.1 ms, work p75 1.6 ms, no errors/findings.
