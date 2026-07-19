@@ -1,4 +1,4 @@
-import { BufferAttribute, InterleavedBufferAttribute, ShaderMaterial } from 'three';
+import { BufferAttribute, InterleavedBufferAttribute, ShaderMaterial, Vector3 } from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -168,14 +168,35 @@ describe('TrajectoryOverlay', () => {
   });
 
   it('exposes nonempty setup-only draw ranges for shader compilation', () => {
-    const overlay = new TrajectoryOverlay(new CameraRelativeSpaceScene(), BODY_IDS);
+    const spaceScene = new CameraRelativeSpaceScene();
+    const overlay = new TrajectoryOverlay(spaceScene, BODY_IDS);
+    const cameraPositionKm = { x: 1.2e9, y: -3.4e8, z: 8.9e8 };
+    const lookDirection = { x: 0.6, y: 0, z: -0.8 };
+    spaceScene.camera.lookAt(lookDirection.x, lookDirection.y, lookDirection.z);
+    spaceScene.camera.updateMatrix();
+    spaceScene.camera.updateMatrixWorld(true);
 
-    overlay.prepareCompilationPass();
+    overlay.prepareCompilationPass(cameraPositionKm, lookDirection);
 
     expect(overlay.line.visible).toBe(true);
     expect(overlay.markers.visible).toBe(true);
     expect(overlay.line.geometry.instanceCount).toBe(1);
     expect(overlay.markers.geometry.drawRange.count).toBe(1);
+    const lineSegments = overlay.line.geometry.getAttribute(
+      'instanceStart',
+    ) as InterleavedBufferAttribute;
+    const markerPosition = overlay.markers.geometry.getAttribute('position') as BufferAttribute;
+    const projected = new Vector3(
+      markerPosition.getX(0),
+      markerPosition.getY(0),
+      markerPosition.getZ(0),
+    ).project(spaceScene.camera);
+    expect(Array.from(lineSegments.data.array.slice(0, 6))).not.toEqual([0, 0, 0, 0, 0, 0]);
+    expect(projected.x).toBeCloseTo(0, 6);
+    expect(projected.y).toBeCloseTo(0, 6);
+    expect(projected.z).toBeGreaterThanOrEqual(-1);
+    expect(projected.z).toBeLessThanOrEqual(1);
+    expect(overlay.markers.geometry.boundingSphere?.center.length()).toBeGreaterThan(0);
     overlay.hide();
     expect(overlay.line.geometry.instanceCount).toBe(0);
     expect(overlay.markers.geometry.drawRange.count).toBe(0);

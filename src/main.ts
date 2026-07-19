@@ -630,7 +630,18 @@ async function prepareApplication(): Promise<void> {
   world.lighting.update();
   world.spaceScene.updateCameraRelative(world.cameraPositionKm);
   world.systemMap.update(0);
+  world.trajectoryOverlay.prepareCompilationPass(
+    world.cameraPositionKm,
+    world.cameraController.lookDirection,
+  );
+  world.systemMap.trajectoryOverlay.prepareCompilationPass(
+    world.systemMap.cameraPositionKm,
+    world.systemMap.cameraController.lookDirection,
+  );
   postPipeline.warmUp(postProcessingEnabled);
+  world.systemMap.render(renderer);
+  world.trajectoryOverlay.hide();
+  world.systemMap.trajectoryOverlay.hide();
   await stateVectorWidget.prepare(renderer);
   updateStateVectorViewport();
   canvas.dataset.worldReady = 'true';

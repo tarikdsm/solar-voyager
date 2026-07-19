@@ -221,7 +221,10 @@ export async function createEpochWorld(
   await visualSystem.initializeEager();
   spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
   osculatingConic.line.visible = true;
-  trajectoryOverlay.prepareCompilationPass();
+  trajectoryOverlay.prepareCompilationPass(
+    cameraController.cameraPositionKm,
+    cameraController.lookDirection,
+  );
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   renderer.render(spaceScene.scene, spaceScene.camera);
   osculatingConic.line.visible = false;
@@ -231,7 +234,10 @@ export async function createEpochWorld(
     initialViewportHeightPx,
     spaceScene.camera.fov * (Math.PI / 180),
   );
-  systemMap.trajectoryOverlay.prepareCompilationPass();
+  systemMap.trajectoryOverlay.prepareCompilationPass(
+    systemMap.cameraPositionKm,
+    systemMap.cameraController.lookDirection,
+  );
   await renderer.compileAsync(systemMap.spaceScene.scene, systemMap.spaceScene.camera);
   renderer.render(systemMap.spaceScene.scene, systemMap.spaceScene.camera);
   systemMap.trajectoryOverlay.hide();

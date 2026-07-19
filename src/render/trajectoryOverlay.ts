@@ -12,6 +12,7 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
+import type { ReadonlyVec3 } from '../core/vec3.js';
 import {
   writePredictionPointsInto,
   writeTrajectoryMarkersInto,
@@ -30,6 +31,8 @@ const MAXIMUM_MARKER_COUNT = PREDICTOR_MAX_POINTS + 2;
 const LINE_COMPONENT_COUNT = PREDICTOR_MAX_POINTS * 3;
 const MARKER_COMPONENT_COUNT = MAXIMUM_MARKER_COUNT * 3;
 const MARKER_SIZE_CSS_PX = 18;
+const COMPILATION_FIXTURE_DISTANCE_KM = 10;
+const COMPILATION_FIXTURE_HALF_WIDTH_KM = 1;
 
 const MARKER_VERTEX_SHADER = /* glsl */ `
 #include <common>
@@ -293,12 +296,58 @@ export class TrajectoryOverlay {
     pixelRatioUniform.value = pixelRatio;
   }
 
-  /** Makes both fixed resources nonempty for the setup-time renderer compilation pass. */
-  prepareCompilationPass(): void {
+  /** Places both fixed resources inside the setup camera frustum for compilation and upload. */
+  prepareCompilationPass(cameraPositionKm: ReadonlyVec3, lookDirection: ReadonlyVec3): void {
+    if (
+      !Number.isFinite(cameraPositionKm.x) ||
+      !Number.isFinite(cameraPositionKm.y) ||
+      !Number.isFinite(cameraPositionKm.z) ||
+      !Number.isFinite(lookDirection.x) ||
+      !Number.isFinite(lookDirection.y) ||
+      !Number.isFinite(lookDirection.z)
+    ) {
+      throw new RangeError('Trajectory compilation fixture requires finite camera state.');
+    }
+    const lookLength = Math.hypot(lookDirection.x, lookDirection.y, lookDirection.z);
+    if (lookLength === 0) {
+      throw new RangeError('Trajectory compilation fixture requires a nonzero look direction.');
+    }
+    const lookX = lookDirection.x / lookLength;
+    const lookY = lookDirection.y / lookLength;
+    const lookZ = lookDirection.z / lookLength;
+    let rightX: number;
+    let rightY: number;
+    let rightZ: number;
+    if (Math.abs(lookZ) < 0.9) {
+      rightX = lookY;
+      rightY = -lookX;
+      rightZ = 0;
+    } else {
+      rightX = -lookZ;
+      rightY = 0;
+      rightZ = lookX;
+    }
+    const rightLength = Math.hypot(rightX, rightY, rightZ);
+    rightX /= rightLength;
+    rightY /= rightLength;
+    rightZ /= rightLength;
+    const centerX = cameraPositionKm.x + lookX * COMPILATION_FIXTURE_DISTANCE_KM;
+    const centerY = cameraPositionKm.y + lookY * COMPILATION_FIXTURE_DISTANCE_KM;
+    const centerZ = cameraPositionKm.z + lookZ * COMPILATION_FIXTURE_DISTANCE_KM;
+    this.linePositionsKm[0] = centerX - rightX * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.linePositionsKm[1] = centerY - rightY * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.linePositionsKm[2] = centerZ - rightZ * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.linePositionsKm[3] = centerX + rightX * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.linePositionsKm[4] = centerY + rightY * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.linePositionsKm[5] = centerZ + rightZ * COMPILATION_FIXTURE_HALF_WIDTH_KM;
+    this.markerPositionsKm[0] = centerX;
+    this.markerPositionsKm[1] = centerY;
+    this.markerPositionsKm[2] = centerZ;
     this.lineBinding.setPointCount(2);
     this.markers.geometry.setDrawRange(0, 1);
     this.line.visible = true;
     this.markers.visible = true;
+    this.spaceScene.updateCameraRelative(cameraPositionKm);
   }
 
   hide(): void {
