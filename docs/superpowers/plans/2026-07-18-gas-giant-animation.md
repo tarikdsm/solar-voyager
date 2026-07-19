@@ -290,7 +290,7 @@ Expected: all focused material tests pass and no existing hook changes output.
 - Produces on `BodyVisualSystem`: `setProceduralQuality(quality)` and test control `setGasGiantAnimationEnabled(id, enabled)`
 - Extends `BodyVisualDefinition` with existing `proceduralSeed: number`
 
-- [ ] **Step 1: Write facade and integration tests first**
+- [x] **Step 1: Write facade and integration tests first**
 
 The facade test must assert:
 
@@ -320,7 +320,7 @@ controller test require:
 expect(subject.visualSystem.setProceduralQuality).toHaveBeenCalledWith('minimum');
 ```
 
-- [ ] **Step 2: Run integration tests and verify RED**
+- [x] **Step 2: Run integration tests and verify RED**
 
 ```powershell
 npx vitest run src/render/gasGiantAnimation.test.ts src/render/bodyVisualSystem.test.ts src/render/createEpochWorld.test.ts src/render/renderQualityController.test.ts
@@ -328,7 +328,7 @@ npx vitest run src/render/gasGiantAnimation.test.ts src/render/bodyVisualSystem.
 
 Expected: FAIL on missing facade, seed field, and quality method.
 
-- [ ] **Step 3: Implement the facade and wire model setup**
+- [x] **Step 3: Implement the facade and wire model setup**
 
 The facade owns one state and one prepared material handle:
 
@@ -355,7 +355,7 @@ Pass `body.proceduralSeed` from `createEpochWorld`. Add
 `setProceduralQuality(profile.proceduralQuality)` to `QualityVisualSystemPort`
 and call it beside the existing Sun quality update.
 
-- [ ] **Step 4: Verify GREEN and render neighbors**
+- [x] **Step 4: Verify GREEN and render neighbors**
 
 ```powershell
 npx vitest run src/render/gasGiantAnimation.test.ts src/render/bodyVisualSystem.test.ts src/render/createEpochWorld.test.ts src/render/renderQualityController.test.ts src/render/surfaceDetail.test.ts src/render/ringSystem.test.ts
@@ -364,7 +364,7 @@ npm run typecheck
 
 Expected: focused tests and typecheck pass with compile order locked.
 
-- [ ] **Step 5: Commit the integration**
+- [x] **Step 5: Commit the integration**
 
 ```powershell
 git add src/render tests/render/visualTierFlyInPage.ts

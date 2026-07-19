@@ -18,7 +18,11 @@ function fixture(postProcessingAvailable = true) {
   const starfield = { setCountCap: vi.fn(), setPixelRatio: vi.fn() };
   const proceduralSun = { setQuality: vi.fn() };
   const assetLoader = { setTextureTierCap: vi.fn() };
-  const visualSystem = { setModelThresholdScale: vi.fn(), setRingParticleCount: vi.fn() };
+  const visualSystem = {
+    setModelThresholdScale: vi.fn(),
+    setProceduralQuality: vi.fn(),
+    setRingParticleCount: vi.fn(),
+  };
   const relativisticVisuals = { setQualityEnabled: vi.fn() };
   const controller = new RenderQualityController({
     assetLoader,
@@ -57,6 +61,7 @@ describe('RenderQualityController', () => {
     expect(subject.proceduralSun.setQuality).toHaveBeenCalledWith('minimum');
     expect(subject.assetLoader.setTextureTierCap).toHaveBeenCalledWith('2k');
     expect(subject.visualSystem.setModelThresholdScale).toHaveBeenCalledWith(1);
+    expect(subject.visualSystem.setProceduralQuality).toHaveBeenCalledWith('minimum');
     expect(subject.visualSystem.setRingParticleCount).toHaveBeenCalledWith(0);
     expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledWith(false);
 
@@ -80,5 +85,6 @@ describe('RenderQualityController', () => {
     expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledOnce();
     expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledWith(false);
     expect(subject.visualSystem.setRingParticleCount).toHaveBeenCalledOnce();
+    expect(subject.visualSystem.setProceduralQuality).toHaveBeenCalledOnce();
   });
 });

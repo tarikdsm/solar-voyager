@@ -19,7 +19,9 @@ import {
   type PreparedEarthSurfaceLayers,
 } from './earthSurfaceLayers.js';
 import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { prepareGasGiantAnimation, type GasGiantAnimation } from './gasGiantAnimation.js';
 import type { ProceduralSunMaterialPort } from './proceduralSun.js';
+import type { ProceduralQuality } from './proceduralSunState.js';
 import type { TextureQualityCap } from './perfGovernor.js';
 import { ringDefinitionFor } from './ringCatalog.js';
 import { prepareRingSystem, type PreparedRingSystem } from './ringSystem.js';
@@ -40,6 +42,7 @@ export interface BodyVisualDefinition {
   readonly polarRadiusRatio: number;
   readonly geometricAlbedo: number;
   readonly albedoColor: number;
+  readonly proceduralSeed: number;
 }
 
 export interface BodyVisualAssetLoader {
@@ -99,6 +102,7 @@ export class BodyVisualSystem {
   private readonly modelBaseTransparencies: Array<Uint8Array | null>;
   private readonly modelBaseForceSinglePasses: Array<Uint8Array | null>;
   private readonly surfaceDetails: Array<PreparedSurfaceDetail | null>;
+  private readonly gasGiantAnimations: Array<GasGiantAnimation | null>;
   private readonly earthSurfaceLayers: Array<PreparedEarthSurfaceLayers | null>;
   private readonly ringSystems: Array<PreparedRingSystem | null>;
   private readonly selectedTiers: Uint8Array;
@@ -114,6 +118,7 @@ export class BodyVisualSystem {
   private readonly sunIndex: number;
   private modelThresholdScale = 1;
   private ringParticleCount = 4096;
+  private proceduralQuality: ProceduralQuality = 'full';
 
   constructor(
     private readonly spaceScene: CameraRelativeSpaceScene,
@@ -157,6 +162,13 @@ export class BodyVisualSystem {
       if (!Number.isFinite(definition.geometricAlbedo) || definition.geometricAlbedo < 0) {
         throw new RangeError(`Body "${definition.id}" must have a finite nonnegative albedo.`);
       }
+      if (
+        !Number.isInteger(definition.proceduralSeed) ||
+        definition.proceduralSeed < 0 ||
+        definition.proceduralSeed > 0xffff_ffff
+      ) {
+        throw new RangeError(`Body "${definition.id}" must have a uint32 procedural seed.`);
+      }
       this.idToIndex.set(definition.id, index);
       colors[index] = definition.albedoColor;
       if (definition.id === 'sun') foundSunIndex = index;
@@ -177,6 +189,7 @@ export class BodyVisualSystem {
     this.modelBaseTransparencies = new Array<Uint8Array | null>(count).fill(null);
     this.modelBaseForceSinglePasses = new Array<Uint8Array | null>(count).fill(null);
     this.surfaceDetails = new Array<PreparedSurfaceDetail | null>(count).fill(null);
+    this.gasGiantAnimations = new Array<GasGiantAnimation | null>(count).fill(null);
     this.earthSurfaceLayers = new Array<PreparedEarthSurfaceLayers | null>(count).fill(null);
     this.ringSystems = new Array<PreparedRingSystem | null>(count).fill(null);
     this.selectedTiers = new Uint8Array(count);
@@ -309,6 +322,10 @@ export class BodyVisualSystem {
       if (surfaceDetail !== null && surfaceDetail !== undefined) {
         surfaceDetail.setDistance(distanceKm, definition.meanRadiusKm);
       }
+      const gasGiantAnimation = this.gasGiantAnimations[index];
+      if (gasGiantAnimation !== null && gasGiantAnimation !== undefined) {
+        gasGiantAnimation.update(simTimeSec);
+      }
       const earthLayers = this.earthSurfaceLayers[index];
       if (earthLayers !== null && earthLayers !== undefined) earthLayers.update(nowMs);
       const ringSystem = this.ringSystems[index];
@@ -391,6 +408,32 @@ export class BodyVisualSystem {
     if (count === this.ringParticleCount) return;
     this.ringParticleCount = count;
     for (const ringSystem of this.ringSystems) ringSystem?.setParticleCount(count);
+  }
+
+  setProceduralQuality(quality: ProceduralQuality): void {
+    if (quality !== 'full' && quality !== 'half' && quality !== 'minimum') {
+      throw new RangeError('Unknown body procedural quality.');
+    }
+    this.proceduralQuality = quality;
+    for (let index = 0; index < this.gasGiantAnimations.length; index += 1) {
+      this.gasGiantAnimations[index]?.setQuality(quality);
+    }
+  }
+
+  getGasGiantOctaves(id: string): number | null {
+    return this.gasGiantAnimations[this.indexForId(id)]?.state.uniforms.uGasOctaves.value ?? null;
+  }
+
+  getGasGiantBandPhase(id: string, zone: number): number | null {
+    if (!Number.isInteger(zone) || zone < 0 || zone > 3) {
+      throw new RangeError('Gas-giant band zone must be an integer from zero to three.');
+    }
+    const animation = this.gasGiantAnimations[this.indexForId(id)];
+    return animation?.state.uniforms.uGasBandPhases.value.getComponent(zone) ?? null;
+  }
+
+  setGasGiantAnimationEnabled(id: string, enabled: boolean): void {
+    this.gasGiantAnimations[this.indexForId(id)]?.setEnabled(enabled);
   }
 
   getRingBlend(id: string): number {
@@ -492,6 +535,25 @@ export class BodyVisualSystem {
     }
     const definition = this.definitions[index];
     if (definition === undefined) throw new Error('Body definition array is sparse.');
+    const surfaceMaterial = model.materials.find(
+      (material): material is MeshStandardMaterial =>
+        material instanceof MeshStandardMaterial && material.name === 'mat_surface',
+    );
+    const gasGiantAnimation =
+      surfaceMaterial === undefined
+        ? null
+        : prepareGasGiantAnimation(definition.id, definition.proceduralSeed, surfaceMaterial);
+    if (gasGiantAnimation !== null) {
+      gasGiantAnimation.setQuality(this.proceduralQuality);
+      this.gasGiantAnimations[index] = gasGiantAnimation;
+    } else if (
+      definition.id === 'jupiter' ||
+      definition.id === 'saturn' ||
+      definition.id === 'uranus' ||
+      definition.id === 'neptune'
+    ) {
+      throw new Error(`Gas-giant model "${definition.id}" is missing mat_surface.`);
+    }
     const ringDefinition = ringDefinitionFor(definition.id);
     if (ringDefinition !== null) {
       const ringSystem = prepareRingSystem(model.root, model.materials, ringDefinition, definition);
@@ -502,10 +564,6 @@ export class BodyVisualSystem {
       this.ringSystems[index] = ringSystem;
     }
     if (model.surfaceDetail !== null) {
-      const surfaceMaterial = model.materials.find(
-        (material): material is MeshStandardMaterial =>
-          material instanceof MeshStandardMaterial && material.name === 'mat_surface',
-      );
       if (surfaceMaterial === undefined) {
         model.surfaceDetail.albedo.dispose();
         model.surfaceDetail.normal.dispose();
@@ -572,6 +630,8 @@ export class BodyVisualSystem {
     } catch {
       this.surfaceDetails[index]?.dispose();
       this.surfaceDetails[index] = null;
+      this.gasGiantAnimations[index]?.dispose();
+      this.gasGiantAnimations[index] = null;
       this.earthSurfaceLayers[index]?.dispose();
       this.earthSurfaceLayers[index] = null;
       this.ringSystems[index]?.dispose();

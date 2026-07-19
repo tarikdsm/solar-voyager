@@ -86,6 +86,7 @@ export async function createEpochWorld(
       polarRadiusRatio: body.polarRadiusRatio,
       geometricAlbedo: body.geometricAlbedo,
       albedoColor: parseAlbedoColor(body.albedoColor),
+      proceduralSeed: body.proceduralSeed,
     });
     if (body.id === 'sun') {
       sunIndex = index;
