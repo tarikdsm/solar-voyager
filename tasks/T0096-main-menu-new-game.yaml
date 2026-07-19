@@ -1,8 +1,8 @@
 id: T0096
 title: Main menu and deterministic new-game flow
-status: TODO
-agent: ""
-branch: ""
+status: CLAIMED
+agent: chatgpt
+branch: task/T0096-main-menu-new-game
 depends_on: [T0050, T0058]
 milestone: M6
 spec: |
