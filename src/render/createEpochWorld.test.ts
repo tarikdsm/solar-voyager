@@ -65,10 +65,12 @@ describe('createEpochWorld', () => {
         1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0.8, 0.9, 1, 0, 0, 1, 2, 1, 0.9, 0.8,
       ]),
     };
+    const milestones: string[] = [];
 
     const world = await createEpochWorld(renderer, {
       assetLoader,
       initialViewportHeightPx: 720,
+      onProgress: (milestone) => milestones.push(milestone),
       starCatalog,
     });
     const bodyCount = bodiesDocument.bodies.length;
@@ -173,14 +175,34 @@ describe('createEpochWorld', () => {
     expect(world.visualSystem.getTier('earth')).toBe(3);
     expect(world.visualSystem.getOpacity('earth', 1)).toBe(0);
     expect(world.visualSystem.getOpacity('earth', 2)).toBe(1);
-    expect(assetLoader.loadModel).toHaveBeenCalledOnce();
-    expect(assetLoader.loadModel).toHaveBeenCalledWith('earth');
-    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(3));
+    expect(world.visualSystem.getLoadState('earth')).toBe('idle');
+    expect(assetLoader.loadModel).not.toHaveBeenCalled();
+    expect(milestones).toEqual([
+      'star-catalog',
+      'asset-manifest',
+      'hero-spheres',
+      'flight-shaders',
+      'map-shaders',
+    ]);
+    expect(compileAsync).toHaveBeenCalledTimes(2);
     expect(compileAsync).toHaveBeenCalledWith(world.spaceScene.scene, world.spaceScene.camera);
     expect(compileAsync).toHaveBeenCalledWith(
       world.systemMap.spaceScene.scene,
       world.systemMap.spaceScene.camera,
     );
+
+    expect(world.cameraController.focusBody('earth')).toBe(true);
+    world.cameraController.update(1_000_000);
+    world.visualSystem.enableLazyLoading();
+    world.visualSystem.update(
+      world.cameraPositionKm,
+      720,
+      world.spaceScene.camera.fov * (Math.PI / 180),
+      1,
+    );
+    await vi.waitFor(() => expect(assetLoader.loadModel).toHaveBeenCalledOnce());
+    expect(assetLoader.loadModel).toHaveBeenCalledWith('earth');
+    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(3));
     expect(compileAsync).toHaveBeenCalledWith(
       earthModelRoot,
       world.spaceScene.camera,

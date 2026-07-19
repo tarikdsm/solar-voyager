@@ -406,6 +406,33 @@ describe('BodyVisualSystem structure', () => {
 });
 
 describe('BodyVisualSystem transitions', () => {
+  it('defers every proximity-triggered request until startup explicitly enables lazy loading', async () => {
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async () => null),
+    };
+    const system = new BodyVisualSystem(
+      new CameraRelativeSpaceScene(),
+      definitions(),
+      positions(),
+      loader,
+      vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
+      false,
+    );
+
+    system.initializeView(cameraAtEarthDistance(5), 1_000, 1);
+    expect(system.getTier('earth')).toBe(3);
+    expect(system.getLoadState('earth')).toBe('idle');
+    expect(loader.loadModel).not.toHaveBeenCalled();
+
+    system.enableLazyLoading();
+    system.update(cameraAtEarthDistance(5), 1_000, 1, 1);
+    await vi.waitFor(() => expect(system.getLoadState('earth')).toBe('failed'));
+    expect(loader.loadModel).toHaveBeenCalledOnce();
+  });
+
   it('snaps the setup view to its loaded fallback before the first rendered frame', () => {
     const loader: BodyVisualAssetLoader = {
       preloadHeroSpheres: vi.fn(async () => undefined),
