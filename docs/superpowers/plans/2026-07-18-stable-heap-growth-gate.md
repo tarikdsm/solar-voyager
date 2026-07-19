@@ -331,7 +331,7 @@ commands, exact review SHA/verdict, and the T0085 CI runs that motivated the
 task. Flip `IN_PROGRESS -> REVIEW`, commit, rebase onto `origin/main`, push, and
 open PR `[T0095] Stable retained-heap CI confirmation`.
 
-- [ ] **Step 5: Complete after green CI**
+- [x] **Step 5: Complete after green CI**
 
 After the PR check passes, flip `REVIEW -> DONE`, push, wait for the final check,
 merge with a merge commit while retaining the branch, and fetch `origin/main`.

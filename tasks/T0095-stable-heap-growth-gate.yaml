@@ -1,6 +1,6 @@
 id: T0095
 title: Stabilize retained-heap CI measurement without weakening the gate
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0095-stable-heap-growth-gate
 depends_on: [T0092]
@@ -70,3 +70,7 @@ handoff_notes: |
   retained +2,934,904 B and was rejected; the draw fixture injected 29 draw
   calls / 65,077 triangles and was rejected. Published for CI as PR #52:
   https://github.com/tarikdsm/solar-voyager/pull/52.
+
+  Initial PR CI run 29673136135, job 88155640957, passed in 5m24s on exact SHA
+  915d17c. This DONE transition rides in the merge commit; the merger must push
+  this status commit and require its final CI run to pass before merging PR #52.
