@@ -52,8 +52,11 @@ the specification's mid-range integrated reference GPU. CI therefore enforces
 portable heap/bundle/draw/triangle gates, while this hardware report is valid as
 the required same-machine before/after regression comparison.
 
-The Windows local production heap gate remained narrowly above its Linux-CI
-calibrated 196,608-byte ceiling: T0085 samples were 207,036 B, 199,444 B, and
-203,060 B. An immediate same-machine `main` A/B without T0085 also failed at
-198,392 B. The ceiling was not changed; this baseline-reproduced local variance
-must be arbitrated by the required Linux CI run before merge.
+Earlier Windows samples were narrowly above the Linux-CI calibrated
+196,608-byte ceiling: T0085 measured 207,036 B, 199,444 B, and 203,060 B, while
+an immediate same-machine `main` A/B without T0085 also failed at 198,392 B.
+The ceiling was not changed. After the final reviewed transactional and
+precompile cleanup (`f78f719`), the production gate passed with -137,288 B
+retained, exactly 10 draw calls and 77,071 triangles; both injected negative
+controls were still rejected. The required Linux CI run remains the final
+arbiter before merge.

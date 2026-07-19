@@ -501,7 +501,7 @@ mask/cycle, simulation-time behavior, hook ordering, exact fallback, and
 quality mapping. Update performance spec only to name gas giants as consumers
 of the already-existing procedural octave rung; do not change any budget.
 
-- [ ] **Step 3: Run the full local gate set**
+- [x] **Step 3: Run the full local gate set**
 
 ```powershell
 npm test
@@ -528,7 +528,7 @@ git diff --check
 
 Expected: every command exits 0; only already-documented skips remain.
 
-- [ ] **Step 4: Request independent exact-head review**
+- [x] **Step 4: Request independent exact-head review**
 
 The different reviewer verifies every acceptance criterion, GLSL/static path,
 recognizable-feature preservation, Great Red Spot direction/crop evidence,

@@ -1,6 +1,6 @@
 id: T0085
 title: Gas giant animated band shaders (texture base + procedural flow)
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0085-gas-giant-animation
 depends_on: [T0041, T0043]
@@ -16,4 +16,39 @@ acceptance:
   - Side-by-side vs static texture shows motion without distorting recognizable features
   - Zero additional texture downloads beyond the existing base maps
   - Cost within render budget; octave fallback verified
-handoff_notes: ""
+handoff_notes: |
+  Implementation complete through f78f719. Jupiter, Saturn, Uranus, and Neptune
+  use deterministic simulation-time band shear, bounded spherical domain warp,
+  storm shimmer, and Jupiter's counterclockwise Great Red Spot rotation while
+  sampling their existing albedo/detail textures. The governor selects 4/2/1
+  octaves through stable uniforms and one stable shader program; disabled mode
+  preserves the original map path. Material hooks, cache keys, controllers, and
+  scene binding are transactional, including validation and compile failures.
+
+  Actual-WebGL acceptance passed with four programs stable after warm-up, one
+  unchanged surface draw and 16,128 triangles per body, zero GL/page/console
+  errors, and only the 16 existing catalog texture requests. Static identity
+  correlation was 0.993752/0.999624/0.999751/0.999619 for Jupiter/Saturn/Uranus/
+  Neptune. One-hour motion MAD was 9.3286/2.0103/0.7288/1.3308 RGB units with
+  luminance drift below 2%. Jupiter's localized spot signal was 2.37x its
+  control, and the animated crop matched the counterclockwise reference better
+  than the clockwise control. Close detail blend was 0.692812 for every body.
+
+  Paired benchmark evidence is in docs/bench/T0085-*.json/.md. Normal-flight
+  median/p75 stayed 6.1/6.1 ms, draw/triangle maxima stayed 26/66,246, steady
+  heap growth changed by 300 B, and entry/total gzip changed by 2,970/2,969 B.
+  The isolated RTX 3070 GPU timer benchmark measured full/minimum p50 at
+  1.874944/1.368064 ms; p75 was 3.052032/3.045376 ms under concurrent GPU load.
+  The final formal production gate passed with -137,288 B retained, exactly 10
+  draws and 77,071 triangles, entry/total gzip 279,959/551,332 B, while both
+  injected allocation and draw-call negative controls were rejected.
+
+  Final verification: Vitest 115 files passed plus one skipped (684 tests passed,
+  3 skipped); lint, typecheck, formatting, build, Python tools, task/schema and
+  asset budgets, gas-giant, surface-detail, ring-system/flythrough, visual-tier,
+  lighting/post, procedural-Sun, renderer-policy, performance-governor, smoke,
+  and production performance gates passed. Independent review of exact SHA
+  f78f719 returned READY with no Critical, Important, or Minor findings after
+  checking precompile-in-scene and full rollback. The available hardware is an
+  RTX 3070 Laptop GPU rather than the specified integrated reference GPU; Linux
+  CI remains the final arbiter before DONE and merge.
