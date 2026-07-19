@@ -51,6 +51,10 @@ const ACTIVE_RUNTIME_RESOURCES = {
   stateVectorLayoutObservers: 1,
   trajectoryWorkers: 1,
 };
+const ACTIVE_RUNTIME_RESOURCES_WITHOUT_TRAJECTORY = {
+  ...ACTIVE_RUNTIME_RESOURCES,
+  trajectoryWorkers: 0,
+};
 
 function collectBrowserErrors(page) {
   const errors = [];
@@ -110,11 +114,20 @@ async function assertFreshMenu(page, expectedContinueEnabled) {
   });
   const newGame = page.getByRole('button', { name: 'New Game' });
   const continueButton = page.getByRole('button', { name: 'Continue' });
-  assert.equal(await newGame.evaluate((element) => element === globalThis.document.activeElement), true);
+  await page.getByRole('heading', { name: 'Solar Voyager', level: 1 }).waitFor();
+  await page.getByRole('heading', { name: 'Begin your voyage', level: 2 }).waitFor();
+  await page.getByRole('heading', { name: 'Quick flight controls', level: 2 }).waitFor();
+  assert.equal(await page.locator('.main-menu-facts li').count(), 3);
+  assert.match(await page.locator('.main-menu').innerText(), /Float64 n-body physics/iu);
+  assert.match(await page.locator('.main-menu').innerText(), /Relativistic visuals/iu);
+  assert.equal(
+    await newGame.evaluate((element) => element === globalThis.document.activeElement),
+    true,
+  );
   assert.equal(await continueButton.isEnabled(), expectedContinueEnabled);
 }
 
-async function waitForSpace(page, timeout = 30_000) {
+async function waitForSpace(page, timeout = 30_000, expectedResources = ACTIVE_RUNTIME_RESOURCES) {
   try {
     await page.waitForSelector('#orbit-readout', { state: 'visible', timeout });
     await page.waitForFunction(
@@ -130,7 +143,7 @@ async function waitForSpace(page, timeout = 30_000) {
           )
         );
       },
-      ACTIVE_RUNTIME_RESOURCES,
+      expectedResources,
       { timeout },
     );
   } catch (cause) {
@@ -242,7 +255,10 @@ async function runFreshAndContinueFlow(browser) {
       `unexpected canonical periapsis: ${canonical.periapsis}`,
     );
     const velocityKmS = Number.parseFloat(canonical.velocity);
-    assert.ok(velocityKmS >= 37 && velocityKmS <= 39, `unexpected canonical LEO speed: ${canonical.velocity}`);
+    assert.ok(
+      velocityKmS >= 37 && velocityKmS <= 39,
+      `unexpected canonical LEO speed: ${canonical.velocity}`,
+    );
     assert.equal(workerRequestCount, 1, 'repeated New Game must create one trajectory worker');
     await page.evaluate(() => {
       globalThis.window.dispatchEvent(new Event('resize'));
@@ -263,7 +279,9 @@ async function runFreshAndContinueFlow(browser) {
     });
     await page.locator('#target-selector').selectOption('mars');
     await page.locator('#session-save').click();
-    assert.ok(await page.evaluate((key) => globalThis.localStorage.getItem(key) !== null, SAVE_STORAGE_KEY));
+    assert.ok(
+      await page.evaluate((key) => globalThis.localStorage.getItem(key) !== null, SAVE_STORAGE_KEY),
+    );
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await assertFreshMenu(page, true);
@@ -289,10 +307,10 @@ async function runInvalidSaveFlow(browser) {
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
   await disableUnrelatedTrajectoryPrediction(page);
-  await page.addInitScript(
-    ({ key, value }) => globalThis.localStorage.setItem(key, value),
-    { key: SAVE_STORAGE_KEY, value: '{"version":2,"corrupt":true}' },
-  );
+  await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
+    key: SAVE_STORAGE_KEY,
+    value: '{"version":2,"corrupt":true}',
+  });
   try {
     await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
     await assertFreshMenu(page, false);
@@ -334,8 +352,14 @@ async function runResponsiveAndReducedMotionFlow(browser) {
     assert.equal(layout.transitionDuration, '0s');
     assert.equal(layout.reducedMotion, true);
     assert.ok(layout.top >= 0, `menu starts above compact viewport: ${JSON.stringify(layout)}`);
-    assert.ok(layout.bottom <= layout.viewportHeight, `menu starts below compact viewport: ${JSON.stringify(layout)}`);
-    assert.ok(layout.right <= layout.viewportWidth, `menu overflows compact viewport: ${JSON.stringify(layout)}`);
+    assert.ok(
+      layout.bottom <= layout.viewportHeight,
+      `menu starts below compact viewport: ${JSON.stringify(layout)}`,
+    );
+    assert.ok(
+      layout.right <= layout.viewportWidth,
+      `menu overflows compact viewport: ${JSON.stringify(layout)}`,
+    );
     assert.equal(layout.scrollWidth, layout.viewportWidth);
 
     await page.locator('#session-settings').evaluate((details) => {
@@ -345,7 +369,10 @@ async function runResponsiveAndReducedMotionFlow(browser) {
       '.main-menu button, .main-menu summary, .main-menu select, .main-menu .session-import-label',
     );
     const controlCount = await controls.count();
-    assert.ok(controlCount >= 10, `expected all compact menu controls, found ${String(controlCount)}`);
+    assert.ok(
+      controlCount >= 10,
+      `expected all compact menu controls, found ${String(controlCount)}`,
+    );
     for (let index = 0; index < controlCount; index += 1) {
       const control = controls.nth(index);
       await control.scrollIntoViewIfNeeded();
@@ -356,8 +383,8 @@ async function runResponsiveAndReducedMotionFlow(browser) {
         bounds.y + bounds.height <= layout.viewportHeight,
         `compact control ${String(index)} is below viewport`,
       );
-      const focusable = await control.evaluate(
-        (element) => element.matches('button:not(:disabled), summary, select'),
+      const focusable = await control.evaluate((element) =>
+        element.matches('button:not(:disabled), summary, select'),
       );
       if (focusable) {
         await control.focus();
@@ -380,6 +407,12 @@ async function runResponsiveAndReducedMotionFlow(browser) {
       `compact menu did not expose a scroll range: ${JSON.stringify(compactScroll)}`,
     );
     assert.ok(compactScroll.scrollTop > 0, 'compact controls were not reachable by scrolling');
+    const newGame = page.getByRole('button', { name: 'New Game' });
+    await newGame.scrollIntoViewIfNeeded();
+    await newGame.focus();
+    await page.keyboard.press('Enter');
+    await waitForSpace(page, 30_000, ACTIVE_RUNTIME_RESOURCES_WITHOUT_TRAJECTORY);
+    await dismissHardwareWarningIfPresent(page);
     assert.deepEqual(browserErrors, []);
     return layout;
   } finally {

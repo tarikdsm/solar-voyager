@@ -58,41 +58,87 @@ export function MainMenuView({
 }: MainMenuViewProps) {
   return (
     <section class="main-menu" aria-labelledby="main-menu-title">
-      <header class="main-menu-header">
-        <p class="main-menu-kicker">Realistic solar-system exploration</p>
-        <h1 id="main-menu-title">Solar Voyager</h1>
-        <p>
-          Command a photon-drive spacecraft from a canonical 400 km low Earth orbit and navigate the
-          Solar System with real orbital mechanics.
+      <div class="main-menu-intro">
+        <header class="main-menu-header">
+          <p class="main-menu-kicker">A real-scale orbital sandbox</p>
+          <h1 id="main-menu-title">Solar Voyager</h1>
+          <p>
+            Command a photon-drive spacecraft from a canonical 400 km low Earth orbit. Read the
+            instruments, shape your trajectory, and cross the Solar System with real orbital
+            mechanics.
+          </p>
+        </header>
+        <ul class="main-menu-facts" aria-label="Simulation highlights">
+          <li>
+            <strong>Float64 n-body physics</strong>
+            <span>Every major body influences your heliocentric flight.</span>
+          </li>
+          <li>
+            <strong>Relativistic visuals</strong>
+            <span>Light-time, aberration, Doppler shift, and beaming at extreme speed.</span>
+          </li>
+          <li>
+            <strong>400 km low Earth orbit</strong>
+            <span>Begin already in space and plan the first departure burn.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="main-menu-launch" aria-labelledby="main-menu-launch-title">
+        <h2 id="main-menu-launch-title">Begin your voyage</h2>
+        <nav class="main-menu-actions" aria-label="Mission start">
+          <button type="button" class="main-menu-primary" autoFocus onClick={onNewGame}>
+            New Game
+          </button>
+          <button type="button" disabled={!canContinue} onClick={onContinue}>
+            Continue
+          </button>
+        </nav>
+        <p
+          class={
+            status?.ok === false ? 'main-menu-status main-menu-status-error' : 'main-menu-status'
+          }
+          aria-live="polite"
+        >
+          {status?.message ?? 'Choose a mission to begin'}
         </p>
-      </header>
-      <nav class="main-menu-actions" aria-label="Mission start">
-        <button type="button" class="main-menu-primary" autoFocus onClick={onNewGame}>
-          New Game
-        </button>
-        <button type="button" disabled={!canContinue} onClick={onContinue}>
-          Continue
-        </button>
-      </nav>
-      <p
-        class={
-          status?.ok === false ? 'main-menu-status main-menu-status-error' : 'main-menu-status'
-        }
-        aria-live="polite"
-      >
-        {status?.message ?? 'Choose a mission to begin'}
-      </p>
-      <p class="main-menu-controls">
-        Keyboard and mouse controls are available in flight. Quality and input preferences can be
-        configured before launch.
-      </p>
-      {session === null ? null : (
-        <SessionSettingsPanel
-          session={session}
-          activationGuard={activationGuard}
-          tutorial={tutorial}
-        />
-      )}
+
+        <aside class="main-menu-quick-start" aria-labelledby="main-menu-controls-title">
+          <div class="main-menu-section-heading">
+            <h2 id="main-menu-controls-title">Quick flight controls</h2>
+            <span>Default bindings</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Attitude</dt>
+              <dd>W / S · A / D · Z / C</dd>
+            </div>
+            <div>
+              <dt>Throttle</dt>
+              <dd>R / F</dd>
+            </div>
+            <div>
+              <dt>Time warp</dt>
+              <dd>= / −</dd>
+            </div>
+            <div>
+              <dt>System map</dt>
+              <dd>M</dd>
+            </div>
+          </dl>
+          <p class="main-menu-controls">
+            Bindings and visual quality are configurable in Settings.
+          </p>
+        </aside>
+
+        {session === null ? null : (
+          <SessionSettingsPanel
+            session={session}
+            activationGuard={activationGuard}
+            tutorial={tutorial}
+          />
+        )}
+      </div>
     </section>
   );
 }

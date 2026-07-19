@@ -90,7 +90,14 @@ describe('main menu', () => {
     expect(newGame?.props.autoFocus).toBe(true);
     expect(continueGame?.props.disabled).toBe(true);
     expect(liveStatus?.props.children).toBe('Unable to start new game');
-    expect(JSON.stringify(view)).toContain('400 km low Earth orbit');
+    const serialized = JSON.stringify(view);
+    expect(serialized).toContain('400 km low Earth orbit');
+    expect(serialized).toContain('Float64 n-body physics');
+    expect(serialized).toContain('Relativistic visuals');
+    expect(serialized).toContain('Quick flight controls');
+    expect(serialized).toContain('Default bindings');
+    expect(nodes.filter((node) => node.type === 'li')).toHaveLength(3);
+    expect(nodes.some((node) => node.type === 'dl')).toBe(true);
   });
 
   it('routes Continue through the scene manager only while the menu is active', () => {
