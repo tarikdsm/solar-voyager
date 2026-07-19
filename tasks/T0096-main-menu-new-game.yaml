@@ -20,7 +20,7 @@ acceptance:
   - Keyboard focus, reduced-motion behavior, reload, and repeated menu-to-game attempts are covered by unit and real-browser tests
   - Existing smoke, performance, save/load, and gameplay regressions pass with no duplicate canvas, renderer, worker, or event listener
 handoff_notes: |
-  Ready for merge after CI on exact implementation head d5f8bb2. The normal
+  Ready for merge after CI on exact implementation head 5f0f6c9. The normal
   production URL now opens an accessible responsive MainMenu; New Game enters
   the canonical 400 km LEO and valid Continue/import operations replace the
   session atomically before entering SpacePhase. Explicit ?autostart=1 keeps
@@ -40,6 +40,11 @@ handoff_notes: |
   exact one-shot resource counters, including a successfully scheduled rAF.
   Application smoke remains the independent gate for completed frames and real
   framebuffer pixels. Independent re-review of this correction reported C0/I0/M0.
+
+  The real-browser suite now runs this flow under deterministic SwiftShader,
+  dismisses the mandatory hardware-acceleration warning through its accessible
+  I understand button before Save and Continue, and keeps both actions as normal
+  pointer clicks. Independent re-review reported C0/I0/M0.
 
   Exact-head verification passed: 706 Vitest tests with 3 expected skips; lint,
   typecheck, format, build, task schema, asset budgets, and diff check; main-menu,
