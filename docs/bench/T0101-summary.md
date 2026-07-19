@@ -98,11 +98,14 @@ including the license/built-copy gate, branch-mode release readiness, performanc
 smoke, trajectory, and all browser regressions. The final task-state commit is
 validated separately in final mode before merge.
 
-The first task-state CI run (`29704741932`) exposed a liveness defect in the
-startup regression itself: its intercepted star-catalog request used an
-unbounded custom promise, so an early navigation/request failure could remain
-silent until the workflow's five-minute timeout. The fixture now uses
-Playwright's request wait with an explicit 30-second timeout and prints all five
-serial scenario phases. The five-minute outer limit and every product/startup
-assertion remain unchanged. The focused liveness test and the complete startup
-regression pass locally; exact-head CI is rerun after this correction.
+Task-state CI runs `29704741932` and `29705322179` reached the startup fixture's
+`cold load` phase and then exhausted the five-minute outer timeout without a
+product assertion or internal checkpoint. The fixture had held the intercepted
+star-catalog route behind an externally released deferred promise. That protocol
+is removed: the route handler now captures the loading state itself, reports any
+capture error, and always continues the request in `finally`; the consuming
+snapshot wait has an independent 30-second Node deadline. Five cold-load
+checkpoints make any remaining stall observable. The five-minute outer limit and
+every product/startup assertion remain unchanged. The focused liveness test and
+complete startup regression pass locally; exact-head CI is rerun after this
+correction.

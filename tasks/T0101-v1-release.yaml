@@ -51,9 +51,11 @@ handoff_notes: |
   push/verification of annotated tag v1.0.0 on that exact deployed main commit.
   T0060-T0062 remain the only post-v1 deferrals.
 
-  Final task-state CI run 29704741932 then exposed an unbounded wait in the
-  startup browser fixture, not a product assertion: an absent intercepted star
-  request could stay silent until the five-minute workflow timeout. The wait is
-  now a Playwright request wait capped at 30 seconds, every serial phase is
-  reported, and the outer timeout plus all startup performance assertions remain
-  unchanged. A focused liveness regression and the complete startup fixture pass.
+  Task-state CI runs 29704741932 and 29705322179 then exhausted the five-minute
+  startup-fixture timeout inside cold load without a product assertion. The
+  externally released promise that held the star-catalog route is removed: the
+  handler captures loading state and always continues in finally, while the
+  snapshot consumer has a separate 30-second Node deadline. Five internal
+  checkpoints localize any future stall. The outer timeout and all startup
+  performance assertions remain unchanged; focused liveness coverage and the
+  complete startup fixture pass locally.
