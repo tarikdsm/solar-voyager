@@ -27,6 +27,13 @@ copyright notices and full Apache License 2.0 terms. A permanent gate compares
 those texts to installed dependencies and requires the built copy to be
 byte-identical. The production build and built-copy check pass.
 
+A second compliance pass identified the separate Basis Universal NOTICE. Its
+complete upstream text, including the 2016–2026 Binomial LLC copyright,
+trademark, and redistribution clauses, is now reproduced verbatim modulo line
+ending/trailing-space normalization. The gate pins the normalized upstream text
+to SHA-256 `77fcc7890e65895eae308767546ad6233aa9599d196affa5f7101c8ff3a655b6`
+and rejects a forged fixture even when both local copies agree.
+
 CI now runs branch readiness only for pull requests and final readiness only for
 pushes to `main`; the latter rejects any state where T0101 is not `DONE`. Focused
 license, workflow, and release-readiness regressions pass 8/8. The post-correction

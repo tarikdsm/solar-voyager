@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,12 +10,19 @@ const SHIPPED_DEPENDENCIES = [
   ['@preact/signals-core', 'node_modules/@preact/signals-core/LICENSE'],
 ];
 const CODEC_NOTICES = [
-  ['Basis Universal', 'Copyright 2019-2026 Binomial LLC'],
+  ['Basis Universal', 'Copyright © 2016–2026 Binomial LLC.'],
   ['Google Draco decoder', 'Copyright 2017 The Draco Authors'],
 ];
+const BASIS_NOTICE_PATH = 'tools/checks/fixtures/basis-universal-NOTICE.txt';
+const BASIS_NOTICE_SHA256 = '77fcc7890e65895eae308767546ad6233aa9599d196affa5f7101c8ff3a655b6';
 
 function normalize(source) {
-  return source.replaceAll('\r\n', '\n').trim();
+  return source
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
 }
 
 function apacheTerms(source) {
@@ -59,6 +67,17 @@ export async function verifyThirdPartyLicenses(
     if (!normalizedNotice.includes(name) || !normalizedNotice.includes(copyright)) {
       findings.push(`missing codec notice: ${name}`);
     }
+  }
+
+  const basisNotice = await readText(join(root, BASIS_NOTICE_PATH));
+  if (basisNotice === undefined || !normalizedNotice.includes(normalize(basisNotice))) {
+    findings.push('missing complete Basis Universal NOTICE');
+  }
+  if (
+    basisNotice !== undefined &&
+    createHash('sha256').update(normalize(basisNotice)).digest('hex') !== BASIS_NOTICE_SHA256
+  ) {
+    findings.push('Basis Universal NOTICE fixture does not match pinned upstream SHA-256');
   }
 
   const apacheReference = await readText(join(root, 'node_modules', 'playwright', 'LICENSE'));

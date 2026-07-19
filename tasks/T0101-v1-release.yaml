@@ -39,7 +39,9 @@ handoff_notes: |
   third-party notices, a source/built-copy license gate, PR-only branch readiness,
   main-push-only final readiness, and focused regression coverage. The corrected
   production build, built notice, performance limits, lint, typecheck, formatting,
-  task/dashboard/release checks, and 8 focused tests pass locally.
+  task/dashboard/release checks, and 9 focused tests pass locally. The Basis
+  Universal NOTICE is pinned to its normalized upstream SHA-256 so a mutually
+  altered fixture and public copy cannot make the gate pass.
 
   Publication is intentionally pending independent C/I/M review, exact-head PR CI,
   DONE transition/merge, green main CI + Pages deploy, cache-disabled live audit,
