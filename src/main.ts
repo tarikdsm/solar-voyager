@@ -47,6 +47,24 @@ import {
 const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
 
+interface RuntimeResourceCounts {
+  animationLoopStarts: number;
+  cameraInputControllers: number;
+  canvasBindings: number;
+  epochWorldCreations: number;
+  keyboardCommandMappers: number;
+  pagehideListeners: number;
+  rendererCreations: number;
+  resizeListeners: number;
+  scrollListeners: number;
+  sessionSimulationCreations: number;
+  sessionSimulationReplacements: number;
+  spacePhaseActivationRequests: number;
+  spacePhaseActivations: number;
+  stateVectorLayoutObservers: number;
+  trajectoryWorkers: number;
+}
+
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
 
@@ -60,7 +78,27 @@ if (!(appElement instanceof HTMLElement)) {
 
 const canvas = canvasElement;
 const appRoot = appElement;
+const runtimeResources: RuntimeResourceCounts = {
+  animationLoopStarts: 0,
+  cameraInputControllers: 0,
+  canvasBindings: 0,
+  epochWorldCreations: 0,
+  keyboardCommandMappers: 0,
+  pagehideListeners: 0,
+  rendererCreations: 0,
+  resizeListeners: 0,
+  scrollListeners: 0,
+  sessionSimulationCreations: 0,
+  sessionSimulationReplacements: 0,
+  spacePhaseActivationRequests: 0,
+  spacePhaseActivations: 0,
+  stateVectorLayoutObservers: 0,
+  trajectoryWorkers: 0,
+};
+runtimeResources.canvasBindings += 1;
+Object.defineProperty(canvas, 'solarVoyagerRuntimeResources', { value: runtimeResources });
 const rendererBootstrap = createRenderer(canvas);
+runtimeResources.rendererCreations += 1;
 const { contextReport, renderer } = rendererBootstrap;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
@@ -86,11 +124,8 @@ function invalidateTrajectoryPredictionForWarpElapsed(): void {
   trajectoryPredictorClient?.invalidateForWarpElapsed();
 }
 
-const initialSimulation = createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction);
 const hudStore = createHudSignalStore();
-hudStore.publish(initialSimulation.snapshot, 0);
 const stateVectorStore = createStateVectorSignalStore();
-stateVectorStore.publish(initialSimulation.snapshot, 0);
 const hardwareWarning = contextReport.warningRequired
   ? { rendererName: contextReport.rendererName }
   : null;
@@ -109,14 +144,33 @@ const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
   setItem: (key, value) => window.localStorage.setItem(key, value),
 };
+
+function createTrackedNewGameSimulation() {
+  const simulation = createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction);
+  runtimeResources.sessionSimulationCreations += 1;
+  return simulation;
+}
+
+function createTrackedPersistentSimulation(
+  state: Parameters<typeof createGameSimulationFromPersistentState>[1],
+) {
+  const simulation = createGameSimulationFromPersistentState(
+    SHIP_MASS_KG,
+    state,
+    invalidateTrajectoryPrediction,
+  );
+  runtimeResources.sessionSimulationCreations += 1;
+  return simulation;
+}
+
 const session = new GameSessionController({
-  initialSimulation,
-  createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction),
+  initialSimulation: createTrackedNewGameSimulation(),
+  createNewSimulation: createTrackedNewGameSimulation,
   saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(browserStorage),
-  createSimulation: (state) =>
-    createGameSimulationFromPersistentState(SHIP_MASS_KG, state, invalidateTrajectoryPrediction),
+  createSimulation: createTrackedPersistentSimulation,
   onSimulationReplaced: (replacement) => {
+    runtimeResources.sessionSimulationReplacements += 1;
     hudStore.publish(replacement.snapshot, performance.now());
     world?.trajectoryOverlay.hide();
     trajectoryPredictionRefresh.clear();
@@ -128,6 +182,8 @@ const session = new GameSessionController({
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
+hudStore.publish(session.simulation.snapshot, 0);
+stateVectorStore.publish(session.simulation.snapshot, 0);
 
 function handleTrajectoryPredictionResult(result: PredictorResponseMessage): void {
   trajectoryPredictionPending = false;
@@ -163,9 +219,10 @@ function startTrajectoryPredictionRuntime(): void {
   const trajectoryWorker = new Worker(new URL('./workers/predictor.worker.ts', import.meta.url), {
     type: 'module',
   });
+  runtimeResources.trajectoryWorkers += 1;
   trajectoryPredictorClient = createTrajectoryPredictorClient(
     trajectoryWorker,
-    initialSimulation.snapshot.bodyIds.length,
+    session.simulation.snapshot.bodyIds.length,
     handleTrajectoryPredictionResult,
     {
       ownsPort: true,
@@ -375,6 +432,7 @@ async function prepareApplication(): Promise<void> {
   world = await createEpochWorld(renderer, {
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
   });
+  runtimeResources.epochWorldCreations += 1;
   stateVectorWidget = new StateVectorWidget();
   postPipeline = new LightingPostPipeline(
     renderer,
@@ -413,6 +471,7 @@ async function prepareApplication(): Promise<void> {
 }
 
 async function activateSpacePhaseRuntime(): Promise<void> {
+  runtimeResources.spacePhaseActivations += 1;
   await applicationReady;
   await Promise.resolve();
   const activeWorld = world;
@@ -427,7 +486,9 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     currentInputSnapshot,
     session.settings.inputBindings,
   );
+  runtimeResources.keyboardCommandMappers += 1;
   cameraInput = new CameraInputController(canvas, window, focusLabel, activeWorld.cameraController);
+  runtimeResources.cameraInputControllers += 1;
   startTrajectoryPredictionRuntime();
   const appOverlay = appRoot.querySelector('.app-overlay');
   if (!(appOverlay instanceof HTMLElement)) {
@@ -437,16 +498,21 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     appOverlay,
     updateStateVectorViewport,
   );
+  runtimeResources.stateVectorLayoutObservers += 1;
   canvas.dataset.cameraReady = 'true';
-  canvas.dataset.runtimeActivationCount = '1';
   window.addEventListener('resize', resizeRenderer, resizeListenerOptions);
+  runtimeResources.resizeListeners += 1;
   window.addEventListener('scroll', updateStateVectorViewport, true);
+  runtimeResources.scrollListeners += 1;
   window.addEventListener('pagehide', handlePageHide);
+  runtimeResources.pagehideListeners += 1;
   invalidateTrajectoryPrediction();
+  runtimeResources.animationLoopStarts += 1;
   requestAnimationFrame(renderFrame);
 }
 
 function activateSpacePhase(): Promise<void> {
+  runtimeResources.spacePhaseActivationRequests += 1;
   spacePhaseActivation ??= activateSpacePhaseRuntime();
   return spacePhaseActivation;
 }

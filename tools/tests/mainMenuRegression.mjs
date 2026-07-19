@@ -14,6 +14,43 @@ const HOST = '127.0.0.1';
 const PORT = 4196;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
+const EARTH_MEAN_RADIUS_KM = 6_371.0084;
+
+const MENU_RUNTIME_RESOURCES = {
+  animationLoopStarts: 0,
+  cameraInputControllers: 0,
+  canvasBindings: 1,
+  epochWorldCreations: 1,
+  keyboardCommandMappers: 0,
+  pagehideListeners: 0,
+  rendererCreations: 1,
+  resizeListeners: 0,
+  scrollListeners: 0,
+  sessionSimulationCreations: 1,
+  sessionSimulationReplacements: 0,
+  spacePhaseActivationRequests: 0,
+  spacePhaseActivations: 0,
+  stateVectorLayoutObservers: 0,
+  trajectoryWorkers: 0,
+};
+
+const ACTIVE_RUNTIME_RESOURCES = {
+  animationLoopStarts: 1,
+  cameraInputControllers: 1,
+  canvasBindings: 1,
+  epochWorldCreations: 1,
+  keyboardCommandMappers: 1,
+  pagehideListeners: 1,
+  rendererCreations: 1,
+  resizeListeners: 1,
+  scrollListeners: 1,
+  sessionSimulationCreations: 2,
+  sessionSimulationReplacements: 1,
+  spacePhaseActivationRequests: 1,
+  spacePhaseActivations: 1,
+  stateVectorLayoutObservers: 1,
+  trajectoryWorkers: 1,
+};
 
 function collectBrowserErrors(page) {
   const errors = [];
@@ -36,7 +73,7 @@ async function readRuntimeState(page) {
       frameSampleCount: canvas.solarVoyagerTelemetry?.frameSampleCount ?? -1,
       hudCount: globalThis.document.querySelectorAll('#orbit-readout').length,
       menuCount: globalThis.document.querySelectorAll('.main-menu').length,
-      runtimeActivationCount: canvas.dataset.runtimeActivationCount ?? null,
+      resources: canvas.solarVoyagerRuntimeResources ?? null,
     };
   });
 }
@@ -69,7 +106,7 @@ async function assertFreshMenu(page, expectedContinueEnabled) {
     frameSampleCount: 0,
     hudCount: 0,
     menuCount: 1,
-    runtimeActivationCount: null,
+    resources: MENU_RUNTIME_RESOURCES,
   });
   const newGame = page.getByRole('button', { name: 'New Game' });
   const continueButton = page.getByRole('button', { name: 'Continue' });
@@ -115,23 +152,56 @@ async function runFreshAndContinueFlow(browser) {
     });
     await waitForSpace(page);
     const canonical = await page.evaluate(() => ({
+      apoapsis:
+        [...globalThis.document.querySelectorAll('#orbit-readout .hud-readout-row')]
+          .find((row) => row.querySelector('dt')?.textContent?.trim() === 'Apoapsis')
+          ?.querySelector('dd')
+          ?.textContent?.trim() ?? '',
       canvasCount: globalThis.document.querySelectorAll('#space-canvas').length,
       hudCount: globalThis.document.querySelectorAll('#orbit-readout').length,
       dominantBody: globalThis.document.querySelector('#orbit-title')?.textContent?.trim() ?? '',
+      periapsis:
+        [...globalThis.document.querySelectorAll('#orbit-readout .hud-readout-row')]
+          .find((row) => row.querySelector('dt')?.textContent?.trim() === 'Periapsis')
+          ?.querySelector('dd')
+          ?.textContent?.trim() ?? '',
       velocity:
         globalThis.document.querySelector('.state-vector-velocity dd')?.textContent?.trim() ?? '',
     }));
     assert.equal(canonical.canvasCount, 1);
     assert.equal(canonical.hudCount, 1);
     assert.equal(canonical.dominantBody, 'Earth');
+    const apoapsisRadiusKm = Number.parseFloat(canonical.apoapsis.replaceAll(',', ''));
+    const periapsisRadiusKm = Number.parseFloat(canonical.periapsis.replaceAll(',', ''));
+    assert.ok(
+      Math.abs(apoapsisRadiusKm - EARTH_MEAN_RADIUS_KM - 400) <= 0.02,
+      `unexpected canonical apoapsis: ${canonical.apoapsis}`,
+    );
+    assert.ok(
+      Math.abs(periapsisRadiusKm - EARTH_MEAN_RADIUS_KM - 400) <= 0.02,
+      `unexpected canonical periapsis: ${canonical.periapsis}`,
+    );
     const velocityKmS = Number.parseFloat(canonical.velocity);
     assert.ok(velocityKmS >= 37 && velocityKmS <= 39, `unexpected canonical LEO speed: ${canonical.velocity}`);
     assert.equal(workerRequestCount, 1, 'repeated New Game must create one trajectory worker');
-    assert.equal((await readRuntimeState(page)).runtimeActivationCount, '1');
+    await page.evaluate(() => {
+      globalThis.window.dispatchEvent(new Event('resize'));
+      globalThis.window.dispatchEvent(new Event('resize'));
+      globalThis.window.dispatchEvent(new Event('scroll'));
+      globalThis.window.dispatchEvent(new Event('scroll'));
+      globalThis.window.dispatchEvent(
+        new globalThis.PageTransitionEvent('pagehide', { persisted: true }),
+      );
+      globalThis.window.dispatchEvent(
+        new globalThis.PageTransitionEvent('pagehide', { persisted: true }),
+      );
+    });
+    assert.deepEqual((await readRuntimeState(page)).resources, ACTIVE_RUNTIME_RESOURCES);
 
     await page.locator('#session-settings').evaluate((details) => {
       details.open = true;
     });
+    await page.locator('#target-selector').selectOption('mars');
     await page.locator('#session-save').click();
     assert.ok(await page.evaluate((key) => globalThis.localStorage.getItem(key) !== null, SAVE_STORAGE_KEY));
 
@@ -140,7 +210,11 @@ async function runFreshAndContinueFlow(browser) {
     assert.equal(workerRequestCount, 1, 'reload menu must not start a trajectory worker');
     await page.getByRole('button', { name: 'Continue' }).click();
     await waitForSpace(page);
-    assert.equal((await readRuntimeState(page)).canvasCount, 1);
+    const continuedRuntime = await readRuntimeState(page);
+    assert.equal(continuedRuntime.canvasCount, 1);
+    assert.deepEqual(continuedRuntime.resources, ACTIVE_RUNTIME_RESOURCES);
+    assert.equal(await page.locator('#target-selector').inputValue(), 'mars');
+    assert.equal(await page.locator('#target-title').textContent(), 'Mars');
     assert.equal(workerRequestCount, 2, 'Continue must create one worker for the reloaded runtime');
     assert.deepEqual(browserErrors, []);
     return { canonical, workerRequestCount };
@@ -170,7 +244,7 @@ async function runInvalidSaveFlow(browser) {
 async function runResponsiveAndReducedMotionFlow(browser) {
   const context = await browser.newContext({
     reducedMotion: 'reduce',
-    viewport: { width: 360, height: 640 },
+    viewport: { width: 360, height: 480 },
   });
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
@@ -178,15 +252,73 @@ async function runResponsiveAndReducedMotionFlow(browser) {
   try {
     await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
     await assertFreshMenu(page, false);
-    const layout = await page.locator('.main-menu').evaluate((menu) => ({
-      reducedMotion: globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      right: menu.getBoundingClientRect().right,
-      scrollWidth: globalThis.document.documentElement.scrollWidth,
-      viewportWidth: globalThis.innerWidth,
-    }));
+    const layout = await page.locator('.main-menu').evaluate((menu) => {
+      const bounds = menu.getBoundingClientRect();
+      const primary = menu.querySelector('.main-menu-primary');
+      if (!(primary instanceof globalThis.HTMLElement)) throw new Error('primary action missing');
+      const motion = globalThis.getComputedStyle(primary);
+      return {
+        animationName: motion.animationName,
+        bottom: bounds.bottom,
+        reducedMotion: globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        right: bounds.right,
+        scrollWidth: globalThis.document.documentElement.scrollWidth,
+        top: bounds.top,
+        transitionDuration: motion.transitionDuration,
+        viewportHeight: globalThis.innerHeight,
+        viewportWidth: globalThis.innerWidth,
+      };
+    });
+    assert.equal(layout.animationName, 'none');
+    assert.equal(layout.transitionDuration, '0s');
     assert.equal(layout.reducedMotion, true);
+    assert.ok(layout.top >= 0, `menu starts above compact viewport: ${JSON.stringify(layout)}`);
+    assert.ok(layout.bottom <= layout.viewportHeight, `menu starts below compact viewport: ${JSON.stringify(layout)}`);
     assert.ok(layout.right <= layout.viewportWidth, `menu overflows compact viewport: ${JSON.stringify(layout)}`);
     assert.equal(layout.scrollWidth, layout.viewportWidth);
+
+    await page.locator('#session-settings').evaluate((details) => {
+      details.open = true;
+    });
+    const controls = page.locator(
+      '.main-menu button, .main-menu summary, .main-menu select, .main-menu .session-import-label',
+    );
+    const controlCount = await controls.count();
+    assert.ok(controlCount >= 10, `expected all compact menu controls, found ${String(controlCount)}`);
+    for (let index = 0; index < controlCount; index += 1) {
+      const control = controls.nth(index);
+      await control.scrollIntoViewIfNeeded();
+      const bounds = await control.boundingBox();
+      assert.ok(bounds !== null, `compact control ${String(index)} is not rendered`);
+      assert.ok(bounds.y >= 0, `compact control ${String(index)} is above viewport`);
+      assert.ok(
+        bounds.y + bounds.height <= layout.viewportHeight,
+        `compact control ${String(index)} is below viewport`,
+      );
+      const focusable = await control.evaluate(
+        (element) => element.matches('button:not(:disabled), summary, select'),
+      );
+      if (focusable) {
+        await control.focus();
+        assert.equal(
+          await control.evaluate((element) => element === globalThis.document.activeElement),
+          true,
+          `compact control ${String(index)} is not keyboard focusable`,
+        );
+      }
+    }
+    const compactScroll = await page.locator('.main-menu').evaluate((menu) => ({
+      clientHeight: menu.clientHeight,
+      overflowY: globalThis.getComputedStyle(menu).overflowY,
+      scrollHeight: menu.scrollHeight,
+      scrollTop: menu.scrollTop,
+    }));
+    assert.equal(compactScroll.overflowY, 'auto');
+    assert.ok(
+      compactScroll.scrollHeight > compactScroll.clientHeight,
+      `compact menu did not expose a scroll range: ${JSON.stringify(compactScroll)}`,
+    );
+    assert.ok(compactScroll.scrollTop > 0, 'compact controls were not reachable by scrolling');
     assert.deepEqual(browserErrors, []);
     return layout;
   } finally {
