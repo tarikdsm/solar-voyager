@@ -37,13 +37,13 @@ frame.
 `src/render/systemMapScene.ts`, tests, `src/render/createEpochWorld.ts`,
 `docs/architecture.md`, `docs/rendering-spec.md`.
 
-- [ ] Write RED tests for generic packed line positions at inner/outer scales,
+- [x] Write RED tests for generic packed line positions at inner/outer scales,
   one icon draw, one orbit-line draw, live parent anchoring, fixed resources,
   focus framing, selection highlighting, and shared trajectory resources.
-- [ ] Implement setup-time orbit sampling through existing orbital conversion,
+- [x] Implement setup-time orbit sampling through existing orbital conversion,
   fixed-pixel icon shaders, one batched line resource, map camera, diagnostics,
   resize/update/render/dispose boundaries, and dynamic map chunk loading.
-- [ ] Precompile every map shader/resource and prove repeated updates preserve
+- [x] Precompile every map shader/resource and prove repeated updates preserve
   object/material/geometry/buffer identity with zero update-time allocations.
 - [ ] Run focused render tests, lint, typecheck, build, and an allocation check;
   obtain independent review.
