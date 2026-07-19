@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "timestamp": "2026-07-19T01:26:08.657Z",
-  "gitSha": "cf27949f0361d2e8afd1a5fcf799ce7287e511ec",
+  "timestamp": "2026-07-19T02:11:03.157Z",
+  "gitSha": "93269220a0fcfba5e5710a776c60e04a724afabf",
   "bundle": {
-    "entryFile": "assets/index-CUvpfgw8.js",
-    "entryGzipBytes": 279446,
-    "totalGzipBytes": 550820
+    "entryFile": "assets/index-B3U0cTdn.js",
+    "entryGzipBytes": 279959,
+    "totalGzipBytes": 551332
   },
   "environment": {
     "canvas": {
@@ -191,47 +191,47 @@
         }
       ],
       "summary": {
-        "heapDeltaBytes": 89692,
+        "heapDeltaBytes": 90036,
         "legs": [
           {
             "id": "leo",
             "medianMs": 6.1,
             "p75Ms": 6.1,
-            "p99Ms": 6.3,
-            "workMedianMs": 2.55,
-            "workP75Ms": 3,
-            "workP99Ms": 4.403
+            "p99Ms": 12.001,
+            "workMedianMs": 1.9,
+            "workP75Ms": 2.7,
+            "workP99Ms": 6.602
           },
           {
             "id": "moon-flyby",
             "medianMs": 6.1,
             "p75Ms": 6.1,
-            "p99Ms": 6.201,
-            "workMedianMs": 2.3,
-            "workP75Ms": 2.625,
-            "workP99Ms": 4.704
+            "p99Ms": 6.5,
+            "workMedianMs": 1.5,
+            "workP75Ms": 1.9,
+            "workP99Ms": 5.604
           },
           {
             "id": "jupiter-approach",
             "medianMs": 6.1,
             "p75Ms": 6.1,
-            "p99Ms": 12.1,
-            "workMedianMs": 2.1,
+            "p99Ms": 12.26,
+            "workMedianMs": 1.6,
             "workP75Ms": 2.6,
-            "workP99Ms": 9.715
+            "workP99Ms": 12.326
           }
         ],
         "maxDrawCalls": 26,
         "maxTriangles": 66246,
-        "pathHeapDeltaBytes": 26682536,
-        "steadyHeapAfterBytes": 123319267,
-        "steadyHeapBeforeBytes": 123229575,
+        "pathHeapDeltaBytes": 26656980,
+        "steadyHeapAfterBytes": 123306742,
+        "steadyHeapBeforeBytes": 123216706,
         "medianMs": 6.1,
         "p75Ms": 6.1,
-        "p99Ms": 6.4,
-        "workMedianMs": 2.3,
-        "workP75Ms": 2.8,
-        "workP99Ms": 6.603
+        "p99Ms": 12.1,
+        "workMedianMs": 1.7,
+        "workP75Ms": 2.4,
+        "workP99Ms": 7.503
       }
     }
   ],
