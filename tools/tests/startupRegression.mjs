@@ -98,6 +98,10 @@ async function runColdLoad(browser) {
   const page = await context.newPage();
   const errors = collectBrowserErrors(page);
   await page.addInitScript(() => {
+    Object.defineProperty(globalThis, '__solarVoyagerTestDisableTrajectoryPrediction', {
+      configurable: true,
+      value: true,
+    });
     const linkedPrograms = [];
     const nativeLinkProgram = globalThis.WebGL2RenderingContext.prototype.linkProgram;
     globalThis.WebGL2RenderingContext.prototype.linkProgram = function (program) {
@@ -220,7 +224,9 @@ async function runColdLoad(browser) {
       () => globalThis.__solarVoyagerLinkedPrograms.length,
     );
 
-    await page.getByRole('button', { name: 'New Game', exact: true }).click();
+    await page.getByRole('button', { name: 'New Game', exact: true }).evaluate((button) => {
+      button.click();
+    });
     await page.waitForFunction(
       () => {
         const canvas = globalThis.document.querySelector('#space-canvas');
@@ -233,6 +239,12 @@ async function runColdLoad(browser) {
       undefined,
       { timeout: 30_000 },
     );
+    const trajectoryWorkers = await page.evaluate(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerRuntimeResources
+          ?.trajectoryWorkers ?? -1,
+    );
+    assert.equal(trajectoryWorkers, 0, 'startup shader fixture must not start background workers');
     const afterFirstFrame = await readStartup(page);
     const firstFrameProgramLabels = await page.evaluate(
       (readyCount) => globalThis.__solarVoyagerLinkedPrograms.slice(readyCount),
