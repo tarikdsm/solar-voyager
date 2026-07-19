@@ -13,22 +13,22 @@
 
 ## Before/after result
 
-| Metric | Before | After | Delta |
-|---|---:|---:|---:|
-| Frame median | 6.100 ms | 6.100 ms | 0.000 ms |
-| Frame p75 | 6.100 ms | 6.100 ms | 0.000 ms |
-| Frame p99 | 6.502 ms | 6.400 ms | -0.102 ms |
-| Frame-work median | 2.200 ms | 2.300 ms | +0.100 ms |
-| Frame-work p75 | 2.800 ms | 2.800 ms | 0.000 ms |
-| Frame-work p99 | 9.000 ms | 6.603 ms | -2.397 ms |
+| Metric             |        Before |         After |     Delta |
+| ------------------ | ------------: | ------------: | --------: |
+| Frame median       |      6.100 ms |      6.100 ms |  0.000 ms |
+| Frame p75          |      6.100 ms |      6.100 ms |  0.000 ms |
+| Frame p99          |      6.502 ms |      6.400 ms | -0.102 ms |
+| Frame-work median  |      2.200 ms |      2.300 ms | +0.100 ms |
+| Frame-work p75     |      2.800 ms |      2.800 ms |  0.000 ms |
+| Frame-work p99     |      9.000 ms |      6.603 ms | -2.397 ms |
 | Steady heap before | 123,176,928 B | 123,229,575 B | +52,647 B |
-| Steady heap after | 123,266,664 B | 123,319,267 B | +52,603 B |
-| Steady heap growth | 89,736 B | 89,692 B | -44 B |
-| Path heap delta | 26,629,296 B | 26,682,536 B | +53,240 B |
-| Maximum draw calls | 26 | 26 | 0 |
-| Maximum triangles | 66,246 | 66,246 | 0 |
-| Entry gzip | 276,989 B | 279,446 B | +2,457 B |
-| Total gzip | 548,363 B | 550,820 B | +2,457 B |
+| Steady heap after  | 123,266,664 B | 123,319,267 B | +52,603 B |
+| Steady heap growth |      89,736 B |      89,692 B |     -44 B |
+| Path heap delta    |  26,629,296 B |  26,682,536 B | +53,240 B |
+| Maximum draw calls |            26 |            26 |         0 |
+| Maximum triangles  |        66,246 |        66,246 |         0 |
+| Entry gzip         |     276,989 B |     279,446 B |  +2,457 B |
+| Total gzip         |     548,363 B |     550,820 B |  +2,457 B |
 
 Both reports completed with an empty error list and no stability findings. The
 normal-flight harness does not emit program or texture counters. The dedicated
