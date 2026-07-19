@@ -22,11 +22,11 @@ deterministic while the normal URL proves the menu.
 
 **Files:** `src/game/sceneManager.ts`, tests, `sessionController.ts`, tests.
 
-- [ ] Write RED tests for phase transitions, repeated activation, atomic New
+- [x] Write RED tests for phase transitions, repeated activation, atomic New
   Game replacement, and valid/missing/invalid Continue availability.
-- [ ] Implement the minimal game-layer contracts without DOM/three.js imports.
-- [ ] Run focused and full unit tests, lint, and typecheck.
-- [ ] Commit the game-layer boundary.
+- [x] Implement the minimal game-layer contracts without DOM/three.js imports.
+- [x] Run focused and full unit tests, lint, and typecheck.
+- [x] Commit the game-layer boundary.
 
 ### Task 2: Accessible MainMenu component
 
