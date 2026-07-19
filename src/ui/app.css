@@ -792,7 +792,7 @@
 .tutorial-overlay {
   position: fixed;
   z-index: 14;
-  bottom: 1rem;
+  bottom: 5rem;
   left: 1rem;
   width: min(27rem, calc(100vw - 2rem));
   box-sizing: border-box;

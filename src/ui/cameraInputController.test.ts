@@ -125,7 +125,7 @@ describe('CameraInputController', () => {
 
   it('does not steer from editable targets or unmodified camera keys', () => {
     const { controls, interactions, keyboard } = createFixture();
-    const button = { isContentEditable: false, tagName: 'BUTTON' };
+    const input = { isContentEditable: false, tagName: 'INPUT' };
     const base = {
       altKey: false,
       code: 'ArrowLeft',
@@ -137,7 +137,7 @@ describe('CameraInputController', () => {
     };
 
     keyboard.emit('keydown', { ...base, shiftKey: false, target: null });
-    keyboard.emit('keydown', { ...base, shiftKey: true, target: button });
+    keyboard.emit('keydown', { ...base, shiftKey: true, target: input });
 
     expect(controls.orbitBy).not.toHaveBeenCalled();
     expect(interactions).toEqual([]);
@@ -181,6 +181,7 @@ describe('CameraInputController', () => {
     });
     keyboard.emit('keydown', {
       key: 'J',
+      target: { isContentEditable: false, tagName: 'BUTTON' },
       repeat: false,
       ctrlKey: false,
       altKey: false,

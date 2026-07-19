@@ -27,16 +27,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
   };
   if (candidate.isContentEditable === true) return true;
   const tagName = candidate.tagName?.toUpperCase();
-  if (
-    tagName === 'INPUT' ||
-    tagName === 'SELECT' ||
-    tagName === 'TEXTAREA' ||
-    tagName === 'BUTTON'
-  ) {
+  if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
     return true;
   }
   if (typeof candidate.closest !== 'function') return false;
-  return candidate.closest('input, select, textarea, button, [contenteditable="true"]') !== null;
+  return candidate.closest('input, select, textarea, [contenteditable="true"]') !== null;
 }
 
 /** Owns disposable DOM input listeners for the orbit camera. */
