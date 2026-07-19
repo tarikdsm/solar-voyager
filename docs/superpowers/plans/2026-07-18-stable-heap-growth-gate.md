@@ -185,7 +185,7 @@ git commit -m "test(perf): [T0095] classify narrow heap outliers"
 - Produces: `production.confirmationHeap`, either a heap measurement or `null`
 - Preserves: allocation fixture, draw fixture, bundle and workload result shapes
 
-- [ ] **Step 1: Add an executable confirmation hook before production code**
+- [x] **Step 1: Add an executable confirmation hook before production code**
 
 Extract one window so both samples use identical mechanics:
 
@@ -226,7 +226,7 @@ const heapFindings = validateConfirmedHeapGrowth(
 );
 ```
 
-- [ ] **Step 2: Run the production-only gate**
+- [x] **Step 2: Run the production-only gate**
 
 ```powershell
 npm run build
@@ -237,7 +237,7 @@ Expected: exit 0. JSON contains `confirmationHeap: null` for a direct pass or a
 second 30-second measurement for a confirmed pass. The reported ceiling remains
 196,608 B.
 
-- [ ] **Step 3: Run the complete gate with negative controls**
+- [x] **Step 3: Run the complete gate with negative controls**
 
 ```powershell
 npm run test:perf-gates
@@ -247,7 +247,7 @@ Expected: exit 0; production passes, allocation fixture reports a retained heap
 finding, draw fixture reports draw/triangle findings, and neither fixture is
 accepted as production.
 
-- [ ] **Step 4: Document the measurement semantics**
+- [x] **Step 4: Document the measurement semantics**
 
 Append to performance spec section 6:
 
@@ -258,7 +258,7 @@ confirmation must meet the original ceiling; larger or repeated failures fail.
 The known retained-allocation fixture is never eligible for confirmation.
 ```
 
-- [ ] **Step 5: Run focused and repository gates**
+- [x] **Step 5: Run focused and repository gates**
 
 ```powershell
 npx vitest run tools/perf/performanceGateUtils.test.mjs
@@ -273,7 +273,7 @@ git diff --check
 
 Expected: all commands exit 0 with no new skip or budget change.
 
-- [ ] **Step 6: Commit the integrated gate**
+- [x] **Step 6: Commit the integrated gate**
 
 ```powershell
 git add tools/perf/performanceGate.mjs docs/performance-spec.md
