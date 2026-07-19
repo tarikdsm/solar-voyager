@@ -38,6 +38,9 @@ export interface SessionSettingsModel {
   captureBinding(action: InputAction, code: string): PanelActionResult;
 }
 
+export type SessionActivationCallback = (result: SessionActionResult) => void;
+export type SessionActivationGuard = (action: () => SessionActionResult) => SessionActionResult;
+
 const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze({
   throttleIncrease: 'Throttle up',
   throttleDecrease: 'Throttle down',
@@ -66,10 +69,17 @@ function isQualityLock(value: string): value is QualityLock {
 export function createSessionSettingsModel(
   session: SessionSettingsPort,
   files: SessionFilePort,
+  onSessionActivated: SessionActivationCallback | null = null,
+  activationGuard: SessionActivationGuard | null = null,
 ): SessionSettingsModel {
+  const activate = (action: () => SessionActionResult): PanelActionResult => {
+    const result = activationGuard === null ? action() : activationGuard(action);
+    if (result.ok) onSessionActivated?.(result);
+    return simplify(result);
+  };
   return {
     save: () => simplify(session.saveLocal()),
-    load: () => simplify(session.loadLocal()),
+    load: () => activate(() => session.loadLocal()),
     exportFile: () => {
       const result = session.exportJson();
       if (!result.ok) return { ok: false, message: result.message };
@@ -83,7 +93,8 @@ export function createSessionSettingsModel(
     importFile: async (file) => {
       if (file === null) return null;
       try {
-        return simplify(session.importJson(await files.readText(file)));
+        const json = await files.readText(file);
+        return activate(() => session.importJson(json));
       } catch {
         return { ok: false, message: 'Unable to read imported session' };
       }
@@ -114,14 +125,21 @@ export const browserSessionFilePort: SessionFilePort = Object.freeze({
 export interface SessionSettingsPanelProps {
   readonly session: SessionSettingsPort;
   readonly files?: SessionFilePort;
+  readonly activationGuard?: SessionActivationGuard | null;
+  readonly onSessionActivated?: SessionActivationCallback | null;
 }
 
 /** Renders explicit session persistence, quality lock, and key rebinding controls. */
 export function SessionSettingsPanel({
   session,
   files = browserSessionFilePort,
+  activationGuard = null,
+  onSessionActivated = null,
 }: SessionSettingsPanelProps) {
-  const model = useMemo(() => createSessionSettingsModel(session, files), [session, files]);
+  const model = useMemo(
+    () => createSessionSettingsModel(session, files, onSessionActivated, activationGuard),
+    [session, files, onSessionActivated, activationGuard],
+  );
   const [settings, setSettings] = useState(session.settings);
   const [status, setStatus] = useState<PanelActionResult | null>(
     session.initializationWarning === null

@@ -17,7 +17,7 @@ import { assertPortAvailable } from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 4177;
-const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 const STEADY_HEAP_SETTLE_MS = 30_000;

@@ -9,7 +9,7 @@ import { disableUnrelatedTrajectoryPrediction } from '../tests/trajectoryPredict
 
 const HOST = '127.0.0.1';
 const PORT = 4175;
-const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const RUNTIME_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_SMOKE_RUNTIME_ERROR';
 const RUNTIME_ERROR_FIXTURE = fileURLToPath(
   new URL('../../tests/smoke/runtimeError.fixture.js', import.meta.url),

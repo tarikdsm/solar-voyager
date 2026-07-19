@@ -1,13 +1,15 @@
 import { useComputed } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useCallback, useRef, useState } from 'preact/hooks';
 
 import { WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { createScaffoldState } from '../game/createScaffoldState.js';
+import type { GamePhase, SceneManager } from '../game/sceneManager.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
 import type { PerfPanelStore } from './hud/perfPanelStore.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
+import { MainMenu } from './MainMenu.js';
 import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
 import { StateVectorPanel } from './StateVectorPanel.js';
@@ -28,7 +30,10 @@ export interface AppProps {
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
+  readonly initialPhase?: GamePhase;
+  readonly onSpacePhaseEntered?: (() => void) | null;
   readonly perfPanel?: PerfPanelStore | null;
+  readonly sceneManager?: SceneManager | null;
   readonly session?: SessionSettingsPort | null;
   readonly stateVectors?: StateVectorSignalStore | null;
   readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
@@ -242,12 +247,36 @@ export function App({
   hud,
   hudState,
   hardwareWarning = null,
+  initialPhase,
+  onSpacePhaseEntered = null,
   perfPanel = null,
+  sceneManager = null,
   session = null,
   stateVectors = null,
   stateVectorViewportRef = null,
   trajectoryPrediction = null,
 }: AppProps) {
+  const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
+  const [phase, setPhase] = useState<GamePhase>(startingPhase);
+  const enteredSpace = useRef(startingPhase === 'space');
+  const enterSpace = useCallback(() => {
+    if (enteredSpace.current) return;
+    enteredSpace.current = true;
+    setPhase('space');
+    onSpacePhaseEntered?.();
+  }, [onSpacePhaseEntered]);
+
+  if (phase === 'main-menu' && sceneManager !== null) {
+    return (
+      <main class="app-overlay app-overlay-menu">
+        {hardwareWarning === null ? null : (
+          <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
+        )}
+        <MainMenu scene={sceneManager} session={session} onSpacePhaseEntered={enterSpace} />
+      </main>
+    );
+  }
+
   return (
     <main class="app-overlay">
       {hardwareWarning === null ? null : (

@@ -1,6 +1,6 @@
 id: T0096
 title: Main menu and deterministic new-game flow
-status: IN_PROGRESS
+status: DONE
 agent: chatgpt
 branch: task/T0096-main-menu-new-game
 depends_on: [T0050, T0058]
@@ -19,4 +19,44 @@ acceptance:
   - Continue is disabled without a valid save and restores a valid save atomically when present
   - Keyboard focus, reduced-motion behavior, reload, and repeated menu-to-game attempts are covered by unit and real-browser tests
   - Existing smoke, performance, save/load, and gameplay regressions pass with no duplicate canvas, renderer, worker, or event listener
-handoff_notes: ""
+handoff_notes: |
+  Ready for merge after CI on exact implementation head 5f0f6c9. The normal
+  production URL now opens an accessible responsive MainMenu; New Game enters
+  the canonical 400 km LEO and valid Continue/import operations replace the
+  session atomically before entering SpacePhase. Explicit ?autostart=1 keeps
+  deterministic browser/performance harnesses in direct-play mode.
+
+  Runtime activation is Promise-guarded and instrumented at the actual creation
+  sites for renderer, world, simulation, worker, input controllers, observer,
+  listeners, and animation loop. Repeated activation stays one-shot and no
+  instrumentation runs in the frame loop. A real-browser regression covers
+  invalid/missing saves, Mars save-reload-Continue restoration, keyboard focus,
+  reduced-motion computed styles, compact vertical scrolling, canonical orbit,
+  and duplicate-resource prevention.
+
+  CI exposed that SwiftShader can delay the first completed WebGL frame even
+  after menu activation is complete. A deterministic rAF-freeze regression now
+  proves the menu transition from visible orbit HUD, camera readiness, and the
+  exact one-shot resource counters, including a successfully scheduled rAF.
+  Application smoke remains the independent gate for completed frames and real
+  framebuffer pixels. Independent re-review of this correction reported C0/I0/M0.
+
+  The real-browser suite now runs this flow under deterministic SwiftShader,
+  dismisses the mandatory hardware-acceleration warning through its accessible
+  I understand button before Save and Continue, and keeps both actions as normal
+  pointer clicks. Independent re-review reported C0/I0/M0.
+
+  Exact-head verification passed: 706 Vitest tests with 3 expected skips; lint,
+  typecheck, format, build, task schema, asset budgets, and diff check; main-menu,
+  smoke, camera, trajectory, and renderer browser suites. Performance passed at
+  -10,576 bytes heap, 10 draw calls, 77,071 triangles, and 281,448/553,357-byte
+  bundles; allocation (+3,234,092 bytes) and draw (29 calls) fixtures failed as
+  required. In-app browser playtest passed menu -> New Game -> Mars save ->
+  reload -> Continue with zero console errors; screenshots are ignored under
+  .playwright-mcp/. Independent final review reported Critical 0, Important 0,
+  Minor 0 and Ready YES. SimSnapshot, Commands, physics formulas, and schemas are
+  unchanged.
+
+  PR #53 CI run 29678498583 passed on e74893f before the DONE transition.
+  The merger requires final CI on this status commit before the non-force merge;
+  the task branch will be retained.

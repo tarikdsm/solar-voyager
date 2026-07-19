@@ -28,6 +28,7 @@ export interface GameSessionControllerOptions {
   readonly initialSimulation: SimulationCore;
   readonly saveRepository: SaveRepository;
   readonly settingsRepository: SettingsRepository;
+  readonly createNewSimulation: () => SimulationCore;
   readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
   readonly onSettingsChanged?: (settings: GameSettingsV1, origin: SettingsChangeOrigin) => void;
@@ -40,6 +41,7 @@ export class GameSessionController {
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
+  private readonly createNewSimulation: () => SimulationCore;
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
   private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
   private readonly onSettingsChanged:
@@ -49,6 +51,7 @@ export class GameSessionController {
     this.currentSimulation = options.initialSimulation;
     this.saveRepository = options.saveRepository;
     this.settingsRepository = options.settingsRepository;
+    this.createNewSimulation = options.createNewSimulation;
     this.createSimulation = options.createSimulation;
     this.onSimulationReplaced = options.onSimulationReplaced ?? null;
     this.onSettingsChanged = options.onSettingsChanged ?? null;
@@ -67,6 +70,29 @@ export class GameSessionController {
 
   get initializationWarning(): string | null {
     return this.settingsInitializationWarning;
+  }
+
+  startNewGame(): SessionActionResult {
+    let candidateSimulation: SimulationCore;
+    try {
+      candidateSimulation = this.createNewSimulation();
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to start new game',
+        detail: describeError(error),
+      };
+    }
+    this.replaceSimulation(candidateSimulation);
+    return { ok: true, message: 'New game started' };
+  }
+
+  hasValidLocalSave(): boolean {
+    try {
+      return this.saveRepository.load(this.currentSimulation.snapshot.bodyIds).ok;
+    } catch {
+      return false;
+    }
   }
 
   saveLocal(): SessionActionResult {
@@ -163,6 +189,11 @@ export class GameSessionController {
     this.onSimulationReplaced?.(candidateSimulation);
     this.onSettingsChanged?.(envelope.settings, 'restore');
     return { ok: true, message: successMessage };
+  }
+
+  private replaceSimulation(simulation: SimulationCore): void {
+    this.currentSimulation = simulation;
+    this.onSimulationReplaced?.(simulation);
   }
 
   private commitSettings(settings: GameSettingsV1, successMessage: string): SessionActionResult {

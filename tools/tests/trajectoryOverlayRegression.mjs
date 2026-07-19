@@ -11,7 +11,7 @@ import {
 const HOST = '127.0.0.1';
 const PORT = 4190;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/trajectoryOverlay.html`;
-const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/`;
+const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/?autostart=1`;
 
 const server = await createServer({
   root: process.cwd(),
