@@ -1,6 +1,6 @@
 id: T0101
 title: Public landing page, final release audit, and v1.0 tag
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0101-v1-release
 depends_on: [T0081, T0083, T0085, T0093, T0096, T0097, T0098, T0099, T0100]
