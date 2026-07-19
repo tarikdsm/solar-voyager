@@ -110,6 +110,7 @@ const browserStorage: KeyValueStorage = {
 };
 const session = new GameSessionController({
   initialSimulation,
+  createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction),
   saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: (state) =>

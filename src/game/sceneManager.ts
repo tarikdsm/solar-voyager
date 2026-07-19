@@ -1,0 +1,44 @@
+import type { SessionActionResult } from './sessionController.js';
+
+export type GamePhase = 'main-menu' | 'space';
+
+export interface SceneSessionPort {
+  startNewGame(): SessionActionResult;
+  loadLocal(): SessionActionResult;
+}
+
+const ALREADY_ACTIVE_RESULT: SessionActionResult = Object.freeze({
+  ok: false,
+  message: 'Space phase is already active',
+});
+
+/** Owns the one-way v1 transition from the main menu into gameplay. */
+export class SceneManager {
+  private currentPhase: GamePhase = 'main-menu';
+
+  constructor(private readonly session: SceneSessionPort) {}
+
+  get phase(): GamePhase {
+    return this.currentPhase;
+  }
+
+  startNewGame(): SessionActionResult {
+    if (this.currentPhase === 'space') return ALREADY_ACTIVE_RESULT;
+    return this.enterSpaceAfter(this.session.startNewGame());
+  }
+
+  continueGame(): SessionActionResult {
+    if (this.currentPhase === 'space') return ALREADY_ACTIVE_RESULT;
+    return this.enterSpaceAfter(this.session.loadLocal());
+  }
+
+  activateLoadedSession(result: SessionActionResult): SessionActionResult {
+    if (this.currentPhase === 'space') return ALREADY_ACTIVE_RESULT;
+    return this.enterSpaceAfter(result);
+  }
+
+  private enterSpaceAfter(result: SessionActionResult): SessionActionResult {
+    if (result.ok) this.currentPhase = 'space';
+    return result;
+  }
+}

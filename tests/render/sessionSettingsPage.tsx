@@ -53,6 +53,7 @@ const storage = new MemoryStorage();
 let mapper: KeyboardCommandMapper | null = null;
 const controller = new GameSessionController({
   initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+  createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
   saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
   settingsRepository: new SettingsRepository(storage),
   createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),

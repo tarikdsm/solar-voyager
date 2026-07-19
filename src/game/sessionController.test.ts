@@ -54,6 +54,7 @@ function createController(
   simulation = createNewGameSimulation(SHIP_MASS_KG),
 ) {
   return new GameSessionController({
+    createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
     createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
     initialSimulation: simulation,
     saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
@@ -84,6 +85,7 @@ describe('GameSessionController', () => {
     const storage = new MemoryStorage();
     let mapper: KeyboardCommandMapper | null = null;
     const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
       createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
       initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
       saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
@@ -130,6 +132,7 @@ describe('GameSessionController', () => {
     source.saveLocal();
     const live = createNewGameSimulation(SHIP_MASS_KG);
     const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
       createSimulation: () => {
         throw new Error('factory failed');
       },
@@ -189,6 +192,77 @@ describe('GameSessionController', () => {
       ok: false,
       message: 'Saved session is invalid',
     });
+  });
+
+  it('atomically replaces the live simulation when New Game construction succeeds', () => {
+    const storage = new MemoryStorage();
+    const live = createNewGameSimulation(SHIP_MASS_KG);
+    const replacement = createNewGameSimulation(SHIP_MASS_KG);
+    const replacements: SimulationCore[] = [];
+    const controller = new GameSessionController({
+      createNewSimulation: () => replacement,
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: live,
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+      onSimulationReplaced: (simulation) => replacements.push(simulation),
+    });
+
+    expect(controller.startNewGame()).toEqual({ ok: true, message: 'New game started' });
+    expect(controller.simulation).toBe(replacement);
+    expect(replacements).toEqual([replacement]);
+  });
+
+  it('keeps the live simulation when New Game construction fails', () => {
+    const storage = new MemoryStorage();
+    const live = createNewGameSimulation(SHIP_MASS_KG);
+    const controller = new GameSessionController({
+      createNewSimulation: () => {
+        throw new Error('factory failed');
+      },
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: live,
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+    });
+
+    expect(controller.startNewGame()).toEqual({
+      ok: false,
+      message: 'Unable to start new game',
+      detail: 'factory failed',
+    });
+    expect(controller.simulation).toBe(live);
+  });
+
+  it('reports Continue availability only for a complete valid local save', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+
+    expect(controller.hasValidLocalSave()).toBe(false);
+    storage.values.set(SAVE_STORAGE_KEY, '{bad');
+    expect(controller.hasValidLocalSave()).toBe(false);
+    storage.values.delete(SAVE_STORAGE_KEY);
+    expect(controller.saveLocal()).toMatchObject({ ok: true });
+    expect(controller.hasValidLocalSave()).toBe(true);
+    storage.getError = new Error('denied');
+    expect(controller.hasValidLocalSave()).toBe(false);
+  });
+
+  it('fails closed when Continue availability cannot be inspected', () => {
+    const storage = new MemoryStorage();
+    const saveRepository = new SaveRepository(storage, SHIP_MASS_KG);
+    saveRepository.load = () => {
+      throw new Error('unexpected repository failure');
+    };
+    const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      saveRepository,
+      settingsRepository: new SettingsRepository(storage),
+    });
+
+    expect(controller.hasValidLocalSave()).toBe(false);
   });
 
   it('exposes an initialization warning when stored settings cannot be read', () => {
