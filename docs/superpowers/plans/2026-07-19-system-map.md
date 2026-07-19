@@ -60,7 +60,7 @@ frame.
   rerendering the main HUD on frame updates.
 - [ ] Hide non-map HUD surfaces while active, retaining performance and warning
   surfaces, and make return focus deterministic.
-- [ ] Run component tests, lint, typecheck, and format; obtain independent
+- [x] Run component tests, lint, typecheck, and format; obtain independent
   review.
 
 ### Task 4: Bootstrap, render switching, browser/performance delivery
