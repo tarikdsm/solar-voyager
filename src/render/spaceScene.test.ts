@@ -2,6 +2,8 @@ import {
   BufferGeometry,
   Float32BufferAttribute,
   InterleavedBufferAttribute,
+  LineBasicMaterial,
+  LineSegments,
   Object3D,
   Points,
   PointsMaterial,
@@ -31,6 +33,13 @@ describe('CameraRelativeSpaceScene', () => {
     expect(SPACE_NEAR_KM).toBe(0.001);
     expect(SPACE_FAR_KM).toBe(1e10);
     expect(spaceScene.camera.matrixAutoUpdate).toBe(false);
+  });
+
+  it('allows a map-specific far plane without changing the space-scene default', () => {
+    const mapScene = new CameraRelativeSpaceScene({ farKm: 60_000_000_000 });
+
+    expect(mapScene.camera.far).toBe(60_000_000_000);
+    expect(new CameraRelativeSpaceScene().camera.far).toBe(SPACE_FAR_KM);
   });
 
   it('subtracts in float64 before the float32 bridge for an Earth surface view', () => {
@@ -226,6 +235,34 @@ describe('CameraRelativeSpaceScene', () => {
       5, -1, 2, 15, 3, 4, 15, 3, 4, -10, 10, 20,
     ]);
     expect(segmentBuffer.version).toBe(originalVersion + 2);
+  });
+
+  it('updates generic packed line positions at inner and outer scales without replacing buffers', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const positionsKm = new Float64Array([AU_KM + 0.125, -0.5, 0.25, AU_KM + 10.25, 20.5, -30.75]);
+    const target = new Float32Array(positionsKm.length);
+    const attribute = new Float32BufferAttribute(target, 3);
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', attribute);
+    geometry.computeBoundingSphere();
+    const lines = new LineSegments(geometry, new LineBasicMaterial());
+    const originalAttribute = geometry.getAttribute('position');
+    const originalArray = attribute.array;
+
+    spaceScene.bindPackedPositions(lines, positionsKm);
+    spaceScene.updateCameraRelative({ x: AU_KM, y: 0, z: 0 });
+
+    expect(geometry.getAttribute('position')).toBe(originalAttribute);
+    expect(attribute.array).toBe(originalArray);
+    expect(Array.from(originalArray)).toEqual([0.125, -0.5, 0.25, 10.25, 20.5, -30.75]);
+    expect(geometry.boundingSphere?.radius).toBeGreaterThan(0);
+
+    positionsKm.set([4_503_937_660.125, -1.5, 2.25, 4_503_937_670.25, 21.5, -28.75]);
+    spaceScene.updateCameraRelative({ x: 4_503_937_660, y: -1, z: 2 });
+
+    expect(geometry.getAttribute('position')).toBe(originalAttribute);
+    expect(attribute.array).toBe(originalArray);
+    expect(Array.from(originalArray)).toEqual([0.125, -0.5, 0.25, 10.25, 22.5, -30.75]);
   });
 
   it('validates packed Line2 point counts and removes bindings on unbind', () => {

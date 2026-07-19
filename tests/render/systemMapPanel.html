@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System map panel regression</title>
+  </head>
+  <body style="margin: 0; min-height: 100vh; background: #020617">
+    <main id="system-map-root"></main>
+    <section id="editable-fixtures" aria-label="Editable keyboard fixtures">
+      <input id="map-input-fixture" value="input value" />
+      <textarea id="map-textarea-fixture">textarea value</textarea>
+      <select id="map-select-fixture">
+        <option value="earth">Earth</option>
+        <option value="mars">Mars</option>
+      </select>
+      <div id="map-contenteditable-empty" contenteditable>empty attribute</div>
+      <div id="map-contenteditable-true" contenteditable="true">true attribute</div>
+      <div id="map-contenteditable-parent" contenteditable="true">
+        <span id="map-contenteditable-descendant">inherited descendant</span>
+      </div>
+    </section>
+    <script type="module" src="./systemMapPanelPage.tsx"></script>
+  </body>
+</html>

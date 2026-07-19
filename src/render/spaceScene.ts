@@ -1,6 +1,7 @@
 import type { ReadonlyVec3 } from '../core/vec3.js';
 import {
   BufferAttribute,
+  type BufferGeometry,
   InterleavedBufferAttribute,
   PerspectiveCamera,
   Scene,
@@ -18,6 +19,10 @@ import {
 
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
+
+export interface CameraRelativeSpaceSceneOptions {
+  readonly farKm?: number;
+}
 
 function assertFinitePosition(label: string, positionKm: ReadonlyVec3): void {
   if (
@@ -45,6 +50,8 @@ export interface PackedPolylineBinding {
   readonly pointCount: number;
   setPointCount(pointCount: number): void;
 }
+
+type PackedPositionVisual = Object3D & { readonly geometry: BufferGeometry };
 
 class CameraRelativePackedPolylineBinding implements PackedPolylineBinding {
   readonly maximumPointCount: number;
@@ -97,13 +104,16 @@ class CameraRelativePackedPolylineBinding implements PackedPolylineBinding {
  */
 export class CameraRelativeSpaceScene {
   readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, SPACE_FAR_KM);
+  readonly camera: PerspectiveCamera;
 
   private readonly visuals: Object3D[] = [];
   private readonly positionsKm: ReadonlyVec3[] = [];
   private readonly packedVisuals: Object3D[] = [];
   private readonly packedVisualPositionsKm: Float64Array[] = [];
   private readonly packedVisualOffsets: number[] = [];
+  private readonly packedPositionVisuals: PackedPositionVisual[] = [];
+  private readonly packedPositionsKm: Float64Array[] = [];
+  private readonly packedPositionAttributes: BufferAttribute[] = [];
   private readonly packedPointVisuals: Points[] = [];
   private readonly packedPointPositionsKm: Float64Array[] = [];
   private readonly packedPointAttributes: BufferAttribute[] = [];
@@ -112,7 +122,12 @@ export class CameraRelativeSpaceScene {
   private readonly aberratedPosition = new Float64Array(3);
   private relativisticObserver: Readonly<RelativisticVisualState> | null = null;
 
-  constructor() {
+  constructor(options: CameraRelativeSpaceSceneOptions = {}) {
+    const farKm = options.farKm ?? SPACE_FAR_KM;
+    if (!Number.isFinite(farKm) || farKm <= SPACE_NEAR_KM) {
+      throw new RangeError('Camera-relative far plane must exceed the finite near plane.');
+    }
+    this.camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, farKm);
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
     this.camera.updateMatrix();
@@ -146,6 +161,28 @@ export class CameraRelativeSpaceScene {
     this.packedVisuals.push(visual);
     this.packedVisualPositionsKm.push(positionsKm);
     this.packedVisualOffsets.push(componentOffset);
+  }
+
+  /** Binds a geometry position attribute to all xyz triples in one packed array. */
+  bindPackedPositions(visual: PackedPositionVisual, positionsKm: Float64Array): void {
+    assertPackedPositions(positionsKm);
+    const attribute = visual.geometry.getAttribute('position');
+    if (
+      !(attribute instanceof BufferAttribute) ||
+      !(attribute.array instanceof Float32Array) ||
+      attribute.itemSize !== 3 ||
+      attribute.array.length !== positionsKm.length
+    ) {
+      throw new RangeError('Visual requires a same-length float32 xyz position attribute.');
+    }
+    if (visual.frustumCulled && visual.geometry.boundingSphere === null) {
+      visual.geometry.computeBoundingSphere();
+    }
+
+    this.claimVisual(visual);
+    this.packedPositionVisuals.push(visual);
+    this.packedPositionsKm.push(positionsKm);
+    this.packedPositionAttributes.push(attribute);
   }
 
   /** Binds a Points position attribute to all xyz triples in one packed array. */
@@ -202,6 +239,12 @@ export class CameraRelativeSpaceScene {
       this.packedPointVisuals.splice(packedPointIndex, 1);
       this.packedPointPositionsKm.splice(packedPointIndex, 1);
       this.packedPointAttributes.splice(packedPointIndex, 1);
+    }
+    const packedPositionIndex = this.packedPositionVisuals.indexOf(visual as PackedPositionVisual);
+    if (packedPositionIndex >= 0) {
+      this.packedPositionVisuals.splice(packedPositionIndex, 1);
+      this.packedPositionsKm.splice(packedPositionIndex, 1);
+      this.packedPositionAttributes.splice(packedPositionIndex, 1);
     }
     const packedPolylineIndex = this.packedPolylines.findIndex(
       (binding) => binding.line === visual,
@@ -283,6 +326,84 @@ export class CameraRelativeSpaceScene {
         visual.position.set(Math.fround(relativeX), Math.fround(relativeY), Math.fround(relativeZ));
       }
       visual.updateMatrix();
+    }
+
+    for (
+      let bindingIndex = 0;
+      bindingIndex < this.packedPositionVisuals.length;
+      bindingIndex += 1
+    ) {
+      const visual = this.packedPositionVisuals[bindingIndex];
+      const positionsKm = this.packedPositionsKm[bindingIndex];
+      const attribute = this.packedPositionAttributes[bindingIndex];
+      if (visual === undefined || positionsKm === undefined || attribute === undefined) {
+        throw new Error('Packed position binding arrays are out of sync.');
+      }
+      const target = attribute.array as Float32Array;
+      let minimumX = Number.POSITIVE_INFINITY;
+      let minimumY = Number.POSITIVE_INFINITY;
+      let minimumZ = Number.POSITIVE_INFINITY;
+      let maximumX = Number.NEGATIVE_INFINITY;
+      let maximumY = Number.NEGATIVE_INFINITY;
+      let maximumZ = Number.NEGATIVE_INFINITY;
+      for (let component = 0; component < positionsKm.length; component += 3) {
+        const x = positionsKm[component] ?? Number.NaN;
+        const y = positionsKm[component + 1] ?? Number.NaN;
+        const z = positionsKm[component + 2] ?? Number.NaN;
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+          throw new RangeError('Packed positions must contain finite coordinates.');
+        }
+        const relativeX = x - cameraPositionKm.x;
+        const relativeY = y - cameraPositionKm.y;
+        const relativeZ = z - cameraPositionKm.z;
+        let renderX: number;
+        let renderY: number;
+        let renderZ: number;
+        if (aberrationActive) {
+          writeAberratedPositionInto(
+            this.aberratedPosition,
+            relativeX,
+            relativeY,
+            relativeZ,
+            observer,
+          );
+          renderX = Math.fround(this.aberratedPosition[0] as number);
+          renderY = Math.fround(this.aberratedPosition[1] as number);
+          renderZ = Math.fround(this.aberratedPosition[2] as number);
+        } else {
+          renderX = Math.fround(relativeX);
+          renderY = Math.fround(relativeY);
+          renderZ = Math.fround(relativeZ);
+        }
+        target[component] = renderX;
+        target[component + 1] = renderY;
+        target[component + 2] = renderZ;
+        minimumX = Math.min(minimumX, renderX);
+        minimumY = Math.min(minimumY, renderY);
+        minimumZ = Math.min(minimumZ, renderZ);
+        maximumX = Math.max(maximumX, renderX);
+        maximumY = Math.max(maximumY, renderY);
+        maximumZ = Math.max(maximumZ, renderZ);
+      }
+      attribute.needsUpdate = true;
+      if (visual.frustumCulled) {
+        const boundingSphere = visual.geometry.boundingSphere;
+        if (boundingSphere === null) {
+          throw new Error('Frustum-culled packed positions require a setup-time bounding sphere.');
+        }
+        const centerX = (minimumX + maximumX) * 0.5;
+        const centerY = (minimumY + maximumY) * 0.5;
+        const centerZ = (minimumZ + maximumZ) * 0.5;
+        let maximumRadiusSquared = 0;
+        for (let component = 0; component < target.length; component += 3) {
+          const x = (target[component] as number) - centerX;
+          const y = (target[component + 1] as number) - centerY;
+          const z = (target[component + 2] as number) - centerZ;
+          maximumRadiusSquared = Math.max(maximumRadiusSquared, x * x + y * y + z * z);
+        }
+        boundingSphere.center.set(centerX, centerY, centerZ);
+        boundingSphere.radius = Math.sqrt(maximumRadiusSquared);
+      }
     }
 
     for (

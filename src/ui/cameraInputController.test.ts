@@ -4,14 +4,16 @@ import { CameraInputController, type CameraControlPort } from './cameraInputCont
 
 class FakeEventTarget {
   private readonly listeners = new Map<string, EventListenerOrEventListenerObject>();
-
-  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-    this.listeners.set(type, listener);
-  }
-
-  removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
-    if (this.listeners.get(type) === listener) this.listeners.delete(type);
-  }
+  readonly addEventListener = vi.fn(
+    (type: string, listener: EventListenerOrEventListenerObject): void => {
+      this.listeners.set(type, listener);
+    },
+  );
+  readonly removeEventListener = vi.fn(
+    (type: string, listener: EventListenerOrEventListenerObject): void => {
+      if (this.listeners.get(type) === listener) this.listeners.delete(type);
+    },
+  );
 
   emit(type: string, event: object): void {
     const listener = this.listeners.get(type);
@@ -21,11 +23,19 @@ class FakeEventTarget {
 }
 
 class FakeCanvas extends FakeEventTarget {
-  readonly setPointerCapture = vi.fn();
-  readonly releasePointerCapture = vi.fn();
+  private readonly capturedPointerIds = new Set<number>();
+  readonly setPointerCapture = vi.fn((pointerId: number): void => {
+    this.capturedPointerIds.add(pointerId);
+  });
+  readonly releasePointerCapture = vi.fn((pointerId: number): void => {
+    this.capturedPointerIds.delete(pointerId);
+  });
+  readonly hasPointerCapture = vi.fn((pointerId: number): boolean =>
+    this.capturedPointerIds.has(pointerId),
+  );
 }
 
-function createFixture() {
+function createFixture(initiallyEnabled = true) {
   const canvas = new FakeCanvas();
   const keyboard = new FakeEventTarget();
   const label = { textContent: '' };
@@ -50,6 +60,7 @@ function createFixture() {
     keyboard as unknown as Window,
     label as unknown as HTMLElement,
     controls,
+    initiallyEnabled,
   );
   return { canvas, controls, input, keyboard, label };
 }
@@ -164,5 +175,112 @@ describe('CameraInputController', () => {
     });
     expect(controls.zoomByWheel).not.toHaveBeenCalled();
     expect(controls.focusBody).not.toHaveBeenCalled();
+  });
+
+  it('has no camera or event effects while disabled', () => {
+    const { canvas, controls, input, keyboard } = createFixture(false);
+    const pointerPreventDefault = vi.fn();
+    const wheelPreventDefault = vi.fn();
+    const keyPreventDefault = vi.fn();
+
+    canvas.emit('pointerdown', {
+      pointerId: 7,
+      clientX: 100,
+      clientY: 80,
+      button: 0,
+      preventDefault: pointerPreventDefault,
+    });
+    canvas.emit('pointermove', {
+      pointerId: 7,
+      clientX: 125,
+      clientY: 70,
+      preventDefault: pointerPreventDefault,
+    });
+    canvas.emit('pointerup', { pointerId: 7 });
+    canvas.emit('wheel', { deltaY: -120, preventDefault: wheelPreventDefault });
+    keyboard.emit('keydown', {
+      key: 'j',
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      preventDefault: keyPreventDefault,
+    });
+
+    expect(canvas.setPointerCapture).not.toHaveBeenCalled();
+    expect(canvas.releasePointerCapture).not.toHaveBeenCalled();
+    expect(controls.orbitBy).not.toHaveBeenCalled();
+    expect(controls.zoomByWheel).not.toHaveBeenCalled();
+    expect(controls.focusBody).not.toHaveBeenCalled();
+    expect(pointerPreventDefault).not.toHaveBeenCalled();
+    expect(wheelPreventDefault).not.toHaveBeenCalled();
+    expect(keyPreventDefault).not.toHaveBeenCalled();
+
+    input.setEnabled(true);
+    canvas.emit('wheel', { deltaY: -120, preventDefault: wheelPreventDefault });
+    expect(controls.zoomByWheel).toHaveBeenCalledWith(-120);
+    expect(wheelPreventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('toggles the enabled gate without listener churn', () => {
+    const { canvas, input, keyboard } = createFixture();
+    const canvasAdds = canvas.addEventListener.mock.calls.slice();
+    const keyboardAdds = keyboard.addEventListener.mock.calls.slice();
+
+    for (let index = 0; index < 100; index += 1) {
+      input.setEnabled(index % 2 === 0);
+    }
+
+    expect(canvas.addEventListener.mock.calls).toEqual(canvasAdds);
+    expect(keyboard.addEventListener.mock.calls).toEqual(keyboardAdds);
+    expect(canvas.removeEventListener).not.toHaveBeenCalled();
+    expect(keyboard.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it('ends an active capture when disabled so the next drag can start', () => {
+    const { canvas, controls, input } = createFixture();
+    const firstPreventDefault = vi.fn();
+    canvas.emit('pointerdown', {
+      pointerId: 7,
+      clientX: 100,
+      clientY: 80,
+      button: 0,
+      preventDefault: firstPreventDefault,
+    });
+    expect(canvas.hasPointerCapture(7)).toBe(true);
+
+    input.setEnabled(false);
+    expect(canvas.releasePointerCapture).toHaveBeenCalledWith(7);
+    expect(canvas.hasPointerCapture(7)).toBe(false);
+
+    const disabledPreventDefault = vi.fn();
+    canvas.emit('pointermove', {
+      pointerId: 7,
+      clientX: 120,
+      clientY: 70,
+      preventDefault: disabledPreventDefault,
+    });
+    canvas.emit('pointerup', { pointerId: 7 });
+    expect(controls.orbitBy).not.toHaveBeenCalled();
+    expect(disabledPreventDefault).not.toHaveBeenCalled();
+
+    input.setEnabled(true);
+    const nextPreventDefault = vi.fn();
+    canvas.emit('pointerdown', {
+      pointerId: 8,
+      clientX: 20,
+      clientY: 30,
+      button: 0,
+      preventDefault: nextPreventDefault,
+    });
+    canvas.emit('pointermove', {
+      pointerId: 8,
+      clientX: 30,
+      clientY: 35,
+      preventDefault: nextPreventDefault,
+    });
+
+    expect(canvas.setPointerCapture).toHaveBeenNthCalledWith(2, 8);
+    expect(controls.orbitBy).toHaveBeenCalledWith(-0.04, -0.02);
   });
 });

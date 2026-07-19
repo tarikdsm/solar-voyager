@@ -9,6 +9,7 @@ import {
   MeshLambertMaterial,
   Points,
   Vector3,
+  type BufferAttribute,
   type Object3D,
   type WebGLRenderer,
 } from 'three';
@@ -17,11 +18,34 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
 import { createEpochWorld } from './createEpochWorld.js';
 import type { StarCatalog } from './starCatalog.js';
+import { SYSTEM_MAP_ORBIT_SEGMENTS } from './systemMapScene.js';
+
+function expectAttributeRangeInFrustum(
+  attribute: BufferAttribute,
+  start: number,
+  count: number,
+  camera: import('three').PerspectiveCamera,
+): void {
+  const projected = new Vector3();
+  for (let index = start; index < start + count; index += 1) {
+    projected.fromBufferAttribute(attribute, index).project(camera);
+    expect(Math.abs(projected.x)).toBeLessThanOrEqual(1.000_001);
+    expect(Math.abs(projected.y)).toBeLessThanOrEqual(1.000_001);
+    expect(projected.z).toBeGreaterThanOrEqual(-1.000_001);
+    expect(projected.z).toBeLessThanOrEqual(1.000_001);
+  }
+}
 
 describe('createEpochWorld', () => {
   it('registers every J2026 body with shared geometry and no scaffold cube', async () => {
     const compileAsync = vi.fn(async () => undefined);
-    const renderer = { compileAsync, getPixelRatio: () => 2 } as unknown as WebGLRenderer;
+    const render = vi.fn();
+    const renderer = {
+      compileAsync,
+      domElement: { width: 2_560, height: 1_440 },
+      getPixelRatio: () => 2,
+      render,
+    } as unknown as WebGLRenderer;
     const earthModelRoot = new Group();
     const earthModelMaterial = new MeshBasicMaterial();
     earthModelRoot.add(new Mesh(undefined, earthModelMaterial));
@@ -51,6 +75,51 @@ describe('createEpochWorld', () => {
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
     expect(world.cameraController.focusId).toBe('earth');
+    expect(world.systemMap.cameraController.focusId).toBe('sun');
+    expect(world.systemMap.cameraPositionKm).toBe(
+      world.systemMap.cameraController.cameraPositionKm,
+    );
+    expect(world.systemMap.diagnostics.bodyCount).toBe(bodyCount);
+    expect(world.systemMap.diagnostics.iconDrawCount).toBe(1);
+    expect(world.systemMap.diagnostics.orbitDrawCount).toBe(1);
+    expect(world.systemMap.diagnostics.selectedVisible).toBe(true);
+    expect(world.systemMap.spaceScene.camera.aspect).toBeCloseTo(16 / 9, 12);
+    expect(world.systemMap.bodyIcons.parent).toBe(world.systemMap.spaceScene.scene);
+    expect(world.systemMap.orbitLines.parent).toBe(world.systemMap.spaceScene.scene);
+    expectAttributeRangeInFrustum(
+      world.systemMap.bodyIcons.geometry.getAttribute('position') as BufferAttribute,
+      0,
+      bodyCount,
+      world.systemMap.spaceScene.camera,
+    );
+    expectAttributeRangeInFrustum(
+      world.systemMap.orbitLines.geometry.getAttribute('position') as BufferAttribute,
+      0,
+      (bodyCount - 1) * SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+      world.systemMap.spaceScene.camera,
+    );
+
+    for (const bodyId of ['mercury', 'neptune', 'eris']) {
+      const bodyIndex = bodiesDocument.bodies.findIndex((body) => body.id === bodyId);
+      expect(bodyIndex).toBeGreaterThan(0);
+      expect(world.systemMap.focusBody(bodyId)).toBe(true);
+      world.systemMap.update(2);
+      expect(world.systemMap.diagnostics.selectedVisible).toBe(true);
+      const semiMajorAxisKm = Math.abs(
+        bodiesDocument.bodies[bodyIndex]?.elements?.semiMajorAxisKm ?? 0,
+      );
+      expect(semiMajorAxisKm).toBeGreaterThan(0);
+      expect(world.systemMap.diagnostics.selectedOrbitAlignmentKm).toBeLessThan(
+        semiMajorAxisKm * 0.002,
+      );
+      expect(world.systemMap.diagnostics.selectedOrbitAlignmentPx).toBeLessThan(1);
+      expectAttributeRangeInFrustum(
+        world.systemMap.orbitLines.geometry.getAttribute('position') as BufferAttribute,
+        (bodyIndex - 1) * SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+        SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+        world.systemMap.spaceScene.camera,
+      );
+    }
     expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
     expect(world.cameraController.focusBody('jupiter')).toBe(true);
     world.cameraController.update(1.5);
@@ -106,17 +175,22 @@ describe('createEpochWorld', () => {
     expect(world.visualSystem.getOpacity('earth', 2)).toBe(1);
     expect(assetLoader.loadModel).toHaveBeenCalledOnce();
     expect(assetLoader.loadModel).toHaveBeenCalledWith('earth');
-    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(2));
-    expect(compileAsync).toHaveBeenNthCalledWith(
-      1,
-      world.spaceScene.scene,
-      world.spaceScene.camera,
+    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(3));
+    expect(compileAsync).toHaveBeenCalledWith(world.spaceScene.scene, world.spaceScene.camera);
+    expect(compileAsync).toHaveBeenCalledWith(
+      world.systemMap.spaceScene.scene,
+      world.systemMap.spaceScene.camera,
     );
-    expect(compileAsync).toHaveBeenNthCalledWith(
-      2,
+    expect(compileAsync).toHaveBeenCalledWith(
       earthModelRoot,
       world.spaceScene.camera,
       world.spaceScene.scene,
+    );
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenCalledWith(world.spaceScene.scene, world.spaceScene.camera);
+    expect(render).toHaveBeenCalledWith(
+      world.systemMap.spaceScene.scene,
+      world.systemMap.spaceScene.camera,
     );
 
     let hasCube = false;
@@ -124,5 +198,11 @@ describe('createEpochWorld', () => {
       if (object instanceof Mesh && object.geometry instanceof BoxGeometry) hasCube = true;
     });
     expect(hasCube).toBe(false);
+
+    const mapIconPosition = world.systemMap.bodyIcons.geometry.getAttribute('position');
+    world.positionsKm[0] = (world.positionsKm[0] as number) + 12_345;
+    world.systemMap.update(0);
+    world.systemMap.spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(mapIconPosition.getX(0)).toBe(Math.fround(world.positionsKm[0] as number));
   });
 });

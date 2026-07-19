@@ -1,9 +1,11 @@
-import { useComputed } from '@preact/signals';
+import { useComputed, type ReadonlySignal } from '@preact/signals';
+import type { ComponentChildren } from 'preact';
 import { useCallback, useRef, useState } from 'preact/hooks';
 
 import { WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { createScaffoldState } from '../game/createScaffoldState.js';
 import type { GamePhase, SceneManager } from '../game/sceneManager.js';
+import type { SystemMapController } from '../game/systemMapController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
@@ -14,6 +16,8 @@ import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
 import { StateVectorPanel } from './StateVectorPanel.js';
 import type { StateVectorSignalStore } from './stateVectorSignals.js';
+import { SystemMapPanel } from './SystemMapPanel.js';
+import type { SystemMapSignalStore } from './systemMapSignals.js';
 import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
 import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
 
@@ -37,7 +41,27 @@ export interface AppProps {
   readonly session?: SessionSettingsPort | null;
   readonly stateVectors?: StateVectorSignalStore | null;
   readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
+  readonly systemMap?: SystemMapUiPort | null;
   readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
+}
+
+export interface SystemMapUiPort {
+  readonly controller: SystemMapController;
+  readonly signals: SystemMapSignalStore;
+}
+
+export function SpaceHudSurfaces({
+  children,
+  mapOpen,
+}: {
+  readonly children: ComponentChildren;
+  readonly mapOpen: boolean | ReadonlySignal<boolean>;
+}) {
+  return (
+    <div class="space-hud-surfaces" hidden={mapOpen} aria-hidden={mapOpen}>
+      {children}
+    </div>
+  );
 }
 
 interface ReadoutValueProps {
@@ -254,6 +278,7 @@ export function App({
   session = null,
   stateVectors = null,
   stateVectorViewportRef = null,
+  systemMap = null,
   trajectoryPrediction = null,
 }: AppProps) {
   const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
@@ -282,40 +307,52 @@ export function App({
       {hardwareWarning === null ? null : (
         <HardwareAccelerationWarning rendererName={hardwareWarning.rendererName} />
       )}
-      {trajectoryPrediction === null ? null : (
-        <TrajectoryImpactWarning display={trajectoryPrediction.display} />
-      )}
-      <h1 class="app-title">{scaffoldState.title}</h1>
       {perfPanel === null ? null : <PerfPanel store={perfPanel} />}
-      {session === null ? null : <SessionSettingsPanel session={session} />}
-      <OrbitReadout hud={hud} />
-      <DualClock hud={hud} />
-      <WarpControl commands={commands} hud={hud} hudState={hudState} />
-      <EnergyPanel hud={hud} />
-      <TargetPanel
-        bodyIds={bodyIds}
-        commands={commands}
-        hud={hud}
-        hudState={hudState}
-        trajectoryPrediction={trajectoryPrediction}
-      />
-      {stateVectors === null || stateVectorViewportRef === null ? null : (
-        <StateVectorPanel
-          display={stateVectors.display}
-          pinnedToEcliptic={stateVectors.signals.pinnedToEcliptic}
-          setPinnedToEcliptic={stateVectors.setPinnedToEcliptic.bind(stateVectors)}
-          viewportRef={stateVectorViewportRef}
+      {systemMap === null || trajectoryPrediction === null ? null : (
+        <SystemMapPanel
+          bodyIds={bodyIds}
+          commands={commands}
+          controller={systemMap.controller}
+          map={systemMap.signals}
+          targetBody={hud.targetBody}
+          trajectoryPrediction={trajectoryPrediction.display}
         />
       )}
-      <Navball hud={hud} hudState={hudState} />
-      <section class="camera-help" aria-label="Camera controls">
-        <p id="camera-focus-label" class="camera-focus" aria-live="polite">
-          Focus: Earth
-        </p>
-        <p class="camera-instructions">
-          Drag to orbit · Scroll to zoom · [ / ] change target · E Earth · J Jupiter
-        </p>
-      </section>
+      <SpaceHudSurfaces mapOpen={systemMap?.signals.display.open ?? false}>
+        {trajectoryPrediction === null ? null : (
+          <TrajectoryImpactWarning display={trajectoryPrediction.display} />
+        )}
+        <h1 class="app-title">{scaffoldState.title}</h1>
+        {session === null ? null : <SessionSettingsPanel session={session} />}
+        <OrbitReadout hud={hud} />
+        <DualClock hud={hud} />
+        <WarpControl commands={commands} hud={hud} hudState={hudState} />
+        <EnergyPanel hud={hud} />
+        <TargetPanel
+          bodyIds={bodyIds}
+          commands={commands}
+          hud={hud}
+          hudState={hudState}
+          trajectoryPrediction={trajectoryPrediction}
+        />
+        {stateVectors === null || stateVectorViewportRef === null ? null : (
+          <StateVectorPanel
+            display={stateVectors.display}
+            pinnedToEcliptic={stateVectors.signals.pinnedToEcliptic}
+            setPinnedToEcliptic={stateVectors.setPinnedToEcliptic.bind(stateVectors)}
+            viewportRef={stateVectorViewportRef}
+          />
+        )}
+        <Navball hud={hud} hudState={hudState} />
+        <section class="camera-help" aria-label="Camera controls">
+          <p id="camera-focus-label" class="camera-focus" aria-live="polite">
+            Focus: Earth
+          </p>
+          <p class="camera-instructions">
+            Drag to orbit · Scroll to zoom · [ / ] change target · E Earth · J Jupiter
+          </p>
+        </section>
+      </SpaceHudSurfaces>
     </main>
   );
 }
