@@ -20,12 +20,12 @@ simulation interfaces or persistence schema.
 
 ## Task 2: Accessible panel and responsive layout
 
-- [ ] Add RED component tests for collapsed/expanded, empty/active/completed,
+- [x] Add RED component tests for collapsed/expanded, empty/active/completed,
   labels, bounded 256 rows, ArrowUp/ArrowDown/Home/End, Escape focus return, and
   no flight command when those keys are rebound and focus is on row buttons.
-- [ ] Implement `BurnLogPanel`, wire it through `App`, clarify the dual clock's
+- [x] Implement `BurnLogPanel`, wire it through `App`, clarify the dual clock's
   mission-UTC label, and add desktop/compact/reduced-motion styles.
-- [ ] Add a focused Chromium component regression for real focus and computed
+- [x] Add a focused Chromium component regression for real focus and computed
   layout: bounding boxes, no horizontal overflow, usable vertical scroll, and
   zero transition duration under reduced motion; run component/unit/static gates.
 - [ ] Independent review: accessibility, focus lifecycle, list ordering,
