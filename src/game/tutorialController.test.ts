@@ -67,7 +67,7 @@ describe('TutorialController', () => {
     expect(controller.progress).toEqual(progress('completed', 'return-to-play'));
     expect(port.progress).toEqual(controller.progress);
     expect(controller.transitionCount).toBe(12);
-    expect(published).toHaveLength(12);
+    expect(published).toHaveLength(13);
     expect(controller.observerActive).toBe(false);
   });
 
