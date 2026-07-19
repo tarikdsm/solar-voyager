@@ -74,6 +74,7 @@ renderer.setSize(VIEWPORT_SIZE, VIEWPORT_SIZE, false);
 renderer.setClearColor(0x000000, 1);
 
 const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_SIZE });
+world.visualSystem.enableLazyLoading();
 const earthPipeline = new LightingPostPipeline(
   renderer,
   world.spaceScene.scene,
@@ -182,13 +183,14 @@ globalThis.__lightingPostHarness = {
       world.spaceScene.camera.fov * (Math.PI / 180),
       MODEL_FADE_END_MS,
     );
-    setEarthEmissionEnabled(emissionEnabled);
+    const earthLoadState = world.visualSystem.getLoadState('earth');
+    if (earthLoadState === 'ready') setEarthEmissionEnabled(emissionEnabled);
     world.lighting.update();
     world.spaceScene.updateCameraRelative(nightCameraPositionKm);
     earthPipeline.render();
     return {
       ...pipelineSnapshot(earthPipeline),
-      earthLoadState: world.visualSystem.getLoadState('earth'),
+      earthLoadState,
       earthTier: world.visualSystem.getTier('earth'),
       sphereOpacity: world.visualSystem.getOpacity('earth', 2),
       modelOpacity: world.visualSystem.getOpacity('earth', 3),
