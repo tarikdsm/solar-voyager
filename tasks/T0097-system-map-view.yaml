@@ -1,6 +1,6 @@
 id: T0097
 title: Interactive solar-system map view
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0097-system-map-view
 depends_on: [T0044, T0071, T0096]
@@ -17,4 +17,11 @@ acceptance:
   - Map and space views share target/focus state and repeated toggles do not leak scenes, listeners, GPU resources, or frame-loop allocations
   - Camera-relative precision and marker alignment are verified at inner-system and outer-system scales in a real browser
   - The added view stays inside draw, triangle, heap, bundle, and frame budgets
-handoff_notes: ""
+handoff_notes: |
+  Implemented the preallocated interactive system map with shared target/focus,
+  live prediction overlays, accessible keyboard/UI controls, and deterministic
+  return to the continuously running space simulation. Independent review:
+  C0/I0/M0. Full unit: 732 passed, 3 skipped. Real-browser regression covers
+  all 43 bodies, delayed first prediction, inner/outer alignment, and 100
+  frame-interleaved toggles with stable GPU resources. Production perf: 10
+  draws, 77,071 triangles, heap -131,840 B; entry bundle 284,681/285,000 B gzip.
