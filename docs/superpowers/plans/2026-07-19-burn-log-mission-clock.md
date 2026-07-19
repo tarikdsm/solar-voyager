@@ -28,7 +28,7 @@ simulation interfaces or persistence schema.
 - [x] Add a focused Chromium component regression for real focus and computed
   layout: bounding boxes, no horizontal overflow, usable vertical scroll, and
   zero transition duration under reduced motion; run component/unit/static gates.
-- [ ] Independent review: accessibility, focus lifecycle, list ordering,
+- [x] Independent review: accessibility, focus lifecycle, list ordering,
   compact overflow, and absence of frame-loop DOM work.
 
 ## Task 3: Runtime, persistence, browser, and delivery
