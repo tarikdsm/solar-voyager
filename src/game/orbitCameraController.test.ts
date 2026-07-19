@@ -82,6 +82,22 @@ describe('OrbitCameraController', () => {
     expect(controller.distanceKm).toBe(1e10);
   });
 
+  it('accepts a map-specific maximum distance without changing the space default', () => {
+    const positionsKm = new Float64Array([0, 0, 0]);
+    const controller = new OrbitCameraController({
+      positionsKm,
+      targets: [{ id: 'sun', positionOffset: 0, meanRadiusKm: 1 }],
+      initialFocusId: 'sun',
+      initialCameraPositionKm: { x: 2, y: 0, z: 0 },
+      maxDistanceKm: 60_000_000_000,
+    });
+
+    controller.zoomByWheel(1_000_000);
+
+    expect(controller.distanceKm).toBe(60_000_000_000);
+    expect(createFixture().controller.distanceKm).toBeLessThan(1e10);
+  });
+
   it('transfers smoothly from Earth to a live Jupiter endpoint', () => {
     const { controller, positionsKm } = createFixture();
     const startX = controller.cameraPositionKm.x;

@@ -20,6 +20,10 @@ import {
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
 
+export interface CameraRelativeSpaceSceneOptions {
+  readonly farKm?: number;
+}
+
 function assertFinitePosition(label: string, positionKm: ReadonlyVec3): void {
   if (
     !Number.isFinite(positionKm.x) ||
@@ -100,7 +104,7 @@ class CameraRelativePackedPolylineBinding implements PackedPolylineBinding {
  */
 export class CameraRelativeSpaceScene {
   readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, SPACE_FAR_KM);
+  readonly camera: PerspectiveCamera;
 
   private readonly visuals: Object3D[] = [];
   private readonly positionsKm: ReadonlyVec3[] = [];
@@ -118,7 +122,12 @@ export class CameraRelativeSpaceScene {
   private readonly aberratedPosition = new Float64Array(3);
   private relativisticObserver: Readonly<RelativisticVisualState> | null = null;
 
-  constructor() {
+  constructor(options: CameraRelativeSpaceSceneOptions = {}) {
+    const farKm = options.farKm ?? SPACE_FAR_KM;
+    if (!Number.isFinite(farKm) || farKm <= SPACE_NEAR_KM) {
+      throw new RangeError('Camera-relative far plane must exceed the finite near plane.');
+    }
+    this.camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, farKm);
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
     this.camera.updateMatrix();

@@ -1,7 +1,7 @@
 import type { ReadonlyVec3 } from '../core/vec3.js';
 
 const DEFAULT_TRANSFER_DURATION_SEC = 1.5;
-const MAX_DISTANCE_KM = 1e10;
+const DEFAULT_MAX_DISTANCE_KM = 1e10;
 const MIN_CLEARANCE_KM = 0.002;
 const RELATIVE_CLEARANCE = 1e-6;
 const DEFAULT_FRAME_RADIUS_MULTIPLIER = 3;
@@ -27,6 +27,7 @@ export interface OrbitCameraControllerOptions {
   readonly targets: readonly CameraFocusTarget[];
   readonly initialFocusId: string;
   readonly initialCameraPositionKm: ReadonlyVec3;
+  readonly maxDistanceKm?: number;
   readonly transferDurationSec?: number;
 }
 
@@ -53,6 +54,7 @@ export class OrbitCameraController {
   private readonly positionsKm: Float64Array;
   private readonly targets: readonly CameraFocusTarget[];
   private readonly transferDurationSec: number;
+  private readonly maxDistanceKm: number;
   private focusTargetIndex: number;
   private yawRad = 0;
   private pitchRad = 0;
@@ -75,6 +77,10 @@ export class OrbitCameraController {
 
     this.positionsKm = options.positionsKm;
     this.targets = options.targets;
+    this.maxDistanceKm = options.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM;
+    if (!Number.isFinite(this.maxDistanceKm) || this.maxDistanceKm <= 0) {
+      throw new RangeError('Camera maximum distance must be finite and positive.');
+    }
     this.transferDurationSec = options.transferDurationSec ?? DEFAULT_TRANSFER_DURATION_SEC;
     if (!Number.isFinite(this.transferDurationSec) || this.transferDurationSec <= 0) {
       throw new RangeError('Camera transfer duration must be finite and positive.');
@@ -119,7 +125,7 @@ export class OrbitCameraController {
     this.currentDistanceKm = clamp(
       distanceKm,
       this.minimumDistanceForTarget(initialTargetIndex),
-      MAX_DISTANCE_KM,
+      this.maxDistanceKm,
     );
     this.yawRad = Math.atan2(offsetY, offsetX);
     this.pitchRad = clamp(Math.asin(offsetZ / distanceKm), -MAX_PITCH_RAD, MAX_PITCH_RAD);
@@ -164,7 +170,7 @@ export class OrbitCameraController {
     const nextDistanceKm = clamp(
       this.currentDistanceKm * scale,
       minimumDistanceKm,
-      MAX_DISTANCE_KM,
+      this.maxDistanceKm,
     );
     if (this.transitionActive && this.currentDistanceKm > 0) {
       this.transitionZoomFactor *= nextDistanceKm / this.currentDistanceKm;
@@ -261,7 +267,7 @@ export class OrbitCameraController {
       this.currentDistanceKm = clamp(
         this.transitionEndDistanceKm * this.transitionZoomFactor,
         this.transitionEndMinimumDistanceKm,
-        MAX_DISTANCE_KM,
+        this.maxDistanceKm,
       );
       this.transitionActive = false;
       this.transitionZoomFactor = 1;
@@ -298,7 +304,7 @@ export class OrbitCameraController {
         this.transitionTravelDistanceKm * TRANSFER_CONTEXT_RATIO * envelope * envelope) *
         this.transitionZoomFactor,
       this.transitionMinimumDistanceAtBlend(blend),
-      MAX_DISTANCE_KM,
+      this.maxDistanceKm,
     );
     this.recomputeCamera();
   }

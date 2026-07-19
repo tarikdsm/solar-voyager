@@ -35,6 +35,13 @@ describe('CameraRelativeSpaceScene', () => {
     expect(spaceScene.camera.matrixAutoUpdate).toBe(false);
   });
 
+  it('allows a map-specific far plane without changing the space-scene default', () => {
+    const mapScene = new CameraRelativeSpaceScene({ farKm: 60_000_000_000 });
+
+    expect(mapScene.camera.far).toBe(60_000_000_000);
+    expect(new CameraRelativeSpaceScene().camera.far).toBe(SPACE_FAR_KM);
+  });
+
   it('subtracts in float64 before the float32 bridge for an Earth surface view', () => {
     const spaceScene = new CameraRelativeSpaceScene();
     const earth = new Object3D();
