@@ -1,6 +1,6 @@
 id: T0098
 title: Burn log panel and UTC mission clock
-status: IN_PROGRESS
+status: REVIEW
 agent: chatgpt
 branch: task/T0098-burn-log-utc
 depends_on: [T0053, T0054, T0058, T0096]
@@ -18,13 +18,17 @@ acceptance:
   - Panel interaction is accessible and does not allocate or iterate the 256-entry history on every animation frame
   - Real-browser evidence shows the panel readable at desktop and compact viewport sizes with no console errors
 handoff_notes: |
-  Implementation complete through Task 3; independent final review remains.
-  Runtime commits: 7b9c2d3, cdab2fd, d6dd0da, 50a8a1e, cb90e6b.
-  Permanent browser regression proves a real KeyR/KeyF burn within one HUD
-  publish, every raw/formatted field, stable diagnostics/rebuild count,
-  keyboard navigation, and exact Save/reload/Continue restoration. Desktop and
-  390 px screenshots are under .playwright-mcp/T0098-burn-log-*.png.
-  Full Vitest: 750 passed, 3 skipped. Lint/typecheck/build/budgets/task schema,
-  burn component/runtime, session, menu, map, and application smoke passed.
-  Exact-head perf gate: 39,348 B retained heap, 10 draws, 77,071 triangles,
-  entry/total gzip 120,945/567,544 B. Paired evidence: docs/bench/T0098-*.
+  Implemented the bounded canonical burn-log panel and explicit J2026 TDB
+  mission-UTC display. The UI uses 256 setup-preallocated stable row graphs plus
+  one active row, synchronous save/import rebind, exact full-ring overwrite
+  detection, keyboard navigation, compact/reduced-motion layouts, and a raw-core
+  fixed diagnostic independent of UI formatting. Protected simulation commands,
+  snapshots, physics formulae, and save schema are unchanged.
+
+  Independent review: C0/I0/M0. Full unit: 750 passed, 3 skipped. Real-browser
+  regression performs KeyR/KeyF burns, proves active display within one HUD
+  publish, compares all 11 raw/formatted fields, verifies unchanged commits do
+  not rebuild, and restores the exact burn through Save/reload/Continue. Desktop
+  and 390px compact layouts, menu, system map, settings, and smoke are green.
+  Production perf: 10 draws, 77,071 triangles, heap -162,791 B; entry/total
+  bundle 120,945/567,544 B gzip. Bench median/p75 stayed 6.1/6.1 ms.
