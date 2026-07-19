@@ -1,6 +1,6 @@
 id: T0099
 title: Orbital-navigation tutorial overlay
-status: REVIEW
+status: DONE
 agent: chatgpt
 branch: task/T0099-orbital-tutorial
 depends_on: [T0096, T0097, T0098]
@@ -18,7 +18,7 @@ acceptance:
   - Tutorial prompts never capture thrust/warp input when hidden and add zero gameplay frame-loop allocations after completion
   - A real-browser guided run reaches completion with no console/page errors or orphaned overlays
 handoff_notes: |
-  Ready for independent review. A first-profile opt-in tutorial now advances
+  Independently approved at dd3a306 with C0/I0/M0. A first-profile opt-in tutorial advances
   through 12 observable steps using the real target/focus, camera, trajectory,
   attitude/thrust, warp, system-map, burn-log, performance, save, and return
   controls. Progress is strictly persisted in profile settings v2; legacy v1
@@ -38,8 +38,12 @@ handoff_notes: |
   Final gates: lint, typecheck, Prettier, build, task schema, asset budgets,
   792 Vitest tests (3 skipped), and 60 Python tool tests pass. The performance
   gate reports 569,988 B total gzip (570,000 B limit), production retained heap
-  -87,299 B, 10 draw calls, and 77,071 triangles; both injected allocation and
+  -84,815 B, 10 draw calls, and 77,071 triangles; both injected allocation and
   draw fixtures fail as expected. The deterministic flight bench at 51899cb
   reports median/p75/p99 6.1/6.1/6.301 ms, heap +105,128 B, max 26 draws and
   49,530 triangles, with no errors. Baseline was 6.1/6.1 ms, +124,124 B, 26
   draws, 49,146 triangles, and 567,544 B total gzip.
+
+  Independent re-review found C0/I0/M0. Exact-head CI run 29696158159 passed
+  every required check before this merger-authored DONE transition; the final
+  status-only head must also be green before non-force merge.
