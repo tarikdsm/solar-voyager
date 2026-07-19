@@ -101,7 +101,11 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
   parent-relative catalog bound and initial viewport aspect; the normal space
   view retains the §2 far-plane default. Alignment diagnostics measure the
   selected icon against the actually rendered orbit segments in both float64
-  kilometres and projected screen pixels without frame-loop allocations.
+  kilometres and projected screen pixels without frame-loop allocations. A
+  setup-only nonempty trajectory fixture is compiled and rendered once, then
+  reset before the animation loop, so the first real event cannot create a GPU
+  program or geometry. During gameplay the frame orchestrator updates the live
+  simulation and both cameras but submits exactly one active view.
 
 ## 8. Performance & asset budgets (CI-gated)
 

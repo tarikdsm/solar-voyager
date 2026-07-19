@@ -53,12 +53,12 @@ frame.
 **Files:** `src/ui/systemMapSignals.ts`, tests,
 `src/ui/SystemMapPanel.tsx`, tests, `src/ui/App.tsx`, `src/ui/app.css`.
 
-- [ ] Write RED tests for button/M/Escape toggles, labeled body selection,
+- [x] Write RED tests for button/M/Escape toggles, labeled body selection,
   target/focus sharing, prediction text, keyboard focus, compact scrolling,
   reduced motion, and no duplicate keyboard effect.
-- [ ] Implement the signal adapter and always-mounted accessible panel without
+- [x] Implement the signal adapter and always-mounted accessible panel without
   rerendering the main HUD on frame updates.
-- [ ] Hide non-map HUD surfaces while active, retaining performance and warning
+- [x] Hide non-map HUD surfaces while active, retaining performance and warning
   surfaces, and make return focus deterministic.
 - [x] Run component tests, lint, typecheck, and format; obtain independent
   review.
@@ -68,15 +68,15 @@ frame.
 **Files:** `src/main.ts`, browser regression, `package.json`, CI,
 `docs/check_plan.html`, task YAML.
 
-- [ ] Write a RED browser regression for preallocated resources, repeated
+- [x] Write a RED browser regression for preallocated resources, repeated
   toggles, advancing sim time, inner/outer focus, target sharing, prediction
   markers, deterministic return, compact/reduced-motion behavior, and console
   errors.
-- [ ] Wire both cameras/input controllers, one worker result into both
+- [x] Wire both cameras/input controllers, one worker result into both
   trajectory overlays, resize handling, dataset/diagnostics, and exactly-one
   scene render per frame.
-- [ ] Add the permanent CI command and preserve all direct-play harnesses.
-- [ ] Run full unit/static/build/browser/performance/budget/schema/diff gates
+- [x] Add the permanent CI command and preserve all direct-play harnesses.
+- [x] Run full unit/static/build/browser/performance/budget/schema/diff gates
   plus an in-app real-browser playtest with screenshots and console inspection.
 - [ ] Obtain independent exact-head review, move to REVIEW, publish, require CI,
   move to DONE, require final CI, merge without force, and retain the branch.
