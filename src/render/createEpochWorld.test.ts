@@ -58,6 +58,7 @@ describe('createEpochWorld', () => {
     expect(world.systemMap.diagnostics.bodyCount).toBe(bodyCount);
     expect(world.systemMap.diagnostics.iconDrawCount).toBe(1);
     expect(world.systemMap.diagnostics.orbitDrawCount).toBe(1);
+    expect(world.systemMap.diagnostics.selectedVisible).toBe(true);
     expect(world.systemMap.bodyIcons.parent).toBe(world.systemMap.spaceScene.scene);
     expect(world.systemMap.orbitLines.parent).toBe(world.systemMap.spaceScene.scene);
     expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
