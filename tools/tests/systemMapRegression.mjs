@@ -33,7 +33,9 @@ async function readMapRuntime(page) {
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) throw new Error('canvas missing');
     const runtime = canvas.solarVoyagerSystemMap;
     if (runtime === undefined) throw new Error('system-map diagnostics missing');
-    const render = canvas.solarVoyagerTelemetry?.snapshot;
+    const telemetry = canvas.solarVoyagerTelemetry;
+    const render = telemetry?.snapshot;
+    const rendererInfo = telemetry?.renderer?.info;
     return {
       bodyCount: runtime.scene.bodyCount,
       focusBodyId: runtime.focusBodyId,
@@ -48,9 +50,9 @@ async function readMapRuntime(page) {
       spaceRenderCountAtModeChange: runtime.spaceRenderCountAtModeChange,
       targetBodyId: runtime.targetBodyId,
       drawCalls: render?.drawCalls ?? -1,
-      geometries: render?.geometries ?? -1,
-      programs: render?.programs ?? -1,
-      textures: render?.textures ?? -1,
+      geometries: rendererInfo?.memory.geometries ?? -1,
+      programs: rendererInfo?.programs?.length ?? -1,
+      textures: rendererInfo?.memory.textures ?? -1,
       triangles: render?.triangles ?? -1,
       trajectoryLineVisible: runtime.trajectoryLineVisible,
       trajectoryMarkersVisible: runtime.trajectoryMarkersVisible,
@@ -89,6 +91,64 @@ function assertFinitePrecision(bodyId, precision) {
   );
 }
 
+function gpuResourcesOf(runtime) {
+  return {
+    geometries: runtime.geometries,
+    programs: runtime.programs,
+    textures: runtime.textures,
+  };
+}
+
+async function waitForMapFrames(page, frameCount) {
+  const start = (await readMapRuntime(page)).mapRenderCount;
+  await page.waitForFunction(
+    ({ expectedFrames, startFrame }) => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (
+        canvas instanceof globalThis.HTMLCanvasElement &&
+        canvas.solarVoyagerSystemMap !== undefined &&
+        canvas.solarVoyagerSystemMap.mapRenderCount >= startFrame + expectedFrames
+      );
+    },
+    { expectedFrames: frameCount, startFrame: start },
+    { timeout: 30_000 },
+  );
+}
+
+async function waitForSpaceFrames(page, frameCount) {
+  const start = (await readMapRuntime(page)).spaceRenderCount;
+  await page.waitForFunction(
+    ({ expectedFrames, startFrame }) => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (
+        canvas instanceof globalThis.HTMLCanvasElement &&
+        canvas.solarVoyagerSystemMap !== undefined &&
+        canvas.solarVoyagerSystemMap.spaceRenderCount >= startFrame + expectedFrames
+      );
+    },
+    { expectedFrames: frameCount, startFrame: start },
+    { timeout: 30_000 },
+  );
+}
+
+async function waitForStableGpuResources(page, waitForFrames, frameBlock = 120) {
+  let previous = null;
+  let stableObservations = 0;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await waitForFrames(page, frameBlock);
+    const current = await readMapRuntime(page);
+    const resources = gpuResourcesOf(current);
+    if (previous !== null && Object.keys(resources).every((key) => resources[key] === previous[key])) {
+      stableObservations += 1;
+      if (stableObservations === 3) return current;
+    } else {
+      stableObservations = 0;
+    }
+    previous = resources;
+  }
+  throw new Error(`GPU resources did not settle before prediction: ${JSON.stringify(previous)}`);
+}
+
 await assertPortAvailable(PORT, HOST);
 await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
 const server = await preview({
@@ -115,6 +175,16 @@ try {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
+  let releaseWorkerRequest = () => undefined;
+  const workerGate = new Promise((resolve) => {
+    releaseWorkerRequest = resolve;
+  });
+  let workerRequestBlocked = false;
+  await page.route(/predictor\.worker/iu, async (route) => {
+    workerRequestBlocked = true;
+    await workerGate;
+    await route.continue();
+  });
   await installTrajectoryPredictionTestHorizon(page, 21_600);
   await installTrajectoryPredictionTestPointCount(page, 128);
   const response = await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
@@ -136,12 +206,6 @@ try {
     await warning.getByRole('button', { name: 'I understand', exact: true }).click();
     await warning.waitFor({ state: 'detached' });
   }
-  await page.waitForFunction(
-    () => globalThis.document.querySelector('#space-canvas')?.dataset.trajectoryReady === 'true',
-    undefined,
-    { timeout: 90_000 },
-  );
-
   const toggle = page.locator('#system-map-toggle');
   const panel = page.locator('#system-map-panel');
   const selector = page.locator('#system-map-body-selector');
@@ -162,7 +226,7 @@ try {
     };
   });
 
-  await page.keyboard.press('m');
+  await toggle.click();
   await panel.waitFor({ state: 'visible' });
   assert.equal(await selector.evaluate((element) => element === globalThis.document.activeElement), true);
   await page.waitForFunction(
@@ -187,9 +251,27 @@ try {
     afterOpen.spaceRenderCountAtModeChange,
     'space rendered behind map',
   );
-  assert.equal(afterOpen.trajectoryLineVisible, true, 'shared prediction line is hidden');
+  assert.equal(workerRequestBlocked, true, 'trajectory worker request was not delayed');
+  assert.equal(afterOpen.trajectoryLineVisible, false, 'trajectory line appeared before response');
+  assert.equal(afterOpen.trajectoryMarkersVisible, false, 'trajectory markers appeared before response');
   assert.ok(afterOpen.drawCalls > 0 && afterOpen.drawCalls <= 150, `map draws: ${afterOpen.drawCalls}`);
   assert.ok(afterOpen.triangles <= 500_000, `map triangles: ${afterOpen.triangles}`);
+
+  const beforePrediction = await waitForStableGpuResources(page, waitForMapFrames);
+  assert.ok(
+    beforePrediction.mapRenderCount >= 480,
+    `map did not render enough delayed-prediction frames: ${beforePrediction.mapRenderCount}`,
+  );
+  releaseWorkerRequest();
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.trajectoryReady === 'true',
+    undefined,
+    { timeout: 90_000 },
+  );
+  await waitForMapFrames(page, 2);
+  const afterPredictionLine = await readMapRuntime(page);
+  assert.equal(afterPredictionLine.trajectoryLineVisible, true, 'shared prediction line is hidden');
+  assert.equal(afterPredictionLine.trajectoryMarkersVisible, false, 'untargeted prediction has markers');
 
   await selector.selectOption('mercury');
   await page.waitForFunction(
@@ -206,6 +288,18 @@ try {
     (await readMapRuntime(page)).trajectoryMarkersVisible,
     true,
     'targeted prediction markers are hidden',
+  );
+  const afterPredictionMarkers = await readMapRuntime(page);
+  assert.deepEqual(
+    {
+      line: gpuResourcesOf(afterPredictionLine),
+      markers: gpuResourcesOf(afterPredictionMarkers),
+    },
+    {
+      line: gpuResourcesOf(beforePrediction),
+      markers: gpuResourcesOf(beforePrediction),
+    },
+    'first trajectory line or marker created GPU resources',
   );
   assertFinitePrecision('mercury', await readSelectedPrecision(page));
   await page.screenshot({
@@ -224,6 +318,17 @@ try {
     fullPage: true,
   });
 
+  await toggle.click();
+  await panel.waitFor({ state: 'hidden' });
+  const beforeToggleWarm = await readMapRuntime(page);
+  const afterToggleWarm = await waitForStableGpuResources(page, waitForSpaceFrames, 30);
+  assert.ok(
+    afterToggleWarm.spaceRenderCount >= beforeToggleWarm.spaceRenderCount + 120,
+    'focused space resources did not receive enough warm-up frames',
+  );
+  await toggle.click();
+  await panel.waitFor({ state: 'visible' });
+  await waitForMapFrames(page, 2);
   const beforeToggles = await readMapRuntime(page);
   const heapBeforeBytes = await page.evaluate(() => {
     globalThis.gc?.();
@@ -231,23 +336,26 @@ try {
     return performance.memory?.usedJSHeapSize ?? -1;
   });
   assert.ok(heapBeforeBytes >= 0, 'precise Chromium heap metrics are unavailable');
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const toggleButton = globalThis.document.querySelector('#system-map-toggle');
     if (!(toggleButton instanceof globalThis.HTMLButtonElement)) throw new Error('toggle missing');
-    for (let index = 0; index < 100; index += 1) toggleButton.click();
+    for (let index = 0; index < 100; index += 1) {
+      toggleButton.click();
+      await new Promise((resolve) => globalThis.requestAnimationFrame(resolve));
+    }
   });
-  await page.waitForTimeout(100);
+  await waitForMapFrames(page, 2);
   const toggleEvidence = await page.evaluate(() => {
     globalThis.gc?.();
     globalThis.gc?.();
     const canvas = globalThis.document.querySelector('#space-canvas');
     if (!(canvas instanceof globalThis.HTMLCanvasElement)) throw new Error('canvas missing');
-    const render = canvas.solarVoyagerTelemetry?.snapshot;
+    const rendererInfo = canvas.solarVoyagerTelemetry?.renderer?.info;
     return {
       gpuResources: {
-        geometries: render?.geometries ?? -1,
-        programs: render?.programs ?? -1,
-        textures: render?.textures ?? -1,
+        geometries: rendererInfo?.memory.geometries ?? -1,
+        programs: rendererInfo?.programs?.length ?? -1,
+        textures: rendererInfo?.memory.textures ?? -1,
       },
       heapAfterBytes: performance.memory?.usedJSHeapSize ?? -1,
       identityStable:
@@ -338,6 +446,7 @@ try {
     `${JSON.stringify(
       {
         bodyCount: returned.bodyCount,
+        delayedPredictionGpuResources: gpuResourcesOf(beforePrediction),
         heapGrowthBytes: toggleEvidence.heapAfterBytes - heapBeforeBytes,
         innerScreenshot: path.join(SCREENSHOT_DIRECTORY, 'T0097-system-map-inner.png'),
         mapRenderCount: returned.mapRenderCount,
