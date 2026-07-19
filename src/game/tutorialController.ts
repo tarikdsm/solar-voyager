@@ -57,6 +57,10 @@ export class TutorialController {
     return this.currentProgress.status === 'active';
   }
 
+  get canAcknowledgeReadouts(): boolean {
+    return this.isCurrentStep('readouts') && this.readoutsReady;
+  }
+
   subscribe(listener: TutorialProgressListener): () => void {
     this.listeners.add(listener);
     return () => {

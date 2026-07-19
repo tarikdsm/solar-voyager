@@ -191,11 +191,15 @@ describe('TutorialController', () => {
   it('requires valid readouts before acknowledgement even after resume', () => {
     const { controller } = setup(progress('active', 'readouts'));
 
+    expect(controller.canAcknowledgeReadouts).toBe(false);
     expect(controller.acknowledgeReadouts()).toBe(false);
     expect(controller.observeReadouts(true, false)).toBe(false);
+    expect(controller.canAcknowledgeReadouts).toBe(false);
     expect(controller.acknowledgeReadouts()).toBe(false);
     expect(controller.observeReadouts(true, true)).toBe(false);
+    expect(controller.canAcknowledgeReadouts).toBe(true);
     expect(controller.acknowledgeReadouts()).toBe(true);
+    expect(controller.canAcknowledgeReadouts).toBe(false);
   });
 
   it('stops all observation and control transitions in terminal states', () => {
