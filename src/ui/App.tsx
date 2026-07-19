@@ -1,5 +1,5 @@
 import { useComputed, type ReadonlySignal } from '@preact/signals';
-import type { ComponentChildren } from 'preact';
+import type { ComponentChildren, ComponentType } from 'preact';
 import { useCallback, useRef, useState } from 'preact/hooks';
 
 import { WARP_LADDER, type WarpFactor } from '../core/time.js';
@@ -20,7 +20,6 @@ import { SystemMapPanel } from './SystemMapPanel.js';
 import type { SystemMapSignalStore } from './systemMapSignals.js';
 import { TrajectoryImpactWarning } from './TrajectoryImpactWarning.js';
 import type { TrajectoryPredictionSignalStore } from './trajectoryPredictionSignals.js';
-import { BurnLogPanel } from './BurnLogPanel.js';
 import type { BurnLogSignalStore } from './burnLogSignals.js';
 
 const scaffoldState = createScaffoldState();
@@ -36,6 +35,7 @@ export interface AppProps {
   readonly commands: Commands;
   readonly bodyIds: readonly string[];
   readonly burnLog?: BurnLogSignalStore | null;
+  readonly burnLogPanel?: ComponentType<{ readonly store: BurnLogSignalStore }> | null;
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
   readonly initialPhase?: GamePhase;
   readonly onSpacePhaseEntered?: (() => void) | null;
@@ -275,6 +275,7 @@ function HardwareAccelerationWarning({ rendererName }: HardwareAccelerationWarni
 export function App({
   bodyIds,
   burnLog = null,
+  burnLogPanel: BurnLogPanelComponent = null,
   commands,
   hud,
   hudState,
@@ -336,7 +337,9 @@ export function App({
         <DualClock hud={hud} />
         <WarpControl commands={commands} hud={hud} hudState={hudState} />
         <EnergyPanel hud={hud} />
-        {burnLog === null ? null : <BurnLogPanel store={burnLog} />}
+        {burnLog === null || BurnLogPanelComponent === null ? null : (
+          <BurnLogPanelComponent store={burnLog} />
+        )}
         <TargetPanel
           bodyIds={bodyIds}
           commands={commands}

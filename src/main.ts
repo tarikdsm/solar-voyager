@@ -36,7 +36,6 @@ import type { Commands } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
-import { createBurnLogSignalStore } from './ui/burnLogSignals.js';
 import { CameraInputController, type CameraControlPort } from './ui/cameraInputController.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
@@ -51,6 +50,7 @@ import {
 
 const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
+const { BurnLogPanel, createBurnLogSignalStore } = await import('./ui/burnLogRuntime.js');
 
 interface RuntimeResourceCounts {
   animationLoopStarts: number;
@@ -651,6 +651,7 @@ function renderApplication(): void {
     h(App, {
       bodyIds: session.simulation.snapshot.bodyIds,
       burnLog: burnLogStore,
+      burnLogPanel: BurnLogPanel,
       commands: sessionCommands,
       hardwareWarning,
       hud: hudStore.display,
