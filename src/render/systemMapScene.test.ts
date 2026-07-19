@@ -76,7 +76,11 @@ function prediction(): PredictorSuccessMessage {
 
 describe('SystemMapScene', () => {
   it('creates one icon draw, one orbit draw, and one map-owned trajectory overlay', () => {
-    const map = new SystemMapScene(createPositions(), BODIES, 720, 2);
+    const map = new SystemMapScene(createPositions(), BODIES, {
+      viewportWidthPx: 1_280,
+      viewportHeightPx: 720,
+      pixelRatio: 2,
+    });
 
     expect(map.bodyIcons).toBeInstanceOf(Points);
     expect(map.orbitLines).toBeInstanceOf(LineSegments);
@@ -95,7 +99,11 @@ describe('SystemMapScene', () => {
 
   it('samples catalog orbits through the canonical conversion and anchors them to live parents', () => {
     const positionsKm = createPositions();
-    const map = new SystemMapScene(positionsKm, BODIES, 720, 1);
+    const map = new SystemMapScene(positionsKm, BODIES, {
+      viewportWidthPx: 1_280,
+      viewportHeightPx: 720,
+      pixelRatio: 1,
+    });
     const expected = createCartesianState();
     const sampleElements = { ...EARTH_ORBIT, meanAnomalyRad: 0 };
     elementsToStateInto(
@@ -143,7 +151,11 @@ describe('SystemMapScene', () => {
   });
 
   it('frames focus, highlights selection, and publishes finite diagnostics', () => {
-    const map = new SystemMapScene(createPositions(), BODIES, 720, 1.5);
+    const map = new SystemMapScene(createPositions(), BODIES, {
+      viewportWidthPx: 1_280,
+      viewportHeightPx: 720,
+      pixelRatio: 1.5,
+    });
     const selection = map.bodyIcons.geometry.getAttribute('aSelected') as BufferAttribute;
 
     expect(map.cameraController.focusId).toBe('sun');
@@ -161,6 +173,7 @@ describe('SystemMapScene', () => {
     expect(Number.isFinite(map.diagnostics.selectedProjectedX)).toBe(true);
     expect(Number.isFinite(map.diagnostics.selectedProjectedY)).toBe(true);
     expect(Number.isFinite(map.diagnostics.selectedOrbitAlignmentKm)).toBe(true);
+    expect(Number.isFinite(map.diagnostics.selectedOrbitAlignmentPx)).toBe(true);
 
     expect(map.focusBody('unknown')).toBe(false);
     expect(Array.from(selection.array)).toEqual([0, 1, 0]);
@@ -168,7 +181,11 @@ describe('SystemMapScene', () => {
 
   it('preserves every setup resource across repeated live updates and prediction replacement', () => {
     const positionsKm = createPositions();
-    const map = new SystemMapScene(positionsKm, BODIES, 720, 1);
+    const map = new SystemMapScene(positionsKm, BODIES, {
+      viewportWidthPx: 1_280,
+      viewportHeightPx: 720,
+      pixelRatio: 1,
+    });
     const iconGeometry = map.bodyIcons.geometry;
     const iconMaterial = map.bodyIcons.material;
     const iconPosition = iconGeometry.getAttribute('position');
@@ -177,6 +194,7 @@ describe('SystemMapScene', () => {
     const orbitPosition = orbitGeometry.getAttribute('position');
     const trajectoryLineGeometry = map.trajectoryOverlay.line.geometry;
     const trajectoryMarkerGeometry = map.trajectoryOverlay.markers.geometry;
+    const diagnostics = map.diagnostics;
 
     map.trajectoryOverlay.applyPrediction(prediction(), 0);
     for (let iteration = 0; iteration < 100; iteration += 1) {
@@ -193,10 +211,15 @@ describe('SystemMapScene', () => {
     expect(map.orbitLines.geometry.getAttribute('position')).toBe(orbitPosition);
     expect(map.trajectoryOverlay.line.geometry).toBe(trajectoryLineGeometry);
     expect(map.trajectoryOverlay.markers.geometry).toBe(trajectoryMarkerGeometry);
+    expect(map.diagnostics).toBe(diagnostics);
   });
 
   it('resizes, renders with the supplied renderer, and disposes owned resources', () => {
-    const map = new SystemMapScene(createPositions(), BODIES, 720, 1);
+    const map = new SystemMapScene(createPositions(), BODIES, {
+      viewportWidthPx: 1_280,
+      viewportHeightPx: 720,
+      pixelRatio: 1,
+    });
     const render = vi.fn();
     const renderer = { render } as unknown as WebGLRenderer;
     const iconMaterial = map.bodyIcons.material as ShaderMaterial;

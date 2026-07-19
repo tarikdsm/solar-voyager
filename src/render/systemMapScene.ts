@@ -73,6 +73,12 @@ export interface SystemMapBodyDefinition {
   readonly elements: Readonly<OrbitalElements> | null;
 }
 
+export interface SystemMapSceneOptions {
+  readonly viewportWidthPx: number;
+  readonly viewportHeightPx: number;
+  readonly pixelRatio: number;
+}
+
 export interface SystemMapDiagnostics {
   readonly bodyCount: number;
   readonly iconDrawCount: 1;
@@ -86,6 +92,7 @@ export interface SystemMapDiagnostics {
   selectedProjectedY: number;
   selectedVisible: boolean;
   selectedOrbitAlignmentKm: number;
+  selectedOrbitAlignmentPx: number;
 }
 
 function assertPositiveFinite(label: string, value: number): void {
@@ -96,7 +103,7 @@ function assertPositiveFinite(label: string, value: number): void {
 
 /** Preallocated camera-relative system-map resources driven by shared body positions. */
 export class SystemMapScene {
-  readonly spaceScene = new CameraRelativeSpaceScene();
+  readonly spaceScene: CameraRelativeSpaceScene;
   readonly bodyIcons: Points<BufferGeometry, ShaderMaterial>;
   readonly orbitLines: LineSegments<BufferGeometry, LineBasicMaterial>;
   readonly trajectoryOverlay: TrajectoryOverlay;
@@ -111,18 +118,23 @@ export class SystemMapScene {
   private readonly orbitPositionsKm: Float64Array;
   private readonly orbitComponentStarts: Int32Array;
   private readonly iconPositionAttribute: BufferAttribute;
+  private readonly orbitPositionAttribute: BufferAttribute;
   private readonly selectionAttribute: BufferAttribute;
   private readonly projectedScratch = new Vector3();
+  private readonly segmentStartProjectedScratch = new Vector3();
+  private readonly segmentEndProjectedScratch = new Vector3();
   private selectedBodyIndex = 0;
+  private viewportWidthPx = 1;
+  private viewportHeightPx = 1;
 
   constructor(
     positionsKm: Float64Array,
     bodies: readonly SystemMapBodyDefinition[],
-    initialViewportHeightPx: number,
-    pixelRatio: number,
+    options: SystemMapSceneOptions,
   ) {
-    assertPositiveFinite('System-map viewport height', initialViewportHeightPx);
-    assertPositiveFinite('System-map pixel ratio', pixelRatio);
+    assertPositiveFinite('System-map viewport width', options.viewportWidthPx);
+    assertPositiveFinite('System-map viewport height', options.viewportHeightPx);
+    assertPositiveFinite('System-map pixel ratio', options.pixelRatio);
     if (bodies.length === 0 || positionsKm.length !== bodies.length * 3) {
       throw new RangeError('System map requires one packed position per body.');
     }
@@ -131,7 +143,8 @@ export class SystemMapScene {
 
     const cameraTargets: CameraFocusTarget[] = [];
     const contextRadiiKm = new Float64Array(bodies.length);
-    let rootContextRadiusKm = 0;
+    const absoluteRadiusBoundsKm = new Float64Array(bodies.length);
+    let catalogRadiusKm = 0;
     for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
       const body = bodies[bodyIndex];
       if (body === undefined) throw new Error('System-map body array is sparse.');
@@ -162,27 +175,48 @@ export class SystemMapScene {
           Math.abs(body.elements.semiMajorAxisKm) * (1 + body.elements.eccentricity),
         );
         contextRadiiKm[bodyIndex] = contextRadiusKm;
-        if (body.parentIndex === 0)
-          rootContextRadiusKm = Math.max(rootContextRadiusKm, contextRadiusKm);
+        const parentRadiusBoundKm = absoluteRadiusBoundsKm[body.parentIndex];
+        if (parentRadiusBoundKm === undefined) {
+          throw new Error('System-map radius-bound arrays are out of sync.');
+        }
+        absoluteRadiusBoundsKm[bodyIndex] = parentRadiusBoundKm + contextRadiusKm;
       }
+      catalogRadiusKm = Math.max(catalogRadiusKm, absoluteRadiusBoundsKm[bodyIndex] as number);
     }
-    rootContextRadiusKm = Math.max(
-      rootContextRadiusKm,
+    catalogRadiusKm = Math.max(
+      catalogRadiusKm,
       bodies[0]?.meanRadiusKm === undefined ? 0 : bodies[0].meanRadiusKm * 8,
     );
-    contextRadiiKm[0] = rootContextRadiusKm;
+    contextRadiiKm[0] = catalogRadiusKm;
+    const aspect = options.viewportWidthPx / options.viewportHeightPx;
+    const verticalHalfFovTangent = Math.tan((75 * Math.PI) / 360);
+    const limitingHalfFovTangent = Math.min(
+      verticalHalfFovTangent,
+      verticalHalfFovTangent * aspect,
+    );
+    const rootFrameDistanceKm = (catalogRadiusKm * 1.08) / limitingHalfFovTangent;
+    let maximumContextDistanceKm = rootFrameDistanceKm;
     for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
       const body = bodies[bodyIndex];
       const contextRadiusKm = contextRadiiKm[bodyIndex];
       if (body === undefined || contextRadiusKm === undefined) {
         throw new Error('System-map camera context arrays are out of sync.');
       }
+      const contextFrameDistanceKm =
+        bodyIndex === 0
+          ? rootFrameDistanceKm
+          : (contextRadiusKm * 2 * 1.08) / limitingHalfFovTangent;
+      maximumContextDistanceKm = Math.max(maximumContextDistanceKm, contextFrameDistanceKm);
       cameraTargets.push({
         id: body.id,
         positionOffset: bodyIndex * 3,
-        meanRadiusKm: Math.max(body.meanRadiusKm, contextRadiusKm * 0.5),
+        meanRadiusKm: Math.max(body.meanRadiusKm, contextFrameDistanceKm / 3),
       });
     }
+
+    const maximumCameraDistanceKm = maximumContextDistanceKm * 2;
+    const mapFarKm = maximumCameraDistanceKm + catalogRadiusKm * 1.1;
+    this.spaceScene = new CameraRelativeSpaceScene({ farKm: mapFarKm });
 
     const rootX = positionsKm[0];
     const rootY = positionsKm[1];
@@ -197,8 +231,9 @@ export class SystemMapScene {
       initialCameraPositionKm: {
         x: rootX,
         y: rootY,
-        z: rootZ + rootContextRadiusKm * 1.5,
+        z: rootZ + rootFrameDistanceKm,
       },
+      maxDistanceKm: maximumCameraDistanceKm,
     });
     this.cameraPositionKm = this.cameraController.cameraPositionKm;
 
@@ -227,7 +262,7 @@ export class SystemMapScene {
     iconGeometry.setAttribute('aSelected', this.selectionAttribute);
     iconGeometry.computeBoundingSphere();
     const iconMaterial = new ShaderMaterial({
-      uniforms: { uPixelRatio: { value: pixelRatio } },
+      uniforms: { uPixelRatio: { value: options.pixelRatio } },
       vertexShader: ICON_VERTEX_SHADER,
       fragmentShader: ICON_FRAGMENT_SHADER,
       transparent: true,
@@ -283,12 +318,11 @@ export class SystemMapScene {
     }
     this.anchorOrbits();
     const orbitGeometry = new BufferGeometry();
-    orbitGeometry.setAttribute(
-      'position',
-      new BufferAttribute(new Float32Array(this.orbitPositionsKm.length), 3).setUsage(
-        DynamicDrawUsage,
-      ),
-    );
+    this.orbitPositionAttribute = new BufferAttribute(
+      new Float32Array(this.orbitPositionsKm.length),
+      3,
+    ).setUsage(DynamicDrawUsage);
+    orbitGeometry.setAttribute('position', this.orbitPositionAttribute);
     orbitGeometry.setAttribute('color', new BufferAttribute(orbitColors, 3));
     orbitGeometry.computeBoundingSphere();
     const orbitMaterial = new LineBasicMaterial({
@@ -317,8 +351,9 @@ export class SystemMapScene {
       selectedProjectedY: 0,
       selectedVisible: false,
       selectedOrbitAlignmentKm: 0,
+      selectedOrbitAlignmentPx: 0,
     };
-    this.resize(1, initialViewportHeightPx, pixelRatio);
+    this.resize(options.viewportWidthPx, options.viewportHeightPx, options.pixelRatio);
     this.update(0);
   }
 
@@ -347,6 +382,8 @@ export class SystemMapScene {
     assertPositiveFinite('System-map pixel ratio', pixelRatio);
     this.spaceScene.camera.aspect = widthPx / heightPx;
     this.spaceScene.camera.updateProjectionMatrix();
+    this.viewportWidthPx = widthPx;
+    this.viewportHeightPx = heightPx;
     const pixelRatioUniform = this.bodyIcons.material.uniforms.uPixelRatio;
     if (pixelRatioUniform === undefined) throw new Error('System-map icon pixel ratio is absent.');
     pixelRatioUniform.value = pixelRatio;
@@ -437,19 +474,89 @@ export class SystemMapScene {
     const orbitComponentStart = this.orbitComponentStarts[this.selectedBodyIndex] as number;
     if (orbitComponentStart < 0) {
       this.diagnostics.selectedOrbitAlignmentKm = 0;
+      this.diagnostics.selectedOrbitAlignmentPx = 0;
       return;
     }
     let minimumDistanceSquaredKm2 = Number.POSITIVE_INFINITY;
+    let minimumDistanceSquaredPx2 = Number.POSITIVE_INFINITY;
     const componentEnd = orbitComponentStart + SYSTEM_MAP_ORBIT_SEGMENTS * 6;
-    for (let component = orbitComponentStart; component < componentEnd; component += 3) {
-      const deltaX = (this.orbitPositionsKm[component] as number) - bodyX;
-      const deltaY = (this.orbitPositionsKm[component + 1] as number) - bodyY;
-      const deltaZ = (this.orbitPositionsKm[component + 2] as number) - bodyZ;
+    const renderedOrbitPositions = this.orbitPositionAttribute.array;
+    const bodyScreenX = this.projectedScratch.x * this.viewportWidthPx * 0.5;
+    const bodyScreenY = this.projectedScratch.y * this.viewportHeightPx * 0.5;
+    for (let component = orbitComponentStart; component < componentEnd; component += 6) {
+      const startX = this.orbitPositionsKm[component] as number;
+      const startY = this.orbitPositionsKm[component + 1] as number;
+      const startZ = this.orbitPositionsKm[component + 2] as number;
+      const segmentX = (this.orbitPositionsKm[component + 3] as number) - startX;
+      const segmentY = (this.orbitPositionsKm[component + 4] as number) - startY;
+      const segmentZ = (this.orbitPositionsKm[component + 5] as number) - startZ;
+      const pointX = bodyX - startX;
+      const pointY = bodyY - startY;
+      const pointZ = bodyZ - startZ;
+      const segmentLengthSquaredKm2 =
+        segmentX * segmentX + segmentY * segmentY + segmentZ * segmentZ;
+      const parameter =
+        segmentLengthSquaredKm2 === 0
+          ? 0
+          : Math.min(
+              1,
+              Math.max(
+                0,
+                (pointX * segmentX + pointY * segmentY + pointZ * segmentZ) /
+                  segmentLengthSquaredKm2,
+              ),
+            );
+      const deltaX = pointX - segmentX * parameter;
+      const deltaY = pointY - segmentY * parameter;
+      const deltaZ = pointZ - segmentZ * parameter;
       minimumDistanceSquaredKm2 = Math.min(
         minimumDistanceSquaredKm2,
         deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ,
       );
+
+      this.segmentStartProjectedScratch
+        .set(
+          renderedOrbitPositions[component] as number,
+          renderedOrbitPositions[component + 1] as number,
+          renderedOrbitPositions[component + 2] as number,
+        )
+        .project(this.spaceScene.camera);
+      this.segmentEndProjectedScratch
+        .set(
+          renderedOrbitPositions[component + 3] as number,
+          renderedOrbitPositions[component + 4] as number,
+          renderedOrbitPositions[component + 5] as number,
+        )
+        .project(this.spaceScene.camera);
+      const startScreenX = this.segmentStartProjectedScratch.x * this.viewportWidthPx * 0.5;
+      const startScreenY = this.segmentStartProjectedScratch.y * this.viewportHeightPx * 0.5;
+      const screenSegmentX =
+        this.segmentEndProjectedScratch.x * this.viewportWidthPx * 0.5 - startScreenX;
+      const screenSegmentY =
+        this.segmentEndProjectedScratch.y * this.viewportHeightPx * 0.5 - startScreenY;
+      const screenPointX = bodyScreenX - startScreenX;
+      const screenPointY = bodyScreenY - startScreenY;
+      const screenSegmentLengthSquaredPx2 =
+        screenSegmentX * screenSegmentX + screenSegmentY * screenSegmentY;
+      const screenParameter =
+        screenSegmentLengthSquaredPx2 === 0
+          ? 0
+          : Math.min(
+              1,
+              Math.max(
+                0,
+                (screenPointX * screenSegmentX + screenPointY * screenSegmentY) /
+                  screenSegmentLengthSquaredPx2,
+              ),
+            );
+      const screenDeltaX = screenPointX - screenSegmentX * screenParameter;
+      const screenDeltaY = screenPointY - screenSegmentY * screenParameter;
+      minimumDistanceSquaredPx2 = Math.min(
+        minimumDistanceSquaredPx2,
+        screenDeltaX * screenDeltaX + screenDeltaY * screenDeltaY,
+      );
     }
     this.diagnostics.selectedOrbitAlignmentKm = Math.sqrt(minimumDistanceSquaredKm2);
+    this.diagnostics.selectedOrbitAlignmentPx = Math.sqrt(minimumDistanceSquaredPx2);
   }
 }

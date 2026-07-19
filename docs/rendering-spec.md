@@ -96,7 +96,12 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
   the same validated predictor result as the space overlay. Its camera,
   diagnostics, float64 source buffers, float32 GPU buffers, geometries,
   materials, and shaders all exist before gameplay; updates only mutate those
-  stable resources through the `spaceScene.ts` camera-relative boundary.
+  stable resources through the `spaceScene.ts` camera-relative boundary. The
+  map derives its setup-time camera range and far plane from the complete
+  parent-relative catalog bound and initial viewport aspect; the normal space
+  view retains the §2 far-plane default. Alignment diagnostics measure the
+  selected icon against the actually rendered orbit segments in both float64
+  kilometres and projected screen pixels without frame-loop allocations.
 
 ## 8. Performance & asset budgets (CI-gated)
 

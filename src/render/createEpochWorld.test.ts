@@ -9,6 +9,7 @@ import {
   MeshLambertMaterial,
   Points,
   Vector3,
+  type BufferAttribute,
   type Object3D,
   type WebGLRenderer,
 } from 'three';
@@ -17,6 +18,23 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
 import { createEpochWorld } from './createEpochWorld.js';
 import type { StarCatalog } from './starCatalog.js';
+import { SYSTEM_MAP_ORBIT_SEGMENTS } from './systemMapScene.js';
+
+function expectAttributeRangeInFrustum(
+  attribute: BufferAttribute,
+  start: number,
+  count: number,
+  camera: import('three').PerspectiveCamera,
+): void {
+  const projected = new Vector3();
+  for (let index = start; index < start + count; index += 1) {
+    projected.fromBufferAttribute(attribute, index).project(camera);
+    expect(Math.abs(projected.x)).toBeLessThanOrEqual(1.000_001);
+    expect(Math.abs(projected.y)).toBeLessThanOrEqual(1.000_001);
+    expect(projected.z).toBeGreaterThanOrEqual(-1.000_001);
+    expect(projected.z).toBeLessThanOrEqual(1.000_001);
+  }
+}
 
 describe('createEpochWorld', () => {
   it('registers every J2026 body with shared geometry and no scaffold cube', async () => {
@@ -44,6 +62,7 @@ describe('createEpochWorld', () => {
 
     const world = await createEpochWorld(renderer, {
       assetLoader,
+      initialViewportWidthPx: 1_280,
       initialViewportHeightPx: 720,
       starCatalog,
     });
@@ -59,8 +78,43 @@ describe('createEpochWorld', () => {
     expect(world.systemMap.diagnostics.iconDrawCount).toBe(1);
     expect(world.systemMap.diagnostics.orbitDrawCount).toBe(1);
     expect(world.systemMap.diagnostics.selectedVisible).toBe(true);
+    expect(world.systemMap.spaceScene.camera.aspect).toBeCloseTo(16 / 9, 12);
     expect(world.systemMap.bodyIcons.parent).toBe(world.systemMap.spaceScene.scene);
     expect(world.systemMap.orbitLines.parent).toBe(world.systemMap.spaceScene.scene);
+    expectAttributeRangeInFrustum(
+      world.systemMap.bodyIcons.geometry.getAttribute('position') as BufferAttribute,
+      0,
+      bodyCount,
+      world.systemMap.spaceScene.camera,
+    );
+    expectAttributeRangeInFrustum(
+      world.systemMap.orbitLines.geometry.getAttribute('position') as BufferAttribute,
+      0,
+      (bodyCount - 1) * SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+      world.systemMap.spaceScene.camera,
+    );
+
+    for (const bodyId of ['mercury', 'neptune', 'eris']) {
+      const bodyIndex = bodiesDocument.bodies.findIndex((body) => body.id === bodyId);
+      expect(bodyIndex).toBeGreaterThan(0);
+      expect(world.systemMap.focusBody(bodyId)).toBe(true);
+      world.systemMap.update(2);
+      expect(world.systemMap.diagnostics.selectedVisible).toBe(true);
+      const semiMajorAxisKm = Math.abs(
+        bodiesDocument.bodies[bodyIndex]?.elements?.semiMajorAxisKm ?? 0,
+      );
+      expect(semiMajorAxisKm).toBeGreaterThan(0);
+      expect(world.systemMap.diagnostics.selectedOrbitAlignmentKm).toBeLessThan(
+        semiMajorAxisKm * 0.002,
+      );
+      expect(world.systemMap.diagnostics.selectedOrbitAlignmentPx).toBeLessThan(1);
+      expectAttributeRangeInFrustum(
+        world.systemMap.orbitLines.geometry.getAttribute('position') as BufferAttribute,
+        (bodyIndex - 1) * SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+        SYSTEM_MAP_ORBIT_SEGMENTS * 2,
+        world.systemMap.spaceScene.camera,
+      );
+    }
     expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
     expect(world.cameraController.focusBody('jupiter')).toBe(true);
     world.cameraController.update(1.5);

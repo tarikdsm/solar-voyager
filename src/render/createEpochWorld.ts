@@ -39,6 +39,7 @@ export interface EpochWorld {
 
 export interface CreateEpochWorldOptions {
   readonly assetLoader?: BodyVisualAssetLoader;
+  readonly initialViewportWidthPx?: number;
   readonly initialViewportHeightPx?: number;
   readonly starCatalog?: StarCatalog;
 }
@@ -157,12 +158,12 @@ export async function createEpochWorld(
   const { SystemMapScene } = await import('./systemMapScene.js');
   const initialViewportHeightPx =
     options.initialViewportHeightPx ?? Math.max(1, renderer.domElement.height);
-  const systemMap = new SystemMapScene(
-    epochState.positionsKm,
-    systemMapDefinitions,
-    initialViewportHeightPx,
-    renderer.getPixelRatio(),
-  );
+  const initialViewportWidthPx = options.initialViewportWidthPx ?? initialViewportHeightPx;
+  const systemMap = new SystemMapScene(epochState.positionsKm, systemMapDefinitions, {
+    viewportWidthPx: initialViewportWidthPx,
+    viewportHeightPx: initialViewportHeightPx,
+    pixelRatio: renderer.getPixelRatio(),
+  });
   spaceScene.camera.lookAt(
     cameraController.lookDirection.x,
     cameraController.lookDirection.y,
