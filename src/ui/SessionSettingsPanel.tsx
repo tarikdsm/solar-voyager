@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
+import type { TutorialController } from '../game/tutorialController.js';
 import {
   INPUT_ACTIONS,
   type GameSettingsV2,
@@ -71,6 +72,7 @@ export function createSessionSettingsModel(
   files: SessionFilePort,
   onSessionActivated: SessionActivationCallback | null = null,
   activationGuard: SessionActivationGuard | null = null,
+  onSaveSucceeded: (() => void) | null = null,
 ): SessionSettingsModel {
   const activate = (action: () => SessionActionResult): PanelActionResult => {
     const result = activationGuard === null ? action() : activationGuard(action);
@@ -78,7 +80,11 @@ export function createSessionSettingsModel(
     return simplify(result);
   };
   return {
-    save: () => simplify(session.saveLocal()),
+    save: () => {
+      const result = session.saveLocal();
+      if (result.ok) onSaveSucceeded?.();
+      return simplify(result);
+    },
     load: () => activate(() => session.loadLocal()),
     exportFile: () => {
       const result = session.exportJson();
@@ -127,6 +133,8 @@ export interface SessionSettingsPanelProps {
   readonly files?: SessionFilePort;
   readonly activationGuard?: SessionActivationGuard | null;
   readonly onSessionActivated?: SessionActivationCallback | null;
+  readonly onSaveSucceeded?: (() => void) | null;
+  readonly tutorial?: TutorialController | null;
 }
 
 /** Renders explicit session persistence, quality lock, and key rebinding controls. */
@@ -135,10 +143,19 @@ export function SessionSettingsPanel({
   files = browserSessionFilePort,
   activationGuard = null,
   onSessionActivated = null,
+  onSaveSucceeded = null,
+  tutorial = null,
 }: SessionSettingsPanelProps) {
   const model = useMemo(
-    () => createSessionSettingsModel(session, files, onSessionActivated, activationGuard),
-    [session, files, onSessionActivated, activationGuard],
+    () =>
+      createSessionSettingsModel(
+        session,
+        files,
+        onSessionActivated,
+        activationGuard,
+        onSaveSucceeded,
+      ),
+    [session, files, onSessionActivated, activationGuard, onSaveSucceeded],
   );
   const [settings, setSettings] = useState(session.settings);
   const [status, setStatus] = useState<PanelActionResult | null>(
@@ -147,6 +164,13 @@ export function SessionSettingsPanel({
       : { ok: false, message: session.initializationWarning },
   );
   const [capturingAction, setCapturingAction] = useState<InputAction | null>(null);
+  const [tutorialProgress, setTutorialProgress] = useState(tutorial?.progress ?? null);
+
+  useEffect(() => {
+    setTutorialProgress(tutorial?.progress ?? null);
+    if (tutorial === null) return;
+    return tutorial.subscribe(setTutorialProgress);
+  }, [tutorial]);
 
   const publish = (result: PanelActionResult): void => {
     setStatus(result);
@@ -157,6 +181,36 @@ export function SessionSettingsPanel({
     <details id="session-settings" class="session-settings">
       <summary>Session &amp; settings</summary>
       <div class="session-settings-content">
+        {tutorial === null || tutorialProgress === null ? null : (
+          <section aria-labelledby="tutorial-settings-title">
+            <h2 id="tutorial-settings-title">Tutorial</h2>
+            <p class="tutorial-settings-status">
+              Status: <strong>{tutorialProgress.status}</strong> · step{' '}
+              <span>{tutorialProgress.stepId}</span>
+            </p>
+            <div class="tutorial-settings-actions">
+              <button
+                type="button"
+                disabled={tutorialProgress.status !== 'skipped'}
+                onClick={() => {
+                  tutorial.resume();
+                  setTutorialProgress(tutorial.progress);
+                }}
+              >
+                Resume tutorial
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  tutorial.reset();
+                  setTutorialProgress(tutorial.progress);
+                }}
+              >
+                Reset tutorial
+              </button>
+            </div>
+          </section>
+        )}
         <section aria-labelledby="session-actions-title">
           <h2 id="session-actions-title">Session</h2>
           <div class="session-action-grid">

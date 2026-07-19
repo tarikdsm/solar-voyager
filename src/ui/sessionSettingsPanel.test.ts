@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
@@ -177,6 +177,18 @@ describe('session settings panel model', () => {
     expect(model.load()).toEqual({ ok: true, message: 'Session loaded' });
     session.loadResult = { ok: false, message: 'No local save found' };
     expect(model.load()).toEqual({ ok: false, message: 'No local save found' });
+  });
+
+  it('reports only successful saves through the optional tutorial seam', () => {
+    const session = new FakeSession();
+    const onSaveSucceeded = vi.fn();
+    const model = createSessionSettingsModel(session, new FakeFiles(), null, null, onSaveSucceeded);
+
+    expect(model.save()).toMatchObject({ ok: true });
+    expect(onSaveSucceeded).toHaveBeenCalledOnce();
+    session.saveResult = { ok: false, message: 'Storage unavailable' };
+    expect(model.save()).toMatchObject({ ok: false });
+    expect(onSaveSucceeded).toHaveBeenCalledOnce();
   });
 
   it('exports through the injected file port and reports file failures', () => {

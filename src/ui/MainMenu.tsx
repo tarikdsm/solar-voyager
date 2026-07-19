@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 
 import type { SceneManager } from '../game/sceneManager.js';
 import type { SessionActionResult } from '../game/sessionController.js';
+import type { TutorialController } from '../game/tutorialController.js';
 import {
   SessionSettingsPanel,
   type SessionActivationGuard,
@@ -43,6 +44,7 @@ export interface MainMenuViewProps {
   readonly activationGuard: SessionActivationGuard;
   readonly session: SessionSettingsPort | null;
   readonly status: SessionActionResult | null;
+  readonly tutorial?: TutorialController | null;
 }
 
 export function MainMenuView({
@@ -52,6 +54,7 @@ export function MainMenuView({
   onNewGame,
   session,
   status,
+  tutorial = null,
 }: MainMenuViewProps) {
   return (
     <section class="main-menu" aria-labelledby="main-menu-title">
@@ -84,7 +87,11 @@ export function MainMenuView({
         configured before launch.
       </p>
       {session === null ? null : (
-        <SessionSettingsPanel session={session} activationGuard={activationGuard} />
+        <SessionSettingsPanel
+          session={session}
+          activationGuard={activationGuard}
+          tutorial={tutorial}
+        />
       )}
     </section>
   );
@@ -94,10 +101,11 @@ export interface MainMenuProps {
   readonly scene: SceneManager;
   readonly session: SessionSettingsPort | null;
   readonly onSpacePhaseEntered: () => void;
+  readonly tutorial?: TutorialController | null;
 }
 
 /** Renders the accessible v1 entry point and delegates all phase changes to SceneManager. */
-export function MainMenu({ scene, session, onSpacePhaseEntered }: MainMenuProps) {
+export function MainMenu({ scene, session, onSpacePhaseEntered, tutorial = null }: MainMenuProps) {
   const model = useMemo(
     () => createMainMenuModel(scene, onSpacePhaseEntered),
     [scene, onSpacePhaseEntered],
@@ -113,6 +121,7 @@ export function MainMenu({ scene, session, onSpacePhaseEntered }: MainMenuProps)
       onNewGame={() => publish(model.startNewGame())}
       session={session}
       status={status}
+      tutorial={tutorial}
     />
   );
 }

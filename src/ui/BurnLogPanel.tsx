@@ -41,7 +41,10 @@ class DefaultBurnLogPanelModel implements BurnLogPanelModel {
   private toggleElement: FocusableElement | null = null;
   private readonly completedElements: Array<FocusableElement | null>;
 
-  constructor(private readonly store: BurnLogSignalStore) {
+  constructor(
+    private readonly store: BurnLogSignalStore,
+    private readonly onExpandedChange: ((expanded: boolean) => void) | null,
+  ) {
     this.emptyHidden = computed(
       () => store.activeRow.visible.value || store.completedCount.value > 0,
     );
@@ -79,6 +82,7 @@ class DefaultBurnLogPanelModel implements BurnLogPanelModel {
 
   readonly toggle = (): void => {
     this.expanded.value = !this.expanded.value;
+    this.onExpandedChange?.(this.expanded.value);
     if (!this.expanded.value) this.toggleElement?.focus();
   };
 
@@ -101,6 +105,7 @@ class DefaultBurnLogPanelModel implements BurnLogPanelModel {
       case 'Escape':
         event.preventDefault();
         this.expanded.value = false;
+        this.onExpandedChange?.(false);
         this.toggleElement?.focus();
         return;
       default:
@@ -243,13 +248,23 @@ export function BurnLogPanelView({
 }
 
 /** Renders the setup-mounted, fixed-capacity burn history panel. */
-export function BurnLogPanel({ store }: { readonly store: BurnLogSignalStore }) {
+export interface BurnLogPanelProps {
+  readonly store: BurnLogSignalStore;
+  readonly onExpandedChange?: ((expanded: boolean) => void) | null;
+}
+
+export function BurnLogPanel({ store, onExpandedChange = null }: BurnLogPanelProps) {
   const modelRef = useRef<BurnLogPanelModel | null>(null);
-  if (modelRef.current === null) modelRef.current = createBurnLogPanelModel(store);
+  if (modelRef.current === null) {
+    modelRef.current = createBurnLogPanelModel(store, onExpandedChange);
+  }
   return <BurnLogPanelView store={store} model={modelRef.current} />;
 }
 
 /** Creates the panel's setup-owned focus and expansion model. */
-export function createBurnLogPanelModel(store: BurnLogSignalStore): BurnLogPanelModel {
-  return new DefaultBurnLogPanelModel(store);
+export function createBurnLogPanelModel(
+  store: BurnLogSignalStore,
+  onExpandedChange: ((expanded: boolean) => void) | null = null,
+): BurnLogPanelModel {
+  return new DefaultBurnLogPanelModel(store, onExpandedChange);
 }

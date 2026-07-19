@@ -71,6 +71,17 @@ function keyboardEvent(code: string): BurnLogPanelKeyboardEvent {
 }
 
 describe('BurnLogPanel', () => {
+  it('reports real expansion changes through the optional observation seam', () => {
+    const store = createBurnLogSignalStore(new TestBurnLogView());
+    const changes: boolean[] = [];
+    const model = createBurnLogPanelModel(store, (expanded) => changes.push(expanded));
+
+    model.toggle();
+    model.toggle();
+
+    expect(changes).toEqual([true, false]);
+  });
+
   it('mounts all bounded row identities while exposing distinct empty, active, and completed states', () => {
     const view = new TestBurnLogView();
     view.activeBurn = entry(30);
