@@ -51,6 +51,7 @@ renderer.setSize(VIEWPORT_SIZE, VIEWPORT_SIZE, false);
 renderer.setClearColor(0x000000, 1);
 
 const world = await createEpochWorld(renderer, { initialViewportHeightPx: VIEWPORT_SIZE });
+world.visualSystem.enableLazyLoading();
 const earthIndex = bodiesDocument.bodies.findIndex((body) => body.id === 'earth');
 if (earthIndex < 0) throw new Error('Earth is missing from the surface-detail fixture.');
 const earthDefinition = bodiesDocument.bodies[earthIndex];
