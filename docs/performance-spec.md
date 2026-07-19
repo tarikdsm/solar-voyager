@@ -46,6 +46,16 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 - Every change is logged to telemetry and surfaced in the perf HUD as the current tier (e.g. `Q4/6`). The governor must never fight the user: a settings lock disables it.
 - **Degradation is invisible-first:** the ladder was ordered so the player notices the FPS drop being fixed before they notice what paid for it.
 
+Initial unlocked quality uses a fixed three-render loading-screen probe after
+eager shader compilation plus WebGL context evidence. Auto starts at rung 0/Q6
+only with a strict hardware context, DPR <= 1.5, `MAX_TEXTURE_SIZE >= 16384`,
+`MAX_SAMPLES >= 4`, and probe mean <= 8 ms. Auto starts at rung 7/Q3 with a
+strict hardware context, DPR <= 2, `MAX_TEXTURE_SIZE >= 8192`,
+`MAX_SAMPLES >= 2`, and probe mean <= 16.6 ms. Every other device, software
+renderer, or major-caveat fallback starts at rung 14/Q1. Manual high/medium/low
+select rungs 0/7/14 without running the probe and remain authoritative; hard
+unsupported features such as post-processing on software rendering stay off.
+
 ## 4. Perf HUD (top-left, elegant)
 
 `ui/hud/PerfPanel.tsx` + `render/telemetry.ts`. Two states:
