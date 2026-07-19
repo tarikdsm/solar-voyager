@@ -47,7 +47,7 @@ Vitest 4, GitHub Actions.
   maxRetainedGrowthBytes)` returning `string[]`
 - Preserves: `validateHeapGrowth(measurement, maxRetainedGrowthBytes)`
 
-- [ ] **Step 1: Write failing classifier tests**
+- [x] **Step 1: Write failing classifier tests**
 
 Add these cases beside `validateHeapGrowth` tests:
 
@@ -110,7 +110,7 @@ describe('validateConfirmedHeapGrowth', () => {
 });
 ```
 
-- [ ] **Step 2: Run the utility tests and verify RED**
+- [x] **Step 2: Run the utility tests and verify RED**
 
 ```powershell
 npx vitest run tools/perf/performanceGateUtils.test.mjs
@@ -118,7 +118,7 @@ npx vitest run tools/perf/performanceGateUtils.test.mjs
 
 Expected: import/export failure because both confirmation helpers are absent.
 
-- [ ] **Step 3: Implement the pure decisions**
+- [x] **Step 3: Implement the pure decisions**
 
 Add a fixed factor without changing the golden:
 
@@ -154,7 +154,7 @@ export function validateConfirmedHeapGrowth(primary, confirmation, maxRetainedGr
 }
 ```
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 ```powershell
 npx vitest run tools/perf/performanceGateUtils.test.mjs
@@ -163,7 +163,7 @@ npx vitest run tools/perf/performanceGateUtils.test.mjs
 Expected: every performance utility test passes, including the unchanged base
 validator and budget parsers.
 
-- [ ] **Step 5: Commit the pure decision layer**
+- [x] **Step 5: Commit the pure decision layer**
 
 ```powershell
 git add tools/perf/performanceGateUtils.mjs tools/perf/performanceGateUtils.test.mjs
