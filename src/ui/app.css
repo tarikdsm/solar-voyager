@@ -4,6 +4,14 @@
   pointer-events: none;
 }
 
+.space-hud-surfaces {
+  display: contents;
+}
+
+.space-hud-surfaces[hidden] {
+  display: none;
+}
+
 .app-overlay-menu {
   display: grid;
   place-items: center;
@@ -158,6 +166,140 @@
   contain: strict;
   font-variant-numeric: tabular-nums;
   backdrop-filter: blur(0.55rem);
+}
+
+.system-map-toggle {
+  position: absolute;
+  z-index: 11;
+  top: clamp(0.75rem, 2vw, 1.5rem);
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  min-height: 2.7rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgb(94 234 212 / 52%);
+  border-radius: 0.55rem;
+  background: rgb(8 47 73 / 88%);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 32%);
+  color: #ccfbf1;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  pointer-events: auto;
+  text-transform: uppercase;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.system-map-toggle:hover,
+.system-map-toggle:focus-visible,
+.system-map-toggle[aria-expanded='true'] {
+  border-color: #5eead4;
+  background: rgb(13 148 136 / 58%);
+  outline: 2px solid rgb(94 234 212 / 44%);
+  outline-offset: 2px;
+}
+
+.system-map-panel {
+  position: absolute;
+  z-index: 10;
+  top: 5rem;
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  width: min(20rem, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 6rem);
+  box-sizing: border-box;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-y: auto;
+  pointer-events: auto;
+  contain: layout paint style;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.system-map-panel header {
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid rgb(125 211 252 / 16%);
+}
+
+.system-map-panel h2 {
+  margin: 0.18rem 0 0;
+  color: #f0f9ff;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.system-map-panel select {
+  width: 100%;
+  min-height: 2.35rem;
+  margin-top: 0.4rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgb(125 211 252 / 32%);
+  border-radius: 0.4rem;
+  background: rgb(15 23 42 / 94%);
+  color: #f0f9ff;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.system-map-panel select:focus-visible {
+  border-color: #5eead4;
+  outline: 2px solid rgb(94 234 212 / 42%);
+  outline-offset: 2px;
+}
+
+.system-map-status {
+  margin: 0.85rem 0 0;
+}
+
+.system-map-status > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: baseline;
+  min-height: 2.15rem;
+  border-bottom: 1px solid rgb(148 163 184 / 10%);
+}
+
+.system-map-status dt,
+.system-map-status dd {
+  margin: 0;
+}
+
+.system-map-status dt {
+  color: rgb(186 230 253 / 64%);
+  font-size: 0.67rem;
+}
+
+.system-map-status dd {
+  overflow-wrap: anywhere;
+  color: #f0f9ff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.system-map-impact {
+  min-height: 1.2rem;
+  margin: 0.7rem 0 0;
+  color: #ff8b73;
+  font-size: 0.7rem;
+}
+
+.system-map-impact[data-visible='false'] {
+  visibility: hidden;
+}
+
+.system-map-instructions {
+  margin: 0.7rem 0 0;
+  color: rgb(203 213 225 / 72%);
+  font-size: 0.64rem;
+  text-align: center;
 }
 
 .perf-panel {
@@ -1140,6 +1282,21 @@
     transform: none;
   }
 
+  .system-map-toggle {
+    position: relative;
+    inset: auto;
+    order: 1;
+    flex: 0 0 auto;
+    align-self: flex-end;
+    pointer-events: auto;
+  }
+
+  .system-map-panel {
+    order: 2;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+  }
+
   .session-settings {
     order: 1;
   }
@@ -1252,7 +1409,9 @@
 @media (prefers-reduced-motion: reduce) {
   .main-menu *,
   .main-menu *::before,
-  .main-menu *::after {
+  .main-menu *::after,
+  .system-map-panel,
+  .system-map-toggle {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
