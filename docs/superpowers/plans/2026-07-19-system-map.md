@@ -29,7 +29,7 @@ frame.
   disabled pointer/wheel/keyboard events have no effects or preventDefault.
 - [x] Prove repeated toggles do not install/remove listeners or allocate new
   controllers.
-- [ ] Run focused tests, lint, and typecheck; obtain independent review.
+- [x] Run focused tests, lint, and typecheck; obtain independent review.
 
 ### Task 2: Preallocated camera-relative map scene
 
