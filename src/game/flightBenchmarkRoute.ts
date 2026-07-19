@@ -8,7 +8,7 @@ import {
   createNewGameSimulation,
 } from './createNewGameSimulation.js';
 import { createSaveEnvelope, serializeSaveEnvelope } from './saveLoad.js';
-import { DEFAULT_GAME_SETTINGS } from './settings.js';
+import { DEFAULT_GAME_SETTINGS, projectGameSettingsV1 } from './settings.js';
 
 const SHIP_MASS_KG = 10_000;
 
@@ -135,7 +135,10 @@ function createCheckpoint(definition: RouteDefinition): FlightBenchmarkCheckpoin
     (checkpointSnapshot.shipState[2] as number) -
       (checkpointSnapshot.bodyPositionsKm[offset + 2] as number),
   );
-  const settings = { ...DEFAULT_GAME_SETTINGS, qualityLock: 'high' as const };
+  const settings = projectGameSettingsV1({
+    ...DEFAULT_GAME_SETTINGS,
+    qualityLock: 'high' as const,
+  });
   return Object.freeze({
     distanceToTargetKm: Number(actualDistanceToTargetKm.toFixed(6)),
     dominantBodyId,

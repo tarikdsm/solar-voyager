@@ -21,6 +21,7 @@ const SHIP_MASS_KG = 10_000;
 class MemoryStorage implements KeyValueStorage {
   readonly values = new Map<string, string>();
   getError: unknown = null;
+  setError: unknown = null;
 
   getItem(key: string): string | null {
     if (this.getError !== null) throw this.getError;
@@ -28,6 +29,7 @@ class MemoryStorage implements KeyValueStorage {
   }
 
   setItem(key: string, value: string): void {
+    if (this.setError !== null) throw this.setError;
     this.values.set(key, value);
   }
 }
@@ -180,6 +182,116 @@ describe('GameSessionController', () => {
       ok: false,
     });
     expect(controller.settings).toBe(before);
+  });
+
+  it('owns functional tutorial transitions and commits before publishing them', () => {
+    const storage = new MemoryStorage();
+    const published: string[] = [];
+    const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+      onSettingsChanged: (settings) => published.push(settings.tutorial.stepId),
+    });
+
+    expect(
+      controller.updateTutorial((current) => ({ ...current, status: 'active', stepId: 'camera' })),
+    ).toEqual({ ok: true, message: 'Tutorial progress updated' });
+    expect(controller.settings.tutorial).toEqual({ status: 'active', stepId: 'camera' });
+    expect(published).toEqual(['camera']);
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '').tutorial).toEqual(
+      controller.settings.tutorial,
+    );
+  });
+
+  it('rejects an invalid tutorial transition without changing or publishing settings', () => {
+    const storage = new MemoryStorage();
+    let publishCount = 0;
+    const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
+      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      settingsRepository: new SettingsRepository(storage),
+      onSettingsChanged: () => {
+        publishCount += 1;
+      },
+    });
+    const before = controller.settings;
+
+    const result = controller.updateTutorial(() => ({
+      status: 'active',
+      stepId: 'teleport' as never,
+    }));
+
+    expect(result).toMatchObject({ ok: false, message: 'Unable to update tutorial progress' });
+    expect(controller.settings).toBe(before);
+    expect(publishCount).toBe(0);
+  });
+
+  it('keeps tutorial progress unchanged when tutorial persistence fails', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+    const before = controller.settings;
+    storage.setError = new Error('quota');
+
+    expect(controller.updateTutorial(() => ({ status: 'active', stepId: 'camera' }))).toMatchObject(
+      { ok: false, message: 'Unable to save settings' },
+    );
+    expect(controller.settings).toBe(before);
+  });
+
+  it('loads save preferences while preserving profile tutorial progress', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+    expect(controller.updateQualityLock('low')).toMatchObject({ ok: true });
+    expect(controller.saveLocal()).toMatchObject({ ok: true });
+    expect(controller.updateTutorial(() => ({ status: 'active', stepId: 'warp' }))).toMatchObject({
+      ok: true,
+    });
+    expect(controller.updateQualityLock('high')).toMatchObject({ ok: true });
+
+    expect(controller.loadLocal()).toMatchObject({ ok: true });
+
+    expect(controller.settings.qualityLock).toBe('low');
+    expect(controller.settings.tutorial).toEqual({ status: 'active', stepId: 'warp' });
+  });
+
+  it('keeps simulation and profile atomic when merged save preferences cannot persist', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+    expect(controller.saveLocal()).toMatchObject({ ok: true });
+    controller.simulation.step(12);
+    const simulationBefore = controller.simulation;
+    const settingsBefore = controller.settings;
+    storage.setError = new Error('quota');
+
+    expect(controller.loadLocal()).toMatchObject({
+      ok: false,
+      message: 'Unable to load session',
+      detail: expect.stringMatching(/quota/u),
+    });
+    expect(controller.simulation).toBe(simulationBefore);
+    expect(controller.settings).toBe(settingsBefore);
+  });
+
+  it('imports save preferences while preserving profile tutorial progress', () => {
+    const sourceStorage = new MemoryStorage();
+    const source = createController(sourceStorage);
+    expect(source.updateQualityLock('medium')).toMatchObject({ ok: true });
+    const exported = source.exportJson();
+    if (!exported.ok) throw new Error(exported.message);
+
+    const target = createController(new MemoryStorage());
+    expect(target.updateTutorial(() => ({ status: 'active', stepId: 'burn-log' }))).toMatchObject({
+      ok: true,
+    });
+
+    expect(target.importJson(exported.json)).toMatchObject({ ok: true });
+    expect(target.settings.qualityLock).toBe('medium');
+    expect(target.settings.tutorial).toEqual({ status: 'active', stepId: 'burn-log' });
   });
 
   it('returns actionable messages for a missing or invalid local slot', () => {

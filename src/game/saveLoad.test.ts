@@ -17,7 +17,12 @@ import {
   SaveRepository,
   serializeSaveEnvelope,
 } from './saveLoad.js';
-import { DEFAULT_GAME_SETTINGS, rebindInput, type KeyValueStorage } from './settings.js';
+import {
+  DEFAULT_GAME_SETTINGS,
+  projectGameSettingsV1,
+  rebindInput,
+  type KeyValueStorage,
+} from './settings.js';
 
 const SHIP_MASS_KG = 10_000;
 
@@ -96,7 +101,7 @@ function persistentState(): SimulationPersistentState {
 
 describe('save envelope', () => {
   it('round-trips v2 through JSON without serializing rails body arrays', () => {
-    const settings = rebindInput(DEFAULT_GAME_SETTINGS, 'pitchUp', 'KeyI');
+    const settings = projectGameSettingsV1(rebindInput(DEFAULT_GAME_SETTINGS, 'pitchUp', 'KeyI'));
     const envelope = createSaveEnvelope(persistentState(), settings, ['earth']);
 
     const json = serializeSaveEnvelope(envelope);
@@ -105,6 +110,21 @@ describe('save envelope', () => {
     expect(restored).toEqual(envelope);
     expect(json).not.toContain('bodyPositionsKm');
     expect(json).not.toContain('bodyVelocitiesKmS');
+  });
+
+  it('keeps save v2 settings as the v1 preferences DTO without tutorial state', () => {
+    const profile = {
+      ...DEFAULT_GAME_SETTINGS,
+      tutorial: { status: 'active' as const, stepId: 'warp' as const },
+    };
+
+    const json = serializeSaveEnvelope(
+      createSaveEnvelope(persistentState(), projectGameSettingsV1(profile), ['earth']),
+    );
+    const document = JSON.parse(json) as { settings: Record<string, unknown> };
+
+    expect(document.settings.version).toBe(1);
+    expect(document.settings).not.toHaveProperty('tutorial');
   });
 
   it('accepts a normalized burn frame where prograde has a radial component', () => {
@@ -131,7 +151,7 @@ describe('save envelope', () => {
           },
         },
       },
-      DEFAULT_GAME_SETTINGS,
+      projectGameSettingsV1(DEFAULT_GAME_SETTINGS),
       ['earth'],
     );
 
@@ -185,7 +205,9 @@ describe('save envelope', () => {
 
     const valid = JSON.parse(
       serializeSaveEnvelope(
-        createSaveEnvelope(persistentState(), DEFAULT_GAME_SETTINGS, ['earth']),
+        createSaveEnvelope(persistentState(), projectGameSettingsV1(DEFAULT_GAME_SETTINGS), [
+          'earth',
+        ]),
       ),
     ) as Record<string, unknown>;
     const invalidNumber = structuredClone(valid);
@@ -255,7 +277,11 @@ describe('save envelope', () => {
   it('round-trips localStorage and reports write failures', () => {
     const storage = new MemoryStorage();
     const repository = new SaveRepository(storage, SHIP_MASS_KG);
-    const envelope = createSaveEnvelope(persistentState(), DEFAULT_GAME_SETTINGS, ['earth']);
+    const envelope = createSaveEnvelope(
+      persistentState(),
+      projectGameSettingsV1(DEFAULT_GAME_SETTINGS),
+      ['earth'],
+    );
 
     expect(repository.save(envelope)).toEqual({ ok: true });
     expect(repository.load(['earth'])).toEqual({ ok: true, envelope });
