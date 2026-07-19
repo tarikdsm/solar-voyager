@@ -1,0 +1,20 @@
+id: T0098
+title: Burn log panel and UTC mission clock
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0053, T0054, T0058, T0096]
+milestone: M5
+spec: |
+  Surface the canonical fixed-capacity burn log in the HUD and add a UTC mission
+  clock derived from simulation TDB display time. The panel shows each completed
+  and active burn's system/proper start and end, energy, proper delta-v, peak
+  power, dominant body, and signed prograde/normal/radial decomposition using
+  shared formatters. It must support keyboard navigation, an empty state, bounded
+  rendering for 256 entries, and exact persistence across save/load.
+acceptance:
+  - A scripted burn appears within one HUD update with values matching the SimulationCore ledger and UTC clock
+  - Active, completed, wrapped-capacity, empty, save/load, and relativistic clock-divergence states have unit coverage
+  - Panel interaction is accessible and does not allocate or iterate the 256-entry history on every animation frame
+  - Real-browser evidence shows the panel readable at desktop and compact viewport sizes with no console errors
+handoff_notes: ""

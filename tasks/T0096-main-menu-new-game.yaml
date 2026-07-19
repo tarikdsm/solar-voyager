@@ -1,0 +1,22 @@
+id: T0096
+title: Main menu and deterministic new-game flow
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0050, T0058]
+milestone: M6
+spec: |
+  Implement the architecture.md v1 phase transition MainMenu -> SpacePhase.
+  The application must open on a polished main menu instead of immediately
+  entering gameplay. New Game constructs the canonical 400 km LEO state with
+  Earth's real barycentric velocity, Continue is enabled only for a valid local
+  save, and import/settings remain available without creating duplicate renderer
+  or simulation instances. The transition must be accessible, deterministic,
+  keyboard operable, and must not add work or allocations to the gameplay frame
+  loop once the menu is dismissed.
+acceptance:
+  - A fresh browser session shows MainMenu and New Game reaches the canonical playable 400 km LEO state
+  - Continue is disabled without a valid save and restores a valid save atomically when present
+  - Keyboard focus, reduced-motion behavior, reload, and repeated menu-to-game attempts are covered by unit and real-browser tests
+  - Existing smoke, performance, save/load, and gameplay regressions pass with no duplicate canvas, renderer, worker, or event listener
+handoff_notes: ""

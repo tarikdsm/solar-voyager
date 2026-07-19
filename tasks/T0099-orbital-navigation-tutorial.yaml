@@ -1,0 +1,20 @@
+id: T0099
+title: Orbital-navigation tutorial overlay
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0096, T0097, T0098]
+milestone: M6
+spec: |
+  Add an opt-in first-run tutorial that teaches focus/target selection, camera
+  control, orbit and trajectory reading, thrust/attitude, time warp, system map,
+  burn log, performance warnings, save, and return-to-play. Steps are driven by
+  observable game conditions rather than fixed delays, can be skipped/resumed,
+  never synthesize physics state, and persist completion in the versioned settings
+  envelope without blocking experienced players.
+acceptance:
+  - A new profile offers the tutorial and every step can be completed through real controls against the real simulation
+  - Skip, resume, reset, keyboard-only, reduced-motion, compact viewport, and persisted completion are covered
+  - Tutorial prompts never capture thrust/warp input when hidden and add zero gameplay frame-loop allocations after completion
+  - A real-browser guided run reaches completion with no console/page errors or orphaned overlays
+handoff_notes: ""

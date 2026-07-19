@@ -1,0 +1,20 @@
+id: T0100
+title: Startup quality auto-detection and load-time optimization
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0041, T0091, T0092, T0096]
+milestone: M6
+spec: |
+  Complete the rendering/performance specs' startup path: use device pixel ratio,
+  GPU/context capability and a bounded loading-screen timing probe to choose the
+  initial unlocked quality tier; precompile the eager shader set; keep only the
+  documented critical assets on the startup path; expose truthful loading progress
+  and a recoverable failure state. Manual tier lock always wins and subsequent
+  governor behavior remains unchanged.
+acceptance:
+  - Deterministic capability/timing fixtures select documented initial tiers while manual lock bypasses auto-detection
+  - Production startup fetches only critical-path assets before play and performs no first-use shader compile for eager visuals
+  - Cold-load timing, transfer bytes, programs, errors, and first-playable milestone are recorded for local hardware and CI
+  - Smoke, visual tiers, governor, bundle, asset, heap, and 60 fps contracts remain green
+handoff_notes: ""

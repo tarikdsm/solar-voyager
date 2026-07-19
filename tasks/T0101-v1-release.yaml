@@ -1,0 +1,20 @@
+id: T0101
+title: Public landing page, final release audit, and v1.0 tag
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0081, T0083, T0085, T0093, T0096, T0097, T0098, T0099, T0100]
+milestone: M6
+spec: |
+  Ship Solar Voyager v1 publicly. Replace placeholder-facing copy with a polished
+  responsive landing/menu experience, complete player and contributor README
+  instructions, license/credits/privacy/accessibility notes, and release notes.
+  Run the full unit, Python, browser, asset reproducibility, performance, deploy,
+  and live-URL audit; reconcile docs/check_plan.html with every canonical task;
+  then create and verify the annotated v1.0.0 tag only from green main.
+acceptance:
+  - Landing/menu clearly explains and launches the game on desktop and compact viewports with keyboard accessibility
+  - README, controls, save compatibility, hardware acceleration guidance, credits, known limitations, and deferred M4 scope are accurate
+  - All repository gates plus a production playtest and GitHub Pages no-404/console-error audit pass on the release commit
+  - Every eligible task is DONE, only T0060-T0062 remain explicitly deferred, and annotated tag v1.0.0 points to the deployed green main commit
+handoff_notes: ""

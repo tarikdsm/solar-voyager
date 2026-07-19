@@ -1,0 +1,20 @@
+id: T0097
+title: Interactive solar-system map view
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0044, T0071, T0096]
+milestone: M5
+spec: |
+  Deliver the rendering-spec.md system-map mode as a separate preallocated
+  three.js scene driven by the same immutable snapshot: top-down-capable orbit
+  camera, scaled body icons, orbit lines, predicted trajectory and event markers,
+  focus/target selection, and a deterministic return to the space camera. Map
+  entry must pause no simulation state, must not create runtime materials or
+  geometries, and must obey the existing GPU/context and camera-relative rules.
+acceptance:
+  - The player can enter the map, select any catalog body, inspect its orbit and predicted events, and return without changing simulation state
+  - Map and space views share target/focus state and repeated toggles do not leak scenes, listeners, GPU resources, or frame-loop allocations
+  - Camera-relative precision and marker alignment are verified at inner-system and outer-system scales in a real browser
+  - The added view stays inside draw, triangle, heap, bundle, and frame budgets
+handoff_notes: ""
