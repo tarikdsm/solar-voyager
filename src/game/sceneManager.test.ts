@@ -8,6 +8,11 @@ class FakeSession implements SceneSessionPort {
   loadCalls = 0;
   newGameResult: SessionActionResult = { ok: true, message: 'New game started' };
   loadResult: SessionActionResult = { ok: true, message: 'Session loaded' };
+  validLocalSave = false;
+
+  hasValidLocalSave(): boolean {
+    return this.validLocalSave;
+  }
 
   startNewGame(): SessionActionResult {
     this.newGameCalls += 1;
@@ -21,6 +26,15 @@ class FakeSession implements SceneSessionPort {
 }
 
 describe('SceneManager', () => {
+  it('reports whether Continue has a valid local save', () => {
+    const session = new FakeSession();
+    const scenes = new SceneManager(session);
+
+    expect(scenes.canContinue).toBe(false);
+    session.validLocalSave = true;
+    expect(scenes.canContinue).toBe(true);
+  });
+
   it('starts in the main menu and enters space only after New Game succeeds', () => {
     const session = new FakeSession();
     const scenes = new SceneManager(session);

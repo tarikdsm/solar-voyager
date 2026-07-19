@@ -3,6 +3,7 @@ import type { SessionActionResult } from './sessionController.js';
 export type GamePhase = 'main-menu' | 'space';
 
 export interface SceneSessionPort {
+  hasValidLocalSave(): boolean;
   startNewGame(): SessionActionResult;
   loadLocal(): SessionActionResult;
 }
@@ -20,6 +21,10 @@ export class SceneManager {
 
   get phase(): GamePhase {
     return this.currentPhase;
+  }
+
+  get canContinue(): boolean {
+    return this.currentPhase === 'main-menu' && this.session.hasValidLocalSave();
   }
 
   startNewGame(): SessionActionResult {

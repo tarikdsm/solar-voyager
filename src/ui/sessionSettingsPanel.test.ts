@@ -75,6 +75,38 @@ class FakeFiles implements SessionFilePort {
 }
 
 describe('session settings panel model', () => {
+  it('announces only successful load and import actions as playable sessions', async () => {
+    const session = new FakeSession();
+    const files = new FakeFiles();
+    const activations: SessionActionResult[] = [];
+    const model = createSessionSettingsModel(session, files, (result) => activations.push(result));
+
+    model.save();
+    model.selectQuality('low');
+    model.captureBinding('pitchUp', 'KeyI');
+    model.exportFile();
+    expect(activations).toEqual([]);
+
+    session.loadResult = { ok: false, message: 'No local save found' };
+    model.load();
+    expect(activations).toEqual([]);
+
+    session.loadResult = { ok: true, message: 'Session loaded' };
+    model.load();
+    expect(activations).toEqual([{ ok: true, message: 'Session loaded' }]);
+
+    session.importJson = () => ({ ok: false, message: 'Imported session is invalid' });
+    await model.importFile({} as File);
+    expect(activations).toHaveLength(1);
+
+    session.importJson = () => ({ ok: true, message: 'Session imported' });
+    await model.importFile({} as File);
+    expect(activations).toEqual([
+      { ok: true, message: 'Session loaded' },
+      { ok: true, message: 'Session imported' },
+    ]);
+  });
+
   it('forwards save/load and keeps their actionable messages', () => {
     const session = new FakeSession();
     const model = createSessionSettingsModel(session, new FakeFiles());
