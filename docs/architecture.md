@@ -69,6 +69,7 @@ future:  MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D) 
 ```
 
 - **v1 ships only `MainMenu → SpacePhase`.** The state machine is built to accept the future states without refactoring — phases are pluggable states, never hardcoded transitions.
+- `MainMenu` is also the public landing. It mounts only after the measured startup pipeline reaches first playable, so the primary New Game/Continue action never creates a second route, renderer, world, worker, or animation loop.
 - Deferred launch phase (post-v1, optional): LaunchScene with an orthographic camera (2D side view) on the same WebGL renderer; handoff at 140 km via `sim/launch/handoff.ts` (2D polar → heliocentric 3D, pure function, energy/angular-momentum round-trip tested). Spec: physics-spec §4; tasks T0060–T0062.
 - **Future landing = a new state** added to this machine; bodies already carry a `surface` descriptor in `bodies.json` (unused in v1).
 
@@ -106,10 +107,16 @@ simulation, renderer, or runtime GPU resource.
 ## Performance architecture
 
 - `render/telemetry.ts` is the single source of perf truth (frame-time ring buffer, ms splits per subsystem, renderer.info snapshots); consumed by the perf HUD (top-left), the adaptive quality governor (`render/perfGovernor.ts`) and the bench harness. The frame orchestrator measures the `SimulationCore.step()` call and passes that scalar to telemetry; deterministic `SimSnapshot` data does not depend on a wall clock (ADR-024).
-- GPU context creation policy (forced hardware acceleration + software-rasterizer banner) lives in one place: the renderer bootstrap in `main.ts`/`render/`. Contract: `docs/performance-spec.md` §2, ADR-008.
+- GPU context creation policy (high-performance request, strict/fallback handling, software classification and warning) lives in one place: the renderer bootstrap in `main.ts`/`render/`. Browsers and drivers remain authoritative over the actual adapter. Contract: `docs/performance-spec.md` §2, ADR-008.
 - The frame loop is owned by `main.ts`: `commands → sim.step() → snapshot → render + UI`, instrumented at each seam. Zero-allocation rules apply to everything this loop calls (performance-spec §5).
 - Production builds retain Vite's Oxc minification, deterministically recompress entry chunks with Terser, and minify copied standalone JavaScript decoders only when their gzip size improves. This keeps optional setup UI within the fixed JavaScript/CSS gzip gate without changing runtime behavior or the budget.
 - Startup is an explicit measured state machine: the static semantic shell reports completed critical-path and shader milestones, `startupQuality.ts` selects the initial unlocked governor rung from context/probe evidence, and lazy body assets remain disabled until gameplay activation. A frozen canvas diagnostic and the cold-load browser gate preserve timing, transfer, program and recovery evidence.
+
+## Release integrity
+
+- `tasks/T*.yaml` is the only task-state authority. `tools/checks/taskDashboard.mjs` deterministically embeds the complete canonical payload in `docs/check_plan.html`; CI rejects drift instead of maintaining parallel status overrides.
+- `tools/checks/releaseReadiness.mjs` enforces the public version, required player/policy documents, README local links, the v1 task-state boundary, and dashboard equality. Final publication additionally requires T0101 DONE.
+- GitHub Pages deploys only from `main`. An annotated release tag is created only after exact-commit CI, Pages deployment, and a cache-disabled live audit succeed; the tag must peel to that deployed commit.
 
 ## Invariants (CI-enforced where possible)
 
