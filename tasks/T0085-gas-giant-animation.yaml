@@ -1,6 +1,6 @@
 id: T0085
 title: Gas giant animated band shaders (texture base + procedural flow)
-status: CLAIMED
+status: IN_PROGRESS
 agent: chatgpt
 branch: task/T0085-gas-giant-animation
 depends_on: [T0041, T0043]
