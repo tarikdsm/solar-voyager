@@ -88,6 +88,11 @@ A small module (`render/perfGovernor.ts`) owns the quality/performance trade-off
 - **CI perf gates (every PR):** bundle-size budget; draw-call/triangle counts from the smoke test scene vs golden values (±10%); **heap-growth-zero check** on 30 s of simulated frames (catches frame-loop allocations mechanically, since CI GPUs are software and absolute fps is meaningless there).
 - Absolute fps regressions are caught on reference hardware: the bench report is committed with perf-relevant PRs (`docs/bench/` history), and any PR touching `render/` or the frame loop must include before/after bench numbers in its description.
 
+A production sample that exceeds the fixed heap ceiling by no more than 25% is
+confirmed with one independent same-page window of the same duration. The
+confirmation must meet the original ceiling; larger or repeated failures fail.
+The known retained-allocation fixture is never eligible for confirmation.
+
 ## 7. Who enforces what
 
 | Rule | Enforcement |

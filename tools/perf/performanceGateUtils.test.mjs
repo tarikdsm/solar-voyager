@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  classifyHeapConfirmation,
   compareBenchmarkRuns,
   parsePerformanceGolden,
   validateBundleSizes,
+  validateConfirmedHeapGrowth,
   validateHeapGrowth,
   validateWorkload,
 } from './performanceGateUtils.mjs';
@@ -49,6 +51,91 @@ describe('validateHeapGrowth', () => {
   it('fails closed when precise heap metrics are unavailable', () => {
     expect(validateHeapGrowth({ afterBytes: null, beforeBytes: null }, 65_536)).toEqual([
       'Precise Chromium heap metrics are unavailable.',
+    ]);
+  });
+});
+
+describe('classifyHeapConfirmation', () => {
+  const ceiling = 196_608;
+
+  it('passes the original inclusive ceiling and confirms only the narrow band', () => {
+    expect(
+      classifyHeapConfirmation(
+        { beforeBytes: 10_000_000, afterBytes: 10_196_608 },
+        ceiling,
+      ),
+    ).toBe('pass');
+    expect(
+      classifyHeapConfirmation(
+        { beforeBytes: 10_000_000, afterBytes: 10_196_609 },
+        ceiling,
+      ),
+    ).toBe('confirm');
+    expect(
+      classifyHeapConfirmation(
+        { beforeBytes: 10_000_000, afterBytes: 10_245_760 },
+        ceiling,
+      ),
+    ).toBe('confirm');
+    expect(
+      classifyHeapConfirmation(
+        { beforeBytes: 10_000_000, afterBytes: 10_245_761 },
+        ceiling,
+      ),
+    ).toBe('fail');
+  });
+
+  it('fails closed for unavailable or malformed metrics', () => {
+    expect(
+      classifyHeapConfirmation({ beforeBytes: null, afterBytes: null }, ceiling),
+    ).toBe('fail');
+    expect(
+      classifyHeapConfirmation({ beforeBytes: 1, afterBytes: Number.NaN }, ceiling),
+    ).toBe('fail');
+    expect(classifyHeapConfirmation({ beforeBytes: 1, afterBytes: 2 }, -1)).toBe(
+      'fail',
+    );
+  });
+});
+
+describe('validateConfirmedHeapGrowth', () => {
+  const ceiling = 196_608;
+  const primary = { beforeBytes: 10_000_000, afterBytes: 10_210_000 };
+
+  it('accepts a narrow primary outlier only after an in-budget confirmation', () => {
+    expect(
+      validateConfirmedHeapGrowth(
+        primary,
+        { beforeBytes: 10_210_000, afterBytes: 10_300_000 },
+        ceiling,
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects a repeated narrow failure and a missing confirmation', () => {
+    expect(
+      validateConfirmedHeapGrowth(
+        primary,
+        { beforeBytes: 10_210_000, afterBytes: 10_420_000 },
+        ceiling,
+      ),
+    ).toEqual([
+      'Confirmed retained heap growth must be <= 196,608 bytes; measured 210,000 bytes.',
+    ]);
+    expect(validateConfirmedHeapGrowth(primary, null, ceiling)).toEqual([
+      'Narrow retained heap failure requires a confirmation measurement.',
+    ]);
+  });
+
+  it('does not let confirmation rescue a large primary failure', () => {
+    expect(
+      validateConfirmedHeapGrowth(
+        { beforeBytes: 10_000_000, afterBytes: 10_300_000 },
+        { beforeBytes: 10_300_000, afterBytes: 10_300_000 },
+        ceiling,
+      ),
+    ).toEqual([
+      'Retained heap growth must be <= 196,608 bytes; measured 300,000 bytes.',
     ]);
   });
 });

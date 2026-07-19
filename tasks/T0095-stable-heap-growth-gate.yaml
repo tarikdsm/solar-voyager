@@ -1,0 +1,76 @@
+id: T0095
+title: Stabilize retained-heap CI measurement without weakening the gate
+status: DONE
+agent: chatgpt
+branch: task/T0095-stable-heap-growth-gate
+depends_on: [T0092]
+milestone: M6
+spec: |
+  The single before/after forced-GC heap sample in tools/perf/performanceGate.mjs
+  produces narrow false failures on GitHub runners despite identical frame-loop
+  code passing adjacent samples. Preserve the fixed 196,608-byte ceiling and
+  30-second observation window, but confirm only a narrowly exceeded primary
+  sample with an independent same-page window. Persistent growth must still fail,
+  large failures must fail immediately, and the retained-allocation fixture must
+  remain a mandatory negative control. Record both samples when confirmation runs.
+acceptance:
+  - The 196,608-byte ceiling and production draw/triangle/bundle budgets are unchanged
+  - Only a primary heap failure no more than 25% above the ceiling receives one confirmation window
+  - Production passes after confirmation only when the independent 30-second window is within the original ceiling
+  - Persistent or large retained growth and the allocation fixture are still rejected
+  - Unit tests cover pass, immediate fail, confirmed pass, and confirmed fail decisions
+  - Local production and negative-control gates pass, CI is green, and docs/check_plan.html includes T0095 exactly once
+handoff_notes: |
+  Ready for independent exact-head review. The fixed 196,608-byte ceiling,
+  every non-heap performance budget, the 30-second observation duration, and
+  tools/perf/performance-golden.json are unchanged. A narrow primary failure
+  in (196,608 B, 245,760 B] receives exactly one independent 30-second
+  confirmation on the already-stabilized page; the confirmation must satisfy
+  the original ceiling. Invalid metrics, large primary failures, and repeated
+  narrow failures fail closed. The retained-allocation fixture remains on the
+  original validator and is never eligible for confirmation.
+
+  The complete local gate passed with a direct production primary of +5,484 B,
+  so production.confirmationHeap was null and no confirmation was collected.
+  The allocation negative control retained +2,963,532 B and was rejected. The
+  draw control injected 29 draw calls / 65,077 triangles and was rejected for
+  both metrics. Production reported 10 draw calls / 77,071 triangles with no
+  findings.
+
+  Verification passed: npx vitest run
+  tools/perf/performanceGateUtils.test.mjs (19/19); npm test (111 passed + 1
+  skipped files, 660 passed + 3 skipped tests); npm run test:perf-gates; npm
+  run lint; npm run typecheck; npm run format:check; npm run build; npm run
+  check:tasks; and git diff --check. The independent Task 2 review covered
+  b7360a2..4b78555 and approved exact code head 4b78555 with Critical 0,
+  Important 0, Minor 0; Ready to merge: Yes.
+
+  This stabilization was motivated by T0085 CI evidence: run 29670343385
+  passed the identical production frame loop at +173,012 B, while run
+  29670710819 produced narrow failures of +202,242 B, +213,120 B, and
+  +211,256 B across retries. The new confirmation path distinguishes a
+  one-window forced-GC outlier from persistent retained growth without raising
+  the contractual ceiling.
+
+  Independent Task 3 review covered a36d2e9..adbf772. The initial review at
+  b9625a1 reported Critical 0, Important 1, Minor 0 because the dashboard used
+  a summarized handoff instead of the canonical YAML value. A focused
+  YAML-to-dashboard deep-equality assertion reproduced the documentation/data
+  mirror defect as RED; no production test or production code change was
+  needed. Commit adbf772 regenerated the T0095 dashboard line from this YAML,
+  and the same assertion passed GREEN while every other dashboard byte was
+  preserved. Final re-review reported Critical 0, Important 0, Minor 0, with
+  spec compliance and code quality approved; Ready to merge after CI.
+
+  Final whole-branch review of d104ac8..eabd7e1 reported Critical 0,
+  Important 0, Minor 0; Ready to publish. Fresh exact-head verification passed:
+  660 tests passed with 3 skipped, plus lint, typecheck, format, build, and task
+  schema. The complete performance-gate rerun passed with production retained
+  growth +58,267 B and 10 draw calls / 77,071 triangles; the allocation fixture
+  retained +2,934,904 B and was rejected; the draw fixture injected 29 draw
+  calls / 65,077 triangles and was rejected. Published for CI as PR #52:
+  https://github.com/tarikdsm/solar-voyager/pull/52.
+
+  Initial PR CI run 29673136135, job 88155640957, passed in 5m24s on exact SHA
+  915d17c. This DONE transition rides in the merge commit; the merger must push
+  this status commit and require its final CI run to pass before merging PR #52.
