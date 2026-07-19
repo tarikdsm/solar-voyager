@@ -44,14 +44,14 @@ deterministic while the normal URL proves the menu.
 **Files:** `src/main.ts`, production harness URLs, new browser regression,
 `package.json`, CI, `docs/check_plan.html`, task YAML.
 
-- [ ] Write a RED real-browser test proving a fresh normal URL shows MainMenu,
+- [x] Write a RED real-browser test proving a fresh normal URL shows MainMenu,
   Continue is disabled, and no simulation frames advance before New Game.
-- [ ] Add idempotent SpacePhase activation and explicit autostart policy; update
+- [x] Add idempotent SpacePhase activation and explicit autostart policy; update
   existing production harness URLs to opt in.
-- [ ] Cover New Game canonical LEO, valid/invalid Continue, reload, compact
+- [x] Cover New Game canonical LEO, valid/invalid Continue, reload, compact
   viewport, reduced motion, one canvas/runtime/listener set, and console errors.
-- [ ] Reconcile T0096-T0101 in the dashboard exactly once and remove converted
+- [x] Reconcile T0096-T0101 in the dashboard exactly once and remove converted
   non-task actions.
-- [ ] Run all repository, browser, performance, schema, budget, and diff gates.
+- [x] Run all repository, browser, performance, schema, budget, and diff gates.
 - [ ] Obtain independent exact-head review, move to REVIEW, publish, require CI,
   move to DONE, require final CI, and merge while retaining the branch.
