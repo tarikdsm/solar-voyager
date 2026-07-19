@@ -114,20 +114,53 @@ async function assertFreshMenu(page, expectedContinueEnabled) {
   assert.equal(await continueButton.isEnabled(), expectedContinueEnabled);
 }
 
-async function waitForSpace(page) {
-  await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 30_000 });
-  await page.waitForFunction(
-    () => {
+async function waitForSpace(page, timeout = 30_000) {
+  try {
+    await page.waitForSelector('#orbit-readout', { state: 'visible', timeout });
+    await page.waitForFunction(
+      (expectedResources) => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) return false;
+        const resources = canvas.solarVoyagerRuntimeResources;
+        return (
+          canvas.dataset.cameraReady === 'true' &&
+          resources !== undefined &&
+          Object.entries(expectedResources).every(
+            ([resource, expected]) => resources[resource] === expected,
+          )
+        );
+      },
+      ACTIVE_RUNTIME_RESOURCES,
+      { timeout },
+    );
+  } catch (cause) {
+    const diagnostics = await page.evaluate(() => {
       const canvas = globalThis.document.querySelector('#space-canvas');
-      return (
-        canvas instanceof globalThis.HTMLCanvasElement &&
-        canvas.dataset.cameraReady === 'true' &&
-        (canvas.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > 0
-      );
-    },
-    undefined,
-    { timeout: 30_000 },
-  );
+      const orbit = globalThis.document.querySelector('#orbit-readout');
+      return {
+        cameraReady:
+          canvas instanceof globalThis.HTMLCanvasElement
+            ? (canvas.dataset.cameraReady ?? null)
+            : null,
+        frameCount:
+          canvas instanceof globalThis.HTMLCanvasElement
+            ? (canvas.solarVoyagerTelemetry?.snapshot.frameCount ?? null)
+            : null,
+        orbitPresent: orbit !== null,
+        orbitVisible:
+          orbit instanceof globalThis.HTMLElement
+            ? globalThis.getComputedStyle(orbit).visibility !== 'hidden'
+            : false,
+        resources:
+          canvas instanceof globalThis.HTMLCanvasElement
+            ? (canvas.solarVoyagerRuntimeResources ?? null)
+            : null,
+      };
+    });
+    throw new Error(`Space activation did not complete: ${JSON.stringify(diagnostics)}`, {
+      cause,
+    });
+  }
 }
 
 async function runFreshAndContinueFlow(browser) {
@@ -145,12 +178,20 @@ async function runFreshAndContinueFlow(browser) {
     assert.ok(response?.ok(), `production page returned ${String(response?.status())}`);
     await assertFreshMenu(page, false);
     assert.equal(workerRequestCount, 0, 'menu must not start the trajectory worker');
+    await page.evaluate(() => {
+      globalThis.requestAnimationFrame = () => 1;
+    });
 
     await page.getByRole('button', { name: 'New Game' }).evaluate((button) => {
       button.click();
       button.click();
     });
-    await waitForSpace(page);
+    await waitForSpace(page, 1_000);
+    assert.equal(
+      (await readRuntimeState(page)).frameCount,
+      0,
+      'menu transition must not depend on a completed WebGL frame',
+    );
     const canonical = await page.evaluate(() => ({
       apoapsis:
         [...globalThis.document.querySelectorAll('#orbit-readout .hud-readout-row')]

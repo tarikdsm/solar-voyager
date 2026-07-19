@@ -507,8 +507,8 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   window.addEventListener('pagehide', handlePageHide);
   runtimeResources.pagehideListeners += 1;
   invalidateTrajectoryPrediction();
-  runtimeResources.animationLoopStarts += 1;
   requestAnimationFrame(renderFrame);
+  runtimeResources.animationLoopStarts += 1;
 }
 
 function activateSpacePhase(): Promise<void> {
