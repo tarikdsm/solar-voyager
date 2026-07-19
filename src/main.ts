@@ -29,7 +29,7 @@ import {
   type EpochWorld,
   type EpochWorldMilestone,
 } from './render/createEpochWorld.js';
-import { createRenderer } from './render/createRenderer.js';
+import { createRenderer, type RendererBootstrap } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
@@ -237,8 +237,11 @@ const startupLoadingElements: StartupLoadingElements = {
   root: startupLoadingElement,
 };
 const startupTracker = new StartupTracker(performance.now());
+let startupRenderer: RendererBootstrap['renderer'] | null = null;
 Object.defineProperty(canvas, 'solarVoyagerStartup', {
-  value: startupTracker.createDiagnostic(),
+  value: startupTracker.createDiagnostic(
+    () => startupRenderer?.info.programs?.length ?? startupTracker.programCountAtReady,
+  ),
 });
 startupLoadingElements.retry.addEventListener('click', () => window.location.reload());
 updateStartupLoadingView(startupLoadingElements, startupTracker);
@@ -277,6 +280,7 @@ async function createRendererOrWait() {
 const rendererBootstrap = await createRendererOrWait();
 runtimeResources.rendererCreations += 1;
 const { contextReport, renderer } = rendererBootstrap;
+startupRenderer = renderer;
 const postProcessingEnabled = !contextReport.softwareRasterizer;
 const telemetry = new RenderTelemetry(renderer, contextReport);
 exposeRenderTelemetry(canvas, telemetry);
@@ -791,6 +795,9 @@ function renderFrame(nowMs: number): void {
     hudEndMs - uiStartMs + (perfPanelEndMs - perfPanelStartMs),
     nowMs,
   );
+  if (startupTracker.programCountAfterFirstFrame === null) {
+    startupTracker.recordFirstFrameProgramCount(renderer.info.programs?.length ?? 0);
+  }
   perfGovernor?.update(nowMs, telemetry.snapshot);
   requestAnimationFrame(renderFrame);
 }
@@ -894,6 +901,11 @@ async function prepareApplication(): Promise<void> {
   canvas.dataset.systemMapMode = systemMapController.mode;
   const preparedWorld = world;
   if (preparedWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
+  preparedWorld.osculatingConic.update(
+    session.simulation.snapshot,
+    Math.max(1, canvas.width),
+    Math.max(1, canvas.height),
+  );
   const qualityLock = session.settings.qualityLock;
   let probeMeanMs: number | null = null;
   let initialAutoRung: 0 | 7 | 14;
@@ -972,6 +984,7 @@ async function prepareApplication(): Promise<void> {
   world.systemMap.render(renderer);
   world.trajectoryOverlay.hide();
   world.systemMap.trajectoryOverlay.hide();
+  stateVectorWidget.update(session.simulation.snapshot, world.spaceScene.camera);
   await stateVectorWidget.prepare(renderer);
   startupTracker.advance('post-ready');
   updateStartupLoadingView(startupLoadingElements, startupTracker);

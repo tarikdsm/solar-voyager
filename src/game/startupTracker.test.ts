@@ -44,6 +44,10 @@ describe('StartupTracker', () => {
     expect(tracker.qualitySource).toBe('auto');
     expect(tracker.probeMeanMs).toBe(12.5);
     expect(tracker.programCountAtReady).toBe(14);
+    expect(tracker.programCountAfterFirstFrame).toBeNull();
+    tracker.recordFirstFrameProgramCount(14);
+    tracker.recordFirstFrameProgramCount(19);
+    expect(tracker.programCountAfterFirstFrame).toBe(14);
     expect(tracker.transferBytes).toBe(400);
     expect(() =>
       tracker.recordReady(220, {
@@ -79,13 +83,18 @@ describe('StartupTracker', () => {
 
   it('exposes a frozen getter-only null-prototype diagnostic', () => {
     const tracker = new StartupTracker(0);
-    const diagnostic = tracker.createDiagnostic();
+    let currentProgramCount = 3;
+    const diagnostic = tracker.createDiagnostic(() => currentProgramCount);
     tracker.advance('context');
 
     expect(Object.isFrozen(diagnostic)).toBe(true);
     expect(Object.getPrototypeOf(diagnostic)).toBeNull();
     expect(diagnostic.stage).toBe('context');
     expect(diagnostic.progress).toBe(0.1);
+    expect(diagnostic.programCountCurrent).toBe(3);
+    expect(diagnostic.programCountAfterFirstFrame).toBeNull();
+    currentProgramCount = 5;
+    expect(diagnostic.programCountCurrent).toBe(5);
     expect(Reflect.set(diagnostic, 'stage', 'ready')).toBe(false);
     expect(diagnostic.stage).toBe('context');
   });

@@ -79,9 +79,9 @@ to eager visuals.
 A fixed getter-only `canvas.solarVoyagerStartup` diagnostic exposes stage,
 progress, selected rung/tier/source, probe duration or null for manual locks,
 startup elapsed milliseconds, first-playable milliseconds, resource transfer and
-encoded-body bytes, program count at ready/current, requested critical paths,
-and an error count/message. Values are written only during setup or the existing
-telemetry cadence; no per-frame object is created.
+encoded-body bytes, program count at ready/first frame/current, and an error
+count/message. Values are written only during setup/first-frame capture or read
+from existing renderer counters; no per-frame object is created.
 
 The permanent cold-load Chromium regression starts with an empty cache, records
 request paths/status/bytes, timing, programs, console/page errors and first

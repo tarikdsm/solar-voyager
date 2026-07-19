@@ -27,6 +27,8 @@ export interface StartupDiagnostic {
   readonly failedStage: string | null;
   readonly firstPlayableMs: number | null;
   readonly probeMeanMs: number | null;
+  readonly programCountCurrent: number;
+  readonly programCountAfterFirstFrame: number | null;
   readonly programCountAtReady: number;
   readonly progress: number;
   readonly qualitySource: StartupQualitySource | null;
@@ -62,6 +64,7 @@ export class StartupTracker {
   selectedRung = -1;
   encodedBodyBytes = 0;
   programCountAtReady = 0;
+  programCountAfterFirstFrame: number | null = null;
   resourceCount = 0;
   transferBytes = 0;
   errorCount = 0;
@@ -114,8 +117,15 @@ export class StartupTracker {
     this.errorMessage = (message || 'Unknown startup error.').slice(0, 160);
   }
 
-  createDiagnostic(): StartupDiagnostic {
-    return createDiagnostic(this);
+  recordFirstFrameProgramCount(programCount: number): void {
+    if (!Number.isInteger(programCount) || programCount < 0) {
+      throw new RangeError('Invalid first-frame program count.');
+    }
+    this.programCountAfterFirstFrame ??= programCount;
+  }
+
+  createDiagnostic(readProgramCount = (): number => this.programCountAtReady): StartupDiagnostic {
+    return createDiagnostic(this, readProgramCount);
   }
 
   private move(stage: Milestone): void {
@@ -128,7 +138,10 @@ export class StartupTracker {
   }
 }
 
-function createDiagnostic(state: StartupTracker): StartupDiagnostic {
+function createDiagnostic(
+  state: StartupTracker,
+  readProgramCount: () => number,
+): StartupDiagnostic {
   return Object.freeze(
     Object.setPrototypeOf(
       {
@@ -149,6 +162,12 @@ function createDiagnostic(state: StartupTracker): StartupDiagnostic {
         },
         get probeMeanMs() {
           return state.probeMeanMs;
+        },
+        get programCountCurrent() {
+          return readProgramCount();
+        },
+        get programCountAfterFirstFrame() {
+          return state.programCountAfterFirstFrame;
         },
         get programCountAtReady() {
           return state.programCountAtReady;
