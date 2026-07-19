@@ -110,6 +110,7 @@ export class SystemMapScene {
   private readonly orbitRelativePositionsKm: Float64Array;
   private readonly orbitPositionsKm: Float64Array;
   private readonly orbitComponentStarts: Int32Array;
+  private readonly iconPositionAttribute: BufferAttribute;
   private readonly selectionAttribute: BufferAttribute;
   private readonly projectedScratch = new Vector3();
   private selectedBodyIndex = 0;
@@ -206,6 +207,7 @@ export class SystemMapScene {
       new Float32Array(positionsKm.length),
       3,
     ).setUsage(DynamicDrawUsage);
+    this.iconPositionAttribute = iconPositionAttribute;
     const iconColors = new Float32Array(positionsKm.length);
     const selection = new Float32Array(bodies.length);
     selection[0] = 1;
@@ -415,9 +417,10 @@ export class SystemMapScene {
     const bodyX = this.positionsKm[bodyComponent] as number;
     const bodyY = this.positionsKm[bodyComponent + 1] as number;
     const bodyZ = this.positionsKm[bodyComponent + 2] as number;
-    const relativeX = Math.fround(bodyX - this.cameraPositionKm.x);
-    const relativeY = Math.fround(bodyY - this.cameraPositionKm.y);
-    const relativeZ = Math.fround(bodyZ - this.cameraPositionKm.z);
+    const renderPositions = this.iconPositionAttribute.array;
+    const relativeX = renderPositions[bodyComponent] as number;
+    const relativeY = renderPositions[bodyComponent + 1] as number;
+    const relativeZ = renderPositions[bodyComponent + 2] as number;
     this.diagnostics.selectedBodyIndex = this.selectedBodyIndex;
     this.diagnostics.selectedRelativeX = relativeX;
     this.diagnostics.selectedRelativeY = relativeY;
