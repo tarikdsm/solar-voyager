@@ -30,7 +30,7 @@ src/
 ├── workers/                    # predictor.worker.ts + predictorProtocol.ts
 ├── render/                     # spaceScene, bodyVisual, starfield, telemetry, perfGovernor,
 │                               # (launchScene: deferred)
-│                               # trajectoryLine, lighting, lod
+│                               # trajectoryLine, systemMapScene, lighting, lod
 ├── game/                       # sceneManager, saveLoad, settings, input
 └── ui/                         # App.tsx, hud/, map/, menus/
 data/                           # bodies.json, ephemerides-check.json, stars.bin
@@ -77,6 +77,13 @@ future:  MainMenu → LaunchPhase (2D) → HandoffCinematic → SpacePhase (3D) 
 - **Main thread:** SimulationCore (rails evaluation + one DP54 ship propagation + ledger = µs-to-low-ms per frame), rendering, UI.
 - **`predictor.worker.ts`:** trajectory prediction — propagates the current ship state thrust-free using the *same* `dp54.ts` + `nbodyForces.ts` modules; returns a downsampled polyline (~2000 pts) + events (SOI transitions, closest approaches, predicted impact) via **postMessage with transferable Float64Arrays**. No SharedArrayBuffer (GitHub Pages can't serve COOP/COEP headers). Re-runs on thrust change / warp elapsed / 0.5 s debounce.
 - Optional "dynamic bodies" mode (mutual n-body, ADR-001) also runs on a worker.
+
+The system map is a dynamically imported, setup-time `SystemMapScene` that
+shares the live body-position buffer and renderer with the space view. Its one
+body-icon batch, one orbit-line batch, and independent trajectory overlay are
+allocated and shader-precompiled before the gameplay frame loop. Opening the
+map therefore changes only the active view; it never creates a second
+simulation, renderer, or runtime GPU resource.
 
 ## State & persistence
 

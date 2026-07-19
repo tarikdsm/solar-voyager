@@ -88,7 +88,15 @@ Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Ear
 
 - Predicted path: polyline from the worker (≤2000 pts), rendered camera-relative as `Line2` (fat lines), color-coded by dominant body; event markers (SOI, closest approach, impact) as billboarded icons.
 - Osculating conic: analytic ellipse (64–256 segments) around the dominant body, updated every frame — instant feedback while the worker refines.
-- System map: separate three.js scene, top-down-capable free orbit camera, bodies as scaled icons + orbit lines, same snapshot data.
+- System map: a dynamically imported, separately preallocated three.js scene
+  on the same renderer and live snapshot positions. Every catalog body is in
+  one fixed-pixel `Points` draw; every closed catalog orbit is sampled through
+  the canonical orbital-element conversion and batched into one
+  parent-anchored `LineSegments` draw. A map-owned `TrajectoryOverlay` accepts
+  the same validated predictor result as the space overlay. Its camera,
+  diagnostics, float64 source buffers, float32 GPU buffers, geometries,
+  materials, and shaders all exist before gameplay; updates only mutate those
+  stable resources through the `spaceScene.ts` camera-relative boundary.
 
 ## 8. Performance & asset budgets (CI-gated)
 

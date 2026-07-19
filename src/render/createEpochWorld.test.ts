@@ -51,6 +51,15 @@ describe('createEpochWorld', () => {
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
     expect(world.cameraController.focusId).toBe('earth');
+    expect(world.systemMap.cameraController.focusId).toBe('sun');
+    expect(world.systemMap.cameraPositionKm).toBe(
+      world.systemMap.cameraController.cameraPositionKm,
+    );
+    expect(world.systemMap.diagnostics.bodyCount).toBe(bodyCount);
+    expect(world.systemMap.diagnostics.iconDrawCount).toBe(1);
+    expect(world.systemMap.diagnostics.orbitDrawCount).toBe(1);
+    expect(world.systemMap.bodyIcons.parent).toBe(world.systemMap.spaceScene.scene);
+    expect(world.systemMap.orbitLines.parent).toBe(world.systemMap.spaceScene.scene);
     expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
     expect(world.cameraController.focusBody('jupiter')).toBe(true);
     world.cameraController.update(1.5);
@@ -106,14 +115,13 @@ describe('createEpochWorld', () => {
     expect(world.visualSystem.getOpacity('earth', 2)).toBe(1);
     expect(assetLoader.loadModel).toHaveBeenCalledOnce();
     expect(assetLoader.loadModel).toHaveBeenCalledWith('earth');
-    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(2));
-    expect(compileAsync).toHaveBeenNthCalledWith(
-      1,
-      world.spaceScene.scene,
-      world.spaceScene.camera,
+    await vi.waitFor(() => expect(compileAsync).toHaveBeenCalledTimes(3));
+    expect(compileAsync).toHaveBeenCalledWith(world.spaceScene.scene, world.spaceScene.camera);
+    expect(compileAsync).toHaveBeenCalledWith(
+      world.systemMap.spaceScene.scene,
+      world.systemMap.spaceScene.camera,
     );
-    expect(compileAsync).toHaveBeenNthCalledWith(
-      2,
+    expect(compileAsync).toHaveBeenCalledWith(
       earthModelRoot,
       world.spaceScene.camera,
       world.spaceScene.scene,
@@ -124,5 +132,11 @@ describe('createEpochWorld', () => {
       if (object instanceof Mesh && object.geometry instanceof BoxGeometry) hasCube = true;
     });
     expect(hasCube).toBe(false);
+
+    const mapIconPosition = world.systemMap.bodyIcons.geometry.getAttribute('position');
+    world.positionsKm[0] = (world.positionsKm[0] as number) + 12_345;
+    world.systemMap.update(0);
+    world.systemMap.spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(mapIconPosition.getX(0)).toBe(Math.fround(world.positionsKm[0] as number));
   });
 });
