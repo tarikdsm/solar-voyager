@@ -190,8 +190,14 @@ export function copyAndValidateSimulationPersistentState(
   if (source.targetBodyId !== null && !bodyIds.includes(source.targetBodyId)) {
     throw new RangeError('persistent target body must exist in the simulation catalog');
   }
-  if (!Number.isFinite(source.initialKineticEnergyJ)) {
-    throw new RangeError('persistent kinetic-energy baseline must be finite');
+  // E_kin = (gamma-1)*m*c^2 is non-negative for every physical state, so a
+  // negative baseline is unrepresentable. It cannot be cross-checked against
+  // `vessel.restMassKg` beyond this: the baseline is the kinetic energy at
+  // *session start*, while `state` holds the current celerity, and the two
+  // legitimately diverge the moment the ship maneuvers — that divergence is
+  // exactly what the published `kineticEnergyChangeJ` reports.
+  if (!Number.isFinite(source.initialKineticEnergyJ) || source.initialKineticEnergyJ < 0) {
+    throw new RangeError('persistent kinetic-energy baseline must be finite and non-negative');
   }
   if (source.burnLog.capacity !== DEFAULT_BURN_LOG_CAPACITY) {
     throw new RangeError(`persistent burn log capacity must be ${DEFAULT_BURN_LOG_CAPACITY}`);

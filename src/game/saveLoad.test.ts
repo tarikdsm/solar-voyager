@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import saveV1Fixture from '../../tests/fixtures/save-v1.json';
+import saveV2MidburnFixture from '../../tests/fixtures/save-v2-midburn.json';
 import saveV2Fixture from '../../tests/fixtures/save-v2.json';
 import { WarpClampReason } from '../sim/simulationSnapshot.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
@@ -155,6 +156,68 @@ describe('save envelope', () => {
     );
     expect(migrated.simulation.burnLog.entries).toEqual(saveV2Fixture.simulation.burnLog.entries);
     expect(migrated.settings).toEqual(saveV2Fixture.settings);
+  });
+
+  it('migrates a mid-burn v2 fixture with its active burn and ledger intact', () => {
+    const bodyIds = saveV2MidburnFixture.simulation.burnLog.active.entry.dominantBodyId;
+    const migrated = parseSaveEnvelope(
+      JSON.stringify(saveV2MidburnFixture),
+      [bodyIds, 'mars'],
+      DEFAULT_VESSEL,
+    );
+    const active = migrated.simulation.burnLog.active;
+
+    expect(migrated.simulation.throttle).toBe(0.6);
+    expect(active).not.toBeNull();
+    expect(active?.entry.energySpentJ).toBe(
+      saveV2MidburnFixture.simulation.burnLog.active.entry.energySpentJ,
+    );
+    expect(active?.entry.peakPowerW).toBe(
+      saveV2MidburnFixture.simulation.burnLog.active.entry.peakPowerW,
+    );
+    expect(migrated.simulation.vessel).toEqual(DEFAULT_VESSEL);
+  });
+
+  it('refuses to re-price a legacy ledger under a different rest mass', () => {
+    // Regression: a mid-burn v2 document keeps a 10 t-priced burn log while the
+    // restored continuation would be priced at the new mass, and nothing
+    // downstream can detect it — validateActiveBurnConsistency compares the burn
+    // log against state-vector deltas from the same document, so it is
+    // mass-independent by construction. Migration must fail closed (ADR-034).
+    const heavyVessel = { ...DEFAULT_VESSEL, restMassKg: 42_000 };
+
+    expect(() =>
+      parseSaveEnvelope(JSON.stringify(saveV2MidburnFixture), ['earth', 'mars'], heavyVessel),
+    ).toThrow(/save v2 migration requires a 10000 kg vessel/u);
+    expect(() =>
+      parseSaveEnvelope(JSON.stringify(saveV2Fixture), ['earth', 'mars'], heavyVessel),
+    ).toThrow(/cannot be re-priced at 42000 kg/u);
+    expect(() => parseSaveEnvelope(JSON.stringify(saveV1Fixture), ['earth'], heavyVessel)).toThrow(
+      /save v1 migration requires a 10000 kg vessel/u,
+    );
+
+    // Drive limits and slew rate are absent from the ledger, so they may differ.
+    const rebuiltDrive = { ...DEFAULT_VESSEL, alphaMaxMS2: 300, alphaManualMaxMS2: 5 };
+    expect(
+      parseSaveEnvelope(JSON.stringify(saveV2Fixture), ['earth', 'mars'], rebuiltDrive).simulation
+        .vessel,
+    ).toEqual(rebuiltDrive);
+  });
+
+  it('rejects a v2 document whose version field disagrees with its dispatch', () => {
+    const mislabelled = structuredClone(saveV2Fixture) as Record<string, unknown>;
+    mislabelled.version = 2.0000001;
+    expect(() => parseSave(JSON.stringify(mislabelled), ['earth', 'mars'])).toThrow(
+      /save version is not supported/u,
+    );
+  });
+
+  it('rejects a negative kinetic-energy baseline', () => {
+    const negative = structuredClone(saveV2Fixture) as Record<string, unknown>;
+    (negative.simulation as Record<string, unknown>).initialKineticEnergyJ = -1;
+    expect(() => parseSave(JSON.stringify(negative), ['earth', 'mars'])).toThrow(
+      /kinetic-energy baseline must be finite and non-negative/u,
+    );
   });
 
   it('rejects a v2 document that already carries a vessel and a v3 document missing one', () => {

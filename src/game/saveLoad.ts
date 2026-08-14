@@ -319,10 +319,33 @@ function parseV3(value: Record<string, unknown>, bodyIds: readonly string[]): Sa
 }
 
 /**
- * v2 -> v3: the simulation document predates `VesselConfig`, so it is adopted by
- * the vessel the caller is running (ADR-034). v2 was only ever written by the
- * 10 t / 1 g ship, whose rest mass equals `DEFAULT_VESSEL.restMassKg`, so the
- * ledger it carries stays consistent under the default vessel.
+ * Rest mass of the only ship that ever wrote a pre-v3 document.
+ *
+ * Legacy documents carry a ledger (`energySpentJ = integral of m*alpha*c dt`,
+ * burn-log `peakPowerW = m*alpha*c`) but not the mass that priced it. Adopting a
+ * vessel of any other mass would leave the recorded joules describing one ship
+ * and the continuation describing another, and nothing downstream can detect it:
+ * `validateActiveBurnConsistency` compares the burn log against state-vector
+ * deltas drawn from the same document, so it is mass-independent by
+ * construction. The only place this can be caught is here, at the migration
+ * boundary, so migration fails closed instead (ADR-034).
+ */
+const LEGACY_SAVE_REST_MASS_KG = 10_000;
+
+function requireLegacyRestMass(vessel: VesselConfig, version: 1 | 2): void {
+  if (vessel.restMassKg !== LEGACY_SAVE_REST_MASS_KG) {
+    throw new RangeError(
+      `save v${String(version)} migration requires a ${String(LEGACY_SAVE_REST_MASS_KG)} kg vessel; ` +
+        `its ledger was priced at that rest mass and cannot be re-priced at ${String(vessel.restMassKg)} kg`,
+    );
+  }
+}
+
+/**
+ * v2 -> v3: the simulation document predates `VesselConfig`, so it adopts the
+ * vessel the caller is running (ADR-034) — but only if that vessel's rest mass
+ * is the one that priced the document. Drive limits and slew rate may differ
+ * freely: they govern future thrust only and are absent from the ledger.
  */
 function migrateV2(
   value: Record<string, unknown>,
@@ -330,7 +353,9 @@ function migrateV2(
   vessel: VesselConfig,
 ): SaveEnvelopeV3 {
   requireExactKeys(value, ['version', 'phase', 'simulation', 'settings'], 'save v2');
+  if (value.version !== 2) throw new RangeError('save v2 version must be 2');
   if (value.phase !== 'space') throw new RangeError('save v2 phase must be space');
+  requireLegacyRestMass(vessel, 2);
   return {
     version: 3,
     phase: 'space',
@@ -350,6 +375,9 @@ function migrateV1(
     'save v1',
   );
   if (value.phase !== 'space') throw new RangeError('save v1 phase must be space');
+  // Same exposure as v2: a v1 burn log is priced in joules the document does not
+  // attribute to any mass, and the kinetic baseline below is derived from one.
+  requireLegacyRestMass(vessel, 1);
   const shipState = requireFloat64Array(
     value.shipState,
     RELATIVISTIC_STATE_DIMENSION,

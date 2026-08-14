@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "phase": "space",
+  "simulation": {
+    "simTimeSec": 1.9999999999999978,
+    "state": [
+      -26073413.311502658, 144781324.0823032, -8893.270202760925, -37.45274441900333,
+      -6.794244417679113, 0.0005169212962378821, 1.9999999839289324, 352795164989483.5,
+      117.67979905438001, -115.79311204261435, -20.987721859048367, 0.0015970813832801448
+    ],
+    "attitudeQuaternion": [0, -0.00007569914443753745, -0.9959335191784617, 0.09009117407628611],
+    "throttle": 0.6,
+    "attitudeMode": "prograde",
+    "rotationRatesRadS": [0, 0, 0],
+    "requestedWarp": 1,
+    "effectiveWarp": 1,
+    "warpClampReason": 0,
+    "targetBodyId": null,
+    "initialKineticEnergyJ": 7199625265536.422,
+    "burnLog": {
+      "capacity": 256,
+      "entries": [],
+      "active": {
+        "entry": {
+          "startTimeSec": 0,
+          "endTimeSec": 1.9999999999999978,
+          "startProperTimeSec": 0,
+          "endProperTimeSec": 1.9999999839289324,
+          "energySpentJ": 352795164989483.5,
+          "properDeltaVMS": 117.67979905438001,
+          "peakPowerW": 176397582494742,
+          "dominantBodyId": "earth",
+          "progradeDeltaVMS": 117.67969946422404,
+          "normalDeltaVMS": 5.294179434493611e-8,
+          "radialDeltaVMS": -0.1326721779275497
+        },
+        "startEnergyJ": 0,
+        "startProperDeltaVMS": 0,
+        "startVectorMS": [0, 0, 0],
+        "progradeBasis": [-0.9841682714693295, -0.177236602457692, 0.000013502821719947176],
+        "normalBasis": [0.000002574553148234275, 0.00006188918101698243, 0.9999999980815507],
+        "radialBasis": [-0.1772366029532929, 0.9841682696160265, -0.00006045306325129702]
+      }
+    }
+  },
+  "settings": {
+    "version": 1,
+    "qualityLock": "auto",
+    "inputBindings": {
+      "throttleIncrease": "KeyR",
+      "throttleDecrease": "KeyF",
+      "warpIncrease": "Equal",
+      "warpDecrease": "Minus",
+      "pitchUp": "KeyW",
+      "pitchDown": "KeyS",
+      "yawLeft": "KeyA",
+      "yawRight": "KeyD",
+      "rollLeft": "KeyZ",
+      "rollRight": "KeyC",
+      "attitudeManual": "Digit1",
+      "attitudePrograde": "Digit2",
+      "attitudeRetrograde": "Digit3"
+    }
+  }
+}
