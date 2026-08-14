@@ -8,7 +8,11 @@ Realistic browser-based solar-system exploration game. Three.js + TypeScript + V
 
 1. Read `docs/architecture.md` (module map, layering, invariants).
 2. Read `docs/task-protocol.md` (how work is claimed and delivered — MANDATORY).
-3. Pick a task from `tasks/` following the protocol. Never code outside a claimed task.
+3. **Active work is v2.0** (free-flight redesign): spec
+   `docs/superpowers/specs/2026-08-14-v2-free-flight-design.md`, plan
+   `docs/superpowers/plans/2026-08-14-v2-free-flight.md`. Read both before
+   claiming any `V2M*`-milestone task; v1's docs/ADRs stay in force alongside them.
+4. Pick a task from `tasks/` following the protocol. Never code outside a claimed task.
 
 ## Hard rules
 
