@@ -21,11 +21,11 @@ src/
 ├── main.ts                     # bootstrap, wires sceneManager
 ├── core/                       # vec3, time, constants, events
 ├── sim/
-│   ├── bodies/                 # catalog.ts (loads data/bodies.json), kepler.ts
-│   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts, leapfrog.ts
-│   ├── ship/                   # shipState.ts, deltaV.ts (ledger)
+│   ├── bodies/                 # kepler.ts (elliptic + hyperbolic solver), orbitalElements.ts
+│   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts
+│   ├── ship/                   # attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger)
 │   ├── launch/                 # [deferred, post-v1] atmosphere.ts, launchSim.ts, handoff.ts
-│   ├── analysis/               # osculating.ts, soi.ts, warnings.ts
+│   ├── analysis/               # osculating.ts, dominantBody.ts, barycenter.ts, trajectoryImpact.ts
 │   └── simulation.ts           # SimulationCore
 ├── workers/                    # predictor.worker.ts + predictorProtocol.ts
 ├── render/                     # spaceScene, bodyVisual, starfield, telemetry, perfGovernor,
@@ -38,6 +38,58 @@ public/assets/                  # committed build artifacts: models/*.glb, textu
 tools/                          # blender/ scripts, bake_ephemerides.py, bake_stars.py
 tests/                          # sim/ unit+regression, golden/ trajectories
 ```
+
+## Planned v2 modules (not yet built)
+
+The v2.0 free-flight redesign (`docs/superpowers/plans/2026-08-14-v2-free-flight.md`
+§1) adds the modules below. None of these exist yet as of T0103 — each lands with
+its owning task (in parentheses), and this map is updated in the same PR (per
+`docs/coding-standards.md`'s doc-update-in-the-same-PR rule). `NEW` = new file;
+`MOD` = existing file gains v2 behavior.
+
+```
+src/
+├── sim/
+│   ├── ship/vessel.ts                      # NEW  VesselConfig + defaults (T0104)
+│   ├── ship/attitude.ts                    # MOD  slew-limited hold pursuit (T0107)
+│   ├── ship/collision.ts                   # NEW  surface-crossing detection (T0111)
+│   ├── guidance/constantAccelIntercept.ts  # NEW  physics-spec §8 solver (T0114)
+│   ├── guidance/brakingEnvelope.ts         # NEW  relativistic stop-distance (T0114)
+│   ├── simulation.ts                       # MOD  vessel injection, collision, slew (T0104/07/11)
+│   └── simulationSnapshot.ts               # MOD  impact fields + vessel echo (ADR) (T0111)
+├── core/time.ts                            # MOD  MAX_THRUST_WARP retune (T0115)
+├── game/
+│   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
+│   ├── input/                              # NEW  input engine (T0105) + gamepad (T0106)
+│   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
+│   ├── cameraDirector.ts, chaseCameraController.ts  # NEW  4 camera modes (T0110/24/25)
+│   ├── diary/                              # NEW  milestones, diaryStore, album (T0146/47)
+│   ├── audio/audioDirector.ts              # NEW  snapshot→audio state (T0144)
+│   ├── restorePoints.ts                    # NEW  10 s autosave ring (T0111)
+│   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
+├── render/
+│   ├── shipVisual.ts, plumeVisual.ts, rcsVisual.ts   # NEW  ship, plume, RCS (T0109/22)
+│   ├── planetshine.ts, milkyWay.ts, exposureController.ts, bodySpin.ts  # NEW (T0123/26/27/28)
+│   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
+│   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
+│   ├── lightingPostPipeline.ts             # MOD  pass-insertion API (T0127)
+│   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
+├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
+│   ├── hud/presets.ts, hud/WorldMarkers.tsx, hud/CruiseStrip.tsx  # NEW (T0112/17/19)
+│   └── PauseMenu.tsx, DiaryPanel.tsx, AlbumGrid.tsx                # NEW (T0112/46/47)
+data/
+├── atmospheres.json (+ .schema.json)       # NEW  per-body scattering params (T0140)
+├── audio-manifest.json                     # NEW  layer/SFX manifest (T0145)
+tools/
+├── blender/build_ship.py                   # MOD  ship remodel (T0121)
+├── blender/build_asteroid.py, build_comet.py  # NEW (T0131)
+└── fetch_textures.py                       # MOD  checksummed source fetch (T0132)
+```
+
+Full per-task interfaces (`VesselConfig`, `FlightController`, `CruiseDirector`,
+`CameraDirector`, `MilestoneDef`) are the plan's §2; do not hand-author a
+conflicting signature — update the plan in the same PR if a real constraint
+forces a deviation (plan §2 naming rule).
 
 ## Single source of truth: `SimulationCore`
 
@@ -102,7 +154,7 @@ simulation, renderer, or runtime GPU resource.
 | Landing | Scene state machine slot; `surface` descriptor per body; atmosphere module reusable for entry |
 | More ships | `Vessel` interface between sim and ship config |
 | Other star systems | `SystemDefinition` loaded from `data/*.json`; new system = new data file + bake |
-| Docking/stations | Ship state is generic rigid state; rendezvous math already in analysis/ |
+| Docking/stations | Ship state is generic rigid state; no rendezvous math exists yet — it would be new `sim/analysis/` module(s) written when this is tackled |
 
 ## Performance architecture
 
