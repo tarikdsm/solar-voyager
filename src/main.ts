@@ -4,7 +4,13 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './game/createNewGameSimulation.js';
-import { KeyboardCommandMapper, type KeyboardInputTarget } from './game/inputMapping.js';
+import { InputCommandBridge } from './game/input/inputCommandBridge.js';
+import {
+  InputEngine,
+  type InputKeyboardTarget,
+  type InputPointerMotionEvent,
+  type PointerLockSurface,
+} from './game/input/inputEngine.js';
 import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
@@ -331,7 +337,9 @@ let world: EpochWorld | null = null;
 let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let systemMapCameraInput: CameraInputController | null = null;
-let commandInput: KeyboardCommandMapper | null = null;
+let inputEngine: InputEngine | null = null;
+let inputCommandBridge: InputCommandBridge | null = null;
+let pauseRequestCount = 0;
 let perfGovernor: PerfGovernor | null = null;
 let relativisticVisuals: RelativisticVisualController | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
@@ -398,6 +406,9 @@ const session = new GameSessionController({
   createSimulation: createTrackedPersistentSimulation,
   onSimulationReplaced: (replacement) => {
     runtimeResources.sessionSimulationReplacements += 1;
+    // Seed the analog lever from the restored state, or the bridge would command
+    // the fresh engine value (0) over it on the next frame.
+    inputEngine?.setThrottleAxis(replacement.snapshot.throttle);
     burnLogStore.rebind(replacement.burnLog);
     updateBurnLogRuntime(replacement.burnLog);
     hudStore.publish(replacement.snapshot, performance.now());
@@ -416,8 +427,12 @@ const session = new GameSessionController({
     invalidateTrajectoryPrediction();
   },
   onSettingsChanged: (settings, origin) => {
-    if (origin === 'restore') commandInput?.restoreBindings(settings.inputBindings);
-    else commandInput?.updateBindings(settings.inputBindings);
+    inputEngine?.applyBindings(settings.inputBindings);
+    inputEngine?.releaseHeldKeys();
+    // A restore already carries the saved rotation rates: adopt them instead of
+    // flushing the (now released) axes over them.
+    if (origin === 'restore') inputCommandBridge?.resetAxes();
+    else inputCommandBridge?.releaseAxes();
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
@@ -536,7 +551,8 @@ function handlePageHide(event: PageTransitionEvent): void {
   trajectoryPredictorClient?.dispose();
   cameraInput?.dispose();
   systemMapCameraInput?.dispose();
-  commandInput?.dispose();
+  canvas.removeEventListener('dblclick', handleCanvasDoubleClick);
+  inputEngine?.dispose();
   disposeStateVectorLayoutObservation?.();
   world?.systemMap.dispose();
   postPipeline?.dispose();
@@ -544,6 +560,74 @@ function handlePageHide(event: PageTransitionEvent): void {
 
 function currentInputSnapshot() {
   return session.simulation.snapshot;
+}
+
+/**
+ * Placeholder pause seam. T0112 replaces this with the real pause menu; T0105
+ * only proves the intent is raised, so the request is recorded where a browser
+ * gate can observe it without touching the frozen diagnostic contracts.
+ */
+function handlePauseRequested(): void {
+  pauseRequestCount += 1;
+  canvas.dataset.pauseRequests = String(pauseRequestCount);
+}
+
+/** Browser adapter for the input engine's pointer-lock port. */
+function createCanvasPointerLockSurface(element: HTMLCanvasElement): PointerLockSurface {
+  const ownerDocument = element.ownerDocument;
+  let motionListener: ((event: InputPointerMotionEvent) => void) | null = null;
+  let lockChangeListener: (() => void) | null = null;
+  let motionAttached = false;
+  const isLocked = (): boolean => ownerDocument.pointerLockElement === element;
+  const handleMouseMove = (event: MouseEvent): void => {
+    motionListener?.(event);
+  };
+  const detachMotion = (): void => {
+    if (!motionAttached) return;
+    motionAttached = false;
+    ownerDocument.removeEventListener('mousemove', handleMouseMove);
+  };
+  const handleLockChange = (): void => {
+    // The listener exists only while locked, so an idle frame loop never pays
+    // for pointer motion it would discard anyway.
+    if (isLocked()) {
+      if (!motionAttached) {
+        motionAttached = true;
+        ownerDocument.addEventListener('mousemove', handleMouseMove);
+      }
+    } else detachMotion();
+    lockChangeListener?.();
+  };
+  ownerDocument.addEventListener('pointerlockchange', handleLockChange);
+  return {
+    isLocked,
+    requestLock: () => {
+      void element.requestPointerLock();
+    },
+    releaseLock: () => {
+      ownerDocument.exitPointerLock();
+    },
+    onMotion: (listener) => {
+      motionListener = listener;
+    },
+    onLockChange: (listener) => {
+      lockChangeListener = listener;
+    },
+    dispose: () => {
+      detachMotion();
+      ownerDocument.removeEventListener('pointerlockchange', handleLockChange);
+      motionListener = null;
+      lockChangeListener = null;
+    },
+  };
+}
+
+/**
+ * Interim mouse-look activation. Single click stays with the v1 orbit-drag
+ * camera; T0110's chase camera owns the real gesture.
+ */
+function handleCanvasDoubleClick(): void {
+  inputEngine?.requestPointerLock();
 }
 
 function updateStateVectorViewport(): void {
@@ -730,7 +814,9 @@ function renderFrame(nowMs: number): void {
   } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
   const simulationStartMs = performance.now();
-  commandInput?.update();
+  if (inputEngine !== null && inputCommandBridge !== null) {
+    inputCommandBridge.apply(inputEngine.poll(deltaSec));
+  }
   const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   if (systemMapRuntimeDiagnostics !== null) {
@@ -1022,12 +1108,17 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
   }
-  commandInput = new KeyboardCommandMapper(
-    window as unknown as KeyboardInputTarget,
-    sessionCommands,
-    currentInputSnapshot,
-    session.settings.inputBindings,
-  );
+  inputEngine = new InputEngine({
+    bindings: session.settings.inputBindings,
+    keyboardTarget: window as unknown as InputKeyboardTarget,
+    onPauseRequested: handlePauseRequested,
+    pointerLock: createCanvasPointerLockSurface(canvas),
+  });
+  inputEngine.setThrottleAxis(session.simulation.snapshot.throttle);
+  inputCommandBridge = new InputCommandBridge(sessionCommands, currentInputSnapshot);
+  canvas.addEventListener('dblclick', handleCanvasDoubleClick);
+  // Frozen CI contract field: it counts one input owner per space-phase
+  // activation, which is now the input engine rather than v1's mapper.
   runtimeResources.keyboardCommandMappers += 1;
   const spaceCameraControls = new SharedCameraControls(
     activeWorld.cameraController,
