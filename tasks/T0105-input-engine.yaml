@@ -1,6 +1,6 @@
 id: T0105
 title: New input engine - pointer lock, analog axes, UI-focus policy
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0105-input-engine
 depends_on: [T0103]

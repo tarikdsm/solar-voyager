@@ -1,0 +1,55 @@
+id: T0107
+title: Slew-limited hold modes and wall-time rotation authority contract
+status: REVIEW
+agent: claude
+branch: task/T0107-attitude-slew
+depends_on: [T0104]
+milestone: V2M1
+spec: |
+  Hold modes currently snap the attitude quaternion on every derivative evaluation, which is
+  invisible in v1 and unacceptable in v2 where the player watches the ship. Replace the snap with
+  a rate-limited pursuit at the vessel's maxSlewRadPerSimS, and establish the wall-time authority
+  contract for manual rotation so time warp can no longer multiply commanded rates into a tumble.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2 and 12.2;
+  formulas in docs/superpowers/plans/2026-08-14-v2-free-flight.md sections 3.1 and 3.2;
+  slew law recorded in docs/physics-spec.md section 3.0.1.
+acceptance:
+  - Hold modes pursue the target direction at maxSlewRadPerSimS read from the vessel, never snap
+  - A 180 degree reorientation costs 12.000018 s of simulation time at every warp tier; wall time is sim/warp (2.40 s at 5x, 0.240 s at 50x)
+  - Prograde-hold LEO drift versus an unbounded-rate baseline under 1e-3 km over one orbit
+  - MANUAL_ATTITUDE_MAX_WARP=100 exported from core/time.ts and enforced by Commands validation
+  - ADR-035 lists every test whose expectation changed
+handoff_notes: |
+  PLAN DEFECT CORRECTED IN THIS PR. The plan's original acceptance text demanded a 180 degree flip
+  in 0.25 s wall at warp 5x. That is arithmetically impossible at the ADR-034 contract rate: the
+  flip costs pi/0.261799 = 12.000018 s of simulation time at every tier, so wall time is 12/warp —
+  2.40 s at 5x and 0.240 s at 50x. The plan lost a factor of ten and contradicted its own "visible
+  15 deg/s at 1x" in the same sentence. The contract rate was kept (it is an ADR-034 value, pinned
+  by vessel.test.ts, persisted in the save envelope, and consumed by T0108 and T0116); plan section
+  3.2, the plan's T0107 entry, and ADR-035 now carry the true table. Raising the rate to 144 deg/s
+  would be an ADR-034 vessel-contract change and a separate task.
+  Determinism: the slew budget is anchored to the FRAME START, deliberately rejecting the plan's
+  "per accepted integrator segment" wording, which would make attitude depend on rejected DP54 steps
+  and warp-ladder rollback. A budget-exhausted tier leaves no attitude residue because targetTimeSec
+  falls back with the rolled-back state. Both scenarios are now pinned by tests that assert their own
+  preconditions.
+  The converged branch copies the target verbatim, so a converged hold is rate-independent; the only
+  residual versus the pre-change law is a forward->quaternion->forward round trip bounded at
+  5.576e-8 rad (worst-case one-orbit drift 1.5e-4 km against the 1e-3 km criterion). The round trip
+  is deliberate: it keeps thrust and the rendered nose exactly consistent.
+  KNOWN SCOPE LIMIT for T0114/T0116: writeQuaternionFromForwardInto has a coordinate singularity at
+  inertial -X where the zero-roll target's ROLL rate diverges as |dq/dt| = 2*omega/eps, exceeding the
+  slew limit within eps < 2*omega/maxSlewRadPerSimS (about 0.5 deg). Heading stays bounded at O(omega).
+  A cruise align phase that gates on quaternion separation will HANG for a target dwelling there;
+  gate on dot(forward, targetDirection) instead. Merely transiting the neighbourhood is a bounded,
+  self-resolving transient. Fixing the singularity means replacing the zero-roll target map, which is
+  ADR-025 contract surface.
+  Also for T0108: rotate's lockout keys on requestedWarp, not effectiveWarp — correct, because command
+  validation must not depend on integrator outcome, but rotation stays locked while the governor has
+  clamped to a lower tier.
+  Verification: 870 Vitest passed / 3 skipped, lint, typecheck, format; goldens byte-identical;
+  bench:sim 0.0814 ms average step (about 25x under the 2 ms budget), retained heap negative.
+  Exactly one existing expectation changed — the Hohmann ledger regression gained a 7 s zero-throttle
+  alignment coast so the burn still starts on-axis; all five original assertions hold at their
+  original bounds. No tolerance was loosened anywhere; verified mechanically (zero test assertions
+  deleted or modified in the whole diff).

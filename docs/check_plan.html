@@ -1562,7 +1562,7 @@
   {
     "id": "T0105",
     "title": "New input engine - pointer lock, analog axes, UI-focus policy",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0105-input-engine",
     "depends_on": [
@@ -1578,6 +1578,26 @@
       "Zero frame-loop allocations (heap gate green)"
     ],
     "handoff_notes": "Contract shipped as a strict superset of plan section 2: pressCount() (two warp taps between\npolls must both register), held() (level query T0116 needs for cruise decompression), and\npoll(wallDtSec). Plan section 2 updated in the same PR per its own naming rule.\nThree source files, not two: src/game/input/inputCommandBridge.ts is an explicitly interim,\nunit-tested InputFrame->Commands translator, because this task deletes the only thing feeding\nthe sim and T0108 does not exist yet. T0108 deletes it and must MOVE (not delete)\nROTATION_RATE_RAD_S — three files import from it, including src/ui/BurnLogPanel.test.tsx.\nFocus policy has three clauses: only INPUT/TEXTAREA/SELECT/contenteditable block flight keys;\ndefaultPrevented is honoured (load-bearing for burn-log arrow navigation, which preventDefaults\nwithout stopPropagation); and Space/Enter/NumpadEnter on an activatable target belong to that\ncontrol. That third clause exists because binding a flight action to Space would otherwise have\nkilled keyboard activation of every HUD button - a NEW accessibility regression created by the\ncorrect \"buttons do not block\" rule. Space/Enter are deliberately NOT added to RESERVED_CODES:\nparseInputBindings runs at load time with no rewrite hook, so both repositories would fail\nclosed on a profile that legally bound them under v1.\nThrottle model is max(TAP_STEP, RAMP * heldSec) re-anchored per press: monotonic in hold\nduration, any tap moves at least 10%, rest-to-full lands at exactly 1.5 s.\nPointer lock is on double-click as an interim gesture so single-click orbit drag survives until\nT0110 owns camera input; while locked, orbit drag still runs (T0110 resolves).\nESC opens pause is conditional today: SystemMapPanel preventDefaults Escape while the map is\nopen. T0112 owns the real pause menu and must resolve that.\nVerification: 869 Vitest passed / 3 skipped, lint, typecheck, twelve browser harnesses including\nnew pointer-lock coverage inside the existing camera-controls step (no new CI time);\ndocs/bench/T0105-summary.md with real before/after runs; heap -1,823 B, goldens 10 draw calls /\n77,071 triangles unchanged, bundle 127,190 entry / 556,970 total gzip.\n"
+  },
+  {
+    "id": "T0107",
+    "title": "Slew-limited hold modes and wall-time rotation authority contract",
+    "status": "REVIEW",
+    "agent": "claude",
+    "branch": "task/T0107-attitude-slew",
+    "depends_on": [
+      "T0104"
+    ],
+    "milestone": "V2M1",
+    "spec": "Hold modes currently snap the attitude quaternion on every derivative evaluation, which is\ninvisible in v1 and unacceptable in v2 where the player watches the ship. Replace the snap with\na rate-limited pursuit at the vessel's maxSlewRadPerSimS, and establish the wall-time authority\ncontract for manual rotation so time warp can no longer multiply commanded rates into a tumble.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2 and 12.2;\nformulas in docs/superpowers/plans/2026-08-14-v2-free-flight.md sections 3.1 and 3.2;\nslew law recorded in docs/physics-spec.md section 3.0.1.\n",
+    "acceptance": [
+      "Hold modes pursue the target direction at maxSlewRadPerSimS read from the vessel, never snap",
+      "A 180 degree reorientation costs 12.000018 s of simulation time at every warp tier; wall time is sim/warp (2.40 s at 5x, 0.240 s at 50x)",
+      "Prograde-hold LEO drift versus an unbounded-rate baseline under 1e-3 km over one orbit",
+      "MANUAL_ATTITUDE_MAX_WARP=100 exported from core/time.ts and enforced by Commands validation",
+      "ADR-035 lists every test whose expectation changed"
+    ],
+    "handoff_notes": "PLAN DEFECT CORRECTED IN THIS PR. The plan's original acceptance text demanded a 180 degree flip\nin 0.25 s wall at warp 5x. That is arithmetically impossible at the ADR-034 contract rate: the\nflip costs pi/0.261799 = 12.000018 s of simulation time at every tier, so wall time is 12/warp —\n2.40 s at 5x and 0.240 s at 50x. The plan lost a factor of ten and contradicted its own \"visible\n15 deg/s at 1x\" in the same sentence. The contract rate was kept (it is an ADR-034 value, pinned\nby vessel.test.ts, persisted in the save envelope, and consumed by T0108 and T0116); plan section\n3.2, the plan's T0107 entry, and ADR-035 now carry the true table. Raising the rate to 144 deg/s\nwould be an ADR-034 vessel-contract change and a separate task.\nDeterminism: the slew budget is anchored to the FRAME START, deliberately rejecting the plan's\n\"per accepted integrator segment\" wording, which would make attitude depend on rejected DP54 steps\nand warp-ladder rollback. A budget-exhausted tier leaves no attitude residue because targetTimeSec\nfalls back with the rolled-back state. Both scenarios are now pinned by tests that assert their own\npreconditions.\nThe converged branch copies the target verbatim, so a converged hold is rate-independent; the only\nresidual versus the pre-change law is a forward->quaternion->forward round trip bounded at\n5.576e-8 rad (worst-case one-orbit drift 1.5e-4 km against the 1e-3 km criterion). The round trip\nis deliberate: it keeps thrust and the rendered nose exactly consistent.\nKNOWN SCOPE LIMIT for T0114/T0116: writeQuaternionFromForwardInto has a coordinate singularity at\ninertial -X where the zero-roll target's ROLL rate diverges as |dq/dt| = 2*omega/eps, exceeding the\nslew limit within eps \u003c 2*omega/maxSlewRadPerSimS (about 0.5 deg). Heading stays bounded at O(omega).\nA cruise align phase that gates on quaternion separation will HANG for a target dwelling there;\ngate on dot(forward, targetDirection) instead. Merely transiting the neighbourhood is a bounded,\nself-resolving transient. Fixing the singularity means replacing the zero-roll target map, which is\nADR-025 contract surface.\nAlso for T0108: rotate's lockout keys on requestedWarp, not effectiveWarp — correct, because command\nvalidation must not depend on integrator outcome, but rotation stays locked while the governor has\nclamped to a lower tier.\nVerification: 870 Vitest passed / 3 skipped, lint, typecheck, format; goldens byte-identical;\nbench:sim 0.0814 ms average step (about 25x under the 2 ms budget), retained heap negative.\nExactly one existing expectation changed — the Hohmann ledger regression gained a 7 s zero-throttle\nalignment coast so the burn still starts on-axis; all five original assertions hold at their\noriginal bounds. No tolerance was loosened anywhere; verified mechanically (zero test assertions\ndeleted or modified in the whole diff).\n"
   }
 ];
     /* TASK_DATA_END */
