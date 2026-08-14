@@ -297,9 +297,7 @@ export class FlightController {
     if (hasLook) this.integrateLook(lookYawRad, lookPitchRad);
 
     if (!this.assistEnabled && !hasLook && !hasAxis) {
-      // Unassisted coast: the last commanded rate stays in the simulation. The
-      // pursuit adopts it so re-touching the controls damps from the real rate.
-      this.pursuitRateRadS.set(this.commandedRateRadS);
+      this.adoptCoastingRate(snapshot);
       this.desiredQuaternion.set(snapshot.attitudeQuaternion);
       return;
     }
@@ -307,6 +305,35 @@ export class FlightController {
     this.writeAttitudeError(snapshot);
     this.integratePursuit(snapshot, dtSec, hasAxis);
     this.commitRotation(snapshot.effectiveWarp);
+  }
+
+  /**
+   * Re-reads the rate an unassisted ship is coasting at, in the wall frame.
+   *
+   * With the assist off the controller issues nothing while idle, so the
+   * simulation keeps the last commanded body rate — a **sim**-frame quantity.
+   * Angular momentum is physical and time warp compresses it like everything
+   * else, so a ship left spinning genuinely does spin `effectiveWarp` times
+   * faster on the wall clock; only *commanded* input is warp-normalized
+   * (physics-spec.md §3.0.1). What must not go stale is the controller's model
+   * of that rate: it is `lastIssuedSimRate * effectiveWarp` at the tier in force
+   * right now, not the wall rate computed at whatever tier the coast began on.
+   * Without the re-read a coast started at 1x and warped to 50x left the pursuit
+   * believing the ship turned fifty times slower than it does.
+   */
+  private adoptCoastingRate(snapshot: SimSnapshot): void {
+    const effectiveWarp = snapshot.effectiveWarp;
+    const scale = Number.isFinite(effectiveWarp) && effectiveWarp > 0 ? effectiveWarp : 1;
+    const issued = this.issuedRatesRadS;
+    const total = this.commandedRateRadS;
+    const pursuit = this.pursuitRateRadS;
+    // Clamped to the vehicle's authority: a coast faster than RATE_MAX cannot be
+    // re-commanded at all, so the model saturates and the pursuit spends full
+    // authority against it the moment the player takes the controls back.
+    total[AXIS_PITCH] = clampRate((issued[0] as number) * scale);
+    total[AXIS_YAW] = clampRate((issued[1] as number) * scale);
+    total[AXIS_ROLL] = clampRate((issued[2] as number) * scale);
+    pursuit.set(total);
   }
 
   /** Sim owns the attitude (hold engaged, or manual rotation locked out). */

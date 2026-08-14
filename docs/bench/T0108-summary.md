@@ -115,6 +115,27 @@ Vitest: 139 files passed, 1 skipped; 932 tests passed, 3 skipped (base commit:
 session settings, burn log, tutorial, camera controls, smoke, perf gates — all
 green.
 
+## Review-fix round
+
+The review-fix commits add the coast-rate re-read and the collision-proof
+binding placeholder. Re-measured on that tree:
+
+| Metric                       | After (`53a9602`) | After fixes |  Delta |
+| ---------------------------- | ----------------: | ----------: | -----: |
+| Entry gzip                   |         129,715 B |   129,865 B | +150 B |
+| Total gzip                   |         559,495 B |   559,645 B | +150 B |
+| Browser retained heap (30 s) |        -206,051 B |  -202,795 B |  noise |
+| `averageControllerMs`        |        0.00055 ms |  0.00052 ms |  noise |
+| `bench:sim` retained heap    |        -216,872 B |  -217,504 B |  noise |
+| Draw calls / triangles       |       10 / 77,071 | 10 / 77,071 |      0 |
+
+`test:perf-gates` findings remain empty. Total gzip headroom is now **10,355 B**.
+The 900-frame `npm run bench` route was not re-run for a 150-byte scalar change
+that does not touch the render path; `T0108-before.json` / `T0108-after.json`
+remain the record for their labelled SHAs.
+
+Vitest after fixes: 139 files passed, 1 skipped; **938 passed**, 3 skipped.
+
 Absolute timing here is from this machine's Intel UHD integrated GPU rather than
 the discrete reference target used for earlier summaries; CI remains the portable
 final arbiter.

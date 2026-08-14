@@ -173,13 +173,36 @@ q(t) = normalize(q0 ⊗ [axis(ω)·sin(|ω|Δt/2), cos(|ω|Δt/2)])
 ```
 
 Because `ω` is per simulated second, a fixed control deflection would spin the
-ship `warp` times faster in wall time. The flight controller therefore commands
+ship `warp` times faster in wall time. `RATE_MAX = 0.6` is therefore the
+vehicle's rotational authority **in the wall frame**, and the flight controller
+(`game/flight/flightController.ts`, T0108) saturates against it *before*
+converting:
 
 ```
-rateSimRadS = clamp(inputRateWallRadS / effectiveWarp, −RATE_MAX, RATE_MAX),  RATE_MAX = 0.6
+rateWallRadS = clamp(controlLawOutputRadS, −RATE_MAX, +RATE_MAX)      # wall frame
+rateSimRadS  = clamp(rateWallRadS / effectiveWarp, −RATE_MAX, +RATE_MAX)
 ```
 
-and manual rotation is locked above `MANUAL_ATTITUDE_MAX_WARP = 100`
+The order is load-bearing. The game-layer control law is a pursuit, so its raw
+output is unbounded — a 180° error asks for 2.85 rad/s at the shipped gains —
+and clamping only *after* the division would admit `RATE_MAX` of **sim** rate at
+every tier, i.e. `RATE_MAX · effectiveWarp` of wall rotation: 30 rad/s at 50x,
+the v1 tumble this rule exists to prevent. With the wall-frame saturation first,
+the **sim-frame envelope is `RATE_MAX / effectiveWarp`** (0.6 rad/s at 1x,
+0.012 rad/s at 50x), and the second clamp is a no-op for any input already
+bounded by `RATE_MAX` whenever `effectiveWarp ≥ 1`, which the whole ladder
+satisfies. It is retained because it is the bound the simulation is entitled to
+assume of anything reaching `Commands.rotate`.
+
+Only *commanded* input is normalized. A body rate already held in the command
+state is physical angular momentum and a tier change does not touch it: a ship
+left coasting at `ω` keeps `ω` per simulated second and therefore appears to
+rotate `effectiveWarp` times faster, exactly as every other motion does under
+time compression. Reaching that state requires disabling the game layer's
+stability assist, which otherwise damps rotation to rest whenever the controls
+are released.
+
+Manual rotation is locked above `MANUAL_ATTITUDE_MAX_WARP = 100`
 (`core/time.ts`): `Commands.rotate` forces the rates to zero there, and raising
 warp past the tier clears any rates already commanded — the same shape as the
 `MAX_THRUST_WARP` throttle lockout in §3.2. Attitude holds remain available at

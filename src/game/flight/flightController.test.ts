@@ -13,7 +13,7 @@ import {
   type Commands,
 } from '../../sim/simulationSnapshot.js';
 import { createNewGameSimulation } from '../createNewGameSimulation.js';
-import { FlightController, ROTATION_RATE_RAD_S } from './flightController.js';
+import { FlightController, MAX_UPDATE_DT_SEC, ROTATION_RATE_RAD_S } from './flightController.js';
 
 const DEGREE_RAD = Math.PI / 180;
 const FRAME_SEC = 1 / 60;
@@ -452,6 +452,69 @@ describe('FlightController holds and assists', () => {
     expect([...coasting.state.rotationRatesRadS]).toEqual([0, 0, 0]);
   });
 
+  it('restores the assist idempotently from a persisted preference', () => {
+    const rig = new FlightRig();
+    rig.flight.setStabilityAssist(false);
+    rig.flight.setStabilityAssist(false);
+    expect(rig.flight.stabilityAssist).toBe(false);
+    rig.flight.setStabilityAssist(true);
+    expect(rig.flight.stabilityAssist).toBe(true);
+    expect(rig.flight.thrustRegime).toBe('manual');
+    rig.flight.setThrustRegime('cruise');
+    expect(rig.flight.thrustRegime).toBe('cruise');
+  });
+
+  it('carries an unassisted coast through a warp change as physical momentum', () => {
+    const rig = new FlightRig();
+    rig.flight.setStabilityAssist(false);
+    rig.flight.setRotationAxes(0, 0, 1);
+    rig.step();
+    const coastSimRateRadS = rig.state.rotationRatesRadS[2] as number;
+    expect(coastSimRateRadS).toBe(ROTATION_RATE_RAD_S);
+    rig.flight.setRotationAxes(0, 0, 0);
+    rig.step();
+
+    rig.setWarp(50);
+    for (let frame = 0; frame < 60; frame += 1) rig.step();
+
+    // Angular momentum is physical: only *commanded* input is warp-normalized
+    // (physics-spec.md §3.0.1), so the SIM-frame rate is untouched by the tier
+    // change and the ship genuinely appears to spin 50x faster, the way every
+    // other motion does under time compression.
+    expect(rig.state.rotationRatesRadS[2] as number).toBe(coastSimRateRadS);
+    expect(rig.wallRateRadS(2)).toBeCloseTo(ROTATION_RATE_RAD_S * 50, 9);
+
+    // What must not go stale is the controller's model of that rate. Taking the
+    // controls back must command against the coast, not with it, and must land
+    // inside the vehicle's authority.
+    rig.flight.setRotationAxes(0, 0, 0);
+    rig.flight.setLookDelta(0.001, 0);
+    rig.step();
+    const recoveredSimRateRadS = rig.state.rotationRatesRadS[2] as number;
+    expect(Math.abs(recoveredSimRateRadS)).toBeLessThanOrEqual(ROTATION_RATE_RAD_S / 50 + 1e-15);
+    expect(Math.abs(recoveredSimRateRadS)).toBeLessThan(Math.abs(coastSimRateRadS));
+
+    rig.flight.killRotation();
+    expect([...rig.state.rotationRatesRadS]).toEqual([0, 0, 0]);
+  });
+
+  it('clears an unassisted coast when warp crosses the manual lockout', () => {
+    const rig = new FlightRig();
+    rig.flight.setStabilityAssist(false);
+    rig.flight.setRotationAxes(0, 0, 1);
+    rig.step();
+    rig.flight.setRotationAxes(0, 0, 0);
+    rig.step();
+    expect(rig.state.rotationRatesRadS[2] as number).toBe(ROTATION_RATE_RAD_S);
+
+    // ADR-035 §6: `setWarp` above MANUAL_ATTITUDE_MAX_WARP clears rates already
+    // commanded, so the coast cannot become an unbounded high-warp tumble.
+    rig.setWarp(1_000);
+    rig.step();
+
+    expect([...rig.state.rotationRatesRadS]).toEqual([0, 0, 0]);
+  });
+
   it('stops a restored spin on demand even though it never commanded it', () => {
     const rig = new FlightRig();
     rig.commands.rotate(0.1, 0.2, 0.3);
@@ -514,18 +577,40 @@ describe('FlightController flush discipline', () => {
     expect([...rig.state.rotationRatesRadS]).toEqual([0, 0, 0]);
   });
 
-  it('survives a stalled frame without diverging', () => {
+  it('keeps critical damping at the slowest frame the telemetry clamp allows', () => {
+    // `render/telemetry.ts` clamps the game delta to MAX_GAME_DELTA_SEC = 0.1 s,
+    // the same figure as MAX_UPDATE_DT_SEC, so this is the worst frame the
+    // production loop can ever hand the controller.
+    const rig = new FlightRig();
+    const target = yawTargetQuaternion(30 * DEGREE_RAD);
+    rig.flight.setLookDelta(30 * DEGREE_RAD, 0);
+
+    let previousSeparationRad = quaternionSeparationRad(rig.snapshot.attitudeQuaternion, target);
+    let maximumReboundRad = 0;
+    for (let frame = 0; frame < 100; frame += 1) {
+      rig.step(MAX_UPDATE_DT_SEC);
+      const separationRad = quaternionSeparationRad(rig.snapshot.attitudeQuaternion, target);
+      maximumReboundRad = Math.max(maximumReboundRad, separationRad - previousSeparationRad);
+      previousSeparationRad = separationRad;
+    }
+
+    expect(maximumReboundRad).toBeLessThan(1e-12);
+    expect(previousSeparationRad).toBeLessThan(1e-3);
+  });
+
+  it('clamps a frame longer than production can produce instead of diverging', () => {
+    // 2.5 s frames cannot reach the controller — telemetry clamps first — so this
+    // pins graceful degradation, not tracking: the integrator must stay bounded
+    // and inside the rate envelope. Tracking quality is asserted at 0.1 s above.
     const rig = new FlightRig();
     rig.flight.setLookDelta(30 * DEGREE_RAD, 0);
     for (let frame = 0; frame < 40; frame += 1) rig.step(2.5);
 
-    expect(Math.abs(rig.wallRateRadS(1))).toBeLessThanOrEqual(ROTATION_RATE_RAD_S + 1e-15);
-    expect(
-      quaternionSeparationRad(
-        rig.snapshot.attitudeQuaternion,
-        yawTargetQuaternion(30 * DEGREE_RAD),
-      ),
-    ).toBeLessThan(1e-3);
+    for (let index = 0; index < 3; index += 1) {
+      const rateRadS = rig.state.rotationRatesRadS[index] as number;
+      expect(Number.isFinite(rateRadS)).toBe(true);
+      expect(Math.abs(rateRadS)).toBeLessThanOrEqual(ROTATION_RATE_RAD_S + 1e-15);
+    }
   });
 });
 

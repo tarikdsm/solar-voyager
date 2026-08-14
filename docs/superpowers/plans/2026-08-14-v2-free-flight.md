@@ -149,7 +149,9 @@ export function solveInterceptInto(out: InterceptSolution,
 export function relativisticStopDistanceKm(relSpeedKmS: number, alphaMS2: number): number;
 // = (c²/α)(γ_rel − 1), exact; used by approach-brake assist and cruise brake phase.
 
-// game/flight/flightController.ts (T0108)
+// game/flight/flightController.ts (T0108 — as shipped)
+export type ThrustRegime = 'manual' | 'cruise';
+export const ROTATION_RATE_RAD_S = 0.6;    // plan §3.1 RATE_MAX; moved here from the T0105 bridge
 export class FlightController {
   constructor(ports: { commands: Commands; snapshot(): SimSnapshot; vessel: VesselConfig });
   setLookDelta(yawRad: number, pitchRad: number): void;      // pointer-lock deltas (wall frame)
@@ -159,6 +161,31 @@ export class FlightController {
   requestHold(mode: AttitudeMode): void;                     // binds all 8 modes
   killRotation(): void;
   update(wallDtSec: number): void;                           // allocation-free
+  // Added by T0108 (this block updated per the naming rule below). Rationale in
+  // docs/superpowers/specs/2026-08-14-flight-controller-design.md §1.
+  setThrustRegime(regime: ThrustRegime): void;   // T0116 selects 'cruise' for the full alpha envelope
+  get thrustRegime(): ThrustRegime;              // read side; a HUD/director needs to know the regime
+  get accelerationCapMS2(): number;              // the ceiling now in force, m/s^2
+  setStabilityAssist(enabled: boolean): void;    // idempotent form a persisted assist setting needs
+  toggleStabilityAssist(): void;                 // the key binding
+  get stabilityAssist(): boolean;
+  setVessel(vessel: VesselConfig): void;         // restore replaces the core; vessel is per-core (ADR-034 §4)
+  adoptCommandedThrottle(commanded01: number): number; // snapshot.throttle is regime-scaled; un-scales it
+  get throttleAxis(): number;                    // lever position, before the regime ceiling
+  resetAxes(): void;                             // restore: forget intent, do NOT overwrite restored rates
+  releaseAxes(): void;                           // resetAxes + an explicit rotate(0,0,0)
+}
+// Deliberately absent: no `updatePorts`. GameSessionController assigns
+// currentSimulation BEFORE onSimulationReplaced fires, so a release-then-repoint
+// method reached through a stable Commands facade flushes zeroes over the rates
+// the restore just applied. Hold a stable facade and call setVessel instead.
+
+// game/flight/flightInputRouter.ts (T0108) — the only module that knows both
+// InputFrame and FlightController; also owns the time-warp ladder.
+export class FlightInputRouter {
+  constructor(controller: FlightController, ports: { commands: Commands; snapshot(): SimSnapshot });
+  apply(frame: InputFrame): void;                            // allocation-free
+  updatePorts(ports: { commands: Commands; snapshot(): SimSnapshot }): void;
 }
 
 // game/flight/cruiseDirector.ts (T0116)
@@ -439,7 +466,7 @@ acceptance:
   - Manual throttle capped at alphaManualMaxMS2/alphaMaxMS2 fraction; full range available to CruiseDirector later
   - All 8 AttitudeMode holds reachable from bindings; kill-rotation on idle default (SAS) toggleable
   - update() allocation-free (bench:sim harness extended to include controller step; retained-heap delta 0)
-handoff_notes: "Design doc first. Pure game-layer: only existing Commands. Damping: rate = clamp(k_p*theta_err - k_d*omega, limits), k_p=2.5/s, k_d=0.9 — tune in test, record final constants here."
+handoff_notes: "Design doc first. Pure game-layer: only existing Commands. Damping law shipped as the second-order form omega_dot = k_p*theta_err - k_d*omega integrated in wall time. FINAL CONSTANTS: k_p = 6.0 s^-2, k_d = 2*sqrt(k_p) = 4.898979485566356 s^-1, i.e. zeta = 1 exactly. The suggested k_p=2.5/k_d=0.9 was zeta=0.28 (39.3% overshoot measured) and too soft for the 2 s budget past ~12 deg; 6.0 puts the 0.6 rad/s saturation knee at ~45 deg. Overshoot is identically 0 at every step size. Rate saturation is applied in the WALL frame before the plan 3.1 division — see physics-spec 3.0.1, the order is what makes a saturating input warp-invariant."
 ```
 
 - Interfaces consumed: `InputFrame` (T0105), `VesselConfig` (T0104). Produces: class in plan §2.

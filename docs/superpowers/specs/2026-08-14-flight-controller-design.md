@@ -223,9 +223,21 @@ Why 6.0 and not more or less:
   30° flick is 79% of authority.
 
 Robustness: the explicit integration is stable for `k_d·Δt < 2`, i.e. Δt up to
-0.41 s. `update()` additionally clamps `wallDtSec` into `[0, 0.1]` so a stalled
-tab or a debugger pause cannot inject a divergent step; at Δt = 0.1 s (10 fps)
-the 20° response is 2.00 s with overshoot still exactly 0.
+0.41 s, and **the production path cannot reach even a quarter of that**.
+`render/telemetry.ts` clamps the game delta to `MAX_GAME_DELTA_SEC = 0.1 s`
+before `main.ts` ever calls `update()`; `MAX_UPDATE_DT_SEC` repeats the same
+0.1 s so the controller is safe when driven directly (tests, T0116). At the real
+worst case, Δt = 0.1 s, the response is still monotone — overshoot exactly 0 —
+and a 20° step settles in 2.00 s.
+
+Beyond that clamp the controller degrades rather than tracks, and the
+distinction matters when reading the tests. A caller that passes `update(2.5)`
+gets 0.1 s of integration against 2.5 s of elapsed attitude, a mismatch
+production cannot create; the response then overshoots (15.4° measured at 30°).
+The test that drives 2.5 s frames therefore asserts only boundedness and
+finiteness — graceful degradation — while tracking quality is asserted at
+0.1 s. 15° of overshoot is not an accepted property of this controller; it is
+what a synthetic frame mismatch produces.
 
 ### Settle deadband
 
@@ -282,28 +294,40 @@ warp came back down.
 
 ### Clamp ordering
 
-physics-spec §3.0.1 states
+physics-spec §3.0.1 stated
 
 ```
 rateSimRadS = clamp(inputRateWallRadS / effectiveWarp, −RATE_MAX, RATE_MAX)
 ```
 
-Applied to a raw PD output this is *not* warp-invariant: the law can demand
-7.85 rad/s from a 180° error, which clamps to 0.6 at 1× but passes through as
-0.157 sim rad/s = 7.85 wall rad/s at 50×. The fix is not to change the formula.
-`RATE_MAX` is the vehicle's **wall-frame** rotational authority, so the control
-law saturates against it before it produces `inputRateWallRadS` at all:
+without saying which frame `RATE_MAX` bounds. Applied to a raw PD output with
+`RATE_MAX` read as a *sim*-frame bound, this is not warp-invariant: the law
+peaks at **2.85 rad/s** for a 180° error (measured at 60 Hz; the analytic
+critically damped peak is `θ₀·ω_n/e = 2.83 rad/s`), which clamps to 0.6 at 1×
+but would pass 0.6 sim rad/s = **30 rad/s of wall rotation** at 50×. The fix is
+not to change the formula. `RATE_MAX` is the vehicle's **wall-frame** rotational
+authority, so the control law saturates against it before it produces
+`inputRateWallRadS` at all:
 
 ```
-inputRateWallRadS = clamp(k_p·θ_err − k_d·ω integrated, ±RATE_MAX)   # control law
+inputRateWallRadS = clamp(k_p·θ_err − k_d·ω integrated, ±RATE_MAX)       # control law, wall frame
 rateSimRadS       = clamp(inputRateWallRadS / effectiveWarp, ±RATE_MAX)  # physics-spec §3.0.1, verbatim
 ```
 
 The spec's clamp is then provably a no-op (`effectiveWarp ≥ 1` on the whole
-ladder) and is kept in the code anyway, because it is the contract and because a
-future ladder entry below 1× would need it. **No physics-spec formula changes,
-so no ADR.** A test asserts both that the composition is warp-invariant at
-saturation and that the outer clamp never binds.
+ladder) and is kept in the code anyway, because it is the bound the sim is
+entitled to assume and because a future ladder entry below 1× would need it. The
+sim-frame envelope this actually yields is `RATE_MAX / effectiveWarp`.
+
+**physics-spec §3.0.1 and `docs/architecture.md` were updated to say which frame
+each bound applies to** — otherwise the documented envelope (0.6 sim rad/s at
+50×) and the shipped one (0.012) differ by a factor of `effectiveWarp`, and
+T0116 reads the spec, not this file. No formula changed and no symbol was
+redefined, only pinned to a frame, so no ADR (confirmed with the maintainer and
+in review).
+
+A test asserts both that the composition is warp-invariant at saturation and
+that the outer clamp never binds.
 
 ---
 
@@ -321,7 +345,8 @@ commands.setThrottle(lever · regimeFraction)
 `'cruise'` → `vessel.alphaMaxMS2` (fraction 1, the full envelope, which is what
 T0116 engages). The vessel is the one in force for the session —
 `SimulationCore.vessel`, i.e. the *persisted* vessel after a restore, never
-`DEFAULT_VESSEL`. It is re-read in `updatePorts()`.
+`DEFAULT_VESSEL`. It is re-read by `setVessel()`, which `main.ts` calls from
+`onSimulationReplaced` (there is no `updatePorts` on the controller — see §1).
 
 With the ADR-034 defaults the manual fraction is
 `19.6133 / 98.0665 = 0.19999999999999998`, and `0.19999999999999998 × 98.0665`
@@ -387,6 +412,45 @@ quaternion and so simply inherits whatever the hold is doing, roll lag included.
 `killRotation()` is an explicit one-shot in both states: zero the pursuit state,
 re-anchor, flush `rotate(0,0,0)`.
 
+### The unassisted coast is not warp-normalized, and that is the decision
+
+With the assist off the controller issues nothing while idle, so the rate that
+persists is the sim-frame body rate the simulation is holding. Warping up
+therefore multiplies the *apparent* rotation: a ship coasting at the full
+0.6 rad/s and warped to 50× visibly rotates at 30 rad/s. This is one keystroke
+away from the v1 tumble in appearance, so it needs an explicit ruling rather
+than silence.
+
+**Ruled: keep it. Only *commanded input* is normalized; a rate already in the
+state is angular momentum.** Plan §3.1 exists to stop a fixed *deflection* from
+being multiplied by warp, and it does. A ship already spinning is a physical
+fact, and time compression showing it faster is the same thing time compression
+does to orbits, rotations and everything else in the game — normalizing it would
+mean the ship's angular momentum silently changes when the player presses `=`,
+which is worse than the appearance it fixes. This is written into
+physics-spec §3.0.1 so the next reader finds it where the rule lives, and into
+`docs/controls.md` so the player is told.
+
+Three things keep it from being a trap, all tested:
+
+- it requires deliberately turning the assist off (`T`), and turning it back on
+  damps the coast immediately;
+- `killRotation()` (`X`) stops it at any tier, and works even for a rate the
+  controller never commanded;
+- ADR-035 §6's `setWarp` clearing bounds the worst case: crossing
+  `MANUAL_ATTITUDE_MAX_WARP` zeroes commanded rates, so the coast cannot survive
+  into the tiers where it would be unrecoverable. The exposure is 100× at most.
+
+What the coast branch *must* do, and originally did not, is keep the
+controller's model honest across the tier change. `commandedRateRadS` is a
+wall-frame quantity; a coast begun at 1× and warped to 50× left it stale by the
+warp ratio, so the pursuit would have damped against a rate fifty times off when
+the player took the controls back. `adoptCoastingRate` re-derives it every coast
+frame as `lastIssuedSimRate × effectiveWarp`, clamped to `RATE_MAX` — the clamp
+is correct rather than lossy, because a coast faster than the vehicle's
+authority cannot be re-commanded at all, so the model saturates and the pursuit
+spends full authority against it on re-engagement.
+
 ---
 
 ## 7. Bindings and settings compatibility
@@ -421,11 +485,18 @@ The parser is changed to treat the registry as append-only:
 - An action *missing* from the document is backfilled from the default table.
 - If that default code is already taken by an explicit binding in the same
   document, the action is bound to the per-action sentinel `unbound.<action>`
-  instead of throwing. Sentinels cannot equal any `KeyboardEvent.code`, are
-  unique per action so they cannot collide with each other, and are rendered as
-  "Unbound" by the settings panel; the player rebinds from there. The
-  alternative — throwing — would make an unlucky-but-legal key map destroy a
-  save.
+  instead of throwing. Sentinels cannot equal any `KeyboardEvent.code` (which
+  never contains a dot) and are rendered as "Unbound" by the settings panel; the
+  player rebinds from there. The alternative — throwing — would make an
+  unlucky-but-legal key map destroy a save.
+- **The sentinel is checked for collisions like any other code.** A sentinel is
+  a legal *explicit* binding, because a document a previous backfill wrote has
+  to round-trip; so an untrusted document (save import, hand-edited JSON) can
+  carry `unbound.<action>` on some other action. Emitting the bare sentinel
+  regardless would produce two actions sharing one code — a document this parser
+  accepts and the *next* load rejects, which is exactly the unloadable profile
+  the backfill exists to prevent. `unboundCodeFor` probes `.1`, `.2`, … until
+  free, bounded by `INPUT_ACTIONS.length`.
 
 `src/game/settings.test.ts`'s "rejects duplicate, reserved, missing, and extra
 bindings" case is the one existing expectation that changes: the *missing* arm

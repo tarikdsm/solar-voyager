@@ -136,10 +136,12 @@ decomposed setters (`setLookDelta`, `setRotationAxes`, `setThrottleAxis`, `stepT
 `CruiseDirector` (T0116) drive the same surface. Two channels, deliberately different: mouse-look
 deltas integrate into a desired attitude pursued by a critically damped law (`k_p = 6.0`,
 `k_d = 2*sqrt(k_p)`), while keyboard/gamepad axes are direct rate demands that re-anchor the desired
-attitude while deflected. Plan §3.1's wall-time normalization
-(`clamp(wallRate / effectiveWarp, ±0.6)`) and the `requestedWarp > MANUAL_ATTITUDE_MAX_WARP` lockout
-both live here; the throttle lever is scaled by a `thrustRegime` that caps manual flight at the
-vessel's `alphaManualMaxMS2`. `game/flight/flightInputRouter.ts` is the one module that knows both
+attitude while deflected. Wall-time authority lives here: the control law saturates against
+`RATE_MAX = 0.6` in the **wall** frame and only then divides by `effectiveWarp`, so the sim-frame
+envelope is `RATE_MAX / effectiveWarp` (physics-spec §3.0.1 — the order is what makes a saturating
+input warp-invariant). The `requestedWarp > MANUAL_ATTITUDE_MAX_WARP` lockout is gated on the same
+figure `Commands.rotate` uses. The throttle lever is scaled by a `thrustRegime` that caps manual
+flight at the vessel's `alphaManualMaxMS2`. `game/flight/flightInputRouter.ts` is the one module that knows both
 `InputFrame` and the controller, and owns the time-warp ladder. `update()` is allocation-free and
 covered by `bench:sim`. Design:
 `docs/superpowers/specs/2026-08-14-flight-controller-design.md`.

@@ -126,6 +126,27 @@ export function isUnboundInputCode(code: string): boolean {
   return code.startsWith(UNBOUND_CODE_PREFIX);
 }
 
+/**
+ * Returns a placeholder code that is free in `assignedCodes`.
+ *
+ * A previous backfill's placeholder is a legal explicit binding — the document
+ * it wrote must round-trip — so an untrusted document can carry
+ * `unbound.<action>` on some *other* action. Emitting the bare placeholder
+ * anyway would produce two actions sharing one code: a document this parser
+ * accepts but rejects on the next load, which is exactly the unloadable-profile
+ * failure the backfill exists to prevent. The suffix search terminates after at
+ * most `INPUT_ACTIONS.length` probes, since that bounds the codes in play.
+ */
+function unboundCodeFor(action: InputAction, assignedCodes: ReadonlySet<string>): string {
+  const preferred = `${UNBOUND_CODE_PREFIX}${action}`;
+  if (!assignedCodes.has(preferred)) return preferred;
+  for (let suffix = 1; suffix <= INPUT_ACTIONS.length; suffix += 1) {
+    const candidate = `${preferred}.${String(suffix)}`;
+    if (!assignedCodes.has(candidate)) return candidate;
+  }
+  throw new RangeError(`input binding ${action} has no free placeholder code`);
+}
+
 function freezeV1Settings(
   qualityLock: QualityLock,
   inputBindings: Record<InputAction, string>,
@@ -251,7 +272,7 @@ function parseInputBindings(value: unknown): Record<InputAction, string> {
     // A pre-existing binding may already occupy a new action's default key.
     // Leaving that action unbindable beats failing the whole document.
     const preferred = DEFAULT_INPUT_BINDINGS[action];
-    const code = assignedCodes.has(preferred) ? `${UNBOUND_CODE_PREFIX}${action}` : preferred;
+    const code = assignedCodes.has(preferred) ? unboundCodeFor(action, assignedCodes) : preferred;
     assignedCodes.add(code);
     result[action] = code;
   }

@@ -259,6 +259,43 @@ describe('game settings', () => {
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
 
+  it('never emits a placeholder that another action already holds', () => {
+    // A placeholder is a legal explicit binding, because a document written by an
+    // earlier backfill has to round-trip. An untrusted document can therefore
+    // carry one on some *other* action, and emitting the bare placeholder anyway
+    // would produce two actions sharing a code: accepted now, rejected on the
+    // next load — precisely the unloadable profile the backfill exists to avoid.
+    const hostile = mutableDocument();
+    const bindings = hostile.inputBindings as Record<string, unknown>;
+    delete bindings.killRotation;
+    bindings.rollLeft = DEFAULT_GAME_SETTINGS.inputBindings.killRotation;
+    bindings.rollRight = 'unbound.killRotation';
+
+    const parsed = parseGameSettings(hostile);
+    const codes = Object.values(parsed.inputBindings);
+
+    expect(parsed.inputBindings.rollRight).toBe('unbound.killRotation');
+    expect(isUnboundInputCode(parsed.inputBindings.killRotation)).toBe(true);
+    expect(parsed.inputBindings.killRotation).not.toBe(parsed.inputBindings.rollRight);
+    expect(new Set(codes).size).toBe(codes.length);
+    // The decisive property: the output loads again.
+    expect(() => parseGameSettings(parsed)).not.toThrow();
+  });
+
+  it('still fails closed on malformed codes in a document that also needs backfill', () => {
+    for (const malformed of [17, null, '', '   ', 'Key W', 'K'.repeat(65)]) {
+      const document = mutableDocument();
+      const bindings = document.inputBindings as Record<string, unknown>;
+      delete bindings.killRotation;
+      bindings.pitchUp = malformed;
+      expect(() => parseGameSettings(document)).toThrow(/pitchUp/u);
+    }
+
+    const notAnObject = mutableDocument();
+    notAnObject.inputBindings = ['KeyW'];
+    expect(() => parseGameSettings(notAnObject)).toThrow(/inputBindings must be an object/u);
+  });
+
   it('rejects unsupported versions, quality locks, and unknown top-level fields', () => {
     expect(() => parseGameSettings({ ...mutableDocument(), version: 2 })).toThrow(/version/u);
     expect(() => parseGameSettings({ ...mutableDocument(), qualityLock: 'ultra' })).toThrow(

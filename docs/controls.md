@@ -50,7 +50,11 @@ unavailable and the attitude holds take over.
 
 **Stability assist** is on by default: releasing the controls stops the rotation and holds the nose
 where you left it. Turned off with `T`, the ship keeps rotating after you release, the way an
-unassisted spacecraft would; `X` stops it at any time. **Attitude holds** point the ship at an
+unassisted spacecraft would; `X` stops it at any time. A rotation you are already carrying is real
+angular momentum, so time warp compresses it like every other motion — leave the ship spinning with
+the assist off and it will appear to spin faster as you warp up. Only your control inputs are
+warp-corrected. Press `X` or turn the assist back on to stop, and raising warp past 100× clears the
+rotation outright. **Attitude holds** point the ship at an
 orbital direction and keep it there, turning at up to 15°/s. Touching the mouse or a rotation axis
 hands control straight back to you.
 
