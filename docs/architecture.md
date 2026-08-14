@@ -24,7 +24,8 @@ src/
 ├── sim/
 │   ├── bodies/                 # kepler.ts (elliptic + hyperbolic solver), orbitalElements.ts
 │   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts
-│   ├── ship/                   # initialState.ts, attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger)
+│   ├── ship/                   # initialState.ts, attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger),
+│                               # vessel.ts (VesselConfig: rest mass + drive/slew limits)
 │   ├── launch/                 # [deferred, post-v1] atmosphere.ts, launchSim.ts, handoff.ts
 │   ├── analysis/               # osculating.ts, dominantBody.ts, barycenter.ts, trajectoryImpact.ts
 │   └── simulation.ts           # SimulationCore
@@ -52,12 +53,12 @@ their v2 behavior from the named task — none of that v2 behavior has landed ye
 ```
 src/
 ├── sim/
-│   ├── ship/vessel.ts                      # NEW  VesselConfig + defaults (T0104)
+│   ├── ship/vessel.ts                      # LANDED VesselConfig + defaults (T0104)
 │   ├── ship/attitude.ts                    # MOD  slew-limited hold pursuit (T0107)
 │   ├── ship/collision.ts                   # NEW  surface-crossing detection (T0111)
 │   ├── guidance/constantAccelIntercept.ts  # NEW  physics-spec §8 solver (T0114)
 │   ├── guidance/brakingEnvelope.ts         # NEW  relativistic stop-distance (T0114)
-│   ├── simulation.ts                       # MOD  vessel injection, collision, slew (T0104/07/11)
+│   ├── simulation.ts                       # MOD  vessel injection LANDED (T0104); collision, slew (T0107/11)
 │   └── simulationSnapshot.ts               # MOD  impact fields + vessel echo (ADR) (T0111)
 ├── core/time.ts                            # MOD  MAX_THRUST_WARP retune (T0115)
 ├── game/
@@ -157,10 +158,10 @@ simulation, renderer, or runtime GPU resource.
 
 ## State & persistence
 
-- The canonical save slot is `solar-voyager.save.v2` in `localStorage`; the same document is available through JSON export/import. Independent profile settings use `solar-voyager.settings.v2`, so quality, input preferences, and tutorial progress survive without requiring a game save. A valid legacy `solar-voyager.settings.v1` profile is immediately migrated to v2 with tutorial status `skipped`; a missing profile starts `unoffered`. A present but invalid v2 document fails closed and is never replaced from the legacy slot.
-- Save v2 = `{version: 2, phase: "space", simulation, settings}`. `simulation` contains the float64 ship/ledger state, simulation time, attitude, throttle, rotation rates, requested/effective warp, clamp reason, navigation target, kinetic-energy baseline and complete burn-log continuation state. Its embedded `settings` deliberately remains the strict `GameSettingsV1` preferences DTO containing only the quality governor lock (`auto | low | medium | high`) and rebindable `KeyboardEvent.code` map. Save/load and export/import project or merge that DTO through `GameSessionController`; they never overwrite profile-only tutorial progress.
+- The canonical save slot is `solar-voyager.save.v2` in `localStorage` (the key names the slot, not the document version — ADR-034 kept it while bumping the document to v3 so already-deployed saves stay reachable); the same document is available through JSON export/import. Independent profile settings use `solar-voyager.settings.v2`, so quality, input preferences, and tutorial progress survive without requiring a game save. A valid legacy `solar-voyager.settings.v1` profile is immediately migrated to v2 with tutorial status `skipped`; a missing profile starts `unoffered`. A present but invalid v2 document fails closed and is never replaced from the legacy slot.
+- Save v3 = `{version: 3, phase: "space", simulation, settings}`. `simulation` contains the float64 ship/ledger state, simulation time, the `VesselConfig` that priced that ledger (rest mass, absolute and manual proper-acceleration limits, hold slew rate — ADR-034), attitude, throttle, rotation rates, requested/effective warp, clamp reason, navigation target, kinetic-energy baseline and complete burn-log continuation state. Its embedded `settings` deliberately remains the strict `GameSettingsV1` preferences DTO containing only the quality governor lock (`auto | low | medium | high`) and rebindable `KeyboardEvent.code` map. Save/load and export/import project or merge that DTO through `GameSessionController`; they never overwrite profile-only tutorial progress.
 - Imported and stored documents are treated as untrusted: parsers reject unknown/missing fields and non-finite or inconsistent simulation values before construction. Loading is atomic — validation and creation of a fresh `SimulationCore` complete before the live session reference and input command target are replaced.
-- Version migrations are explicit (`v1 -> v2` is covered by a committed fixture). Rails bodies are never serialized because their positions and velocities are deterministically derived from `simTimeSec`.
+- Version migrations are explicit and each is covered by a committed fixture (`tests/fixtures/save-v1.json`, `tests/fixtures/save-v2.json`, `tests/fixtures/save-v2-midburn.json`). A migrated document adopts the running vessel, but only if that vessel carries the 10 000 kg rest mass that priced every pre-v3 ledger; any other mass fails the load closed, because no downstream check can detect a mass substitution (ADR-034). Rails bodies are never serialized because their positions and velocities are deterministically derived from `simTimeSec`.
 - The burn-log HUD is the one bounded exception to snapshot-only UI reads: its runtime chunk is awaited before application bootstrap, then a setup-owned `BurnLogSignalStore` consumes the public read-only `SimulationCore.burnLog` view only when the existing 10 Hz HUD publisher commits, plus a synchronous `rebind()` on session replacement. Its 256 row identities and browser diagnostic object are preallocated; unchanged history is never traversed from the animation-frame path.
 - The opt-in tutorial is a DOM-free `game/TutorialController` driven only by real UI events and primitive facts from the existing 10 Hz HUD publication. Camera, map, panel and save callbacks report completed interactions; snapshot facts confirm simulation outcomes. Its stable frame observer is nullable and is set to `null` after skip or completion, so terminal profiles add no tutorial work or allocation to the frame path. A frozen getter-only browser diagnostic exposes observation state without changing `Commands` or `SimSnapshot`.
 

@@ -3,12 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
-import { DEFAULT_MAX_PROPER_ACCELERATION_M_S2 } from './ship/thrust.js';
+import { STANDARD_GRAVITY_M_S2 } from './ship/thrust.js';
+import { DEFAULT_VESSEL, type VesselConfig } from './ship/vessel.js';
 
 const EARTH_MU_KM3_S2 = 398_600.4418;
 const EARTH_RADIUS_KM = 6_378.137;
 const GEO_RADIUS_KM = 42_164;
 const SHIP_MASS_KG = 10_000;
+
+// ADR-034: physics-spec.md §7.7/§7.10 regressions predate VesselConfig and price
+// their analytic expectations at 1 g; pinned so the 10 g default cannot move them.
+const ONE_G_VESSEL: VesselConfig = {
+  restMassKg: SHIP_MASS_KG,
+  alphaMaxMS2: STANDARD_GRAVITY_M_S2,
+  alphaManualMaxMS2: STANDARD_GRAVITY_M_S2,
+  maxSlewRadPerSimS: DEFAULT_VESSEL.maxSlewRadPerSimS,
+};
 
 function earthCatalog() {
   return compileRailsCatalog([
@@ -52,8 +62,7 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularEarthState(leoRadiusKm),
-      shipMassKg: SHIP_MASS_KG,
-      maxProperAccelerationMS2: impulsiveAccelerationMS2,
+      vessel: { ...ONE_G_VESSEL, alphaMaxMS2: impulsiveAccelerationMS2 },
     });
     core.commands.setAttitudeMode('prograde');
     core.commands.setThrottle(1);
@@ -79,13 +88,13 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
 
   it('prices a continuous 90-degree turn above the impulsive momentum lower bound', () => {
     const celerityKmS = 30;
-    const accelerationKmS2 = DEFAULT_MAX_PROPER_ACCELERATION_M_S2 / 1_000;
+    const accelerationKmS2 = STANDARD_GRAVITY_M_S2 / 1_000;
     const turnRateRadS = accelerationKmS2 / celerityKmS;
     const durationSec = Math.PI / (2 * turnRateRadS);
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(0, celerityKmS),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     core.commands.rotate(0, -turnRateRadS, 0);
     core.commands.setThrottle(1);
@@ -93,7 +102,7 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     const snapshot = core.step(durationSec);
     core.commands.setThrottle(0);
 
-    const forceN = SHIP_MASS_KG * DEFAULT_MAX_PROPER_ACCELERATION_M_S2;
+    const forceN = SHIP_MASS_KG * STANDARD_GRAVITY_M_S2;
     const analyticProfileEnergyJ = forceN * SPEED_OF_LIGHT_KM_S * 1_000 * durationSec;
     expect(relativeError(snapshot.energySpentJ, analyticProfileEnergyJ)).toBeLessThan(0.02);
     const momentumChangeKgMS = SHIP_MASS_KG * celerityKmS * 1_000 * Math.sqrt(2);
@@ -111,12 +120,12 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     const realtime = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     const warped = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     realtime.commands.setThrottle(0.4);
     warped.commands.setThrottle(0.4);
@@ -140,7 +149,7 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     core.commands.setThrottle(0.25);
 
@@ -166,7 +175,7 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: {
         absolute: new Float64Array([1e-6, 1e-6, 1e-6, 1e-9, 1e-9, 1e-9, 1e-6]),
         relative: 1e-9,

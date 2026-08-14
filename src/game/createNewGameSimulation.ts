@@ -5,6 +5,7 @@ import { SimulationCore } from '../sim/simulation.js';
 import type { TrajectoryInvalidationListener } from '../sim/simulationSnapshot.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
 import { createNewGameLeoState } from '../sim/ship/initialState.js';
+import type { VesselConfig } from '../sim/ship/vessel.js';
 
 const NEW_GAME_LEO_ALTITUDE_KM = 400;
 
@@ -23,21 +24,26 @@ function createCanonicalLeoState(catalog: ReturnType<typeof createCanonicalCatal
 
 /** Compiles the committed J2026 catalog and creates the canonical new-game simulation. */
 export function createNewGameSimulation(
-  shipMassKg: number,
+  vessel: VesselConfig,
   onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
 ): SimulationCore {
   const catalog = createCanonicalCatalog();
   return new SimulationCore({
     catalog,
     initialShipState: createCanonicalLeoState(catalog),
-    shipMassKg,
+    vessel,
     onTrajectoryInvalidated: onTrajectoryInvalidated ?? undefined,
   });
 }
 
-/** Reconstructs a saved space-phase simulation against the canonical catalog. */
+/**
+ * Reconstructs a saved space-phase simulation against the canonical catalog.
+ *
+ * `vessel` is the fallback only; `persistentState.vessel` is what the restored
+ * core actually flies (ADR-034).
+ */
 export function createGameSimulationFromPersistentState(
-  shipMassKg: number,
+  vessel: VesselConfig,
   persistentState: SimulationPersistentState,
   onTrajectoryInvalidated: TrajectoryInvalidationListener | null = null,
 ): SimulationCore {
@@ -45,7 +51,7 @@ export function createGameSimulationFromPersistentState(
   return new SimulationCore({
     catalog,
     initialShipState: createCanonicalLeoState(catalog),
-    shipMassKg,
+    vessel,
     onTrajectoryInvalidated: onTrajectoryInvalidated ?? undefined,
     persistentState,
   });

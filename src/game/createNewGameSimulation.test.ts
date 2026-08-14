@@ -1,5 +1,6 @@
 import bodiesDocument from '../../data/bodies.json';
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 
 import {
   createGameSimulationFromPersistentState,
@@ -8,7 +9,7 @@ import {
 
 describe('createNewGameSimulation', () => {
   it('inherits Earth barycentric velocity in the committed 400 km LEO', () => {
-    const core = createNewGameSimulation(10_000);
+    const core = createNewGameSimulation(DEFAULT_VESSEL);
     const snapshot = core.snapshot;
     const earthIndex = snapshot.bodyIds.indexOf('earth');
     const earth = bodiesDocument.bodies[earthIndex];
@@ -54,14 +55,14 @@ describe('createNewGameSimulation', () => {
 
   it('preserves trajectory invalidation listeners across new and restored simulations', () => {
     const newGameInvalidated = vi.fn();
-    const core = createNewGameSimulation(10_000, newGameInvalidated);
+    const core = createNewGameSimulation(DEFAULT_VESSEL, newGameInvalidated);
 
     core.commands.setThrottle(0.25);
 
     expect(newGameInvalidated).toHaveBeenCalledOnce();
     const restoredInvalidated = vi.fn();
     const restored = createGameSimulationFromPersistentState(
-      10_000,
+      DEFAULT_VESSEL,
       core.exportPersistentState(),
       restoredInvalidated,
     );

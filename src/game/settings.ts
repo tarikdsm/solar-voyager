@@ -35,7 +35,7 @@ export type QualityLock = 'auto' | 'low' | 'medium' | 'high';
 export type TutorialStepId = (typeof TUTORIAL_STEP_IDS)[number];
 export type TutorialStatus = 'unoffered' | 'active' | 'skipped' | 'completed';
 
-/** Preferences DTO embedded in SaveEnvelopeV2. Its schema intentionally remains version 1. */
+/** Preferences DTO embedded in SaveEnvelopeV3. Its schema intentionally remains version 1. */
 export interface GameSettingsV1 {
   readonly version: 1;
   readonly qualityLock: QualityLock;
@@ -250,7 +250,7 @@ export function parseProfileSettings(value: unknown): GameSettingsV2 {
   );
 }
 
-/** Projects profile preferences into the stable DTO used by SaveEnvelopeV2. */
+/** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
 export function projectGameSettingsV1(settings: GameSettingsV2): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });

@@ -10,9 +10,10 @@ import { InputEngine, type InputKeyboardTarget } from '../../src/game/input/inpu
 import { SAVE_STORAGE_KEY, SaveRepository } from '../../src/game/saveLoad.js';
 import { GameSessionController } from '../../src/game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from '../../src/game/settings.js';
+import { DEFAULT_VESSEL } from '../../src/sim/ship/vessel.js';
 import { SessionSettingsPanel, type SessionFilePort } from '../../src/ui/SessionSettingsPanel.js';
 
-const SHIP_MASS_KG = 10_000;
+const VESSEL = DEFAULT_VESSEL;
 
 interface SessionHarnessSnapshot {
   readonly exportedJson: string;
@@ -54,11 +55,11 @@ const storage = new MemoryStorage();
 let engine: InputEngine | null = null;
 let bridge: InputCommandBridge | null = null;
 const controller = new GameSessionController({
-  initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-  createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-  saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+  initialSimulation: createNewGameSimulation(VESSEL),
+  createNewSimulation: () => createNewGameSimulation(VESSEL),
+  saveRepository: new SaveRepository(storage, VESSEL),
   settingsRepository: new SettingsRepository(storage),
-  createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+  createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
   onSimulationReplaced: (simulation) => {
     engine?.setThrottleAxis(simulation.snapshot.throttle);
     bridge?.updateCommands(simulation.commands, currentSnapshot);

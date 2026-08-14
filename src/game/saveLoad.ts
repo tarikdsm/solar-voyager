@@ -17,20 +17,27 @@ import {
   RELATIVISTIC_STATE_DIMENSION,
   relativisticKineticEnergyJ,
 } from '../sim/ship/relativity.js';
+import { validateVesselConfig, type VesselConfig } from '../sim/ship/vessel.js';
 import { parseGameSettings, type GameSettingsV1, type KeyValueStorage } from './settings.js';
 
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
+
+/**
+ * Canonical browser slot. The key names the storage *slot*, not the document
+ * version — the document carries its own `version` and is migrated on read, so
+ * the key stays `.v2` to keep already-deployed v2 saves reachable (ADR-034).
+ */
 export const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 
-export interface SaveEnvelopeV2 {
-  readonly version: 2;
+export interface SaveEnvelopeV3 {
+  readonly version: 3;
   readonly phase: 'space';
   readonly simulation: SimulationPersistentState;
   readonly settings: GameSettingsV1;
 }
 
 export type SaveLoadResult =
-  | { readonly ok: true; readonly envelope: SaveEnvelopeV2 }
+  | { readonly ok: true; readonly envelope: SaveEnvelopeV3 }
   | { readonly ok: false; readonly reason: 'not-found' }
   | { readonly ok: false; readonly reason: 'invalid' | 'storage'; readonly error: string };
 
@@ -218,33 +225,60 @@ function parseBurnLog(value: unknown, path: string): BurnLogPersistentState {
   };
 }
 
+const SIMULATION_V2_KEYS = Object.freeze([
+  'simTimeSec',
+  'state',
+  'attitudeQuaternion',
+  'throttle',
+  'attitudeMode',
+  'rotationRatesRadS',
+  'requestedWarp',
+  'effectiveWarp',
+  'warpClampReason',
+  'targetBodyId',
+  'initialKineticEnergyJ',
+  'burnLog',
+]);
+
+const SIMULATION_V3_KEYS = Object.freeze([...SIMULATION_V2_KEYS, 'vessel']);
+
+const VESSEL_KEYS = Object.freeze([
+  'restMassKg',
+  'alphaMaxMS2',
+  'alphaManualMaxMS2',
+  'maxSlewRadPerSimS',
+]);
+
+function parseVessel(value: unknown, path: string): VesselConfig {
+  const record = requireRecord(value, path);
+  requireExactKeys(record, VESSEL_KEYS, path);
+  return validateVesselConfig({
+    restMassKg: requireFiniteNumber(record.restMassKg, `${path}.restMassKg`),
+    alphaMaxMS2: requireFiniteNumber(record.alphaMaxMS2, `${path}.alphaMaxMS2`),
+    alphaManualMaxMS2: requireFiniteNumber(record.alphaManualMaxMS2, `${path}.alphaManualMaxMS2`),
+    maxSlewRadPerSimS: requireFiniteNumber(record.maxSlewRadPerSimS, `${path}.maxSlewRadPerSimS`),
+  });
+}
+
+/**
+ * Parses one `simulation` sub-document.
+ *
+ * `migratedVessel` is null for a native v3 document (the vessel is read from the
+ * document) and non-null when migrating a v2 document, which has no `vessel` key
+ * and therefore must be validated against the older key list.
+ */
 function parseSimulationState(
   value: unknown,
   bodyIds: readonly string[],
+  migratedVessel: VesselConfig | null,
 ): SimulationPersistentState {
   const path = 'save.simulation';
   const record = requireRecord(value, path);
-  requireExactKeys(
-    record,
-    [
-      'simTimeSec',
-      'state',
-      'attitudeQuaternion',
-      'throttle',
-      'attitudeMode',
-      'rotationRatesRadS',
-      'requestedWarp',
-      'effectiveWarp',
-      'warpClampReason',
-      'targetBodyId',
-      'initialKineticEnergyJ',
-      'burnLog',
-    ],
-    path,
-  );
+  requireExactKeys(record, migratedVessel === null ? SIMULATION_V3_KEYS : SIMULATION_V2_KEYS, path);
   return copyAndValidateSimulationPersistentState(
     {
       simTimeSec: requireFiniteNumber(record.simTimeSec, `${path}.simTimeSec`),
+      vessel: migratedVessel ?? parseVessel(record.vessel, `${path}.vessel`),
       state: requireFloat64Array(record.state, SIMULATION_STATE_DIMENSION, `${path}.state`),
       attitudeQuaternion: requireFloat64Array(
         record.attitudeQuaternion,
@@ -272,14 +306,60 @@ function parseSimulationState(
   );
 }
 
-function parseV2(value: Record<string, unknown>, bodyIds: readonly string[]): SaveEnvelopeV2 {
+function parseV3(value: Record<string, unknown>, bodyIds: readonly string[]): SaveEnvelopeV3 {
   requireExactKeys(value, ['version', 'phase', 'simulation', 'settings'], 'save');
-  if (value.version !== 2) throw new RangeError('save version must be 2');
+  if (value.version !== 3) throw new RangeError('save version must be 3');
   if (value.phase !== 'space') throw new RangeError('save phase must be space');
   return {
-    version: 2,
+    version: 3,
     phase: 'space',
-    simulation: parseSimulationState(value.simulation, bodyIds),
+    simulation: parseSimulationState(value.simulation, bodyIds, null),
+    settings: parseGameSettings(value.settings),
+  };
+}
+
+/**
+ * Rest mass of the only ship that ever wrote a pre-v3 document.
+ *
+ * Legacy documents carry a ledger (`energySpentJ = integral of m*alpha*c dt`,
+ * burn-log `peakPowerW = m*alpha*c`) but not the mass that priced it. Adopting a
+ * vessel of any other mass would leave the recorded joules describing one ship
+ * and the continuation describing another, and nothing downstream can detect it:
+ * `validateActiveBurnConsistency` compares the burn log against state-vector
+ * deltas drawn from the same document, so it is mass-independent by
+ * construction. The only place this can be caught is here, at the migration
+ * boundary, so migration fails closed instead (ADR-034).
+ */
+const LEGACY_SAVE_REST_MASS_KG = 10_000;
+
+function requireLegacyRestMass(vessel: VesselConfig, version: 1 | 2): void {
+  if (vessel.restMassKg !== LEGACY_SAVE_REST_MASS_KG) {
+    throw new RangeError(
+      `save v${String(version)} migration requires a ${String(LEGACY_SAVE_REST_MASS_KG)} kg vessel; ` +
+        `its ledger was priced at that rest mass and cannot be re-priced at ${String(vessel.restMassKg)} kg`,
+    );
+  }
+}
+
+/**
+ * v2 -> v3: the simulation document predates `VesselConfig`, so it adopts the
+ * vessel the caller is running (ADR-034) — but only if that vessel's rest mass
+ * is the one that priced the document. Drive limits and slew rate may differ
+ * freely: they govern future thrust only and are absent from the ledger.
+ */
+function migrateV2(
+  value: Record<string, unknown>,
+  bodyIds: readonly string[],
+  vessel: VesselConfig,
+): SaveEnvelopeV3 {
+  requireExactKeys(value, ['version', 'phase', 'simulation', 'settings'], 'save v2');
+  if (value.version !== 2) throw new RangeError('save v2 version must be 2');
+  if (value.phase !== 'space') throw new RangeError('save v2 phase must be space');
+  requireLegacyRestMass(vessel, 2);
+  return {
+    version: 3,
+    phase: 'space',
+    simulation: parseSimulationState(value.simulation, bodyIds, vessel),
     settings: parseGameSettings(value.settings),
   };
 }
@@ -287,14 +367,17 @@ function parseV2(value: Record<string, unknown>, bodyIds: readonly string[]): Sa
 function migrateV1(
   value: Record<string, unknown>,
   bodyIds: readonly string[],
-  shipMassKg: number,
-): SaveEnvelopeV2 {
+  vessel: VesselConfig,
+): SaveEnvelopeV3 {
   requireExactKeys(
     value,
     ['version', 'simTimeSec', 'phase', 'shipState', 'ledger', 'burnLog', 'settings'],
     'save v1',
   );
   if (value.phase !== 'space') throw new RangeError('save v1 phase must be space');
+  // Same exposure as v2: a v1 burn log is priced in joules the document does not
+  // attribute to any mass, and the kinetic baseline below is derived from one.
+  requireLegacyRestMass(vessel, 1);
   const shipState = requireFloat64Array(
     value.shipState,
     RELATIVISTIC_STATE_DIMENSION,
@@ -320,6 +403,7 @@ function migrateV1(
   return createSaveEnvelope(
     {
       simTimeSec: requireFiniteNumber(value.simTimeSec, 'save v1.simTimeSec'),
+      vessel,
       state,
       attitudeQuaternion: new Float64Array([0, 0, 0, 1]),
       throttle: 0,
@@ -333,7 +417,7 @@ function migrateV1(
         shipState[3] as number,
         shipState[4] as number,
         shipState[5] as number,
-        shipMassKg,
+        vessel.restMassKg,
       ),
       burnLog: { capacity: DEFAULT_BURN_LOG_CAPACITY, entries, active: null },
     },
@@ -342,14 +426,14 @@ function migrateV1(
   );
 }
 
-/** Creates a validated ownership-safe v2 envelope. */
+/** Creates a validated ownership-safe v3 envelope. */
 export function createSaveEnvelope(
   simulation: SimulationPersistentState,
   settings: GameSettingsV1,
   bodyIds: readonly string[],
-): SaveEnvelopeV2 {
+): SaveEnvelopeV3 {
   return {
-    version: 2,
+    version: 3,
     phase: 'space',
     simulation: copyAndValidateSimulationPersistentState(simulation, bodyIds),
     settings: parseGameSettings(settings),
@@ -380,13 +464,19 @@ function burnLogToJson(burnLog: BurnLogPersistentState) {
 }
 
 /** Serializes typed simulation storage into a portable JSON document. */
-export function serializeSaveEnvelope(envelope: SaveEnvelopeV2): string {
+export function serializeSaveEnvelope(envelope: SaveEnvelopeV3): string {
   const simulation = envelope.simulation;
   return JSON.stringify({
-    version: 2,
+    version: 3,
     phase: 'space',
     simulation: {
       simTimeSec: simulation.simTimeSec,
+      vessel: {
+        restMassKg: simulation.vessel.restMassKg,
+        alphaMaxMS2: simulation.vessel.alphaMaxMS2,
+        alphaManualMaxMS2: simulation.vessel.alphaManualMaxMS2,
+        maxSlewRadPerSimS: simulation.vessel.maxSlewRadPerSimS,
+      },
       state: Array.from(simulation.state),
       attitudeQuaternion: Array.from(simulation.attitudeQuaternion),
       throttle: simulation.throttle,
@@ -407,8 +497,8 @@ export function serializeSaveEnvelope(envelope: SaveEnvelopeV2): string {
 export function parseSaveEnvelope(
   text: string,
   bodyIds: readonly string[],
-  shipMassKg: number,
-): SaveEnvelopeV2 {
+  vessel: VesselConfig,
+): SaveEnvelopeV3 {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
@@ -417,13 +507,9 @@ export function parseSaveEnvelope(
     throw new RangeError(`Unable to parse save JSON: ${message}`);
   }
   const record = requireRecord(parsed, 'save');
-  if (record.version === 1) {
-    if (!Number.isFinite(shipMassKg) || shipMassKg <= 0) {
-      throw new RangeError('v1 save migration requires a positive finite ship mass');
-    }
-    return migrateV1(record, bodyIds, shipMassKg);
-  }
-  if (record.version === 2) return parseV2(record, bodyIds);
+  if (record.version === 1) return migrateV1(record, bodyIds, validateVesselConfig(vessel));
+  if (record.version === 2) return migrateV2(record, bodyIds, validateVesselConfig(vessel));
+  if (record.version === 3) return parseV3(record, bodyIds);
   throw new RangeError('save version is not supported');
 }
 
@@ -433,17 +519,17 @@ function describeError(error: unknown): string {
 
 /** Owns the canonical browser save slot through a localStorage-compatible port. */
 export class SaveRepository {
+  private readonly vessel: VesselConfig;
+
   constructor(
     private readonly storage: KeyValueStorage,
-    private readonly shipMassKg: number,
+    vessel: VesselConfig,
   ) {
-    if (!Number.isFinite(shipMassKg) || shipMassKg <= 0) {
-      throw new RangeError('save repository ship mass must be positive and finite');
-    }
+    this.vessel = validateVesselConfig(vessel);
   }
 
-  parse(text: string, bodyIds: readonly string[]): SaveEnvelopeV2 {
-    return parseSaveEnvelope(text, bodyIds, this.shipMassKg);
+  parse(text: string, bodyIds: readonly string[]): SaveEnvelopeV3 {
+    return parseSaveEnvelope(text, bodyIds, this.vessel);
   }
 
   load(bodyIds: readonly string[]): SaveLoadResult {
@@ -465,7 +551,7 @@ export class SaveRepository {
     }
   }
 
-  save(envelope: SaveEnvelopeV2): SaveWriteResult {
+  save(envelope: SaveEnvelopeV3): SaveWriteResult {
     try {
       this.storage.setItem(SAVE_STORAGE_KEY, serializeSaveEnvelope(envelope));
       return { ok: true };

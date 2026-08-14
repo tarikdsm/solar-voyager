@@ -14,7 +14,8 @@ const server = await createServer({
 
 try {
   const simulationModule = await server.ssrLoadModule('/src/game/createNewGameSimulation.ts');
-  const core = simulationModule.createNewGameSimulation(10_000);
+  const vesselModule = await server.ssrLoadModule('/src/sim/ship/vessel.ts');
+  const core = simulationModule.createNewGameSimulation(vesselModule.DEFAULT_VESSEL);
   core.commands.setAttitudeMode('prograde');
   core.commands.setThrottle(0.5);
   const firstSnapshot = core.snapshot;

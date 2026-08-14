@@ -17,10 +17,17 @@ import {
   type BurnLogPersistentState,
 } from './ship/ledger.js';
 import { STATE_TAU } from './ship/relativity.js';
+import { validateVesselConfig, type VesselConfig } from './ship/vessel.js';
 
 /** Setup-time state needed to reconstruct a SimulationCore exactly. */
 export interface SimulationPersistentState {
   readonly simTimeSec: number;
+  /**
+   * Vessel that priced this document's ledger (ADR-034). Energy and proper
+   * delta-v below are only meaningful against this rest mass, so the vessel
+   * travels with them instead of being re-supplied on restore.
+   */
+  readonly vessel: VesselConfig;
   readonly state: Float64Array;
   readonly attitudeQuaternion: Float64Array;
   readonly throttle: number;
@@ -150,6 +157,7 @@ export function copyAndValidateSimulationPersistentState(
   if (!Number.isFinite(source.simTimeSec)) {
     throw new RangeError('persistent simulation time must be finite');
   }
+  const vessel = validateVesselConfig(source.vessel);
   const state = copyFiniteArray(source.state, SIMULATION_STATE_DIMENSION, 'persistent state');
   const attitudeQuaternion = copyFiniteArray(
     source.attitudeQuaternion,
@@ -182,8 +190,14 @@ export function copyAndValidateSimulationPersistentState(
   if (source.targetBodyId !== null && !bodyIds.includes(source.targetBodyId)) {
     throw new RangeError('persistent target body must exist in the simulation catalog');
   }
-  if (!Number.isFinite(source.initialKineticEnergyJ)) {
-    throw new RangeError('persistent kinetic-energy baseline must be finite');
+  // E_kin = (gamma-1)*m*c^2 is non-negative for every physical state, so a
+  // negative baseline is unrepresentable. It cannot be cross-checked against
+  // `vessel.restMassKg` beyond this: the baseline is the kinetic energy at
+  // *session start*, while `state` holds the current celerity, and the two
+  // legitimately diverge the moment the ship maneuvers — that divergence is
+  // exactly what the published `kineticEnergyChangeJ` reports.
+  if (!Number.isFinite(source.initialKineticEnergyJ) || source.initialKineticEnergyJ < 0) {
+    throw new RangeError('persistent kinetic-energy baseline must be finite and non-negative');
   }
   if (source.burnLog.capacity !== DEFAULT_BURN_LOG_CAPACITY) {
     throw new RangeError(`persistent burn log capacity must be ${DEFAULT_BURN_LOG_CAPACITY}`);
@@ -211,6 +225,7 @@ export function copyAndValidateSimulationPersistentState(
   }
   return {
     simTimeSec: source.simTimeSec,
+    vessel,
     state,
     attitudeQuaternion,
     throttle: source.throttle,

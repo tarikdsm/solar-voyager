@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SimulationCore } from '../sim/simulation.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
@@ -17,7 +18,7 @@ import {
   type KeyValueStorage,
 } from './settings.js';
 
-const SHIP_MASS_KG = 10_000;
+const VESSEL = DEFAULT_VESSEL;
 
 class MemoryStorage implements KeyValueStorage {
   readonly values = new Map<string, string>();
@@ -52,15 +53,12 @@ function copySessionState(simulation: SimulationCore) {
   };
 }
 
-function createController(
-  storage: MemoryStorage,
-  simulation = createNewGameSimulation(SHIP_MASS_KG),
-) {
+function createController(storage: MemoryStorage, simulation = createNewGameSimulation(VESSEL)) {
   return new GameSessionController({
-    createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-    createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+    createNewSimulation: () => createNewGameSimulation(VESSEL),
+    createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
     initialSimulation: simulation,
-    saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+    saveRepository: new SaveRepository(storage, VESSEL),
     settingsRepository: new SettingsRepository(storage),
   });
 }
@@ -89,10 +87,10 @@ describe('GameSessionController', () => {
     let engine: InputEngine | null = null;
     let bridge: InputCommandBridge | null = null;
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
-      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      initialSimulation: createNewGameSimulation(VESSEL),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSimulationReplaced: (simulation) => {
         engine?.setThrottleAxis(simulation.snapshot.throttle);
@@ -145,14 +143,14 @@ describe('GameSessionController', () => {
     const storage = new MemoryStorage();
     const source = createController(storage);
     source.saveLocal();
-    const live = createNewGameSimulation(SHIP_MASS_KG);
+    const live = createNewGameSimulation(VESSEL);
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
       createSimulation: () => {
         throw new Error('factory failed');
       },
       initialSimulation: live,
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
     });
     const settingsBefore = controller.settings;
@@ -201,10 +199,10 @@ describe('GameSessionController', () => {
     const storage = new MemoryStorage();
     const published: string[] = [];
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
-      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      initialSimulation: createNewGameSimulation(VESSEL),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSettingsChanged: (settings) => published.push(settings.tutorial.stepId),
     });
@@ -223,10 +221,10 @@ describe('GameSessionController', () => {
     const storage = new MemoryStorage();
     const origins: string[] = [];
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
-      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      initialSimulation: createNewGameSimulation(VESSEL),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSettingsChanged: (_settings, origin) => origins.push(origin),
     });
@@ -241,10 +239,10 @@ describe('GameSessionController', () => {
     const storage = new MemoryStorage();
     let publishCount = 0;
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
-      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      initialSimulation: createNewGameSimulation(VESSEL),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSettingsChanged: () => {
         publishCount += 1;
@@ -339,14 +337,14 @@ describe('GameSessionController', () => {
 
   it('atomically replaces the live simulation when New Game construction succeeds', () => {
     const storage = new MemoryStorage();
-    const live = createNewGameSimulation(SHIP_MASS_KG);
-    const replacement = createNewGameSimulation(SHIP_MASS_KG);
+    const live = createNewGameSimulation(VESSEL);
+    const replacement = createNewGameSimulation(VESSEL);
     const replacements: SimulationCore[] = [];
     const controller = new GameSessionController({
       createNewSimulation: () => replacement,
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
       initialSimulation: live,
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSimulationReplaced: (simulation) => replacements.push(simulation),
     });
@@ -358,14 +356,14 @@ describe('GameSessionController', () => {
 
   it('keeps the live simulation when New Game construction fails', () => {
     const storage = new MemoryStorage();
-    const live = createNewGameSimulation(SHIP_MASS_KG);
+    const live = createNewGameSimulation(VESSEL);
     const controller = new GameSessionController({
       createNewSimulation: () => {
         throw new Error('factory failed');
       },
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
       initialSimulation: live,
-      saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+      saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
     });
 
@@ -393,14 +391,14 @@ describe('GameSessionController', () => {
 
   it('fails closed when Continue availability cannot be inspected', () => {
     const storage = new MemoryStorage();
-    const saveRepository = new SaveRepository(storage, SHIP_MASS_KG);
+    const saveRepository = new SaveRepository(storage, VESSEL);
     saveRepository.load = () => {
       throw new Error('unexpected repository failure');
     };
     const controller = new GameSessionController({
-      createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-      createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
-      initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      initialSimulation: createNewGameSimulation(VESSEL),
       saveRepository,
       settingsRepository: new SettingsRepository(storage),
     });
