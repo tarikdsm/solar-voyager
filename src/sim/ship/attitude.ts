@@ -112,6 +112,107 @@ export function evaluateBodyRateQuaternionInto(
   return outputQuaternion;
 }
 
+/**
+ * Returns the shortest-path rotation angle in radians between two unit quaternions.
+ *
+ * physics-spec.md §3.0.1 — `theta_err`. Uses `2*atan2(|vec(q_rel)|, |w(q_rel)|)`
+ * rather than `2*acos(|dot|)` because `acos` loses roughly half its significant
+ * digits as its argument approaches 1, which is exactly where a converged hold
+ * lives. The sign fold picks the shorter of the two double-cover representations,
+ * so the result is always in `[0, pi]`.
+ */
+export function quaternionSeparationRad(
+  quaternionA: Float64Array,
+  quaternionB: Float64Array,
+): number {
+  const ax = quaternionA[QUATERNION_X] as number;
+  const ay = quaternionA[QUATERNION_Y] as number;
+  const az = quaternionA[QUATERNION_Z] as number;
+  const aw = quaternionA[QUATERNION_W] as number;
+  const bx = quaternionB[QUATERNION_X] as number;
+  const by = quaternionB[QUATERNION_Y] as number;
+  const bz = quaternionB[QUATERNION_Z] as number;
+  const bw = quaternionB[QUATERNION_W] as number;
+  const dot = ax * bx + ay * by + az * bz + aw * bw;
+  const sign = dot < 0 ? -1 : 1;
+  const relativeX = sign * (aw * bx - ax * bw - ay * bz + az * by);
+  const relativeY = sign * (aw * by + ax * bz - ay * bw - az * bx);
+  const relativeZ = sign * (aw * bz - ax * by + ay * bx - az * bw);
+  return 2 * Math.atan2(Math.hypot(relativeX, relativeY, relativeZ), sign * dot);
+}
+
+/**
+ * Writes the current attitude advanced toward a target by at most `maximumStepRad`.
+ *
+ * physics-spec.md §3.0.1 / ADR-035 — bounded hold-mode pursuit:
+ * `theta_step = min(theta_err, maxSlewRadPerSimS * dtSimSec)`, applied as a slerp
+ * along the shortest-path geodesic.
+ *
+ * When the budget covers the whole separation the target is copied **verbatim**
+ * instead of being re-derived by a unit-fraction slerp, so the quaternion a
+ * converged hold publishes is bit-identical to the pre-ADR-035 snap and the
+ * pursuit is rate-independent once converged. The `!(x > y)` form routes
+ * `theta_err === 0` to the copy branch rather than through a zero division; a
+ * non-positive or non-finite budget is treated as zero, which holds the current
+ * attitude.
+ *
+ * The step is composed as an axis-angle product on the axis already carried by
+ * the relative quaternion, avoiding the `1/sin(theta)` blow-up of the textbook
+ * slerp formula at small separations.
+ */
+export function writeSlewLimitedQuaternionInto(
+  outputQuaternion: Float64Array,
+  currentQuaternion: Float64Array,
+  targetQuaternion: Float64Array,
+  maximumStepRad: number,
+): Float64Array {
+  const currentX = currentQuaternion[QUATERNION_X] as number;
+  const currentY = currentQuaternion[QUATERNION_Y] as number;
+  const currentZ = currentQuaternion[QUATERNION_Z] as number;
+  const currentW = currentQuaternion[QUATERNION_W] as number;
+  const targetX = targetQuaternion[QUATERNION_X] as number;
+  const targetY = targetQuaternion[QUATERNION_Y] as number;
+  const targetZ = targetQuaternion[QUATERNION_Z] as number;
+  const targetW = targetQuaternion[QUATERNION_W] as number;
+
+  const dot = currentX * targetX + currentY * targetY + currentZ * targetZ + currentW * targetW;
+  const sign = dot < 0 ? -1 : 1;
+  const relativeX =
+    sign * (currentW * targetX - currentX * targetW - currentY * targetZ + currentZ * targetY);
+  const relativeY =
+    sign * (currentW * targetY + currentX * targetZ - currentY * targetW - currentZ * targetX);
+  const relativeZ =
+    sign * (currentW * targetZ - currentX * targetY + currentY * targetX - currentZ * targetW);
+  const sineHalfSeparation = Math.hypot(relativeX, relativeY, relativeZ);
+  const separationRad = 2 * Math.atan2(sineHalfSeparation, sign * dot);
+  const stepRad = maximumStepRad > 0 ? maximumStepRad : 0;
+
+  if (!(separationRad > stepRad)) {
+    outputQuaternion[QUATERNION_X] = targetX;
+    outputQuaternion[QUATERNION_Y] = targetY;
+    outputQuaternion[QUATERNION_Z] = targetZ;
+    outputQuaternion[QUATERNION_W] = targetW;
+    return outputQuaternion;
+  }
+
+  const halfStep = 0.5 * stepRad;
+  const axisScale = Math.sin(halfStep) / sineHalfSeparation;
+  const deltaX = relativeX * axisScale;
+  const deltaY = relativeY * axisScale;
+  const deltaZ = relativeZ * axisScale;
+  const deltaW = Math.cos(halfStep);
+  const x = currentW * deltaX + currentX * deltaW + currentY * deltaZ - currentZ * deltaY;
+  const y = currentW * deltaY - currentX * deltaZ + currentY * deltaW + currentZ * deltaX;
+  const z = currentW * deltaZ + currentX * deltaY - currentY * deltaX + currentZ * deltaW;
+  const w = currentW * deltaW - currentX * deltaX - currentY * deltaY - currentZ * deltaZ;
+  const inverseNorm = 1 / Math.hypot(x, y, z, w);
+  outputQuaternion[QUATERNION_X] = x * inverseNorm;
+  outputQuaternion[QUATERNION_Y] = y * inverseNorm;
+  outputQuaternion[QUATERNION_Z] = z * inverseNorm;
+  outputQuaternion[QUATERNION_W] = w * inverseNorm;
+  return outputQuaternion;
+}
+
 /** Returns the body with maximum instantaneous mu/d² at the ship position. */
 export function selectMaximumGravityBodyIndex(
   shipState: Float64Array,

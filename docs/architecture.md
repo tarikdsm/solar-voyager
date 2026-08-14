@@ -54,13 +54,13 @@ their v2 behavior from the named task — none of that v2 behavior has landed ye
 src/
 ├── sim/
 │   ├── ship/vessel.ts                      # LANDED VesselConfig + defaults (T0104)
-│   ├── ship/attitude.ts                    # MOD  slew-limited hold pursuit (T0107)
+│   ├── ship/attitude.ts                    # LANDED slew-limited hold pursuit (T0107)
 │   ├── ship/collision.ts                   # NEW  surface-crossing detection (T0111)
 │   ├── guidance/constantAccelIntercept.ts  # NEW  physics-spec §8 solver (T0114)
 │   ├── guidance/brakingEnvelope.ts         # NEW  relativistic stop-distance (T0114)
-│   ├── simulation.ts                       # MOD  vessel injection LANDED (T0104); collision, slew (T0107/11)
-│   └── simulationSnapshot.ts               # MOD  impact fields + vessel echo (ADR) (T0111)
-├── core/time.ts                            # MOD  MAX_THRUST_WARP retune (T0115)
+│   ├── simulation.ts                       # MOD  vessel (T0104) + slew (T0107) LANDED; collision (T0111)
+│   └── simulationSnapshot.ts               # MOD  manual-rotation lockout LANDED (T0107); impact fields (T0111)
+├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
 ├── game/
 │   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
 │   ├── input/                              # LANDED engine+bindings (T0105); gamepad next (T0106)

@@ -59,6 +59,7 @@ import {
   writeAttitudeDirectionInto,
   writeForwardFromQuaternionInto,
   writeQuaternionFromForwardInto,
+  writeSlewLimitedQuaternionInto,
 } from './ship/attitude.js';
 import {
   photonDrivePowerW,
@@ -153,6 +154,7 @@ export class SimulationCore {
   private readonly catalog: CompiledRailsCatalog;
   private readonly shipMassKg: number;
   private readonly maximumProperAccelerationKmS2: number;
+  private readonly maximumSlewRadPerSimS: number;
   private readonly initialKineticEnergyJ: number;
   private readonly burnLogRecorder: BurnLogRecorder;
   private readonly burnLogPersistence: BurnLogPersistence;
@@ -173,6 +175,7 @@ export class SimulationCore {
   private readonly stepStartAttitudeQuaternion: Float64Array;
   private readonly stageAttitudeQuaternion: Float64Array;
   private readonly endpointAttitudeQuaternion: Float64Array;
+  private readonly targetAttitudeQuaternion: Float64Array;
   private readonly angularVelocityBodyRadS: Float64Array;
   private readonly attitudeDirection: Float64Array;
   private readonly attitudeCoordinateVelocityKmS: Float64Array;
@@ -207,6 +210,10 @@ export class SimulationCore {
     this.vessel = persistentState?.vessel ?? optionsVessel;
     this.shipMassKg = this.vessel.restMassKg;
     this.maximumProperAccelerationKmS2 = validateMaxProperAcceleration(this.vessel.alphaMaxMS2);
+    // Cached like the mass and the drive limit (ADR-034): the frame loop reads a
+    // scalar, not a property chain through a frozen object. Sourced from the
+    // vessel actually in force, so a restored non-default vessel is honoured.
+    this.maximumSlewRadPerSimS = this.vessel.maxSlewRadPerSimS;
     this.initialKineticEnergyJ =
       persistentState?.initialKineticEnergyJ ??
       relativisticKineticEnergyJ(
@@ -243,6 +250,7 @@ export class SimulationCore {
     this.stepStartAttitudeQuaternion = new Float64Array([0, 0, 0, 1]);
     this.stageAttitudeQuaternion = new Float64Array(4);
     this.endpointAttitudeQuaternion = new Float64Array(4);
+    this.targetAttitudeQuaternion = new Float64Array(4);
     this.angularVelocityBodyRadS = new Float64Array(3);
     this.attitudeDirection = new Float64Array(3);
     this.attitudeCoordinateVelocityKmS = new Float64Array(3);
@@ -384,6 +392,10 @@ export class SimulationCore {
     const nextShipState = nextSnapshotIndex === 0 ? this.shipStates[0] : this.shipStates[1];
     this.stepStartTimeSec = this.clock.timeSec;
     this.stepStartAttitudeQuaternion.set(this.attitudeQuaternion);
+    // ADR-025 §4: `Commands.rotate` takes (pitch, yaw, roll) and stores them in that
+    // order, but body rates are indexed by the +X-forward axis convention — roll is
+    // about +X, pitch about +Y, yaw about +Z. Hence the remap [pitch,yaw,roll] ->
+    // [roll,pitch,yaw]; it is a reordering, not a relabelling.
     this.angularVelocityBodyRadS[0] = this.commandState.rotationRatesRadS[2] as number;
     this.angularVelocityBodyRadS[1] = this.commandState.rotationRatesRadS[0] as number;
     this.angularVelocityBodyRadS[2] = this.commandState.rotationRatesRadS[1] as number;
@@ -657,11 +669,30 @@ export class SimulationCore {
         this.stepStartAttitudeQuaternion,
       );
       writeQuaternionFromForwardInto(
-        outputAttitudeQuaternion,
+        this.targetAttitudeQuaternion,
         this.attitudeDirection[0] as number,
         this.attitudeDirection[1] as number,
         this.attitudeDirection[2] as number,
       );
+      // physics-spec.md §3.0.1 / ADR-035 — bounded pursuit instead of a snap. The
+      // budget is measured from the START OF THE FRAME, never accumulated per
+      // derivative evaluation or per accepted step: the attitude must be a pure
+      // function of (frame-start attitude, frame-start time, timeSec, state) so
+      // that rejected DP54 steps, warp-ladder rollback, and a different tolerance
+      // all reproduce the same quaternion. Once the budget covers the separation
+      // the published quaternion is the pre-ADR-035 snap, bit for bit.
+      writeSlewLimitedQuaternionInto(
+        outputAttitudeQuaternion,
+        this.stepStartAttitudeQuaternion,
+        this.targetAttitudeQuaternion,
+        this.maximumSlewRadPerSimS * (timeSec - this.stepStartTimeSec),
+      );
+      // Thrust follows the attitude the ship actually holds, not the one it is
+      // slewing toward. Re-deriving from the quaternion (rather than reusing the
+      // solved direction, as the pre-ADR-035 code did) also makes thrust and the
+      // rendered nose exactly consistent, at the cost of one normalize round trip
+      // — worst case 5.6e-8 rad against the old thrust direction (ADR-035 §3).
+      writeForwardFromQuaternionInto(this.attitudeDirection, outputAttitudeQuaternion);
     }
     writeProperAccelerationInto(
       outputProperAccelerationKmS2,

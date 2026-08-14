@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { WARP_LADDER, type WarpFactor } from '../core/time.js';
+import { MANUAL_ATTITUDE_MAX_WARP, WARP_LADDER, type WarpFactor } from '../core/time.js';
 import {
   createCommandController,
   createSimulationSnapshotBuffer,
@@ -109,6 +109,56 @@ describe('command controller', () => {
     controller.commands.setThrottle(0);
     controller.commands.setAttitudeMode('retrograde');
     expect(invalidations).toBe(6);
+  });
+
+  it('locks manual rotation above MANUAL_ATTITUDE_MAX_WARP but keeps holds — ADR-035', () => {
+    const controller = createCommandController(Object.freeze(['sun']));
+
+    controller.commands.setWarp(MANUAL_ATTITUDE_MAX_WARP);
+    controller.commands.rotate(0.1, -0.2, 0.3);
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0.1, -0.2, 0.3]);
+
+    // Crossing the ceiling must clear rates already in flight — surviving rates
+    // multiplied by warp are exactly the v1 tumble this constant exists to stop.
+    controller.commands.setWarp(1e3);
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0, 0, 0]);
+
+    // Rejected, not thrown: the flight controller calls rotate() every frame.
+    expect(() => controller.commands.rotate(0.4, 0.5, 0.6)).not.toThrow();
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0, 0, 0]);
+    // Non-finite input is a programming error and still throws.
+    expect(() => controller.commands.rotate(Number.NaN, 0, 0)).toThrow(/rotation rates/u);
+
+    // Holds are unaffected — they are what makes the lockout acceptable.
+    controller.commands.setAttitudeMode('retrograde');
+    expect(controller.state.attitudeMode).toBe('retrograde');
+
+    // Dropping back restores authority; stale intent is not replayed.
+    controller.commands.setWarp(10);
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0, 0, 0]);
+    controller.commands.rotate(0.4, 0.5, 0.6);
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0.4, 0.5, 0.6]);
+  });
+
+  it('invalidates once when a warp increase clears live manual rotation', () => {
+    let invalidations = 0;
+    const controller = createCommandController(Object.freeze(['sun']), () => {
+      invalidations += 1;
+    });
+
+    controller.commands.rotate(0.1, 0, 0);
+    controller.commands.setThrottle(0.5);
+    expect(invalidations).toBe(1);
+
+    // Below MAX_THRUST_WARP, so throttle survives and only the rates are cleared.
+    controller.commands.setWarp(1e3);
+    expect(controller.state.throttle).toBe(0.5);
+    expect(Array.from(controller.state.rotationRatesRadS)).toEqual([0, 0, 0]);
+    expect(invalidations).toBe(2);
+
+    // Already zero: nothing changed, so nothing is republished.
+    controller.commands.setWarp(1e4);
+    expect(invalidations).toBe(3); // throttle lockout only
   });
 
   it('forces coast above physics warp and does not restore stale throttle intent', () => {

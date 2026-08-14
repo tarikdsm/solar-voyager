@@ -1,4 +1,9 @@
-import { MAX_THRUST_WARP, WARP_LADDER, type WarpFactor } from '../core/time.js';
+import {
+  MANUAL_ATTITUDE_MAX_WARP,
+  MAX_THRUST_WARP,
+  WARP_LADDER,
+  type WarpFactor,
+} from '../core/time.js';
 import { RELATIVISTIC_STATE_DIMENSION } from './ship/relativity.js';
 
 /** Stable codes explaining budget clamps or coast-only warp safety. */
@@ -262,16 +267,23 @@ class SimulationCommands implements Commands {
     ) {
       throw new RangeError('rotation rates must be finite');
     }
+    // ADR-035 — manual rotation is a regime, not a validation error: rates above
+    // MANUAL_ATTITUDE_MAX_WARP are forced to zero exactly as setThrottle forces
+    // throttle to zero above MAX_THRUST_WARP. Holds remain available there.
+    const locked = this.commandState.requestedWarp > MANUAL_ATTITUDE_MAX_WARP;
+    const effectivePitchRateRadS = locked ? 0 : pitchRateRadS;
+    const effectiveYawRateRadS = locked ? 0 : yawRateRadS;
+    const effectiveRollRateRadS = locked ? 0 : rollRateRadS;
     if (
-      pitchRateRadS === this.commandState.rotationRatesRadS[0] &&
-      yawRateRadS === this.commandState.rotationRatesRadS[1] &&
-      rollRateRadS === this.commandState.rotationRatesRadS[2]
+      effectivePitchRateRadS === this.commandState.rotationRatesRadS[0] &&
+      effectiveYawRateRadS === this.commandState.rotationRatesRadS[1] &&
+      effectiveRollRateRadS === this.commandState.rotationRatesRadS[2]
     ) {
       return;
     }
-    this.commandState.rotationRatesRadS[0] = pitchRateRadS;
-    this.commandState.rotationRatesRadS[1] = yawRateRadS;
-    this.commandState.rotationRatesRadS[2] = rollRateRadS;
+    this.commandState.rotationRatesRadS[0] = effectivePitchRateRadS;
+    this.commandState.rotationRatesRadS[1] = effectiveYawRateRadS;
+    this.commandState.rotationRatesRadS[2] = effectiveRollRateRadS;
     if (this.commandState.throttle > 0 && this.commandState.attitudeMode === 'manual') {
       this.onTrajectoryInvalidated?.();
     }
@@ -280,12 +292,29 @@ class SimulationCommands implements Commands {
   setWarp(warp: WarpFactor): void {
     if (!isWarpFactor(warp)) throw new RangeError('warp must use the canonical ladder');
     this.commandState.requestedWarp = warp;
+    let invalidated = false;
     if (warp > MAX_THRUST_WARP && this.commandState.throttle > 0) {
       const previousThrottle = this.commandState.throttle;
       this.commandState.throttle = 0;
       this.onThrottleChanged?.(previousThrottle, 0);
-      this.onTrajectoryInvalidated?.();
+      invalidated = true;
     }
+    // Without this the lockout would be decorative: the v1 tumble came from rates
+    // commanded *before* the warp increase surviving it and being multiplied by it.
+    if (warp > MANUAL_ATTITUDE_MAX_WARP && this.clearRotationRates()) {
+      invalidated ||= this.commandState.throttle > 0 && this.commandState.attitudeMode === 'manual';
+    }
+    if (invalidated) this.onTrajectoryInvalidated?.();
+  }
+
+  /** Zeroes commanded body rates in place; returns whether anything changed. */
+  private clearRotationRates(): boolean {
+    const rates = this.commandState.rotationRatesRadS;
+    if (rates[0] === 0 && rates[1] === 0 && rates[2] === 0) return false;
+    rates[0] = 0;
+    rates[1] = 0;
+    rates[2] = 0;
+    return true;
   }
 
   setTarget(bodyId: string | null): void {
