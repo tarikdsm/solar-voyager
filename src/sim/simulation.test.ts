@@ -182,11 +182,15 @@ describe('SimulationCore attitude slew — ADR-035 / physics-spec.md §3.0.1', (
       // Sim-time cost of the manoeuvre is warp-independent by construction.
       expect(result.simSec).toBeGreaterThanOrEqual(HALF_TURN_SLEW_SEC);
       expect(result.simSec - HALF_TURN_SLEW_SEC).toBeLessThanOrEqual(wallDtSec * warp);
-      expect(result.wallSec).toBeCloseTo(result.simSec / warp, 1);
+      // Wall time is exactly sim/warp; the tier bounds below are asserted on that
+      // manoeuvre figure rather than on the frame-quantized measurement, because
+      // 12.000 s at 50x is exactly 15 frames and a bound sitting on a sampling
+      // boundary would flip red for any cadence change rather than any real one.
+      expect(result.wallSec).toBeCloseTo(result.simSec / warp, 10);
     }
-    expect(measured.get(1)?.wallSec).toBeGreaterThan(11);
-    expect(measured.get(5)?.wallSec).toBeLessThanOrEqual(2.5);
-    expect(measured.get(50)?.wallSec).toBeLessThanOrEqual(0.25);
+    expect((measured.get(1)?.simSec ?? 0) / 1).toBeGreaterThan(11);
+    expect((measured.get(5)?.simSec ?? 0) / 5).toBeLessThanOrEqual(2.5);
+    expect((measured.get(50)?.simSec ?? 0) / 50).toBeLessThanOrEqual(0.25);
   });
 
   it('slews at the restored vessel rate, not the default one', () => {
@@ -260,6 +264,74 @@ describe('SimulationCore attitude slew — ADR-035 / physics-spec.md §3.0.1', (
     ).toBeLessThan(1e-12);
   });
 
+  it('publishes one attitude per simulation time however the steps are sized', () => {
+    // A different tolerance and seed step produce a different accepted/rejected
+    // step sequence over the same frame. Frame anchoring means the attitude cannot
+    // notice: it reads only (frame-start attitude, frame-start time, timeSec).
+    const coarse = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      vessel: DEFAULT_VESSEL,
+    });
+    const fine = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: farFieldState(),
+      vessel: DEFAULT_VESSEL,
+      integrationTolerance: verificationTolerance(),
+    });
+    coarse.commands.setAttitudeMode('prograde');
+    fine.commands.setAttitudeMode('prograde');
+
+    const coarseSnapshot = coarse.step(4);
+    const fineSnapshot = fine.step(4);
+
+    expect(quaternionSeparationRad(coarseSnapshot.attitudeQuaternion, PROGRADE)).toBeGreaterThan(
+      0.5,
+    );
+    expect(
+      quaternionSeparationRad(coarseSnapshot.attitudeQuaternion, fineSnapshot.attitudeQuaternion),
+    ).toBeLessThan(1e-12);
+  });
+
+  it('leaves no attitude residue when a warp tier is rolled back', () => {
+    // ADR-035 decision 2 names budget-exhausted rollback as the reason for frame
+    // anchoring. The core below requests 10x, exhausts the shared step budget, and
+    // publishes its last completed 5x checkpoint; the reference only ever asks for
+    // 5x. Both must land on the same attitude, mid-slew, with no partial tier left
+    // behind — targetTimeSec falls back with the state, so the budget does too.
+    const tolerance = verificationTolerance(7);
+    tolerance.initialStepSec = 0.01;
+    const buildCore = (): SimulationCore =>
+      new SimulationCore({
+        catalog: earthCatalog(),
+        initialShipState: farFieldState(),
+        vessel: ONE_G_VESSEL,
+        integrationTolerance: tolerance,
+      });
+
+    const rolledBack = buildCore();
+    rolledBack.commands.setAttitudeMode('prograde');
+    rolledBack.commands.setThrottle(0.4);
+    rolledBack.commands.setWarp(10);
+    const snapshot = rolledBack.step(1);
+
+    expect(snapshot.warpClampReason).toBe(WarpClampReason.INTEGRATION_BUDGET);
+    expect(snapshot.effectiveWarp).toBeLessThan(10);
+    // Mid-slew, so the discarded tier carried a strictly larger budget to leak.
+    expect(quaternionSeparationRad(snapshot.attitudeQuaternion, PROGRADE)).toBeGreaterThan(0.1);
+
+    // Same run, but only ever asking for the tier that actually completed.
+    const reference = buildCore();
+    reference.commands.setAttitudeMode('prograde');
+    reference.commands.setThrottle(0.4);
+    reference.commands.setWarp(snapshot.effectiveWarp);
+    const referenceSnapshot = reference.step(1);
+
+    expect(referenceSnapshot.warpClampReason).toBe(WarpClampReason.NONE);
+    expect(snapshot.simTimeSec).toBe(referenceSnapshot.simTimeSec);
+    expect(snapshot.attitudeQuaternion).toEqual(referenceSnapshot.attitudeQuaternion);
+  });
+
   it('drifts under 1e-3 km from the pre-ADR-035 snap over a converged LEO orbit', () => {
     const periodSec = 2 * Math.PI * Math.sqrt(ORBIT_RADIUS_KM ** 3 / EARTH_MU_KM3_S2);
     const alignmentSec = Math.PI / 2 / ONE_G_VESSEL.maxSlewRadPerSimS + 1;
@@ -290,13 +362,21 @@ describe('SimulationCore attitude slew — ADR-035 / physics-spec.md §3.0.1', (
       (slewed.snapshot.shipState[2] as number) - (snapped.snapshot.shipState[2] as number),
     );
 
-    // A converged hold does not approximate the old snap, it reproduces it: the
-    // budget covers theta_err at every stage and the target is copied verbatim.
+    // Exactly zero: both cores run the ADR-035 code and a converged hold copies
+    // the target verbatim, so the slew RATE cannot move the trajectory. This
+    // isolates the rate, not the whole change — the pre-ADR-035 law additionally
+    // fed the solved direction to the drive without the quaternion round trip,
+    // worth <= 5.6e-8 rad of thrust direction (ADR-035 decision 3).
     expect(driftKm).toBeLessThan(1e-3);
     expect(driftKm).toBe(0);
   });
 
-  it('prices a converged hold identically at 1x and 100x', () => {
+  it('flies a converged hold identically at 1x and 100x', () => {
+    // The ledger's own 1x/100x regression is manual-mode and compares quantities
+    // built from |alpha|, so it is attitude-blind by construction. This case is
+    // the direction-SENSITIVE counterpart: a prograde hold whose target sweeps
+    // with the orbit, compared on the integrated state and the per-axis burn
+    // decomposition, which no attitude-independent argument can carry.
     const alignmentSec = Math.PI / 2 / ONE_G_VESSEL.maxSlewRadPerSimS + 1;
     const realtime = new SimulationCore({
       catalog: earthCatalog(),
@@ -330,12 +410,45 @@ describe('SimulationCore attitude slew — ADR-035 / physics-spec.md §3.0.1', (
     expect(
       relativeError(warpedSnapshot.properDeltaVMS, realtimeSnapshot.properDeltaVMS),
     ).toBeLessThan(1e-12);
+
+    // Everything below depends on WHERE the ship pointed, not just how hard it
+    // pushed, so a frame-size-dependent slew would show up here and nowhere above.
+    // Bounds are ~2-3 orders above the measured agreement, not fitted to it.
     expect(
       quaternionSeparationRad(
         warpedSnapshot.attitudeQuaternion,
         realtimeSnapshot.attitudeQuaternion,
       ),
-    ).toBeLessThan(1e-9);
+    ).toBeLessThan(1e-12); // measured 1.1e-16
+    // Compared as physical magnitudes, not per-component relative error: the
+    // out-of-plane components are exactly zero, where relative error is 0/0.
+    const positionDriftKm = Math.hypot(
+      (warpedSnapshot.shipState[0] as number) - (realtimeSnapshot.shipState[0] as number),
+      (warpedSnapshot.shipState[1] as number) - (realtimeSnapshot.shipState[1] as number),
+      (warpedSnapshot.shipState[2] as number) - (realtimeSnapshot.shipState[2] as number),
+    );
+    const celerityDriftKmS = Math.hypot(
+      (warpedSnapshot.shipState[3] as number) - (realtimeSnapshot.shipState[3] as number),
+      (warpedSnapshot.shipState[4] as number) - (realtimeSnapshot.shipState[4] as number),
+      (warpedSnapshot.shipState[5] as number) - (realtimeSnapshot.shipState[5] as number),
+    );
+    expect(positionDriftKm).toBeLessThan(1e-9); // measured 3.6e-12 km
+    expect(celerityDriftKmS).toBeLessThan(1e-12); // measured 1.8e-15 km/s
+    expect(
+      relativeError(warpedSnapshot.shipProperTimeSec, realtimeSnapshot.shipProperTimeSec),
+    ).toBeLessThan(1e-12);
+
+    // The burn basis decomposes the same joules onto prograde/normal/radial axes
+    // fixed at ignition, so the radial component is nonzero only because the nose
+    // tracked a rotating target — it is the attitude path, priced.
+    const warpedBurn = warped.burnLog.activeBurn;
+    const realtimeBurn = realtime.burnLog.activeBurn;
+    expect(realtimeBurn).not.toBeNull();
+    expect(Math.abs(realtimeBurn?.progradeDeltaVMS ?? 0)).toBeGreaterThan(1);
+    expect(Math.abs(realtimeBurn?.radialDeltaVMS ?? 0)).toBeGreaterThan(0.1);
+    for (const axis of ['progradeDeltaVMS', 'normalDeltaVMS', 'radialDeltaVMS'] as const) {
+      expect(warpedBurn?.[axis] ?? Number.NaN).toBeCloseTo(realtimeBurn?.[axis] ?? Number.NaN, 9);
+    }
   });
 });
 

@@ -680,7 +680,7 @@ export class SimulationCore {
       // function of (frame-start attitude, frame-start time, timeSec, state) so
       // that rejected DP54 steps, warp-ladder rollback, and a different tolerance
       // all reproduce the same quaternion. Once the budget covers the separation
-      // this degenerates to the pre-ADR-035 snap, bit for bit.
+      // the published quaternion is the pre-ADR-035 snap, bit for bit.
       writeSlewLimitedQuaternionInto(
         outputAttitudeQuaternion,
         this.stepStartAttitudeQuaternion,
@@ -688,7 +688,10 @@ export class SimulationCore {
         this.maximumSlewRadPerSimS * (timeSec - this.stepStartTimeSec),
       );
       // Thrust follows the attitude the ship actually holds, not the one it is
-      // slewing toward.
+      // slewing toward. Re-deriving from the quaternion (rather than reusing the
+      // solved direction, as the pre-ADR-035 code did) also makes thrust and the
+      // rendered nose exactly consistent, at the cost of one normalize round trip
+      // — worst case 5.6e-8 rad against the old thrust direction (ADR-035 §3).
       writeForwardFromQuaternionInto(this.attitudeDirection, outputAttitudeQuaternion);
     }
     writeProperAccelerationInto(

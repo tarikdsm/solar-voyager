@@ -149,11 +149,12 @@ export function quaternionSeparationRad(
  * along the shortest-path geodesic.
  *
  * When the budget covers the whole separation the target is copied **verbatim**
- * instead of being re-derived by a unit-fraction slerp. That keeps a converged
- * hold bit-identical to the pre-ADR-035 snap, and makes an unbounded slew rate an
- * exact reproduction of it. The `!(x > y)` form routes `theta_err === 0` to the
- * copy branch rather than through a zero division; a non-positive or non-finite
- * budget is treated as zero, which holds the current attitude.
+ * instead of being re-derived by a unit-fraction slerp, so the quaternion a
+ * converged hold publishes is bit-identical to the pre-ADR-035 snap and the
+ * pursuit is rate-independent once converged. The `!(x > y)` form routes
+ * `theta_err === 0` to the copy branch rather than through a zero division; a
+ * non-positive or non-finite budget is treated as zero, which holds the current
+ * attitude.
  *
  * The step is composed as an axis-angle product on the axis already carried by
  * the relative quaternion, avoiding the `1/sin(theta)` blow-up of the textbook
