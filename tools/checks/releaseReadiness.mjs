@@ -15,6 +15,8 @@ const REQUIRED_FILES = [
 ];
 const DEFERRED_TASKS = new Set(['T0060', 'T0061', 'T0062']);
 const REQUIRED_RELEASE_TASKS = [...DEFERRED_TASKS, 'T0101'];
+const RELEASE_MANIFEST_RELATIVE_PATH = 'tools/checks/releaseManifest.json';
+const DEFAULT_RELEASE = 'v1';
 
 async function exists(path) {
   try {
@@ -23,6 +25,10 @@ async function exists(path) {
   } catch {
     return false;
   }
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function localMarkdownLinks(source) {
@@ -44,8 +50,46 @@ function isInside(root, target) {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
+/**
+ * Loads the committed release manifest and returns the frozen task-id scope for `release`
+ * (ADR-033). Tasks outside the returned set are exempt from the "must be DONE" rule in
+ * `verifyReleaseReadiness` — they remain subject to schema validation via `check:tasks`.
+ */
+async function loadReleaseScope(root, release) {
+  const manifestPath = join(root, ...RELEASE_MANIFEST_RELATIVE_PATH.split('/'));
+  const source = await readFile(manifestPath, 'utf8');
+
+  let manifest;
+  try {
+    manifest = JSON.parse(source);
+  } catch (error) {
+    throw new Error(
+      `${RELEASE_MANIFEST_RELATIVE_PATH} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!isRecord(manifest)) {
+    throw new Error(`${RELEASE_MANIFEST_RELATIVE_PATH}: root must be an object`);
+  }
+
+  const scope = manifest[release];
+  if (
+    !isRecord(scope) ||
+    !Array.isArray(scope.taskIds) ||
+    scope.taskIds.some((id) => typeof id !== 'string')
+  ) {
+    throw new Error(
+      `${RELEASE_MANIFEST_RELATIVE_PATH}: unknown or invalid release scope "${release}"`,
+    );
+  }
+
+  return new Set(scope.taskIds);
+}
+
 /** Returns every release finding so CI can report all actionable drift at once. */
-export async function verifyReleaseReadiness(repositoryRoot, { final = false } = {}) {
+export async function verifyReleaseReadiness(
+  repositoryRoot,
+  { final = false, release = DEFAULT_RELEASE } = {},
+) {
   const root = resolve(repositoryRoot);
   const findings = [];
 
@@ -76,6 +120,13 @@ export async function verifyReleaseReadiness(repositoryRoot, { final = false } =
     findings.push(`README.md: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  let releasedTaskIds;
+  try {
+    releasedTaskIds = await loadReleaseScope(root, release);
+  } catch (error) {
+    findings.push(`release manifest: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   let tasks = [];
   try {
     tasks = await loadCanonicalTasks(join(root, 'tasks'));
@@ -97,7 +148,9 @@ export async function verifyReleaseReadiness(repositoryRoot, { final = false } =
             `T0101 must be ${final ? 'DONE for final release' : 'IN_PROGRESS, REVIEW, or DONE'}; found ${String(task.status)}`,
           );
         }
-      } else if (task.status !== 'DONE') {
+      } else if (releasedTaskIds?.has(task.id) && task.status !== 'DONE') {
+        // Tasks outside the release manifest's scope (e.g. v2+ work-in-progress) are exempt:
+        // check:tasks still schema-validates them, but they do not gate release readiness.
         findings.push(`${task.id} must be DONE; found ${String(task.status)}`);
       }
     }
@@ -121,11 +174,22 @@ export async function verifyReleaseReadiness(repositoryRoot, { final = false } =
 async function main() {
   const arguments_ = process.argv.slice(2);
   const final = arguments_.includes('--final');
-  const unknown = arguments_.filter((value) => value !== '--final');
+  let release = DEFAULT_RELEASE;
+  const unknown = [];
+  for (const value of arguments_) {
+    if (value === '--final') continue;
+    const releaseMatch = /^--release=(.+)$/u.exec(value);
+    if (releaseMatch) {
+      release = releaseMatch[1];
+      continue;
+    }
+    unknown.push(value);
+  }
   if (unknown.length > 0) throw new Error(`unknown argument: ${unknown.join(' ')}`);
-  const findings = await verifyReleaseReadiness(process.cwd(), { final });
+  const findings = await verifyReleaseReadiness(process.cwd(), { final, release });
   if (findings.length > 0) throw new Error(findings.join('\n'));
-  process.stdout.write(`Release readiness passed${final ? ' in final mode' : ''}.\n`);
+  const releaseSuffix = release === DEFAULT_RELEASE ? '' : ` for release ${release}`;
+  process.stdout.write(`Release readiness passed${final ? ' in final mode' : ''}${releaseSuffix}.\n`);
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? '')).href) {
