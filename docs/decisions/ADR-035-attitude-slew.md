@@ -105,10 +105,22 @@ Three constraints shaped the design.
    the hold lags and the published quaternion is frame-size dependent at high
    warp.
 
-   This breaks no contract: the lag is almost pure roll (the heading component
-   stays bounded by `ω`), so `û`, thrust, the ledger and the trajectory are
-   unaffected — only the rendered roll and any *convergence predicate* are. It is
-   scoped rather than fixed because fixing it means replacing the zero-roll
+   This breaks no contract: only the *roll* component runs away, as `O(ω/ε)`.
+   The heading component stays `O(ω)` and bounded, so `û`, thrust, the ledger and
+   the trajectory are unaffected — the lag is almost pure roll, and what notices
+   it is the rendered roll and any *convergence predicate*.
+
+   **Dwelling and transiting are different failures, and only one is a failure.**
+   A hold target that *dwells* inside the neighbourhood — a target body held near
+   inertial `−X̂`, a station-keeping hold there — never clears its roll error, so
+   a quaternion-separation predicate never fires: that is an indefinite hang. A
+   target merely *transiting* the neighbourhood, which is the ordinary case for
+   an orbiting reference sweeping through, produces a bounded, self-resolving
+   transient: roll error accumulates for the crossing and then unwinds at the
+   full 15°/s once the target's roll rate drops back under the limit. A transit
+   is not something to design around.
+
+   Scoped rather than fixed because fixing it means replacing the zero-roll
    target map, which is ADR-025 §4 contract surface and would move the navball
    and every restored attitude. See the handoff note in Consequences.
 
@@ -270,12 +282,15 @@ their original reason:
 - **The `align` phase can fail to converge near inertial `−X̂`.** Per decision 4,
   within `ε < 2ω / maxSlewRadPerSimS` of the target map's singularity (≈ 0.5° at
   LEO rates) the zero-roll target's roll rate exceeds the slew limit and the hold
-  lags indefinitely in roll. A cruise director that waits for
+  lags in roll. A cruise director that waits for
   `quaternionSeparationRad(attitude, target) < tol` before advancing phase **will
-  hang there**. Gate on the *forward direction* — `dot(forward, targetDirection)`
-  — which stays convergent because the heading component is bounded by `ω`, and
-  which is what the thrust profile actually cares about. Do not raise the phase
-  tolerance to paper over it.
+  hang there if the target dwells inside the neighbourhood**; if the target
+  merely transits it, the predicate is late by the crossing but recovers on its
+  own. Gate on the *forward direction* — `dot(forward, targetDirection)` — which
+  is convergent in both cases because the heading component stays bounded by `ω`,
+  and which is what the thrust profile actually cares about. Do not raise the
+  phase tolerance to paper over it: that trades a hang for a phase advance taken
+  before the ship is pointing anywhere in particular.
 
 ## Alternatives considered
 

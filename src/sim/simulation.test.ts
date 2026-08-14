@@ -162,35 +162,49 @@ describe('SimulationCore attitude slew — ADR-035 / physics-spec.md §3.0.1', (
   });
 
   it('scales a 180 degree flip with warp: 12 s of sim time at every tier', () => {
-    const wallDtSec = 1 / 60;
     // Plan §3.2 and the T0107 acceptance list say "warp >= 5x completes in <=
     // 0.24/0.25 s wall". That is arithmetically impossible at the contract slew
-    // rate: pi / 0.261799 = 12.000 s of SIM time, so 0.24 s wall is the 50x
+    // rate: pi / 0.261799 = 12.000018 s of SIM time, so 0.24 s wall is the 50x
     // figure and 5x is a lost factor of ten (ADR-035 records the correction).
-    // Both figures are asserted here, each at the tier where it is true.
+    //
+    // Convergence is only observable at frame boundaries, so a measurement is
+    // quantized by the SIM time one frame covers -- and that is warp-dependent.
+    // Sampling every tier at a fixed 1/60 s WALL cadence would quantize the 50x
+    // run to 0.8333 s of sim time, rounding the 12.000018 s manoeuvre up to
+    // 12.5 s and putting the wall figure at exactly 0.25 s, sitting on its own
+    // bound. So the wall cadence is scaled by warp instead, giving every tier the
+    // same 1/60 s of SIM resolution: the three runs become directly comparable,
+    // the quantization is one part in 720 everywhere, and the wall bounds clear
+    // with real headroom (2.403 s at 5x, 0.2403 s at 50x).
+    const simResolutionSec = 1 / 60;
     const measured = new Map<number, { readonly wallSec: number; readonly simSec: number }>();
     for (const warp of [1, 5, 50] as const) {
       const core = farFieldCore();
       core.commands.setAttitudeMode('prograde');
-      stepUntilAligned(core, PROGRADE, wallDtSec, 10_000);
+      stepUntilAligned(core, PROGRADE, 1 / 60, 10_000);
       core.commands.setAttitudeMode('retrograde');
       core.commands.setWarp(warp);
-      measured.set(warp, stepUntilAligned(core, RETROGRADE, wallDtSec, 10_000));
+      measured.set(warp, stepUntilAligned(core, RETROGRADE, simResolutionSec / warp, 10_000));
     }
 
+    // 721 frames of 1/60 s sim resolution: the analytic flip rounded up to the
+    // next whole frame. Identical at every tier, which IS the warp-independence
+    // claim -- the sim-time cost of the manoeuvre does not know about warp.
+    const quantizedFlipSec = Math.ceil(HALF_TURN_SLEW_SEC / simResolutionSec) * simResolutionSec;
+    expect(quantizedFlipSec).toBeGreaterThanOrEqual(HALF_TURN_SLEW_SEC);
+    expect(quantizedFlipSec - HALF_TURN_SLEW_SEC).toBeLessThan(simResolutionSec);
     for (const [warp, result] of measured) {
-      // Sim-time cost of the manoeuvre is warp-independent by construction.
-      expect(result.simSec).toBeGreaterThanOrEqual(HALF_TURN_SLEW_SEC);
-      expect(result.simSec - HALF_TURN_SLEW_SEC).toBeLessThanOrEqual(wallDtSec * warp);
-      // Wall time is exactly sim/warp; the tier bounds below are asserted on that
-      // manoeuvre figure rather than on the frame-quantized measurement, because
-      // 12.000 s at 50x is exactly 15 frames and a bound sitting on a sampling
-      // boundary would flip red for any cadence change rather than any real one.
+      expect(result.simSec).toBeCloseTo(quantizedFlipSec, 9);
       expect(result.wallSec).toBeCloseTo(result.simSec / warp, 10);
     }
-    expect((measured.get(1)?.simSec ?? 0) / 1).toBeGreaterThan(11);
-    expect((measured.get(5)?.simSec ?? 0) / 5).toBeLessThanOrEqual(2.5);
-    expect((measured.get(50)?.simSec ?? 0) / 50).toBeLessThanOrEqual(0.25);
+
+    // Wall cost is the manoeuvre divided by warp, measured rather than derived.
+    expect(measured.get(1)?.wallSec).toBeGreaterThan(11);
+    expect(measured.get(5)?.wallSec).toBeLessThanOrEqual(2.5); // 2.4033
+    expect(measured.get(50)?.wallSec).toBeLessThanOrEqual(0.25); // 0.24033
+    // ...and not by sitting on the bound: >= 3% clear at both tiers.
+    expect(measured.get(5)?.wallSec).toBeLessThan(2.5 * 0.97);
+    expect(measured.get(50)?.wallSec).toBeLessThan(0.25 * 0.97);
   });
 
   it('slews at the restored vessel rate, not the default one', () => {
