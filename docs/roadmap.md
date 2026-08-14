@@ -1,6 +1,10 @@
-# Roadmap — Solar Voyager v1
+# Roadmap — Solar Voyager
 
-Dependency spine: `M0 → M1 → M2 → M3 → M5 → M6`. The asset lane runs continuously from M1 to M6. Tasks encode the exact DAG via `depends_on`.
+v1.0 shipped 2026-07-19 (tag `v1.0.0`) via milestones `M0`–`M6` below. v2.0 (the
+free-flight redesign) is in progress via milestones `V2M1`–`V2M6`, added as
+their own section at the end of this document.
+
+Dependency spine (v1): `M0 → M1 → M2 → M3 → M5 → M6`. The asset lane runs continuously from M1 to M6. Tasks encode the exact DAG via `depends_on`.
 
 > **Scope change (2026-07-15):** the 2D launch phase (M4) is **deferred to post-v1 as an optional expansion**. v1 starts with the ship already in low Earth orbit; the focus is 3D navigation across the solar system. The launch spec (physics-spec §4) and its tasks (T0060–T0062) remain in the repo for the future — do not claim them for v1.
 
@@ -49,3 +53,71 @@ USSA-1976 atmosphere + tests, 2D launch sim from Alcântara (RK4, drag, max-q) +
 ## Post-v1 (backlog only — architecture hooks in place)
 
 **Launch phase (M4, above)** · Landing & surface phase · multiple ships/`Vessel` configs · other star systems via `SystemDefinition` · aerobraking/re-entry · docking · missions layer.
+
+---
+
+## v2.0 — Free-flight redesign (in progress)
+
+**Spec of record:** `docs/superpowers/specs/2026-08-14-v2-free-flight-design.md`.
+**Implementation plan:** `docs/superpowers/plans/2026-08-14-v2-free-flight.md`
+(full per-task DAG, shared interfaces, and ADR queue — see `docs/decisions/ADR-032-v2-kickoff.md`
+for scope, pillars, and the budget-revision policy).
+
+Dependency spine: `V2M1 → V2M2 → V2M3 → V2M4 → V2M5 → V2M6`. As with v1, the
+**asset lane** (V2M4's body-asset batch tasks) runs continuously and in
+parallel once its lane-opening tasks land — the same pattern v1 used from M1
+to M6, it does not wait for V2M2/V2M3 to finish first. **M4 (the 2D Alcântara
+launch phase, `T0060`–`T0062`) remains deferred and `BLOCKED`** — v2.0 does not
+revisit it.
+
+### V2M1 — "The ship exists."
+
+Input rewrite (pointer lock, wall-time authority, gamepad), ship rendered +
+chase camera, manual mouse-look flight, collision v0 (restore/respawn), HUD
+Clean v0, pause.
+
+**Exit:** fly around Earth–Moon by hand, crash, restore, 60 fps, all v1 sim
+goldens green.
+
+### V2M2 — "The system is yours."
+
+CruiseDirector (guidance §8 + warp piloting + arrival insertion),
+click-to-target, assists suite (all holds bound + approach brake), map cruise
+integration, warp-ceiling retune.
+
+**Exit:** click Jupiter from LEO → arrive in a stable orbit in ≤ 5 wall
+minutes, ledger/goldens honest, abort works mid-cruise.
+
+### V2M3 — "Stunning I."
+
+Ship remodel + plume/RCS/lights + planetshine, cockpit-lite + cinematic/photo
+cameras, Milky Way, adaptive exposure, body rotation/tilt/oblateness,
+Eris/far-plane fix.
+
+**Exit:** the LEO opening shot and a Saturn arrival are screenshot-worthy;
+camera modes cycle smoothly.
+
+### V2M4 — "Stunning II."
+
+All 43 bodies asseted (hero + standard + asteroid/comet tooling), atmospheric
+scattering, eclipse shadows, Sun upgrade + god rays, close-range flyby detail.
+This milestone contains the continuous asset lane described above.
+
+**Exit:** no untextured body anywhere; Sun-pole shot is the README hero;
+eclipse visible from Io.
+
+### V2M5 — "Alive."
+
+Audio engine + adaptive music + ship sounds + Kubrick mode; diary milestones +
+album + export; cinematic main menu; settings expansion
+(assists/HUD/audio/camera).
+
+**Exit:** full sensory loop; diary records a grand-tour run.
+
+### V2M6 — "Ship it."
+
+Performance re-baseline across tiers, 90-second intro, accessibility pass
+(focus order, reduced-motion, captions for audio cues), docs/README/release
+notes, v2.0.0 tag + Pages deploy + live audit.
+
+**Exit:** release checklist green, tag peels to deployed commit.
