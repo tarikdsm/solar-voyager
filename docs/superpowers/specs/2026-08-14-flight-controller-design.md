@@ -95,13 +95,22 @@ none of the specified ones changed.
 
 | Member | Why it must exist |
 |---|---|
-| `setThrustRegime(regime)` / `thrustRegime` | The task requires the manual ceiling to be "a mode/parameter rather than a hard clamp". T0116 needs a way to select the full envelope; the §2 constructor has no such port. |
+| `setThrustRegime(regime)` / `thrustRegime` / `accelerationCapMS2` | The task requires the manual ceiling to be "a mode/parameter rather than a hard clamp". T0116 needs a way to select the full envelope; the §2 constructor has no such port. |
 | `setStabilityAssist(enabled)` / `toggleStabilityAssist()` / `stabilityAssist` | Acceptance requires SAS to be *toggleable*. |
 | `resetAxes()` / `releaseAxes()` | The restore path. `GameSessionController.onSettingsChanged(_, 'restore')` must be able to say "forget local intent but do not overwrite the rates the save just restored" — see §6. The interim bridge had exactly these two. |
-| `updatePorts(ports)` | Simulation replacement. The bridge had `updateCommands`; the controller additionally has to re-read `vessel`, which is per-`SimulationCore` (ADR-034 §4) and is *not* `DEFAULT_VESSEL`. |
+| `setVessel(vessel)` | Simulation replacement. `commands` and `snapshot()` reach the live core through the stable facade `main.ts` already owns, so they never need re-pointing; `vessel` is a value, is per-`SimulationCore` (ADR-034 §4) and is *not* `DEFAULT_VESSEL`, so it does. |
+| `adoptCommandedThrottle(commanded01)` | `snapshot.throttle` is `lever × regimeFraction`, so the restore path cannot feed it back in as a lever position without scaling it twice. Returns the lever, so the input engine — which owns the same lever — is seeded from one figure. |
+| `throttleAxis` (getter) | Lets callers inspect the lever without a second source of truth. |
 
-`throttleAxis` is exposed as a getter (read-only) so callers can seed and
-inspect the lever without a second source of truth.
+There is deliberately **no** `updatePorts` on the controller, unlike the bridge's
+`updateCommands`. `GameSessionController` sets `currentSimulation` *before* it
+calls `onSimulationReplaced`, so a "release the old session's axes then
+re-point" method reached through a stable facade would flush zeroes over the
+rates the restore had just applied. `tests/render/sessionSettingsPage.tsx` is
+changed to hold the same stable facade `main.ts` does, which removes the need
+for the method entirely. `FlightInputRouter` does keep an `updatePorts`, because
+its only port use is reading `requestedWarp` and issuing `setWarp` — nothing it
+can clobber.
 
 ---
 
@@ -187,15 +196,20 @@ budget. Both were retuned.
 `k_d` is written as `2·Math.sqrt(k_p)` in source rather than as a decimal
 literal, so the two constants cannot drift apart into an accidental ζ ≠ 1.
 
-Measured (60 Hz, rate cap 0.6 rad/s, error-only convergence to 2°):
+Measured (60 Hz, rate cap 0.6 rad/s):
 
 | Step | Settles ≤ 2° | Settles ≤ 2° and ≤ 2°/s | Peak rate | Overshoot |
 |---|---|---|---|---|
 | 10° | 1.28 s | 1.57 s | 0.158 rad/s | 0.000° |
 | 20° | 1.58 s | 1.95 s | 0.317 rad/s | 0.000° |
 | 30° | 1.75 s | 2.17 s | 0.475 rad/s | 0.000° |
-| 45° | — | 2.47 s | 0.600 rad/s (saturated) | 0.000° |
-| 180° | — | 6.33 s | 0.600 rad/s (saturated) | 0.000° |
+| 45° | 2.20 s | 2.47 s | 0.600 rad/s (saturated) | 0.000° |
+| 180° | 6.13 s | 6.33 s | 0.600 rad/s (saturated) | 0.000° |
+
+The 2 s acceptance is asserted against the ≤ 2° column, which is the yardstick
+the acceptance criterion itself uses ("no overshoot > 2°"). The stricter
+"settled" column is reported because it is the honest answer to "when does it
+*look* stopped", and it still fits 2 s for a 20° flick.
 
 Why 6.0 and not more or less:
 
@@ -441,8 +455,10 @@ move — a loud failure in the right direction.
 | `src/game/sessionController.test.ts` | imports move; same assertions |
 | `tests/render/sessionSettingsPage.tsx` | harness drives the controller |
 | `src/main.ts` | constructs the controller + router; restore hooks |
-| `tools/bench/simulationCoreBench.mjs` | the sampled loop now includes `router.apply` + `controller.update` |
+| `src/game/saveLoad.test.ts` | the v2-fixture migration now asserts the backfill |
+| `tools/bench/simulationCoreBench.mjs` | three arms: sim-only, controller-only, full frame loop |
 | `docs/controls.md`, `docs/architecture.md` | new bindings, new module map entry |
+| `docs/bench/T0108-summary.md` (+ before/after JSON) | frame-loop evidence |
 
 `ROTATION_RATE_RAD_S` **moves** to `flightController.ts` unchanged at `0.6`.
 Three modules import it (`inputCommandBridge.test.ts`, `BurnLogPanel.test.tsx`,
@@ -466,10 +482,19 @@ calls, `evaluateBodyRateQuaternionInto`, is allocation-free by contract and is
 aliasing-safe (it reads its inputs into locals before writing), so
 `qDesired ← qDesired ⊗ Δq` is done in place.
 
-`bench:sim` is extended to drive `FlightInputRouter.apply` +
-`FlightController.update` inside its sampled loop with a live look delta, so the
-retained-heap assertion covers the new frame-loop code and not just
-`SimulationCore.step`.
+`bench:sim` grows from one arm to three: `SimulationCore.step` alone (the
+historical `averageStepMs`, unchanged in shape), the router+controller alone
+against a fixed snapshot (`averageControllerMs`), and the full frame loop
+(`averageFlightStepMs`, which the retained-heap assertion covers).
+
+The controller arm is measured on its own rather than by differencing two
+`core.step` arms: the controller *steers*, so two arms that steer differently
+fly different trajectories, and DP54's adaptive step count follows the
+trajectory. Differencing reported a spurious 0.020 ms/frame before the arms were
+separated — twenty times the real figure, and entirely orbital mechanics.
+
+Measured: **0.55 µs per frame**, retained heap growth negative on every run. See
+`docs/bench/T0108-summary.md`.
 
 ## 10. Verification
 
@@ -499,3 +524,36 @@ harnesses this can touch (`smoke`, `camera-controls`, `session-settings`,
 `burn-log`, `tutorial`) and `test:perf-gates` for the heap gate.
 `docs/bench/T0108-summary.md` carries the before/after evidence required for a
 frame-loop change.
+
+## 11. Corrections and findings after implementation
+
+- **The controller cannot see `effectiveWarp` for the frame it is commanding.**
+  It runs before `step()`, so it can only read the *published* tier. A warp-tier
+  change is therefore one frame stale: the frame after `setWarp` is normalized by
+  the old divisor. Measured on a real core over a 3 s route, the whole artefact
+  is a 1.85e-5 rad (0.001°) difference in total angle flown between 1× and 50×.
+  The steady-state claim is exact; the transition is not, and cannot be without
+  giving the game layer a prediction of the governor's decision. The integration
+  test settles the tier before measuring, and asserts steady state.
+- **`averageFlightStepMs` is lower than `averageStepMs`**, which looks like a
+  free lunch and is not: arm A holds prograde (a rails solve at every DP54
+  stage) while the flight loop is in manual attitude (one body-rate quaternion).
+  Different sim work, not different controller work.
+- **A restored spin is invisible to the controller.** `SimSnapshot` carries no
+  body rates, so after `resetAxes()` the controller believes the ship is at rest
+  and the change-latch is what keeps it from writing that belief into the sim.
+  The stability assist therefore does *not* damp a restored spin until the
+  player touches something — `killRotation()` covers it explicitly, and a test
+  pins that. Publishing body rates would be a `SimSnapshot` change and needs its
+  own ADR; T0112 should decide, since a HUD rate readout would want the same
+  field.
+- **The v2-fixture save-migration test changed with the binding backfill**
+  (`saveLoad.test.ts`, "migrates the committed v2 fixture to v3"). It asserted
+  `migrated.settings` equalled the fixture's settings verbatim; it now asserts
+  the fixture's 13 bindings survive and the 7 appended ones are backfilled to
+  their defaults. That is the strongest available evidence that a real pre-T0108
+  save still loads, which is why the case was updated rather than removed.
+- `tools/perf/browserSettings.mjs` still writes a 13-action document and is
+  deliberately left that way: it exercises the backfill on every perf-gate run,
+  and a backfill regression would drop its pinned `qualityLock: 'high'` to
+  `'auto'` and move the golden — a loud failure in the right direction.
