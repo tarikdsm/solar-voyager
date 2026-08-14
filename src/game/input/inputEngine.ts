@@ -153,6 +153,9 @@ export class InputEngine {
   private pendingLookYawRad = 0;
   private pendingLookPitchRad = 0;
   private throttle = 0;
+  private throttleHoldDirection = 0;
+  private throttleHoldSec = 0;
+  private throttleHoldOrigin = 0;
   private lockReleaseRequested = false;
   private disposed = false;
 
@@ -246,9 +249,15 @@ export class InputEngine {
     this.bindingTable.rebuild(bindings);
   }
 
-  /** Clears every held key without touching the throttle lever or look deltas. */
+  /**
+   * Clears every held key and every queued press edge.
+   *
+   * The edges must go too: a press latched just before a blur or a rebind would
+   * otherwise fire on the next poll and steal a warp rung or an attitude mode.
+   */
   releaseHeldKeys(): void {
     this.frame.down.fill(0);
+    this.pendingEdges.fill(0);
   }
 
   /** Seeds the analog lever, e.g. from a restored snapshot. */
@@ -256,6 +265,10 @@ export class InputEngine {
     if (!Number.isFinite(value01)) throw new RangeError('throttle axis must be finite');
     this.throttle = clamp01(value01);
     this.frame.axes.throttle = this.throttle;
+    // Re-anchor any hold in progress so the next poll sweeps from the seeded value.
+    this.throttleHoldDirection = 0;
+    this.throttleHoldSec = 0;
+    this.throttleHoldOrigin = this.throttle;
   }
 
   requestPointerLock(): void {
@@ -290,13 +303,36 @@ export class InputEngine {
     return (this.frame.down[positiveIndex] ?? 0) - (this.frame.down[negativeIndex] ?? 0);
   }
 
+  /**
+   * Advances the analog lever.
+   *
+   * A hold is measured cumulatively from where it started, and its swept
+   * distance is `max(TAP_STEP, RAMP · heldSec)`. That makes the two documented
+   * guarantees exact and mutually consistent: any press moves the lever at least
+   * 10%, and a hold from rest reaches full travel at exactly
+   * `THROTTLE_FULL_SWEEP_SEC`. Adding the tap step to the ramp instead (the
+   * first implementation) made a hold from rest finish in 1.35 s, and applying
+   * the tap step only to sub-frame presses made a slightly longer press move the
+   * lever *less*. Cumulative sweep is monotonic in hold duration.
+   */
   private integrateThrottle(frame: MutableInputFrame, wallDtSec: number): number {
-    const tapSteps = frame.pressCount('throttleIncrease') - frame.pressCount('throttleDecrease');
-    const rampDirection = this.axisValue('throttleIncrease', 'throttleDecrease');
-    if (tapSteps === 0 && rampDirection === 0) return this.throttle;
-    const dtSec = Number.isFinite(wallDtSec) && wallDtSec > 0 ? wallDtSec : 0;
-    const delta = tapSteps * THROTTLE_TAP_STEP + rampDirection * THROTTLE_RAMP_PER_SEC * dtSec;
-    this.throttle = clamp01(this.throttle + delta);
+    const direction = this.axisValue('throttleIncrease', 'throttleDecrease');
+    if (direction !== this.throttleHoldDirection) {
+      this.throttleHoldDirection = direction;
+      this.throttleHoldSec = 0;
+      this.throttleHoldOrigin = this.throttle;
+    }
+    if (direction !== 0) {
+      const dtSec = Number.isFinite(wallDtSec) && wallDtSec > 0 ? wallDtSec : 0;
+      this.throttleHoldSec += dtSec;
+      const sweep = Math.max(THROTTLE_TAP_STEP, THROTTLE_RAMP_PER_SEC * this.throttleHoldSec);
+      this.throttle = clamp01(this.throttleHoldOrigin + direction * sweep);
+      return this.throttle;
+    }
+    // No key down at poll time: a press that opened and closed between two polls
+    // still counts as a tap.
+    const taps = frame.pressCount('throttleIncrease') - frame.pressCount('throttleDecrease');
+    if (taps !== 0) this.throttle = clamp01(this.throttle + taps * THROTTLE_TAP_STEP);
     return this.throttle;
   }
 }

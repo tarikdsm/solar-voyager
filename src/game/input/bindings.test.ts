@@ -7,6 +7,7 @@ import {
   INPUT_ACTION_COUNT,
   actionIndex,
   blocksGameKey,
+  isActivationKeyForTarget,
   isEditableTarget,
 } from './bindings.js';
 
@@ -63,13 +64,42 @@ describe('isEditableTarget', () => {
   });
 });
 
+describe('isActivationKeyForTarget', () => {
+  it('recognizes the keys the browser uses to activate the focused control', () => {
+    const button = target({ tagName: 'BUTTON' });
+    expect(isActivationKeyForTarget('Space', button)).toBe(true);
+    expect(isActivationKeyForTarget('Enter', button)).toBe(true);
+    expect(isActivationKeyForTarget('NumpadEnter', button)).toBe(true);
+    expect(isActivationKeyForTarget('Space', target({ tagName: 'SUMMARY' }))).toBe(true);
+    expect(isActivationKeyForTarget('Enter', target({ tagName: 'a' }))).toBe(true);
+    expect(isActivationKeyForTarget('Space', target({ getAttribute: () => 'button' }))).toBe(true);
+  });
+
+  it('leaves every other key and every non-activatable target to the game', () => {
+    const button = target({ tagName: 'BUTTON' });
+    expect(isActivationKeyForTarget('KeyW', button)).toBe(false);
+    expect(isActivationKeyForTarget('Space', null)).toBe(false);
+    expect(isActivationKeyForTarget('Space', target({ tagName: 'CANVAS' }))).toBe(false);
+    expect(isActivationKeyForTarget('Space', target({ tagName: 'DIV' }))).toBe(false);
+    expect(isActivationKeyForTarget('Space', target({ getAttribute: () => null }))).toBe(false);
+  });
+});
+
 describe('blocksGameKey', () => {
   it('yields to a control that already consumed the key', () => {
     const button = target({ tagName: 'BUTTON' });
-    expect(blocksGameKey({ defaultPrevented: false, target: button })).toBe(false);
-    expect(blocksGameKey({ defaultPrevented: true, target: button })).toBe(true);
+    expect(blocksGameKey({ code: 'KeyW', defaultPrevented: false, target: button })).toBe(false);
+    expect(blocksGameKey({ code: 'KeyW', defaultPrevented: true, target: button })).toBe(true);
     expect(blocksGameKey({ target: button })).toBe(false);
     expect(blocksGameKey({ target: target({ tagName: 'INPUT' }) })).toBe(true);
+  });
+
+  it('yields the focused control its native activation keys', () => {
+    const button = target({ tagName: 'BUTTON' });
+    expect(blocksGameKey({ code: 'Space', target: button })).toBe(true);
+    expect(blocksGameKey({ code: 'Enter', target: target({ tagName: 'SUMMARY' }) })).toBe(true);
+    expect(blocksGameKey({ code: 'Space', target: null })).toBe(false);
+    expect(blocksGameKey({ code: 'Space', target: target({ tagName: 'CANVAS' }) })).toBe(false);
   });
 });
 

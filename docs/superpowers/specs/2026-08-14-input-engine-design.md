@@ -147,15 +147,45 @@ consumer in the codebase needs and nothing else.
   `closest('input, select, textarea')`, and an inherited
   `closest('[contenteditable]')` whose attribute is `""` or `"true"`. Each guard
   is feature-detected, so structural test doubles keep working.
-- `blocksGameKey(event)` — `event.defaultPrevented || isEditableTarget(target)`.
+- `isActivationKeyForTarget(code, target)` — `Space`/`Enter`/`NumpadEnter` on an
+  `A`, `BUTTON`, `SUMMARY`, or an ARIA widget role (`button`, `checkbox`, `link`,
+  `menuitem`, `option`, `radio`, `switch`, `tab`).
+- `blocksGameKey(event)` — `defaultPrevented || isEditableTarget(target) ||
+  isActivationKeyForTarget(code, target)`.
 
-`defaultPrevented` is the load-bearing half of the new policy. A focused button
-no longer blocks flight input *by virtue of being a button*; it blocks only the
-specific keys it actually consumed. The burn-log row (`ui/BurnLogPanel.tsx:114`)
-and the rebind capture button (`ui/SessionSettingsPanel.tsx:265`) already call
-`preventDefault()` on the keys they handle, and they run in the target phase
-before the engine's window-level listener, so arrow-key list navigation and
-rebind capture keep working without disabling the rest of the ship.
+A key belongs to the UI rather than the ship in exactly three cases. Clauses 2
+and 3 are what make "buttons do not block" safe:
+
+1. **The player is typing.** `isEditableTarget`.
+2. **A control consumed the key explicitly.** `defaultPrevented`. The
+   load-bearing case is the burn-log row (`ui/BurnLogPanel.tsx:114`), which
+   `preventDefault()`s `ArrowUp`/`ArrowDown`/`Home`/`End` in the target phase,
+   before the engine's window-level listener — so list navigation keeps working
+   even when the player has bound flight actions to those codes, and nothing
+   double-fires. (The rebind capture button at
+   `ui/SessionSettingsPanel.tsx:263-268` also calls `preventDefault()`, but it
+   additionally calls `stopPropagation()` and Preact attaches the handler on the
+   element, so the window listener never sees that event at all. It is not what
+   this clause is for.)
+3. **The key natively activates the focused control.**
+   `isActivationKeyForTarget`. The browser's default action *is* the activation
+   and it never sets `defaultPrevented`, so clause 2 cannot see it. Without this,
+   binding a flight action to `Space` would let the window listener
+   `preventDefault()` every HUD `<button>` and the settings `<summary>` into
+   silence; bind `Enter` too and keyboard activation is gone entirely — a
+   regression against `docs/accessibility.md` that v1 avoided only because it
+   blocked `BUTTON` outright.
+
+`Space` and `Enter` are deliberately **not** added to `RESERVED_CODES`. That
+would tighten `parseInputBindings`, and a profile or save envelope that already
+binds them (legal and fully functional under v1, where `BUTTON` blocked) would
+then fail validation: `SettingsRepository.load()` fails closed and discards the
+entire profile including quality lock and tutorial progress, and
+`SaveRepository.load()` would reject a previously valid save as invalid. There is
+no migration hook that could rewrite the binding first — `migrateLegacySettings`
+runs `parseGameSettings` on the v1 document and would throw on the same code.
+Losing a player's settings and save is a far worse regression than the one being
+fixed, so the fix lives in the engine, where it costs nothing.
 
 ### `src/game/input/inputEngine.ts`
 
@@ -169,14 +199,16 @@ Keyboard handling, in order:
 ```
 repeat                      → ignore (OS auto-repeat is not a new press)
 ctrlKey || altKey || metaKey→ ignore (real browser/OS chords)  [Shift is NOT here]
-blocksGameKey(event)        → ignore (editable target, or already consumed)
+blocksGameKey(event)        → ignore (typing, consumed, or a native activation key)
 Escape                      → raise the pause intent, release pointer lock, return
 bindings.resolve(code)      → set held + latch edge, preventDefault()
 ```
 
 `keyup` clears the held bit unconditionally (so a key released over a focused
 button cannot stick — v1 already did this and it must survive). A `blur` on the
-keyboard target releases every held key, which fixes stuck axes on alt-tab.
+keyboard target calls `releaseHeldKeys()`, which clears held bits **and** queued
+press edges: an edge latched just before the blur would otherwise fire on the
+next poll and steal a warp rung or an attitude mode.
 
 ### `src/game/input/inputCommandBridge.ts` (interim)
 
@@ -192,8 +224,9 @@ It reproduces v1's semantics exactly, including the flush shape:
   axis triple differs from the one the bridge last issued. This is not an
   optimization: `rotate()` overwrites the sim's rotation rates, so an
   unconditional per-frame flush would erase rates restored from a save. v1
-  encoded this as `axesDirty`; `markSynchronized()` is the equivalent hook for
-  the restore path.
+  encoded this as `axesDirty`; `resetAxes()` is the equivalent hook for the
+  restore path (`releaseAxes()` is the same reset plus an explicit
+  `rotate(0, 0, 0)`).
 - **Throttle is compared against the snapshot.** `commands.setThrottle()` is
   issued when the frame's lever position differs from `snapshot.throttle`. This
   is deliberate: `SimulationCommands.setThrottle` silently forces 0 while
@@ -208,17 +241,36 @@ It reproduces v1's semantics exactly, including the flush shape:
 
 ## Analog throttle
 
-- Range `[0, 1]`, continuous, owned by the engine.
-- **Hold** ramps at `1 / 1.5 s ≈ 0.667 s⁻¹`, so a full sweep takes 1.5 s.
-- **Tap** applies `THROTTLE_TAP_STEP = 0.1` immediately, because a press and
-  release that both land between two polls have zero held duration and would
-  otherwise do nothing at all. A tap is a discrete nudge; the resulting value is
-  still continuous and holding sweeps smoothly through it. The v1 *ratchet* —
-  where throttle could only ever be a multiple of 0.1 — is gone.
-- Both directions held cancels to zero net change.
-- `setThrottleAxis()` seeds the lever from a restored snapshot;
-  `main.ts` calls it from `onSimulationReplaced` so a load does not slam the
-  restored throttle to zero on the next frame.
+Range `[0, 1]`, continuous, owned by the engine. A press is measured
+**cumulatively from where it started**: the distance swept by a press that has
+been held for `heldSec` is
+
+```
+sweep = max(THROTTLE_TAP_STEP, THROTTLE_RAMP_PER_SEC · heldSec)
+lever = clamp01(origin ± sweep)
+```
+
+with `origin` re-anchored whenever the held direction changes, and
+`THROTTLE_RAMP_PER_SEC = 1 / THROTTLE_FULL_SWEEP_SEC = 1 / 1.5 s`. This makes the
+two documented guarantees exact and mutually consistent:
+
+- **any press moves the lever at least `THROTTLE_TAP_STEP = 0.1`** — including a
+  press and release that both land between two polls, which has zero held
+  duration and would otherwise be a silent no-op (this is exactly how scripted
+  input and very fast presses arrive);
+- **a hold from rest reaches full travel at exactly 1.5 s.**
+
+Two rejected alternatives, both of which the unit tests now pin against:
+*adding* the tap step to the ramp made a hold from rest finish in 1.35 s, which
+contradicted `docs/controls.md`; applying the tap step only to sub-frame presses
+made a slightly longer press move the lever *less* than a shorter one. Cumulative
+sweep is monotonic in hold duration.
+
+Both directions held cancels to zero net change. `setThrottleAxis()` seeds the
+lever from a restored snapshot and re-anchors any hold in progress; `main.ts`
+calls it from `onSimulationReplaced` so a load does not slam the restored
+throttle to zero on the next frame. The v1 *ratchet* — where throttle could only
+ever be a multiple of 0.1 — is gone.
 
 ## Pointer lock and the pause seam
 
@@ -241,10 +293,16 @@ It reproduces v1's semantics exactly, including the flush shape:
   that records the request on `canvas.dataset`; **T0112 owns the real menu** and
   must arbitrate with the panels that already consume Escape (system map, burn
   log), all of which `preventDefault()` and therefore suppress the intent today.
-- Activation affordance: `dblclick` on the canvas requests the lock. This is
-  interim. Single click stays with the v1 orbit-drag camera so
+- Activation affordance: `dblclick` on the canvas requests the lock, guarded by
+  the `pointerLocked` getter so an already-locked canvas never re-requests. This
+  is interim. Single click stays with the v1 orbit-drag camera so
   `test:camera-controls` keeps passing; T0110's chase camera owns the real
   activation gesture.
+- `Element.requestPointerLock()` returns a promise in current Chrome and rejects
+  with `SecurityError` inside the short lock-out window that follows an Escape
+  release (reachable as double-click → Escape → double-click). The adapter
+  attaches a `.catch()`; an unhandled rejection would surface as a console error
+  and fail every browser gate that asserts an empty error list.
 
 ## Settings compatibility
 
@@ -277,21 +335,29 @@ covers this in the real browser.
 Unit (Vitest):
 
 - `bindings.test.ts` — the unified predicate against all three call sites' target
-  shapes; duplicate-code rejection; dense index stability.
+  shapes; the activation-key clause; duplicate-code rejection; dense index
+  stability.
 - `inputEngine.test.ts` — **Shift+W still pitches** and **W with a focused
-  button still pitches** (the two v1 regressions), `defaultPrevented`
-  suppression, edge vs level semantics, throttle ramp timing (1.5 s sweep) and
-  tap step, pointer-lock delta scaling and drain-once, Escape/pause intent,
-  blur release, rebind routing, allocation-free repeat polling.
+  button still pitches** (the two v1 regressions), **`Space`/`Enter` bound to a
+  flight action still activate a focused button or `<summary>`** while every
+  other key keeps flying, `defaultPrevented` suppression, edge vs level
+  semantics, the 1.5 s sweep measured from rest with no head start, tap-step
+  monotonicity, queued-edge drop on blur/rebind, pointer-lock delta scaling and
+  drain-once, Escape/pause intent, rebind routing, frame-object identity.
 - `inputCommandBridge.test.ts` — flush shape (no rotate without change), restore
   preservation, warp-clamp throttle recovery, warp ladder stepping.
 
-Browser: no new harness (input is not a visual feature; the plan's harness rule
-targets visual features). The existing gates that cover this path —
-`test:session-settings` (rebind + persistence + held-key rate),
-`test:camera-controls`, `test:burn-log` (focused-button key presses),
-`test:tutorial` (throttle/warp/map key flow), `test:main-menu`
-(`RuntimeResourceCounts`), `test:smoke`, `test:perf-gates` — all stay green.
+Browser: no *new* harness — input is not a visual feature, so the plan's
+new-harness rule does not apply, and a separate CI step would cost a browser
+launch for three assertions. Instead `tools/tests/cameraControlsRegression.mjs`
+gains the pointer-lock case on the production page it already has open:
+double-click takes the lock on `#space-canvas`, Escape releases it and
+increments `canvas.dataset.pauseRequests`. That is the only new code path with no
+other automated coverage. The remaining gates that cover this work —
+`test:session-settings` (rebind + persistence + held-key rate), `test:burn-log`
+(focused-button key presses), `test:tutorial` (throttle/warp/map key flow),
+`test:main-menu` (`RuntimeResourceCounts`), `test:smoke`, `test:perf-gates` —
+all stay green.
 
 `RuntimeResourceCounts.keyboardCommandMappers` keeps its name even though the
 class is gone: it is frozen CI contract surface (~25 browser gates) and the
@@ -318,3 +384,15 @@ activation, exactly as before.
 - **Wall-time authority** (plan §3.1) and the manual-attitude warp lock are not
   in this task; the bridge keeps v1's sim-time rates so behavior is unchanged
   until ADR-035 lands.
+- **"Escape opens pause" is conditional until T0112.** `SystemMapPanel.tsx:85`
+  `preventDefault()`s Escape whenever the map is open, and its window listener is
+  registered before the engine's, so Escape closes the map and raises no pause
+  intent. The same will apply to any future panel that claims Escape. T0112 owns
+  the arbitration and should decide the precedence explicitly rather than
+  inheriting it from listener registration order.
+- **Deleting `inputCommandBridge.ts` (T0108) touches three files, not two.**
+  `src/ui/BurnLogPanel.test.tsx` imports both `InputCommandBridge` and
+  `ROTATION_RATE_RAD_S` from it to drive a real engine→Commands path in the
+  focused-button regression. `ROTATION_RATE_RAD_S` must **move** to
+  `game/flight/flightController.ts` (or wherever the rate constant lands), not be
+  deleted with the file.

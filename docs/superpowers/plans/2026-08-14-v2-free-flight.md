@@ -364,7 +364,8 @@ handoff_notes: "Design doc first. Keep settings schema compatibility: bindings s
 ```
 
 - Files — Create: `src/game/input/inputEngine.ts`, `src/game/input/bindings.ts`; Delete: `src/game/inputMapping.ts` (port its per-frame flush shape); Modify: `src/ui/cameraInputController.ts` consumers, `src/game/settings.ts` (only additive).
-- Interfaces produced: `InputFrame { lookYawRad, lookPitchRad, axes: {pitch,yaw,roll,throttle}, pressed(action): boolean }` polled once per frame by FlightController.
+- Interfaces produced: `InputFrame { lookYawRad, lookPitchRad, axes: {pitch,yaw,roll,throttle}, pressed(action): boolean, pressCount(action): number, held(action): boolean }`, published by `InputEngine.poll(wallDtSec)` once per frame and consumed by FlightController.
+  - As shipped (T0105, per the §2 naming rule): `poll` takes `wallDtSec` because the engine owns the analog throttle ramp and the ramp needs a time base. `pressCount` exists because two `=` taps between two polls must step warp twice — v1 acted on every `keydown` immediately and a boolean silently drops the second. `held` is the level query for consumers that need "is the player on the stick" without re-deriving it from `axes` (T0116's cruise decompress-on-input rule).
 - Tests: Shift+W still pitches; focused warp button + W still pitches; throttle ramp timing; pointer-lock delta scaling; rebind persistence.
 - [ ] Design doc → failing regression tests for both v1 defects → impl → green → commit
 

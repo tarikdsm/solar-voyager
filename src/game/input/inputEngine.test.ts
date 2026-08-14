@@ -5,7 +5,6 @@ import {
   DEFAULT_LOOK_RAD_PER_PIXEL,
   InputEngine,
   THROTTLE_FULL_SWEEP_SEC,
-  THROTTLE_RAMP_PER_SEC,
   THROTTLE_TAP_STEP,
   type InputBlurListener,
   type InputKeyboardEvent,
@@ -147,6 +146,8 @@ function createEngine(overrides: { readonly onPauseRequested?: () => void } = {}
 
 const BUTTON_TARGET = { isContentEditable: false, tagName: 'BUTTON' } as unknown as EventTarget;
 const INPUT_TARGET = { isContentEditable: false, tagName: 'INPUT' } as unknown as EventTarget;
+const SUMMARY_TARGET = { isContentEditable: false, tagName: 'SUMMARY' } as unknown as EventTarget;
+const CANVAS_TARGET = { isContentEditable: false, tagName: 'CANVAS' } as unknown as EventTarget;
 
 describe('InputEngine — v1 defect regressions', () => {
   it('still pitches while Shift is held', () => {
@@ -180,7 +181,7 @@ describe('InputEngine — v1 defect regressions', () => {
     expect(frame.axes.pitch).toBe(-1);
     expect(frame.axes.yaw).toBe(-1);
     expect(frame.axes.roll).toBe(1);
-    expect(frame.axes.throttle).toBeCloseTo(THROTTLE_TAP_STEP + THROTTLE_RAMP_PER_SEC / 60, 12);
+    expect(frame.axes.throttle).toBeCloseTo(THROTTLE_TAP_STEP, 12);
     expect(frame.pressed('warpIncrease')).toBe(true);
     expect(frame.pressed('attitudePrograde')).toBe(true);
   });
@@ -202,6 +203,44 @@ describe('InputEngine — focus policy', () => {
     const frame = engine.poll(1 / 60);
     expect(frame.axes.pitch).toBe(0);
     expect(frame.axes.throttle).toBe(0);
+  });
+
+  it('leaves Space and Enter to a focused button so HUD controls stay operable', () => {
+    const { engine, keyboard } = createEngine();
+    engine.applyBindings({
+      ...DEFAULT_GAME_SETTINGS.inputBindings,
+      throttleIncrease: 'Space',
+      warpIncrease: 'Enter',
+    });
+
+    // A bubble-phase preventDefault would cancel the button's activation.
+    expect(keyboard.press('Space', { target: BUTTON_TARGET }).prevented).toBe(false);
+    expect(keyboard.press('Enter', { target: BUTTON_TARGET }).prevented).toBe(false);
+    expect(keyboard.press('Space', { target: SUMMARY_TARGET }).prevented).toBe(false);
+
+    const blocked = engine.poll(1 / 60);
+    expect(blocked.axes.throttle).toBe(0);
+    expect(blocked.pressed('warpIncrease')).toBe(false);
+
+    // The same bindings must still fly the ship when no activatable control has focus.
+    expect(keyboard.press('Space', { target: CANVAS_TARGET }).prevented).toBe(true);
+    expect(keyboard.press('Enter', { target: null }).prevented).toBe(true);
+
+    const live = engine.poll(1 / 60);
+    expect(live.axes.throttle).toBeCloseTo(THROTTLE_TAP_STEP, 12);
+    expect(live.pressed('warpIncrease')).toBe(true);
+  });
+
+  it('still flies every non-activation key while a button has focus', () => {
+    const { engine, keyboard } = createEngine();
+    engine.applyBindings({
+      ...DEFAULT_GAME_SETTINGS.inputBindings,
+      throttleIncrease: 'Space',
+    });
+
+    expect(keyboard.press('KeyW', { target: BUTTON_TARGET }).prevented).toBe(true);
+
+    expect(engine.poll(1 / 60).axes.pitch).toBe(1);
   });
 
   it('releases a held axis on keyup even when focus moved to a button', () => {
@@ -227,6 +266,19 @@ describe('InputEngine — focus policy', () => {
     const frame = engine.poll(1 / 60);
     expect(frame.axes.pitch).toBe(0);
     expect(frame.axes.yaw).toBe(0);
+  });
+
+  it('drops a press edge that was queued when focus or bindings changed', () => {
+    const { engine, keyboard } = createEngine();
+
+    // Latched but never polled: a blur must not let it fire a warp rung later.
+    keyboard.press('Equal');
+    keyboard.blurWindow();
+    expect(engine.poll(1 / 60).pressed('warpIncrease')).toBe(false);
+
+    keyboard.press('Digit2');
+    engine.releaseHeldKeys();
+    expect(engine.poll(1 / 60).pressed('attitudePrograde')).toBe(false);
   });
 });
 
@@ -280,22 +332,35 @@ describe('InputEngine — edges and axes', () => {
 });
 
 describe('InputEngine — analog throttle', () => {
-  it('sweeps the full range in 1.5 s of held ramp', () => {
+  it('sweeps from rest to full in exactly 1.5 s of hold, and back down in 1.5 s', () => {
     const { engine, keyboard } = createEngine();
-    keyboard.press('KeyR');
-    // Consume the tap step first so the measurement is ramp-only.
-    engine.poll(0);
-    expect(engine.poll(0).axes.throttle).toBeCloseTo(THROTTLE_TAP_STEP, 12);
-    engine.setThrottleAxis(0);
-
-    let elapsedSec = 0;
     const stepSec = 1 / 120;
-    while (elapsedSec < THROTTLE_FULL_SWEEP_SEC - stepSec / 2) {
-      engine.poll(stepSec);
-      elapsedSec += stepSec;
-    }
+    const stepsPerSweep = Math.round(THROTTLE_FULL_SWEEP_SEC / stepSec);
 
-    expect(engine.poll(0).axes.throttle).toBeCloseTo(1, 9);
+    // No zeroing and no head start: this measures what docs/controls.md claims.
+    keyboard.press('KeyR');
+    for (let step = 0; step < stepsPerSweep - 1; step += 1) engine.poll(stepSec);
+    expect(engine.poll(0).axes.throttle).toBeLessThan(1);
+    expect(engine.poll(stepSec).axes.throttle).toBeCloseTo(1, 9);
+
+    keyboard.release('KeyR');
+    keyboard.press('KeyF');
+    for (let step = 0; step < stepsPerSweep - 1; step += 1) engine.poll(stepSec);
+    expect(engine.poll(0).axes.throttle).toBeGreaterThan(0);
+    expect(engine.poll(stepSec).axes.throttle).toBe(0);
+  });
+
+  it('never moves the lever backwards as a press gets longer', () => {
+    const { engine, keyboard } = createEngine();
+    const samples: number[] = [];
+    keyboard.press('KeyR');
+    for (let step = 0; step < 120; step += 1) samples.push(engine.poll(1 / 240).axes.throttle);
+
+    expect(samples[0]).toBeCloseTo(THROTTLE_TAP_STEP, 12);
+    for (let index = 1; index < samples.length; index += 1) {
+      expect(samples[index]).toBeGreaterThanOrEqual(samples[index - 1] as number);
+    }
+    expect(samples.at(-1)).toBeGreaterThan(THROTTLE_TAP_STEP);
   });
 
   it('nudges by a tap step when press and release land between two polls', () => {

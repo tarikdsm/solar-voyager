@@ -602,7 +602,11 @@ function createCanvasPointerLockSurface(element: HTMLCanvasElement): PointerLock
   return {
     isLocked,
     requestLock: () => {
-      void element.requestPointerLock();
+      // Chrome returns a promise that rejects with SecurityError inside the
+      // short lock-out window after an Escape release; an unhandled rejection
+      // there would surface as a console error and fail the browser gates.
+      const request: unknown = element.requestPointerLock();
+      if (request instanceof Promise) request.catch(() => undefined);
     },
     releaseLock: () => {
       ownerDocument.exitPointerLock();
@@ -627,7 +631,8 @@ function createCanvasPointerLockSurface(element: HTMLCanvasElement): PointerLock
  * camera; T0110's chase camera owns the real gesture.
  */
 function handleCanvasDoubleClick(): void {
-  inputEngine?.requestPointerLock();
+  if (inputEngine === null || inputEngine.pointerLocked) return;
+  inputEngine.requestPointerLock();
 }
 
 function updateStateVectorViewport(): void {

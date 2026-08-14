@@ -10,6 +10,21 @@ const EDITABLE_TAG_NAMES: ReadonlySet<string> = new Set(['INPUT', 'SELECT', 'TEX
 const EDITABLE_SELECTOR = 'input, select, textarea';
 const CONTENTEDITABLE_ATTRIBUTE = 'contenteditable';
 const CONTENTEDITABLE_SELECTOR = `[${CONTENTEDITABLE_ATTRIBUTE}]`;
+const ROLE_ATTRIBUTE = 'role';
+
+/** Elements the browser activates natively from the keyboard. */
+const ACTIVATION_TAG_NAMES: ReadonlySet<string> = new Set(['A', 'BUTTON', 'SUMMARY']);
+const ACTIVATION_ROLES: ReadonlySet<string> = new Set([
+  'button',
+  'checkbox',
+  'link',
+  'menuitem',
+  'option',
+  'radio',
+  'switch',
+  'tab',
+]);
+const ACTIVATION_CODES: ReadonlySet<string> = new Set(['Enter', 'NumpadEnter', 'Space']);
 
 const ACTION_INDICES: ReadonlyMap<InputAction, number> = buildActionIndices();
 
@@ -36,6 +51,7 @@ interface EditableOwner {
 interface EditableCandidate {
   readonly isContentEditable?: unknown;
   readonly tagName?: unknown;
+  getAttribute?: (name: string) => string | null;
   matches?: (selectors: string) => boolean;
   closest?: (selectors: string) => EditableOwner | null;
 }
@@ -73,14 +89,48 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return hasEditableContentAncestor(candidate);
 }
 
+/**
+ * True when the browser would natively activate the focused control with this key.
+ *
+ * `Space`/`Enter` on a `<button>`, `<summary>`, link, or ARIA widget is that
+ * control's own key: the browser's default action *is* the activation, and it
+ * never sets `defaultPrevented`, so the generic "a control that consumed the key
+ * blocks it" rule cannot see it. Without this clause, binding a flight action to
+ * `Space` would let the window listener `preventDefault()` every HUD button and
+ * the settings `<summary>` into silence — a keyboard-operability regression that
+ * v1 avoided only because it blocked `BUTTON` outright.
+ */
+export function isActivationKeyForTarget(code: string, target: EventTarget | null): boolean {
+  if (!ACTIVATION_CODES.has(code)) return false;
+  if (target === null || typeof target !== 'object') return false;
+  const candidate = target as EditableCandidate;
+  if (
+    typeof candidate.tagName === 'string' &&
+    ACTIVATION_TAG_NAMES.has(candidate.tagName.toUpperCase())
+  ) {
+    return true;
+  }
+  const role = candidate.getAttribute?.(ROLE_ATTRIBUTE);
+  return typeof role === 'string' && ACTIVATION_ROLES.has(role.toLowerCase());
+}
+
 export interface GameKeyEvent {
+  readonly code?: string;
   readonly defaultPrevented?: boolean;
   readonly target: EventTarget | null;
 }
 
-/** True when a keyboard event must not reach game controls. */
+/**
+ * True when a keyboard event must not reach game controls.
+ *
+ * Three ways a key belongs to the UI instead of the ship: the player is typing,
+ * a control already consumed the key explicitly, or the key is the focused
+ * control's native activation key.
+ */
 export function blocksGameKey(event: GameKeyEvent): boolean {
-  return event.defaultPrevented === true || isEditableTarget(event.target);
+  if (event.defaultPrevented === true) return true;
+  if (isEditableTarget(event.target)) return true;
+  return event.code !== undefined && isActivationKeyForTarget(event.code, event.target);
 }
 
 /**
