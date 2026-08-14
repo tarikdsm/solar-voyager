@@ -61,12 +61,12 @@ import {
   writeQuaternionFromForwardInto,
 } from './ship/attitude.js';
 import {
-  DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
   photonDrivePowerW,
   validateMaxProperAcceleration,
   writeProperAccelerationInto,
   writeThrustForceInto,
 } from './ship/thrust.js';
+import { validateVesselConfig, type VesselConfig } from './ship/vessel.js';
 import {
   createBurnLog,
   SIMULATION_STATE_DIMENSION,
@@ -85,8 +85,8 @@ import {
 export interface SimulationCoreOptions {
   readonly catalog: CompiledRailsCatalog;
   readonly initialShipState: Float64Array;
-  readonly shipMassKg: number;
-  readonly maxProperAccelerationMS2?: number;
+  /** Fresh-session vessel; a supplied `persistentState.vessel` takes precedence (ADR-034). */
+  readonly vessel: VesselConfig;
   readonly onTrajectoryInvalidated?: TrajectoryInvalidationListener;
   readonly initialTimeSec?: number;
   readonly integrationTolerance?: Dp54Tolerance;
@@ -147,6 +147,8 @@ function normalizeInto(output: Float64Array, x: number, y: number, z: number): v
 export class SimulationCore {
   readonly commands: Commands;
   readonly burnLog: BurnLogView;
+  /** Vessel actually in force for this core — the persisted one after a restore. */
+  readonly vessel: VesselConfig;
 
   private readonly catalog: CompiledRailsCatalog;
   private readonly shipMassKg: number;
@@ -186,9 +188,7 @@ export class SimulationCore {
 
   constructor(options: SimulationCoreOptions) {
     validateInitialState(options.initialShipState);
-    if (!Number.isFinite(options.shipMassKg) || options.shipMassKg <= 0) {
-      throw new RangeError('ship mass must be finite and positive');
-    }
+    const optionsVessel = validateVesselConfig(options.vessel);
     const persistentState =
       options.persistentState === undefined
         ? null
@@ -202,10 +202,11 @@ export class SimulationCore {
     }
 
     this.catalog = options.catalog;
-    this.shipMassKg = options.shipMassKg;
-    this.maximumProperAccelerationKmS2 = validateMaxProperAcceleration(
-      options.maxProperAccelerationMS2 ?? DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
-    );
+    // The ledger already recorded in a persistent state was priced against its own
+    // vessel; restoring under a different mass would invalidate E and proper delta-v.
+    this.vessel = persistentState?.vessel ?? optionsVessel;
+    this.shipMassKg = this.vessel.restMassKg;
+    this.maximumProperAccelerationKmS2 = validateMaxProperAcceleration(this.vessel.alphaMaxMS2);
     this.initialKineticEnergyJ =
       persistentState?.initialKineticEnergyJ ??
       relativisticKineticEnergyJ(
@@ -349,6 +350,7 @@ export class SimulationCore {
   exportPersistentState(): SimulationPersistentState {
     return {
       simTimeSec: this.clock.timeSec,
+      vessel: this.vessel,
       state: new Float64Array(this.currentPrivateShipState()),
       attitudeQuaternion: new Float64Array(this.attitudeQuaternion),
       throttle: this.commandState.throttle,

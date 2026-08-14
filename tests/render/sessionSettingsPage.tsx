@@ -9,9 +9,10 @@ import { KeyboardCommandMapper, type KeyboardInputTarget } from '../../src/game/
 import { SAVE_STORAGE_KEY, SaveRepository } from '../../src/game/saveLoad.js';
 import { GameSessionController } from '../../src/game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from '../../src/game/settings.js';
+import { DEFAULT_VESSEL } from '../../src/sim/ship/vessel.js';
 import { SessionSettingsPanel, type SessionFilePort } from '../../src/ui/SessionSettingsPanel.js';
 
-const SHIP_MASS_KG = 10_000;
+const VESSEL = DEFAULT_VESSEL;
 
 interface SessionHarnessSnapshot {
   readonly exportedJson: string;
@@ -52,11 +53,11 @@ if (!(root instanceof HTMLElement)) throw new Error('session regression root is 
 const storage = new MemoryStorage();
 let mapper: KeyboardCommandMapper | null = null;
 const controller = new GameSessionController({
-  initialSimulation: createNewGameSimulation(SHIP_MASS_KG),
-  createNewSimulation: () => createNewGameSimulation(SHIP_MASS_KG),
-  saveRepository: new SaveRepository(storage, SHIP_MASS_KG),
+  initialSimulation: createNewGameSimulation(VESSEL),
+  createNewSimulation: () => createNewGameSimulation(VESSEL),
+  saveRepository: new SaveRepository(storage, VESSEL),
   settingsRepository: new SettingsRepository(storage),
-  createSimulation: (state) => createGameSimulationFromPersistentState(SHIP_MASS_KG, state),
+  createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
   onSimulationReplaced: (simulation) => {
     mapper?.updateCommands(simulation.commands, currentSnapshot);
   },

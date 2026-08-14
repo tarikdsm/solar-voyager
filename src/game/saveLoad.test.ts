@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import saveV1Fixture from '../../tests/fixtures/save-v1.json';
+import saveV2Fixture from '../../tests/fixtures/save-v2.json';
 import { WarpClampReason } from '../sim/simulationSnapshot.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
 import {
@@ -10,6 +11,7 @@ import {
   type BurnLogEntry,
 } from '../sim/ship/ledger.js';
 import { relativisticKineticEnergyJ } from '../sim/ship/relativity.js';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 import {
   createSaveEnvelope,
   parseSaveEnvelope,
@@ -24,10 +26,8 @@ import {
   type KeyValueStorage,
 } from './settings.js';
 
-const SHIP_MASS_KG = 10_000;
-
 function parseSave(text: string, bodyIds: readonly string[] = ['earth']) {
-  return parseSaveEnvelope(text, bodyIds, SHIP_MASS_KG);
+  return parseSaveEnvelope(text, bodyIds, DEFAULT_VESSEL);
 }
 
 class MemoryStorage implements KeyValueStorage {
@@ -68,6 +68,7 @@ function persistentState(): SimulationPersistentState {
   state.set([100, 200, 300, 4, 5, 6, 7, 18, 12, 3, 2, 1]);
   return {
     simTimeSec: 42,
+    vessel: DEFAULT_VESSEL,
     state,
     attitudeQuaternion: new Float64Array([0, 0, 0, 1]),
     throttle: 0.25,
@@ -100,7 +101,7 @@ function persistentState(): SimulationPersistentState {
 }
 
 describe('save envelope', () => {
-  it('round-trips v2 through JSON without serializing rails body arrays', () => {
+  it('round-trips v3 through JSON without serializing rails body arrays', () => {
     const settings = projectGameSettingsV1(rebindInput(DEFAULT_GAME_SETTINGS, 'pitchUp', 'KeyI'));
     const envelope = createSaveEnvelope(persistentState(), settings, ['earth']);
 
@@ -112,7 +113,102 @@ describe('save envelope', () => {
     expect(json).not.toContain('bodyVelocitiesKmS');
   });
 
-  it('keeps save v2 settings as the v1 preferences DTO without tutorial state', () => {
+  it('carries the vessel through the v3 document and back (ADR-034)', () => {
+    const vessel = {
+      restMassKg: 12_500,
+      alphaMaxMS2: 147.09975,
+      alphaManualMaxMS2: 29.41995,
+      maxSlewRadPerSimS: 0.5,
+    };
+
+    const json = serializeSaveEnvelope(
+      createSaveEnvelope(
+        { ...persistentState(), vessel },
+        projectGameSettingsV1(DEFAULT_GAME_SETTINGS),
+        ['earth'],
+      ),
+    );
+    const document = JSON.parse(json) as { version: number; simulation: Record<string, unknown> };
+
+    expect(document.version).toBe(3);
+    expect(document.simulation.vessel).toEqual(vessel);
+    expect(parseSave(json).simulation.vessel).toEqual(vessel);
+  });
+
+  it('migrates the committed v2 fixture to v3 by adopting the running vessel', () => {
+    const migrated = parseSaveEnvelope(
+      JSON.stringify(saveV2Fixture),
+      ['earth', 'mars'],
+      DEFAULT_VESSEL,
+    );
+
+    expect(migrated.version).toBe(3);
+    expect(migrated.phase).toBe('space');
+    expect(migrated.simulation.vessel).toEqual(DEFAULT_VESSEL);
+    // Everything the v2 document already carried survives untouched.
+    expect([...migrated.simulation.state]).toEqual(saveV2Fixture.simulation.state);
+    expect(migrated.simulation.simTimeSec).toBe(saveV2Fixture.simulation.simTimeSec);
+    expect(migrated.simulation.targetBodyId).toBe('mars');
+    expect(migrated.simulation.requestedWarp).toBe(10);
+    expect(migrated.simulation.initialKineticEnergyJ).toBe(
+      saveV2Fixture.simulation.initialKineticEnergyJ,
+    );
+    expect(migrated.simulation.burnLog.entries).toEqual(saveV2Fixture.simulation.burnLog.entries);
+    expect(migrated.settings).toEqual(saveV2Fixture.settings);
+  });
+
+  it('rejects a v2 document that already carries a vessel and a v3 document missing one', () => {
+    const v2WithVessel = structuredClone(saveV2Fixture) as Record<string, unknown>;
+    (v2WithVessel.simulation as Record<string, unknown>).vessel = DEFAULT_VESSEL;
+    expect(() => parseSave(JSON.stringify(v2WithVessel), ['earth', 'mars'])).toThrow(
+      /unknown field vessel/u,
+    );
+
+    const v3WithoutVessel = JSON.parse(
+      serializeSaveEnvelope(
+        createSaveEnvelope(persistentState(), projectGameSettingsV1(DEFAULT_GAME_SETTINGS), [
+          'earth',
+        ]),
+      ),
+    ) as Record<string, unknown>;
+    delete (v3WithoutVessel.simulation as Record<string, unknown>).vessel;
+    expect(() => parseSave(JSON.stringify(v3WithoutVessel))).toThrow(
+      /simulation\.vessel is missing/u,
+    );
+  });
+
+  it('rejects an out-of-range vessel in an untrusted v3 document', () => {
+    const document = JSON.parse(
+      serializeSaveEnvelope(
+        createSaveEnvelope(persistentState(), projectGameSettingsV1(DEFAULT_GAME_SETTINGS), [
+          'earth',
+        ]),
+      ),
+    ) as Record<string, unknown>;
+    const simulation = document.simulation as Record<string, unknown>;
+
+    const zeroMass = structuredClone(document);
+    (
+      (zeroMass.simulation as Record<string, unknown>).vessel as Record<string, unknown>
+    ).restMassKg = 0;
+    expect(() => parseSave(JSON.stringify(zeroMass))).toThrow(/rest mass/u);
+
+    const manualAboveLimit = structuredClone(document);
+    (
+      (manualAboveLimit.simulation as Record<string, unknown>).vessel as Record<string, unknown>
+    ).alphaManualMaxMS2 = 1_000;
+    expect(() => parseSave(JSON.stringify(manualAboveLimit))).toThrow(/must not exceed/u);
+
+    const unknownField = structuredClone(document);
+    (
+      (unknownField.simulation as Record<string, unknown>).vessel as Record<string, unknown>
+    ).rcsAuthority = 1;
+    expect(() => parseSave(JSON.stringify(unknownField))).toThrow(/unknown field rcsAuthority/u);
+
+    expect(simulation.vessel).toEqual(DEFAULT_VESSEL);
+  });
+
+  it('keeps save v3 settings as the v1 preferences DTO without tutorial state', () => {
     const profile = {
       ...DEFAULT_GAME_SETTINGS,
       tutorial: { status: 'active' as const, stepId: 'warp' as const },
@@ -158,11 +254,12 @@ describe('save envelope', () => {
     expect(envelope.simulation.burnLog.active?.entry.radialDeltaVMS).toBe(2);
   });
 
-  it('migrates the committed v1 fixture into the exact v2 state layout', () => {
-    const migrated = parseSaveEnvelope(JSON.stringify(saveV1Fixture), ['earth'], SHIP_MASS_KG);
+  it('migrates the committed v1 fixture into the exact v3 state layout', () => {
+    const migrated = parseSaveEnvelope(JSON.stringify(saveV1Fixture), ['earth'], DEFAULT_VESSEL);
 
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     expect(migrated.phase).toBe('space');
+    expect(migrated.simulation.vessel).toEqual(DEFAULT_VESSEL);
     expect(migrated.settings.qualityLock).toBe('medium');
     expect([...migrated.simulation.state]).toEqual([
       ...saveV1Fixture.shipState,
@@ -181,7 +278,7 @@ describe('save envelope', () => {
         saveV1Fixture.shipState[3] as number,
         saveV1Fixture.shipState[4] as number,
         saveV1Fixture.shipState[5] as number,
-        SHIP_MASS_KG,
+        DEFAULT_VESSEL.restMassKg,
       ),
     );
   });
@@ -265,7 +362,7 @@ describe('save envelope', () => {
 
   it('distinguishes a missing slot from invalid or unavailable storage', () => {
     const storage = new MemoryStorage();
-    const repository = new SaveRepository(storage, SHIP_MASS_KG);
+    const repository = new SaveRepository(storage, DEFAULT_VESSEL);
 
     expect(repository.load(['earth'])).toEqual({ ok: false, reason: 'not-found' });
     storage.values.set(SAVE_STORAGE_KEY, '{bad');
@@ -276,7 +373,7 @@ describe('save envelope', () => {
 
   it('round-trips localStorage and reports write failures', () => {
     const storage = new MemoryStorage();
-    const repository = new SaveRepository(storage, SHIP_MASS_KG);
+    const repository = new SaveRepository(storage, DEFAULT_VESSEL);
     const envelope = createSaveEnvelope(
       persistentState(),
       projectGameSettingsV1(DEFAULT_GAME_SETTINGS),

@@ -17,10 +17,17 @@ import {
   type BurnLogPersistentState,
 } from './ship/ledger.js';
 import { STATE_TAU } from './ship/relativity.js';
+import { validateVesselConfig, type VesselConfig } from './ship/vessel.js';
 
 /** Setup-time state needed to reconstruct a SimulationCore exactly. */
 export interface SimulationPersistentState {
   readonly simTimeSec: number;
+  /**
+   * Vessel that priced this document's ledger (ADR-034). Energy and proper
+   * delta-v below are only meaningful against this rest mass, so the vessel
+   * travels with them instead of being re-supplied on restore.
+   */
+  readonly vessel: VesselConfig;
   readonly state: Float64Array;
   readonly attitudeQuaternion: Float64Array;
   readonly throttle: number;
@@ -150,6 +157,7 @@ export function copyAndValidateSimulationPersistentState(
   if (!Number.isFinite(source.simTimeSec)) {
     throw new RangeError('persistent simulation time must be finite');
   }
+  const vessel = validateVesselConfig(source.vessel);
   const state = copyFiniteArray(source.state, SIMULATION_STATE_DIMENSION, 'persistent state');
   const attitudeQuaternion = copyFiniteArray(
     source.attitudeQuaternion,
@@ -211,6 +219,7 @@ export function copyAndValidateSimulationPersistentState(
   }
   return {
     simTimeSec: source.simTimeSec,
+    vessel,
     state,
     attitudeQuaternion,
     throttle: source.throttle,

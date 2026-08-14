@@ -14,7 +14,7 @@ import {
   STATE_UX,
 } from './relativity.js';
 import {
-  DEFAULT_MAX_PROPER_ACCELERATION_M_S2,
+  STANDARD_GRAVITY_M_S2,
   photonDrivePowerW,
   validateMaxProperAcceleration,
   writeProperAccelerationInto,
@@ -28,13 +28,13 @@ describe('ship proper thrust', () => {
       acceleration,
       new Float64Array([0, 0.6, 0.8]),
       0.25,
-      DEFAULT_MAX_PROPER_ACCELERATION_M_S2 / 1_000,
+      STANDARD_GRAVITY_M_S2 / 1_000,
     );
 
     expect(Array.from(acceleration)).toEqual([
       0,
-      0.25 * 0.6 * (DEFAULT_MAX_PROPER_ACCELERATION_M_S2 / 1_000),
-      0.25 * 0.8 * (DEFAULT_MAX_PROPER_ACCELERATION_M_S2 / 1_000),
+      0.25 * 0.6 * (STANDARD_GRAVITY_M_S2 / 1_000),
+      0.25 * 0.8 * (STANDARD_GRAVITY_M_S2 / 1_000),
     ]);
   });
 
@@ -97,8 +97,8 @@ describe('ship proper thrust', () => {
   });
 
   it('validates configurable maximum proper acceleration', () => {
-    expect(validateMaxProperAcceleration(DEFAULT_MAX_PROPER_ACCELERATION_M_S2)).toBe(
-      DEFAULT_MAX_PROPER_ACCELERATION_M_S2 / 1_000,
+    expect(validateMaxProperAcceleration(STANDARD_GRAVITY_M_S2)).toBe(
+      STANDARD_GRAVITY_M_S2 / 1_000,
     );
     expect(() => validateMaxProperAcceleration(0)).toThrow(/maximum proper acceleration/u);
     expect(() => validateMaxProperAcceleration(Number.NaN)).toThrow(/maximum proper acceleration/u);

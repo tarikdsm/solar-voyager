@@ -309,7 +309,7 @@ async function runInvalidSaveFlow(browser) {
   await disableUnrelatedTrajectoryPrediction(page);
   await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
     key: SAVE_STORAGE_KEY,
-    value: '{"version":2,"corrupt":true}',
+    value: '{"version":3,"corrupt":true}',
   });
   try {
     await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });

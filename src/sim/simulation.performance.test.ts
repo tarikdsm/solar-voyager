@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
+import { DEFAULT_VESSEL } from './ship/vessel.js';
 
 function createCore(): SimulationCore {
   const muKm3S2 = 398_600.4418;
@@ -12,7 +13,7 @@ function createCore(): SimulationCore {
   return new SimulationCore({
     catalog: compileRailsCatalog([{ id: 'earth', parentId: null, muKm3S2, elements: null }]),
     initialShipState: new Float64Array([radiusKm, 0, 0, 0, gamma * velocityKmS, 0, 0]),
-    shipMassKg: 10_000,
+    vessel: DEFAULT_VESSEL,
   });
 }
 

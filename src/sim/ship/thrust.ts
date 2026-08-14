@@ -1,7 +1,13 @@
 import { SPEED_OF_LIGHT_KM_S } from '../../core/constants.js';
 
-/** Canonical 1 g default from ADR-025, in meters per second squared. */
-export const DEFAULT_MAX_PROPER_ACCELERATION_M_S2 = 9.80665;
+/**
+ * Standard gravity in meters per second squared.
+ *
+ * ADR-025 used this as the default drive limit; since ADR-034 the limit comes
+ * from `VesselConfig.alphaMaxMS2` and this is only the physical reference the
+ * vessel defaults are expressed against (10 g cruise, 2 g manual).
+ */
+export const STANDARD_GRAVITY_M_S2 = 9.80665;
 
 /** Validates setup configuration and returns maximum proper acceleration in km/s². */
 export function validateMaxProperAcceleration(maximumAccelerationMS2: number): number {

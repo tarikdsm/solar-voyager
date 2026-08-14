@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "phase": "space",
+  "simulation": {
+    "simTimeSec": 172800,
+    "state": [
+      7000000, -2500000, 310000, 12.5, 31.25, -0.75, 172800, 420000000000000, 1450, 900, -300, 12
+    ],
+    "attitudeQuaternion": [0, 0, 0, 1],
+    "throttle": 0,
+    "attitudeMode": "prograde",
+    "rotationRatesRadS": [0, 0, 0],
+    "requestedWarp": 10,
+    "effectiveWarp": 10,
+    "warpClampReason": 0,
+    "targetBodyId": "mars",
+    "initialKineticEnergyJ": 4500000000000000,
+    "burnLog": {
+      "capacity": 256,
+      "entries": [
+        {
+          "startTimeSec": 600,
+          "endTimeSec": 780,
+          "startProperTimeSec": 600,
+          "endProperTimeSec": 779.9,
+          "energySpentJ": 420000000000000,
+          "properDeltaVMS": 1450,
+          "peakPowerW": 2940000000000,
+          "dominantBodyId": "earth",
+          "progradeDeltaVMS": 1400,
+          "normalDeltaVMS": 120,
+          "radialDeltaVMS": -300
+        }
+      ],
+      "active": null
+    }
+  },
+  "settings": {
+    "version": 1,
+    "qualityLock": "auto",
+    "inputBindings": {
+      "throttleIncrease": "KeyR",
+      "throttleDecrease": "KeyF",
+      "warpIncrease": "Equal",
+      "warpDecrease": "Minus",
+      "pitchUp": "KeyW",
+      "pitchDown": "KeyS",
+      "yawLeft": "KeyA",
+      "yawRight": "KeyD",
+      "rollLeft": "KeyZ",
+      "rollRight": "KeyC",
+      "attitudeManual": "Digit1",
+      "attitudePrograde": "Digit2",
+      "attitudeRetrograde": "Digit3"
+    }
+  }
+}
