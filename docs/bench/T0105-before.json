@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "timestamp": "2026-08-14T19:52:44.039Z",
-  "gitSha": "857cc25117ed1d01297c3778ec9ed4cece2a8ae0",
+  "timestamp": "2026-08-14T19:50:07.498Z",
+  "gitSha": "6afb1e37e0109dec040464076b8222021f1c889b",
   "bundle": {
-    "entryFile": "assets/index-Dvt1wCbH.js",
-    "entryGzipBytes": 127190,
-    "totalGzipBytes": 556970
+    "entryFile": "assets/index-Dq-ILmwf.js",
+    "entryGzipBytes": 125975,
+    "totalGzipBytes": 555755
   },
   "environment": {
     "canvas": {
@@ -191,47 +191,47 @@
         }
       ],
       "summary": {
-        "heapDeltaBytes": 103412,
+        "heapDeltaBytes": 104152,
         "legs": [
           {
             "id": "leo",
             "medianMs": 6.1,
             "p75Ms": 6.1,
-            "p99Ms": 6.2,
+            "p99Ms": 6.201,
             "workMedianMs": 1.2,
             "workP75Ms": 1.4,
-            "workP99Ms": 2.301
+            "workP99Ms": 1.901
           },
           {
             "id": "moon-flyby",
             "medianMs": 6.1,
             "p75Ms": 6.1,
             "p99Ms": 6.2,
-            "workMedianMs": 1.4,
-            "workP75Ms": 1.5,
-            "workP99Ms": 3.605
+            "workMedianMs": 1.3,
+            "workP75Ms": 1.6,
+            "workP99Ms": 3.603
           },
           {
             "id": "jupiter-approach",
             "medianMs": 6.1,
             "p75Ms": 6.1,
-            "p99Ms": 18.2,
-            "workMedianMs": 1.25,
+            "p99Ms": 12.1,
+            "workMedianMs": 1.3,
             "workP75Ms": 1.5,
-            "workP99Ms": 6.7
+            "workP99Ms": 6.703
           }
         ],
         "maxDrawCalls": 26,
         "maxTriangles": 49530,
-        "pathHeapDeltaBytes": 26643666,
-        "steadyHeapAfterBytes": 132685911,
-        "steadyHeapBeforeBytes": 132582499,
+        "pathHeapDeltaBytes": 26618507,
+        "steadyHeapAfterBytes": 132672158,
+        "steadyHeapBeforeBytes": 132568006,
         "medianMs": 6.1,
         "p75Ms": 6.1,
         "p99Ms": 6.3,
         "workMedianMs": 1.3,
         "workP75Ms": 1.5,
-        "workP99Ms": 4.103
+        "workP99Ms": 4.802
       }
     }
   ],
