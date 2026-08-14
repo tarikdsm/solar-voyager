@@ -23,7 +23,7 @@ src/
 ├── sim/
 │   ├── bodies/                 # kepler.ts (elliptic + hyperbolic solver), orbitalElements.ts
 │   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts
-│   ├── ship/                   # attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger)
+│   ├── ship/                   # initialState.ts, attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger)
 │   ├── launch/                 # [deferred, post-v1] atmosphere.ts, launchSim.ts, handoff.ts
 │   ├── analysis/               # osculating.ts, dominantBody.ts, barycenter.ts, trajectoryImpact.ts
 │   └── simulation.ts           # SimulationCore
@@ -39,13 +39,14 @@ tools/                          # blender/ scripts, bake_ephemerides.py, bake_st
 tests/                          # sim/ unit+regression, golden/ trajectories
 ```
 
-## Planned v2 modules (not yet built)
+## Planned v2 modules (new files and existing-file changes)
 
 The v2.0 free-flight redesign (`docs/superpowers/plans/2026-08-14-v2-free-flight.md`
-§1) adds the modules below. None of these exist yet as of T0103 — each lands with
-its owning task (in parentheses), and this map is updated in the same PR (per
-`docs/coding-standards.md`'s doc-update-in-the-same-PR rule). `NEW` = new file;
-`MOD` = existing file gains v2 behavior.
+§1) adds or changes the modules below, each landing with its owning task (in
+parentheses); this map is updated in the same PR (per `docs/coding-standards.md`'s
+doc-update-in-the-same-PR rule). `NEW` files do not exist yet. `MOD` files exist
+today (e.g. `sim/simulation.ts`, the "Single source of truth" below) and gain
+their v2 behavior from the named task — none of that v2 behavior has landed yet.
 
 ```
 src/
@@ -62,13 +63,15 @@ src/
 │   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
 │   ├── input/                              # NEW  input engine (T0105) + gamepad (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
-│   ├── cameraDirector.ts, chaseCameraController.ts  # NEW  4 camera modes (T0110/24/25)
+│   ├── cameraDirector.ts                   # NEW  4 modes + transitions (T0110/24/25)
+│   ├── chaseCameraController.ts            # NEW  spring-arm f64 controller (T0110)
 │   ├── diary/                              # NEW  milestones, diaryStore, album (T0146/47)
 │   ├── audio/audioDirector.ts              # NEW  snapshot→audio state (T0144)
 │   ├── restorePoints.ts                    # NEW  10 s autosave ring (T0111)
 │   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
 ├── render/
-│   ├── shipVisual.ts, plumeVisual.ts, rcsVisual.ts   # NEW  ship, plume, RCS (T0109/22)
+│   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
+│   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
 │   ├── planetshine.ts, milkyWay.ts, exposureController.ts, bodySpin.ts  # NEW (T0123/26/27/28)
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
