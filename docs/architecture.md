@@ -115,7 +115,7 @@ simulation, renderer, or runtime GPU resource.
 ## Release integrity
 
 - `tasks/T*.yaml` is the only task-state authority. `tools/checks/taskDashboard.mjs` deterministically embeds the complete canonical payload in `docs/check_plan.html`; CI rejects drift instead of maintaining parallel status overrides.
-- `tools/checks/releaseReadiness.mjs` enforces the public version, required player/policy documents, README local links, the v1 task-state boundary, and dashboard equality. Final publication additionally requires T0101 DONE.
+- `tools/checks/releaseReadiness.mjs` enforces the public version, required player/policy documents, README local links, the release-scoped task-state boundary, and dashboard equality. Final publication additionally requires T0101 DONE. The task-state boundary is release-scoped: a committed `tools/checks/releaseManifest.json` names explicit task-id scopes (`v1` today, frozen to the ids that shipped v1.0); `T0060`–`T0062` and `T0101` keep their unconditional rules, every other in-scope task must be DONE, and tasks outside the selected scope (future releases' work-in-progress) are exempt from the DONE rule while remaining schema-checked by `check:tasks`. `--release=<name>` (default `v1`) selects the scope; see ADR-033.
 - GitHub Pages deploys only from `main`. An annotated release tag is created only after exact-commit CI, Pages deployment, and a cache-disabled live audit succeed; the tag must peel to that deployed commit.
 
 ## Invariants (CI-enforced where possible)
