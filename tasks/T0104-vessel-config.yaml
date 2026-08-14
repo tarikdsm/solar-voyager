@@ -1,0 +1,44 @@
+id: T0104
+title: Introduce VesselConfig; remove hardcoded ship mass and fixed alpha
+status: REVIEW
+agent: claude
+branch: task/T0104-vessel-config
+depends_on: [T0103]
+milestone: V2M1
+spec: |
+  Formalize the ship as configurable data instead of hardcoded constants: rest mass,
+  absolute drive limit, manual-regime cap, and hold-mode slew rate. SimulationCore is
+  constructed from a VesselConfig; the config is session state carried in the save
+  envelope, not a user setting. Rest mass stays constant (photon drive, ADR-007).
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2
+  and 12.2; interface contract in docs/superpowers/plans/2026-08-14-v2-free-flight.md
+  section 2; task detail T0104.
+acceptance:
+  - SimulationCore constructed with VesselConfig; SHIP_MASS_KG constant deleted from src/main.ts and flightBenchmarkRoute
+  - Save envelope v3 with v2->v3 migration fixture test; embedded settings DTO untouched (stays GameSettingsV1)
+  - alphaMaxMS2 default 98.0665 reachable; existing 1 g goldens still pass by pinning their scenarios to alpha=9.80665
+  - Energy-ledger Hohmann and plane-change tests unchanged and green
+handoff_notes: |
+  ADR-034 records the decision. Interface matches the plan's section 2 field-for-field with
+  literal defaults (10000 kg, 98.0665, 19.6133, 0.261799 — literals because 10*9.80665 is not
+  98.0665 in float64). alphaManualMaxMS2 and maxSlewRadPerSimS are stored and validated but
+  inert until T0108 and T0107; read them from the frozen SimulationCore.vessel, never from
+  DEFAULT_VESSEL, so a restored non-default vessel is honoured.
+  SAVE_STORAGE_KEY deliberately stays 'solar-voyager.save.v2' while documents are v3: the key
+  names the slot, the document names its version. Renaming would orphan deployed saves and make
+  migration unreachable. Review endorsed this.
+  Review found two Important defects, both fixed: migrateV2 adopted the caller's vessel with no
+  mass check, so a mid-burn legacy save could be silently re-priced (the cited cross-validation
+  guard is mass-independent and cannot catch it) — requireLegacyRestMass now fails v1 and v2
+  migration closed, ADR-034 corrected in four places; and the legacy-slot path lost its last
+  end-to-end coverage — runLegacyV2SaveFlow now plants a valid v2 document in the real slot and
+  proves Continue, load, and rewrite-as-v3.
+  Verification: 850 Vitest passed / 3 skipped, lint, typecheck, format, build, perf gates,
+  main-menu and session-settings harnesses; goldens byte-identical by hash across both bases;
+  bench:sim step cost unchanged within run-to-run spread, retained heap negative.
+  Known residual (accepted, not fixable here): an implausible-but-positive restMassKg in a
+  hand-edited v3 document yields a nonsense kineticEnergyChangeJ. initialKineticEnergyJ is a
+  session-start baseline, not the current state's KE, so no mass-vs-ledger cross-check exists;
+  only a plausibility bound on vessel mass would close it. Deferred to final review.
+  Also noted: src/render/stateVectorModel.ts still hardcodes 10000 kg as a widget axis-scale
+  heuristic — a HUD decision for T0112/T0124, deliberately not changed here.
