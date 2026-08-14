@@ -183,6 +183,25 @@ describe('KeyboardCommandMapper', () => {
     expect([...controller.state.rotationRatesRadS]).toEqual([0, 0, 0]);
   });
 
+  it('still pitches while Shift is held', () => {
+    const target = new FakeKeyboardTarget();
+    const { controller, mapper } = createMapper(target);
+
+    expect(target.keyDown('KeyW', { shiftKey: true }).prevented).toBe(true);
+    mapper.update();
+    expect(controller.state.rotationRatesRadS[0]).toBe(ROTATION_RATE_RAD_S);
+  });
+
+  it('still pitches while a HUD button has focus', () => {
+    const target = new FakeKeyboardTarget();
+    const { controller, mapper } = createMapper(target);
+    const button = { isContentEditable: false, tagName: 'BUTTON' } as unknown as EventTarget;
+
+    expect(target.keyDown('KeyW', { target: button }).prevented).toBe(true);
+    mapper.update();
+    expect(controller.state.rotationRatesRadS[0]).toBe(ROTATION_RATE_RAD_S);
+  });
+
   it('releases held axes when bindings change and routes later input to the new key', () => {
     const target = new FakeKeyboardTarget();
     const { controller, mapper } = createMapper(target);
