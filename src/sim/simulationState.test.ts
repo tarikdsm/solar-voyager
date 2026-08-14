@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { copyAndValidateSimulationPersistentState } from './simulationState.js';
 import { createBurnLog, SIMULATION_STATE_DIMENSION } from './ship/ledger.js';
+import { DEFAULT_VESSEL } from './ship/vessel.js';
 
 function validState() {
   return {
     simTimeSec: 12,
+    vessel: DEFAULT_VESSEL,
     state: new Float64Array(SIMULATION_STATE_DIMENSION),
     attitudeQuaternion: new Float64Array([0, 0, 0, 1]),
     throttle: 0,

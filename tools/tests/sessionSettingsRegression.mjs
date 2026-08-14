@@ -56,7 +56,9 @@ try {
   await page.getByText('Session & settings', { exact: true }).click();
   await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
   const exported = await page.evaluate(() => globalThis.__sessionHarness.snapshot());
-  assert.match(exported.exportedJson, /^\{"version":2,/u);
+  assert.match(exported.exportedJson, /^\{"version":3,/u);
+  // ADR-034: the exported document carries the session vessel.
+  assert.match(exported.exportedJson, /"vessel":\{"restMassKg":10000,"alphaMaxMS2":98\.0665,/u);
 
   const desktop = await page.locator('#session-settings').evaluate((panel) => ({
     clientHeight: panel.clientHeight,

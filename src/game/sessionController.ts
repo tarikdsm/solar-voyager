@@ -2,7 +2,7 @@ import type { SimulationCore } from '../sim/simulation.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
 import {
   createSaveEnvelope,
-  type SaveEnvelopeV2,
+  type SaveEnvelopeV3,
   type SaveRepository,
   serializeSaveEnvelope,
 } from './saveLoad.js';
@@ -134,7 +134,7 @@ export class GameSessionController {
   }
 
   importJson(json: string): SessionActionResult {
-    let envelope: SaveEnvelopeV2;
+    let envelope: SaveEnvelopeV3;
     try {
       envelope = this.saveRepository.parse(json, this.currentSimulation.snapshot.bodyIds);
     } catch (error: unknown) {
@@ -181,7 +181,7 @@ export class GameSessionController {
     }
   }
 
-  private createCurrentEnvelope(): SaveEnvelopeV2 {
+  private createCurrentEnvelope(): SaveEnvelopeV3 {
     return createSaveEnvelope(
       this.currentSimulation.exportPersistentState(),
       projectGameSettingsV1(this.currentSettings),
@@ -190,7 +190,7 @@ export class GameSessionController {
   }
 
   private replaceFromEnvelope(
-    envelope: SaveEnvelopeV2,
+    envelope: SaveEnvelopeV3,
     successMessage: string,
     failureMessage: string,
   ): SessionActionResult {

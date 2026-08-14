@@ -39,6 +39,7 @@ import { RelativisticVisualController } from './render/relativisticVisualControl
 import { StateVectorWidget } from './render/stateVectorWidget.js';
 import { measureStartupProbe, selectStartupQualityRung } from './render/startupQuality.js';
 import type { BurnLogEntry, BurnLogView } from './sim/ship/ledger.js';
+import { DEFAULT_VESSEL } from './sim/ship/vessel.js';
 import type { Commands, SimSnapshot } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
@@ -56,7 +57,6 @@ import {
   writeStateVectorViewportPixelsInto,
 } from './ui/stateVectorViewport.js';
 
-const SHIP_MASS_KG = 10_000;
 const SOFTWARE_FALLBACK_EXPOSURE = 3;
 
 interface RuntimeResourceCounts {
@@ -346,7 +346,7 @@ const browserStorage: KeyValueStorage = {
 };
 
 function createTrackedNewGameSimulation() {
-  const simulation = createNewGameSimulation(SHIP_MASS_KG, invalidateTrajectoryPrediction);
+  const simulation = createNewGameSimulation(DEFAULT_VESSEL, invalidateTrajectoryPrediction);
   runtimeResources.sessionSimulationCreations += 1;
   return simulation;
 }
@@ -355,7 +355,7 @@ function createTrackedPersistentSimulation(
   state: Parameters<typeof createGameSimulationFromPersistentState>[1],
 ) {
   const simulation = createGameSimulationFromPersistentState(
-    SHIP_MASS_KG,
+    DEFAULT_VESSEL,
     state,
     invalidateTrajectoryPrediction,
   );
@@ -393,7 +393,7 @@ function updateBurnLogRuntime(view: BurnLogView): void {
 const session = new GameSessionController({
   initialSimulation,
   createNewSimulation: createTrackedNewGameSimulation,
-  saveRepository: new SaveRepository(browserStorage, SHIP_MASS_KG),
+  saveRepository: new SaveRepository(browserStorage, DEFAULT_VESSEL),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: createTrackedPersistentSimulation,
   onSimulationReplaced: (replacement) => {

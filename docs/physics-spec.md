@@ -86,12 +86,17 @@ g(r, t) = Σ_i −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³     # Newtonian n
 
 **Emergent feel (do not script it):** coordinate acceleration parallel to v falls as α/γ³ — the drive feels "heavier" the faster you go; combined with E = c·|Δp| cost (§5), expensive maneuvers (plane changes, near-c pushes, ecliptic escapes) are *felt* as sluggish response, like a power-limited vehicle.
 
-### 3.0.1 Attitude and commanded proper acceleration (ADR-025)
+### 3.0.1 Attitude and commanded proper acceleration (ADR-025, ADR-034)
 
 Attitude quaternion order is `[x,y,z,w]`; it rotates the ship-local `+X`
-nose/drive axis into the inertial ecliptic frame. Default maximum proper
-acceleration is standard gravity, `α_max = 9.80665 m/s² = 0.00980665 km/s²`,
-overridable in ship configuration. For throttle fraction `f ∈ [0,1]`:
+nose/drive axis into the inertial ecliptic frame. Both `α_max` and the rest mass
+`m_kg` come from the session's `VesselConfig` (`sim/ship/vessel.ts`, ADR-034),
+which is serialized with the simulation state. The default vessel is the 10 t
+torchship with `α_max = alphaMaxMS2 = 98.0665 m/s² = 0.0980665 km/s²` (10 g);
+before ADR-034 the default was standard gravity, `9.80665 m/s²`. The vessel also
+carries `alphaManualMaxMS2 = 19.6133 m/s²` (2 g), a *regime* ceiling applied by
+the flight controller in the game layer — the simulation itself commands only
+against the absolute `α_max`. For throttle fraction `f ∈ [0,1]`:
 
 ```
 α_vector = f · α_max · forward

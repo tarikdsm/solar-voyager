@@ -8,11 +8,22 @@ import { SimulationCore } from './simulation.js';
 import { WarpClampReason, type SimSnapshot } from './simulationSnapshot.js';
 import { writeForwardFromQuaternionInto } from './ship/attitude.js';
 import type { BurnLogEntry, BurnLogView } from './ship/ledger.js';
-import { DEFAULT_MAX_PROPER_ACCELERATION_M_S2 } from './ship/thrust.js';
+import { STANDARD_GRAVITY_M_S2 } from './ship/thrust.js';
+import { DEFAULT_VESSEL, type VesselConfig } from './ship/vessel.js';
 
 const EARTH_MU_KM3_S2 = 398_600.4418;
 const ORBIT_RADIUS_KM = 6_778.137;
 const SHIP_MASS_KG = 10_000;
+
+// ADR-034: these scenarios were authored against the pre-vessel 1 g drive limit.
+// They are pinned to 1 g so their analytic expectations stay exact under the new
+// 10 g DEFAULT_VESSEL.
+const ONE_G_VESSEL: VesselConfig = {
+  restMassKg: SHIP_MASS_KG,
+  alphaMaxMS2: STANDARD_GRAVITY_M_S2,
+  alphaManualMaxMS2: STANDARD_GRAVITY_M_S2,
+  maxSlewRadPerSimS: DEFAULT_VESSEL.maxSlewRadPerSimS,
+};
 
 function earthCatalog() {
   return compileRailsCatalog([
@@ -37,6 +48,10 @@ function verificationTolerance(maxAcceptedSteps = 4_000): Dp54Tolerance {
     initialStepSec: 1,
     maxAcceptedSteps,
   };
+}
+
+function relativeError(actual: number, expected: number): number {
+  return Math.abs(actual - expected) / Math.max(Math.abs(actual), Math.abs(expected));
 }
 
 function stubRendererConsume(snapshot: SimSnapshot): number {
@@ -77,13 +92,105 @@ function copyPersistentSnapshot(snapshot: SimSnapshot) {
   };
 }
 
+describe('SimulationCore vessel configuration — ADR-034', () => {
+  it('reaches the 10 g default drive limit and prices it as P = m*alpha*c', () => {
+    const throttle = 0.75;
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      vessel: DEFAULT_VESSEL,
+    });
+    core.commands.setAttitudeMode('prograde');
+    core.commands.setThrottle(throttle);
+
+    const snapshot = core.step(1);
+
+    // physics-spec.md §3.0.1 — alpha = f * alpha_max, F = m*alpha, P = F*c.
+    const expectedAccelerationKmS2 = (throttle * DEFAULT_VESSEL.alphaMaxMS2) / 1_000;
+    const expectedForceN = DEFAULT_VESSEL.restMassKg * throttle * DEFAULT_VESSEL.alphaMaxMS2;
+    const expectedPowerW = expectedForceN * SPEED_OF_LIGHT_KM_S * 1_000;
+    const actualAccelerationKmS2 = Math.hypot(...snapshot.shipProperAccelerationKmS2);
+
+    expect(relativeError(actualAccelerationKmS2, expectedAccelerationKmS2)).toBeLessThan(1e-12);
+    expect(relativeError(Math.hypot(...snapshot.shipThrustVectorN), expectedForceN)).toBeLessThan(
+      1e-12,
+    );
+    expect(relativeError(snapshot.powerDrawW, expectedPowerW)).toBeLessThan(1e-12);
+    // 0.75 throttle already commands 7.5 g — unreachable at any throttle under the
+    // pre-ADR-034 1 g ceiling, so the new limit is genuinely in force, not clamped.
+    expect((actualAccelerationKmS2 * 1_000) / STANDARD_GRAVITY_M_S2).toBeCloseTo(7.5, 12);
+  });
+
+  it('publishes the vessel it flies and validates it at construction', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      vessel: DEFAULT_VESSEL,
+    });
+
+    expect(core.vessel).toEqual(DEFAULT_VESSEL);
+    expect(Object.isFrozen(core.vessel)).toBe(true);
+    expect(
+      () =>
+        new SimulationCore({
+          catalog: earthCatalog(),
+          initialShipState: circularState(),
+          vessel: { ...DEFAULT_VESSEL, restMassKg: 0 },
+        }),
+    ).toThrow(/rest mass/u);
+  });
+
+  it('restores the persisted vessel in preference to the constructor vessel', () => {
+    const catalog = earthCatalog();
+    const original = new SimulationCore({
+      catalog,
+      initialShipState: circularState(),
+      vessel: DEFAULT_VESSEL,
+    });
+    original.commands.setAttitudeMode('prograde');
+    original.commands.setThrottle(1);
+    original.step(1);
+    const saved = original.exportPersistentState();
+
+    // The persistent ledger was priced at 10 g; restoring under a 1 g vessel must
+    // not silently re-price it.
+    const restored = new SimulationCore({
+      catalog,
+      initialShipState: circularState(),
+      vessel: ONE_G_VESSEL,
+      persistentState: saved,
+    });
+
+    expect(saved.vessel).toEqual(DEFAULT_VESSEL);
+    expect(restored.vessel).toEqual(DEFAULT_VESSEL);
+    expect(restored.snapshot.powerDrawW).toBe(original.snapshot.powerDrawW);
+    expect(restored.snapshot.energySpentJ).toBe(original.snapshot.energySpentJ);
+  });
+
+  it('uses the constructor vessel for a fresh session', () => {
+    const core = new SimulationCore({
+      catalog: earthCatalog(),
+      initialShipState: circularState(),
+      vessel: ONE_G_VESSEL,
+    });
+    core.commands.setThrottle(1);
+    const snapshot = core.step(1);
+
+    expect(core.vessel.alphaMaxMS2).toBe(STANDARD_GRAVITY_M_S2);
+    expect(Math.hypot(...snapshot.shipProperAccelerationKmS2)).toBeCloseTo(
+      STANDARD_GRAVITY_M_S2 / 1_000,
+      14,
+    );
+  });
+});
+
 describe('SimulationCore', () => {
   it('exports and restores the complete simulation continuation state', () => {
     const catalog = earthCatalog();
     const original = new SimulationCore({
       catalog,
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     original.commands.setTarget('earth');
     original.commands.setAttitudeMode('prograde');
@@ -100,7 +207,7 @@ describe('SimulationCore', () => {
     const restored = new SimulationCore({
       catalog,
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       persistentState: saved,
     });
 
@@ -118,7 +225,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     const initial = core.snapshot;
 
@@ -148,7 +255,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
 
     core.commands.setThrottle(0.6);
@@ -163,7 +270,7 @@ describe('SimulationCore', () => {
     expect(snapshot.throttle).toBe(0.6);
     expect(snapshot.attitudeMode).toBe('prograde');
     expect(snapshot.targetBodyIndex).toBe(0);
-    const expectedAccelerationKmS2 = (0.6 * DEFAULT_MAX_PROPER_ACCELERATION_M_S2) / 1_000;
+    const expectedAccelerationKmS2 = (0.6 * STANDARD_GRAVITY_M_S2) / 1_000;
     expect(Math.hypot(...snapshot.shipProperAccelerationKmS2)).toBeCloseTo(
       expectedAccelerationKmS2,
       14,
@@ -180,7 +287,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: verificationTolerance(),
     });
     core.commands.setAttitudeMode('prograde');
@@ -203,7 +310,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     core.commands.rotate(0, Math.PI / 2, 0);
 
@@ -220,7 +327,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       onTrajectoryInvalidated: () => {
         invalidations += 1;
       },
@@ -236,7 +343,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     const published = core.snapshot;
 
@@ -253,7 +360,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: verificationTolerance(),
     });
 
@@ -272,7 +379,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: verificationTolerance(0),
     });
     const initial = core.snapshot;
@@ -291,7 +398,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     core.commands.setWarp(1e7);
 
@@ -308,7 +415,7 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
     });
     core.commands.setThrottle(0.5);
     core.commands.setWarp(1e7);
@@ -332,13 +439,13 @@ describe('SimulationCore', () => {
     const core = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: tolerance,
     });
     const checkpointCore = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: farFieldState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: tolerance,
     });
     core.commands.setThrottle(0.4);
@@ -363,13 +470,13 @@ describe('SimulationCore', () => {
     const warped = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: verificationTolerance(),
     });
     const realtime = new SimulationCore({
       catalog: earthCatalog(),
       initialShipState: circularState(),
-      shipMassKg: SHIP_MASS_KG,
+      vessel: ONE_G_VESSEL,
       integrationTolerance: verificationTolerance(),
     });
     warped.commands.setThrottle(0.2);

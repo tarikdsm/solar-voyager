@@ -3,14 +3,13 @@ import bodiesDocument from '../../data/bodies.json';
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import { WarpClampReason } from '../sim/simulationSnapshot.js';
 import { STATE_TAU, relativisticKineticEnergyJ } from '../sim/ship/relativity.js';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './createNewGameSimulation.js';
 import { createSaveEnvelope, serializeSaveEnvelope } from './saveLoad.js';
 import { DEFAULT_GAME_SETTINGS, projectGameSettingsV1 } from './settings.js';
-
-const SHIP_MASS_KG = 10_000;
 
 interface RouteDefinition {
   readonly altitudeKm: number;
@@ -56,11 +55,11 @@ function coordinateVelocityToCelerity(velocityKmS: readonly number[]): readonly 
 }
 
 function createCheckpoint(definition: RouteDefinition): FlightBenchmarkCheckpoint {
-  const initialSimulation = createNewGameSimulation(SHIP_MASS_KG);
+  const initialSimulation = createNewGameSimulation(DEFAULT_VESSEL);
   const timeState = initialSimulation.exportPersistentState();
   const stateAtTime = new Float64Array(timeState.state);
   stateAtTime[STATE_TAU] = definition.simTimeSec;
-  const simulationAtTime = createGameSimulationFromPersistentState(SHIP_MASS_KG, {
+  const simulationAtTime = createGameSimulationFromPersistentState(DEFAULT_VESSEL, {
     ...timeState,
     simTimeSec: definition.simTimeSec,
     state: stateAtTime,
@@ -117,11 +116,11 @@ function createCheckpoint(definition: RouteDefinition): FlightBenchmarkCheckpoin
       routeState[3] as number,
       routeState[4] as number,
       routeState[5] as number,
-      SHIP_MASS_KG,
+      DEFAULT_VESSEL.restMassKg,
     ),
   };
   const checkpointSimulation = createGameSimulationFromPersistentState(
-    SHIP_MASS_KG,
+    DEFAULT_VESSEL,
     persistentState,
   );
   const checkpointSnapshot = checkpointSimulation.snapshot;

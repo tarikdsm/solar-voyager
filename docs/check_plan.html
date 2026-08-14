@@ -1539,6 +1539,25 @@
       "AGENTS.md points to the v2 spec+plan as active work"
     ],
     "handoff_notes": "Docs-only; zero src/ changes. Controller added three items beyond the four acceptance\ncriteria: corrected ADR-033's account of how the v1 manifest id list was produced\n(generated via loadCanonicalTasks, not hand-enumerated), scoped the plan's JSON-Schema\nGlobal Constraint to runtime/catalog data under data/ rather than CI-process config, and\nadded a v2.0-development note to release-notes.md. Review found one Important defect —\nthe new planned-modules section claimed no listed file existed while ~10 MOD entries are\nreal files — fixed in 209f072 together with two minor attribution errors. Verification:\nformat:check, check:tasks (61), check:release, check:dashboard, 833 Vitest passed / 3\nskipped; the reviewer independently re-derived the module map against the real tree.\nDeferred minors: directory-layout lines remain partial by convention (sim/analysis lists\n4 of 8 modules); expansion-hooks rows for Vessel and SystemDefinition still describe hooks\nthat do not exist in src/ (pre-existing text; Vessel becomes real in T0104).\n"
+  },
+  {
+    "id": "T0104",
+    "title": "Introduce VesselConfig; remove hardcoded ship mass and fixed alpha",
+    "status": "REVIEW",
+    "agent": "claude",
+    "branch": "task/T0104-vessel-config",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M1",
+    "spec": "Formalize the ship as configurable data instead of hardcoded constants: rest mass,\nabsolute drive limit, manual-regime cap, and hold-mode slew rate. SimulationCore is\nconstructed from a VesselConfig; the config is session state carried in the save\nenvelope, not a user setting. Rest mass stays constant (photon drive, ADR-007).\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2\nand 12.2; interface contract in docs/superpowers/plans/2026-08-14-v2-free-flight.md\nsection 2; task detail T0104.\n",
+    "acceptance": [
+      "SimulationCore constructed with VesselConfig; SHIP_MASS_KG constant deleted from src/main.ts and flightBenchmarkRoute",
+      "Save envelope v3 with v2->v3 migration fixture test; embedded settings DTO untouched (stays GameSettingsV1)",
+      "alphaMaxMS2 default 98.0665 reachable; existing 1 g goldens still pass by pinning their scenarios to alpha=9.80665",
+      "Energy-ledger Hohmann and plane-change tests unchanged and green"
+    ],
+    "handoff_notes": "ADR-034 records the decision. Interface matches the plan's section 2 field-for-field with\nliteral defaults (10000 kg, 98.0665, 19.6133, 0.261799 — literals because 10*9.80665 is not\n98.0665 in float64). alphaManualMaxMS2 and maxSlewRadPerSimS are stored and validated but\ninert until T0108 and T0107; read them from the frozen SimulationCore.vessel, never from\nDEFAULT_VESSEL, so a restored non-default vessel is honoured.\nSAVE_STORAGE_KEY deliberately stays 'solar-voyager.save.v2' while documents are v3: the key\nnames the slot, the document names its version. Renaming would orphan deployed saves and make\nmigration unreachable. Review endorsed this.\nReview found two Important defects, both fixed: migrateV2 adopted the caller's vessel with no\nmass check, so a mid-burn legacy save could be silently re-priced (the cited cross-validation\nguard is mass-independent and cannot catch it) — requireLegacyRestMass now fails v1 and v2\nmigration closed, ADR-034 corrected in four places; and the legacy-slot path lost its last\nend-to-end coverage — runLegacyV2SaveFlow now plants a valid v2 document in the real slot and\nproves Continue, load, and rewrite-as-v3.\nVerification: 850 Vitest passed / 3 skipped, lint, typecheck, format, build, perf gates,\nmain-menu and session-settings harnesses; goldens byte-identical by hash across both bases;\nbench:sim step cost unchanged within run-to-run spread, retained heap negative.\nKnown residual (accepted, not fixable here): an implausible-but-positive restMassKg in a\nhand-edited v3 document yields a nonsense kineticEnergyChangeJ. initialKineticEnergyJ is a\nsession-start baseline, not the current state's KE, so no mass-vs-ledger cross-check exists;\nonly a plausibility bound on vessel mass would close it. Deferred to final review.\nAlso noted: src/render/stateVectorModel.ts still hardcodes 10000 kg as a widget axis-scale\nheuristic — a HUD decision for T0112/T0124, deliberately not changed here.\n"
   }
 ];
     /* TASK_DATA_END */
