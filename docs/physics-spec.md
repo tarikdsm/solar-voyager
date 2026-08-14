@@ -86,7 +86,7 @@ g(r, t) = Σ_i −μᵢ · (r − rᵢ(t)) / |r − rᵢ(t)|³     # Newtonian n
 
 **Emergent feel (do not script it):** coordinate acceleration parallel to v falls as α/γ³ — the drive feels "heavier" the faster you go; combined with E = c·|Δp| cost (§5), expensive maneuvers (plane changes, near-c pushes, ecliptic escapes) are *felt* as sluggish response, like a power-limited vehicle.
 
-### 3.0.1 Attitude and commanded proper acceleration (ADR-025, ADR-034)
+### 3.0.1 Attitude and commanded proper acceleration (ADR-025, ADR-034, ADR-035)
 
 Attitude quaternion order is `[x,y,z,w]`; it rotates the ship-local `+X`
 nose/drive axis into the inertial ecliptic frame. Both `α_max` and the rest mass
@@ -111,13 +111,63 @@ are `±normalize(r_rel)`, and normal/antinormal are
 `±normalize(r_rel × v_rel)`. Target hold is `normalize(r_target-r)`.
 Degenerate directions retain the previous finite forward vector.
 
-Manual rates are body-frame angular velocity `ω` in rad/s. Within one
-propagation call they are constant and evaluated exactly at every DP54 stage.
-With `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about `+Z`:
+#### Hold-mode slew (ADR-035)
+
+The solved direction is a *target*, not the attitude. `q_target(t)` is the
+minimum-rotation (zero-roll) quaternion taking `+X` to that direction, and the
+ship pursues it along the shortest-path geodesic at no more than the vessel's
+`maxSlewRadPerSimS` (default `0.261799 rad/s` = 15°/s, ADR-034):
+
+```
+Δt      = t − t_frame_start                      # elapsed SIM time in this frame
+θ_err   = 2·atan2(|vec(q_rel)|, |w(q_rel)|),  q_rel = conj(q_frame_start) ⊗ ±q_target(t)
+θ_step  = min(θ_err, maxSlewRadPerSimS · Δt)
+q(t)    = slerp(q_frame_start, q_target(t), θ_step / θ_err)   ; = q_target(t) when θ_step = θ_err
+```
+
+`±q_target` is sign-folded so `dot ≥ 0`, keeping the slew on the shorter of the
+two double-cover paths, so `θ_err ∈ [0, π]`. Thrust uses the attitude actually
+held, `û = forward(q(t))`, not the target.
+
+The budget is measured from the **start of the frame** and never accumulated per
+derivative evaluation or per accepted step. The attitude is therefore a pure
+function of `(q_frame_start, t_frame_start, t, state(t))`, so rejected DP54
+steps, warp-ladder rollback (§3.2) and a change of tolerance all reproduce the
+same quaternion. When the budget covers the whole separation the target is
+adopted exactly, which is the pre-ADR-035 snap; every hold reference rotates
+far slower than the slew limit, so a *converged* hold tracks its target exactly
+and is unaffected by frame size. The slew *transient* is frame-size dependent at
+`O(ω_target·Δt_frame)`; the ledger (§5) is not, because `E` and scalar `Δv`
+depend on `|α|` only.
+
+A 180° reorientation costs `π / maxSlewRadPerSimS = 12.0 s` of **simulation**
+time at every warp tier, hence `12.0 s / warp` of wall time — 12 s at 1x,
+2.4 s at 5x, 0.24 s at 50x.
+
+#### Manual body rates and wall-time authority (ADR-035)
+
+Manual rates are body-frame angular velocity `ω` in rad per **simulated** second.
+Within one propagation call they are constant and evaluated exactly at every DP54
+stage. With `+X` forward, roll is about `+X`, pitch about `+Y`, and yaw about
+`+Z` (`Commands.rotate` takes `(pitch, yaw, roll)` and is reordered to that axis
+convention on entry):
 
 ```
 q(t) = normalize(q0 ⊗ [axis(ω)·sin(|ω|Δt/2), cos(|ω|Δt/2)])
 ```
+
+Because `ω` is per simulated second, a fixed control deflection would spin the
+ship `warp` times faster in wall time. The flight controller therefore commands
+
+```
+rateSimRadS = clamp(inputRateWallRadS / effectiveWarp, −RATE_MAX, RATE_MAX),  RATE_MAX = 0.6
+```
+
+and manual rotation is locked above `MANUAL_ATTITUDE_MAX_WARP = 100`
+(`core/time.ts`): `Commands.rotate` forces the rates to zero there, and raising
+warp past the tier clears any rates already commanded — the same shape as the
+`MAX_THRUST_WARP` throttle lockout in §3.2. Attitude holds remain available at
+every tier.
 
 The endpoint attitude commits only when the propagation succeeds. Hold-mode
 directions are recomputed at every stage, so thrust follows the curved orbit.
@@ -305,9 +355,10 @@ these presentation bounds do not alter the physical definitions above.
 4. **Launch regression** *(deferred with §4)*: scripted throttle/pitch profile reaches 200±5 km orbit; total Δv within ±1% of the golden value; max-q within ±2%.
 5. **Handoff** *(deferred with §4)*: energy/angular-momentum round-trip < 1e-9 relative.
 6. **Golden trajectories:** three 30-day unpowered ship propagations (400 km LEO, post-Earth-SOI Earth–Mars transfer coast, Jupiter flyby) start at J2026 and use the production §3.1 tolerance profile against the full §2/§3 rails-plus-n-body field. Store the initial state and 31 samples at one-day cadence in `tests/golden/`; each daily segment must finish within the 4,000 accepted-step budget or fail loudly. Compare every `(r, u, τ)` sample component. The many-step adaptive LEO case uses cross-runtime absolute drift limits of `2e-2 km` for position, `2e-5 km/s` for celerity, and `1e-6 s` for proper time; the transfer and flyby retain `1e-3 km`, `1e-9 km/s`, and `1e-6 s`, respectively (ADR-017). Any change that moves them requires an explicit golden update in the PR (reviewable diff).
-7. **Ledger:** proper Δv of an impulsive-approximation Hohmann LEO→GEO within 1% of the analytic 3.90 km/s; E_spent for the same maneuver within 1% of c·m·Δv.
+7. **Ledger:** proper Δv of an impulsive-approximation Hohmann LEO→GEO within 1% of the analytic 3.90 km/s; E_spent for the same maneuver within 1% of c·m·Δv. Each burn starts from an aligned ship: since ADR-035 a prograde hold slews at `maxSlewRadPerSimS` rather than snapping, so the scenario coasts `θ_err / maxSlewRadPerSimS` before opening the throttle. Alignment is a precondition of the scenario, never a relaxation of the 1% bounds.
 8. **Relativistic kinematics:** constant proper acceleration α from rest — analytic hyperbolic-motion solution `v(t) = αt/√(1+(αt/c)²)`, `τ(t) = (c/α)·asinh(αt/c)`: DP54 matches to 1e-9 relative over a span reaching γ = 10; |v| < c strictly at all times; γ from u exact.
 9. **Newtonian limit:** the full relativistic propagator vs the pure Newtonian model from the same coordinate state on a 10-orbit circular LEO coast — final position separation < 5e-8 relative. The expected accumulated phase separation is ≈ 4.12e-8 under the §3 celerity dynamics even though γ−1 ≈ 3e-10 instantaneously (ADR-012).
 10. **Plane-change pricing:** rotating a 30 km/s velocity vector by 90° at constant speed via continuous thrust — ledger E_spent within 2% of the analytic ∫Fc dt for the flown profile, and strictly greater than c·m·|Δp| (the impulsive lower bound).
 11. **Time dilation:** 1 year of coordinate time at γ = 2 yields τ within 1e-9 of t/2 (with dτ integrated, not recomputed).
 12. **N-body field:** single-body inverse-square acceleration relative error < 1e-14. In an ideal circular Earth-Sun barycentric rotating frame, independently solved L1 lies 1.4e6–1.6e6 km from Earth and satisfies `|g_x + n²·x| / max(|g_x|, |n²·x|) < 1e-10`; Coriolis acceleration is zero for this stationary rotating-frame point.
+13. **Hold-mode slew (§3.0.1, ADR-035):** a step of `θ_step` toward a target `θ_err` away lands on the great circle at exactly `θ_step`, and composing N steps of `θ_step/N` reproduces it to 1e-14. A 90° hold converges in `θ_err / maxSlewRadPerSimS` within one frame; a 180° reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time at every warp tier, i.e. `12.0 s / warp` of wall time (≤ 2.5 s at 5x, ≤ 0.25 s at 50x). One frame reached through the warp ladder publishes the same attitude as the same frame integrated in a single segment, to 1e-12. A converged prograde hold reproduces the pre-ADR-035 snap (equivalently, an unbounded slew rate) over one LEO orbit with position drift < 1e-3 km, and prices energy and proper Δv identically at 1x and 100x to 1e-12.
