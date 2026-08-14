@@ -1524,7 +1524,7 @@
   {
     "id": "T0103",
     "title": "Add v2 kickoff ADR, roadmap milestones V2M1-V2M6, doc pointers",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0103-v2-kickoff-docs",
     "depends_on": [
@@ -1543,7 +1543,7 @@
   {
     "id": "T0104",
     "title": "Introduce VesselConfig; remove hardcoded ship mass and fixed alpha",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0104-vessel-config",
     "depends_on": [
@@ -1558,6 +1558,26 @@
       "Energy-ledger Hohmann and plane-change tests unchanged and green"
     ],
     "handoff_notes": "ADR-034 records the decision. Interface matches the plan's section 2 field-for-field with\nliteral defaults (10000 kg, 98.0665, 19.6133, 0.261799 — literals because 10*9.80665 is not\n98.0665 in float64). alphaManualMaxMS2 and maxSlewRadPerSimS are stored and validated but\ninert until T0108 and T0107; read them from the frozen SimulationCore.vessel, never from\nDEFAULT_VESSEL, so a restored non-default vessel is honoured.\nSAVE_STORAGE_KEY deliberately stays 'solar-voyager.save.v2' while documents are v3: the key\nnames the slot, the document names its version. Renaming would orphan deployed saves and make\nmigration unreachable. Review endorsed this.\nReview found two Important defects, both fixed: migrateV2 adopted the caller's vessel with no\nmass check, so a mid-burn legacy save could be silently re-priced (the cited cross-validation\nguard is mass-independent and cannot catch it) — requireLegacyRestMass now fails v1 and v2\nmigration closed, ADR-034 corrected in four places; and the legacy-slot path lost its last\nend-to-end coverage — runLegacyV2SaveFlow now plants a valid v2 document in the real slot and\nproves Continue, load, and rewrite-as-v3.\nVerification: 850 Vitest passed / 3 skipped, lint, typecheck, format, build, perf gates,\nmain-menu and session-settings harnesses; goldens byte-identical by hash across both bases;\nbench:sim step cost unchanged within run-to-run spread, retained heap negative.\nKnown residual (accepted, not fixable here): an implausible-but-positive restMassKg in a\nhand-edited v3 document yields a nonsense kineticEnergyChangeJ. initialKineticEnergyJ is a\nsession-start baseline, not the current state's KE, so no mass-vs-ledger cross-check exists;\nonly a plausibility bound on vessel mass would close it. Deferred to final review.\nAlso noted: src/render/stateVectorModel.ts still hardcodes 10000 kg as a widget axis-scale\nheuristic — a HUD decision for T0112/T0124, deliberately not changed here.\n"
+  },
+  {
+    "id": "T0105",
+    "title": "New input engine - pointer lock, analog axes, UI-focus policy",
+    "status": "REVIEW",
+    "agent": "claude",
+    "branch": "task/T0105-input-engine",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M1",
+    "spec": "Replace the v1 keyboard mapper with a real input engine: pointer-lock mouse-look\nproducing wall-frame deltas, continuous analog throttle, one shared UI-focus policy,\nand a stable allocation-free InputFrame that the flight controller, gamepad layer and\nchase camera are written against. Kill the two v1 defects that made flying impossible:\na focused HUD button froze all flight keys, and holding Shift disabled every control.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2\nand 7; design doc docs/superpowers/specs/2026-08-14-input-engine-design.md;\ncontract in docs/superpowers/plans/2026-08-14-v2-free-flight.md section 2.\n",
+    "acceptance": [
+      "Pointer-lock mouse-look deltas exposed as wall-frame rad; ESC releases lock and opens pause (stub until T0112)",
+      "Flight input NEVER disabled by focused BUTTON elements or held Shift (regression tests for both v1 defects)",
+      "Analog throttle axis [0,1] with keyboard ramp (full sweep 1.5 s) replacing the 10-step ratchet",
+      "KeyboardCommandMapper removed; all 13 existing bindings preserved via the new bindings registry; rebind UI still works",
+      "Zero frame-loop allocations (heap gate green)"
+    ],
+    "handoff_notes": "Contract shipped as a strict superset of plan section 2: pressCount() (two warp taps between\npolls must both register), held() (level query T0116 needs for cruise decompression), and\npoll(wallDtSec). Plan section 2 updated in the same PR per its own naming rule.\nThree source files, not two: src/game/input/inputCommandBridge.ts is an explicitly interim,\nunit-tested InputFrame->Commands translator, because this task deletes the only thing feeding\nthe sim and T0108 does not exist yet. T0108 deletes it and must MOVE (not delete)\nROTATION_RATE_RAD_S — three files import from it, including src/ui/BurnLogPanel.test.tsx.\nFocus policy has three clauses: only INPUT/TEXTAREA/SELECT/contenteditable block flight keys;\ndefaultPrevented is honoured (load-bearing for burn-log arrow navigation, which preventDefaults\nwithout stopPropagation); and Space/Enter/NumpadEnter on an activatable target belong to that\ncontrol. That third clause exists because binding a flight action to Space would otherwise have\nkilled keyboard activation of every HUD button - a NEW accessibility regression created by the\ncorrect \"buttons do not block\" rule. Space/Enter are deliberately NOT added to RESERVED_CODES:\nparseInputBindings runs at load time with no rewrite hook, so both repositories would fail\nclosed on a profile that legally bound them under v1.\nThrottle model is max(TAP_STEP, RAMP * heldSec) re-anchored per press: monotonic in hold\nduration, any tap moves at least 10%, rest-to-full lands at exactly 1.5 s.\nPointer lock is on double-click as an interim gesture so single-click orbit drag survives until\nT0110 owns camera input; while locked, orbit drag still runs (T0110 resolves).\nESC opens pause is conditional today: SystemMapPanel preventDefaults Escape while the map is\nopen. T0112 owns the real pause menu and must resolve that.\nVerification: 869 Vitest passed / 3 skipped, lint, typecheck, twelve browser harnesses including\nnew pointer-lock coverage inside the existing camera-controls step (no new CI time);\ndocs/bench/T0105-summary.md with real before/after runs; heap -1,823 B, goldens 10 draw calls /\n77,071 triangles unchanged, bundle 127,190 entry / 556,970 total gzip.\n"
   }
 ];
     /* TASK_DATA_END */
