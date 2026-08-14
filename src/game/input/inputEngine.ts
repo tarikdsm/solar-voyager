@@ -139,8 +139,9 @@ export interface InputEngineOptions {
  * {@link InputFrame} per frame.
  *
  * Replaces v1's `KeyboardCommandMapper`. The engine never speaks to the
- * simulation: `game/input/inputCommandBridge.ts` does that today and T0108's
- * `FlightController` takes over.
+ * simulation: `game/flight/flightInputRouter.ts` turns a frame into
+ * `FlightController` intent, and the controller is the only writer of
+ * attitude and throttle `Commands`.
  */
 export class InputEngine {
   private readonly frame = new MutableInputFrame();
