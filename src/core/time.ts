@@ -14,6 +14,18 @@ export type WarpFactor = (typeof WARP_LADDER)[number];
 /** Highest canonical tier where player thrust may remain active. */
 export const MAX_THRUST_WARP: WarpFactor = 1e3;
 
+/**
+ * Highest canonical tier where manual body-rate rotation stays available (ADR-035).
+ *
+ * Commanded rates are rad per *simulated* second, so a fixed stick deflection
+ * spins the ship `warp` times faster in wall time. The flight controller
+ * normalizes for that (`inputRateWallRadS / effectiveWarp`, physics-spec.md
+ * §3.0.1); above this tier the normalized rate would be finer than one float64
+ * step is worth and the ship becomes uncontrollable, so `Commands` forces manual
+ * rates to zero and leaves attitude to the hold modes.
+ */
+export const MANUAL_ATTITUDE_MAX_WARP: WarpFactor = 100;
+
 /** Mutable float64 simulation time, measured in TDB seconds since J2026. */
 export interface SimClock {
   timeSec: number;

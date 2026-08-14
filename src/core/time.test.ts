@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   J2026_TDB_EPOCH_LABEL,
+  MANUAL_ATTITUDE_MAX_WARP,
+  MAX_THRUST_WARP,
   WARP_LADDER,
   advanceSimClock,
   createSimClock,
@@ -46,6 +48,14 @@ describe('SimClock — physics-spec.md §1 / §3.2', () => {
 
   it('exposes the exact warp ladder from physics-spec.md §3.2', () => {
     expect(WARP_LADDER).toEqual([1, 5, 10, 50, 100, 1e3, 1e4, 1e5, 1e6, 1e7]);
+  });
+
+  it('caps manual rotation authority at 100x, below the thrust ceiling — ADR-035', () => {
+    expect(MANUAL_ATTITUDE_MAX_WARP).toBe(100);
+    expect(WARP_LADDER).toContain(MANUAL_ATTITUDE_MAX_WARP);
+    // Manual attitude locks out strictly before thrust does: between the two tiers
+    // the player still burns, but only under an attitude hold.
+    expect(MANUAL_ATTITUDE_MAX_WARP).toBeLessThan(MAX_THRUST_WARP);
   });
 
   it('defines requested, effective, and reason fields for clamp state', () => {

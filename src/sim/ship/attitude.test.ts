@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   evaluateBodyRateQuaternionInto,
+  quaternionSeparationRad,
   selectMaximumGravityBodyIndex,
   writeAttitudeDirectionInto,
   writeForwardFromQuaternionInto,
   writeQuaternionFromForwardInto,
+  writeSlewLimitedQuaternionInto,
 } from './attitude.js';
 
 function expectVector(actual: Float64Array, expected: readonly number[]): void {
@@ -38,6 +40,116 @@ describe('attitude quaternion primitives', () => {
     writeForwardFromQuaternionInto(forward, output);
     expectVector(forward, [0, 1, 0]);
     expect(Math.hypot(...output)).toBeCloseTo(1, 14);
+  });
+});
+
+describe('slew-limited attitude pursuit — physics-spec.md §3.0.1 / ADR-035', () => {
+  const identity = new Float64Array([0, 0, 0, 1]);
+
+  function quaternionFromForward(x: number, y: number, z: number): Float64Array {
+    return writeQuaternionFromForwardInto(new Float64Array(4), x, y, z);
+  }
+
+  it('measures the shortest-path separation across the double cover', () => {
+    const quarterTurn = quaternionFromForward(0, 1, 0);
+    const negated = new Float64Array(quarterTurn).map((component) => -component);
+
+    expect(quaternionSeparationRad(identity, identity)).toBe(0);
+    expect(quaternionSeparationRad(identity, quarterTurn)).toBeCloseTo(Math.PI / 2, 14);
+    // -q is the same rotation; the separation must not report the long way round.
+    expect(quaternionSeparationRad(identity, negated)).toBeCloseTo(Math.PI / 2, 14);
+    expect(quaternionSeparationRad(identity, quaternionFromForward(-1, 0, 0))).toBeCloseTo(
+      Math.PI,
+      14,
+    );
+  });
+
+  it('advances exactly the requested angle along the great circle', () => {
+    const target = quaternionFromForward(0, 1, 0);
+    const output = new Float64Array(4);
+    const forward = new Float64Array(3);
+    const stepRad = Math.PI / 6;
+
+    expect(writeSlewLimitedQuaternionInto(output, identity, target, stepRad)).toBe(output);
+
+    // Analytic check: a 30 deg step of a 90 deg +X -> +Y rotation about +Z.
+    writeForwardFromQuaternionInto(forward, output);
+    expectVector(forward, [Math.cos(stepRad), Math.sin(stepRad), 0]);
+    expect(quaternionSeparationRad(identity, output)).toBeCloseTo(stepRad, 14);
+    expect(quaternionSeparationRad(output, target)).toBeCloseTo(Math.PI / 2 - stepRad, 14);
+    expect(Math.hypot(...output)).toBeCloseTo(1, 15);
+  });
+
+  it('composes successive steps into one uniform-rate geodesic', () => {
+    const target = quaternionFromForward(0, 0, 1);
+    const stepwise = new Float64Array(4);
+    const direct = new Float64Array(4);
+    const scratch = new Float64Array(identity);
+    const stepRad = Math.PI / 400;
+
+    for (let step = 0; step < 100; step += 1) {
+      writeSlewLimitedQuaternionInto(stepwise, scratch, target, stepRad);
+      scratch.set(stepwise);
+    }
+    writeSlewLimitedQuaternionInto(direct, identity, target, 100 * stepRad);
+
+    for (let index = 0; index < 4; index += 1) {
+      expect(stepwise[index]).toBeCloseTo(direct[index] as number, 14);
+    }
+  });
+
+  it('copies the target verbatim once the budget covers the separation', () => {
+    const target = quaternionFromForward(0.3, -0.5, 0.81);
+    const output = new Float64Array(4);
+
+    // Bit-for-bit, not merely close: this is what keeps a converged hold identical
+    // to the pre-ADR-035 snap and makes an unbounded rate reproduce it exactly.
+    writeSlewLimitedQuaternionInto(output, identity, target, Math.PI);
+    expect(output).toEqual(target);
+    writeSlewLimitedQuaternionInto(output, identity, target, Number.POSITIVE_INFINITY);
+    expect(output).toEqual(target);
+    writeSlewLimitedQuaternionInto(output, target, target, 0);
+    expect(output).toEqual(target);
+  });
+
+  it('holds the current attitude for a zero, negative, or non-finite budget', () => {
+    const target = quaternionFromForward(0, 1, 0);
+    const output = new Float64Array(4);
+
+    for (const budget of [0, -1, Number.NaN]) {
+      writeSlewLimitedQuaternionInto(output, identity, target, budget);
+      expect(output).toEqual(identity);
+    }
+  });
+
+  it('takes the short way round when the target is the negated quaternion', () => {
+    const target = quaternionFromForward(0, 1, 0);
+    const negatedTarget = new Float64Array(target).map((component) => -component);
+    const viaTarget = new Float64Array(4);
+    const viaNegated = new Float64Array(4);
+    const stepRad = Math.PI / 8;
+
+    writeSlewLimitedQuaternionInto(viaTarget, identity, target, stepRad);
+    writeSlewLimitedQuaternionInto(viaNegated, identity, negatedTarget, stepRad);
+
+    for (let index = 0; index < 4; index += 1) {
+      expect(viaNegated[index]).toBeCloseTo(viaTarget[index] as number, 14);
+    }
+  });
+
+  it('slews through an exact 180 degree reversal without a degenerate axis', () => {
+    const target = quaternionFromForward(-1, 0, 0);
+    const output = new Float64Array(4);
+    const forward = new Float64Array(3);
+
+    expect(quaternionSeparationRad(identity, target)).toBeCloseTo(Math.PI, 14);
+    writeSlewLimitedQuaternionInto(output, identity, target, Math.PI / 2);
+    writeForwardFromQuaternionInto(forward, output);
+
+    expect(Number.isFinite(forward[0] as number)).toBe(true);
+    expect(forward[0]).toBeCloseTo(0, 13);
+    expect(Math.hypot(...forward)).toBeCloseTo(1, 14);
+    expect(quaternionSeparationRad(output, target)).toBeCloseTo(Math.PI / 2, 13);
   });
 });
 

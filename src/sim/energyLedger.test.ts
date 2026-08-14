@@ -65,6 +65,13 @@ describe('SimulationCore energy ledger — physics-spec.md §5 / §7.7 / §7.10'
       vessel: { ...ONE_G_VESSEL, alphaMaxMS2: impulsiveAccelerationMS2 },
     });
     core.commands.setAttitudeMode('prograde');
+    // ADR-035: hold modes slew at the vessel rate instead of snapping, and the
+    // ship starts nose-radial, 90 deg off prograde. An impulsive burn must begin
+    // from an aligned ship, so coast until the hold has converged (90 deg at
+    // maxSlewRadPerSimS, plus a margin). Once converged the hold tracks exactly
+    // as it did before ADR-035, so the burn itself is unchanged.
+    const progradeAlignmentSec = Math.PI / 2 / ONE_G_VESSEL.maxSlewRadPerSimS + 1;
+    core.step(progradeAlignmentSec);
     core.commands.setThrottle(1);
     core.step(firstBurnSec);
     core.commands.setThrottle(0);
