@@ -1,6 +1,6 @@
 id: T0104
 title: Introduce VesselConfig; remove hardcoded ship mass and fixed alpha
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0104-vessel-config
 depends_on: [T0103]

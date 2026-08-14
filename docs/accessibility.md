@@ -12,6 +12,9 @@ claim of formal WCAG conformance.
   live status region, and supports compact scrolling without horizontal overflow.
 - Settings, system map, burn log, tutorial, selectors, save/load, and import/export use semantic DOM
   controls with visible focus. Keyboard shortcuts are listed in [controls](controls.md).
+- Keyboard flight and keyboard panel navigation coexist: a focused button keeps its own keys (they
+  are consumed at the control) while every other flight key stays live, so tabbing through the HUD
+  never silently disables the ship. `Shift` chords remain available alongside flight input.
 - HUD values are text in definition lists or labeled panels rather than text painted only into the
   WebGL canvas. Important trajectory events pair color with labels and marker shapes.
 - The interface honors `prefers-reduced-motion: reduce`; quality can be manually locked to reduce

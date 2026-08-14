@@ -1,7 +1,13 @@
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, it, vi } from 'vitest';
 
-import { KeyboardCommandMapper, type KeyboardInputEvent } from '../game/inputMapping.js';
+import { InputCommandBridge, ROTATION_RATE_RAD_S } from '../game/input/inputCommandBridge.js';
+import {
+  InputEngine,
+  type InputKeyboardEvent,
+  type InputKeyboardListener,
+  type InputKeyboardTarget,
+} from '../game/input/inputEngine.js';
 import { DEFAULT_GAME_SETTINGS, type InputBindings } from '../game/settings.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import type { BurnLogEntry, BurnLogView } from '../sim/ship/ledger.js';
@@ -62,11 +68,76 @@ class TestBurnLogView implements BurnLogView {
   }
 }
 
+const ROW_BUTTON_TARGET = { tagName: 'BUTTON' } as unknown as EventTarget;
+
 function keyboardEvent(code: string): BurnLogPanelKeyboardEvent {
   return {
     code,
     preventDefault: vi.fn(),
-    target: { tagName: 'BUTTON' } as unknown as EventTarget,
+    target: ROW_BUTTON_TARGET,
+  };
+}
+
+interface DomLikeKeyboardEvent {
+  altKey: boolean;
+  code: string;
+  ctrlKey: boolean;
+  defaultPrevented: boolean;
+  metaKey: boolean;
+  repeat: boolean;
+  shiftKey: boolean;
+  target: EventTarget | null;
+  preventDefault(): void;
+}
+
+/** Models the one DOM behavior this test depends on: preventDefault is observable upstream. */
+function domLikeKeyboardEvent(code: string, target: EventTarget | null): DomLikeKeyboardEvent {
+  const event: DomLikeKeyboardEvent = {
+    altKey: false,
+    code,
+    ctrlKey: false,
+    defaultPrevented: false,
+    metaKey: false,
+    repeat: false,
+    shiftKey: false,
+    target,
+    preventDefault: () => {
+      event.defaultPrevented = true;
+    },
+  };
+  return event;
+}
+
+function createFlightInputFixture(bindings: InputBindings) {
+  const keyDownListeners: InputKeyboardListener[] = [];
+  const keyUpListeners: InputKeyboardListener[] = [];
+  const keyboardTarget: InputKeyboardTarget = {
+    addEventListener: (type: 'keydown' | 'keyup' | 'blur', listener: unknown) => {
+      if (type === 'keydown') keyDownListeners.push(listener as InputKeyboardListener);
+      else if (type === 'keyup') keyUpListeners.push(listener as InputKeyboardListener);
+    },
+    removeEventListener: vi.fn(),
+  } as unknown as InputKeyboardTarget;
+  const commands: Commands = {
+    rotate: vi.fn(),
+    setAttitudeMode: vi.fn(),
+    setTarget: vi.fn(),
+    setThrottle: vi.fn(),
+    setWarp: vi.fn(),
+  };
+  const engine = new InputEngine({ bindings, keyboardTarget });
+  const bridge = new InputCommandBridge(commands, () => ({ requestedWarp: 1, throttle: 0 }));
+  return {
+    commands,
+    emitKeyDown: (event: InputKeyboardEvent) => {
+      for (const listener of keyDownListeners) listener(event);
+    },
+    emitKeyUp: (event: InputKeyboardEvent) => {
+      for (const listener of keyUpListeners) listener(event);
+    },
+    step: () => {
+      bridge.apply(engine.poll(1 / 60));
+    },
   };
 }
 
@@ -153,80 +224,53 @@ describe('BurnLogPanel', () => {
     expect(toggleFocus).toHaveBeenCalledOnce();
   });
 
-  it('keeps rebound flight Commands silent while a completed-row button owns navigation keys', () => {
+  it('keeps rebound flight Commands silent while a completed-row button consumes navigation keys', () => {
     const view = new TestBurnLogView();
     view.entries.push(entry(1), entry(2));
-    const store = createBurnLogSignalStore(view);
-    const model = createBurnLogPanelModel(store);
-    const keyDownListeners: Array<(event: KeyboardInputEvent) => void> = [];
-    const keyUpListeners: Array<(event: KeyboardInputEvent) => void> = [];
-    const target = {
-      addEventListener: (
-        type: 'keydown' | 'keyup',
-        listener: (event: KeyboardInputEvent) => void,
-      ) => {
-        if (type === 'keydown') keyDownListeners.push(listener);
-        else keyUpListeners.push(listener);
-      },
-      removeEventListener: vi.fn(),
-    };
-    const commands: Commands = {
-      rotate: vi.fn(),
-      setAttitudeMode: vi.fn(),
-      setTarget: vi.fn(),
-      setThrottle: vi.fn(),
-      setWarp: vi.fn(),
-    };
-    const bindings: InputBindings = {
+    const model = createBurnLogPanelModel(createBurnLogSignalStore(view));
+    const flight = createFlightInputFixture({
       ...DEFAULT_GAME_SETTINGS.inputBindings,
       pitchUp: 'ArrowDown',
       pitchDown: 'ArrowUp',
       throttleIncrease: 'End',
       warpIncrease: 'Home',
-    };
-    const mapper = new KeyboardCommandMapper(
-      target,
-      commands,
-      () => ({ requestedWarp: 1, throttle: 0 }),
-      bindings,
-    );
-    const rowTarget = { tagName: 'BUTTON' } as unknown as EventTarget;
+    });
 
     for (const code of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
-      let flightKeyDownPrevented = false;
-      const keyDownEvent: KeyboardInputEvent = {
-        altKey: false,
-        code,
-        ctrlKey: false,
-        metaKey: false,
-        repeat: false,
-        shiftKey: false,
-        target: rowTarget,
-        preventDefault: () => {
-          flightKeyDownPrevented = true;
-        },
-      };
-      for (const listener of keyDownListeners) listener(keyDownEvent);
-      expect(flightKeyDownPrevented).toBe(false);
+      // Real DOM order: the focused row handles the key first and calls
+      // preventDefault, so the window-level engine must stand down.
+      const keyDownEvent = domLikeKeyboardEvent(code, ROW_BUTTON_TARGET);
       model.completedSlots[0]?.handleKeyDown(keyDownEvent);
+      expect(keyDownEvent.defaultPrevented).toBe(true);
+      flight.emitKeyDown(keyDownEvent);
 
-      let flightKeyUpPrevented = false;
-      const keyUpEvent: KeyboardInputEvent = {
-        ...keyDownEvent,
-        preventDefault: () => {
-          flightKeyUpPrevented = true;
-        },
-      };
-      for (const listener of keyUpListeners) listener(keyUpEvent);
-      expect(flightKeyUpPrevented).toBe(false);
-      mapper.update();
+      const keyUpEvent = domLikeKeyboardEvent(code, ROW_BUTTON_TARGET);
+      flight.emitKeyUp(keyUpEvent);
+      flight.step();
     }
 
-    expect(commands.rotate).not.toHaveBeenCalled();
-    expect(commands.setThrottle).not.toHaveBeenCalled();
-    expect(commands.setWarp).not.toHaveBeenCalled();
-    expect(commands.setAttitudeMode).not.toHaveBeenCalled();
-    expect(commands.setTarget).not.toHaveBeenCalled();
+    expect(flight.commands.rotate).not.toHaveBeenCalled();
+    expect(flight.commands.setThrottle).not.toHaveBeenCalled();
+    expect(flight.commands.setWarp).not.toHaveBeenCalled();
+    expect(flight.commands.setAttitudeMode).not.toHaveBeenCalled();
+    expect(flight.commands.setTarget).not.toHaveBeenCalled();
+  });
+
+  it('keeps flying while a completed-row button holds focus but ignores the key', () => {
+    const view = new TestBurnLogView();
+    view.entries.push(entry(1), entry(2));
+    const model = createBurnLogPanelModel(createBurnLogSignalStore(view));
+    const flight = createFlightInputFixture(DEFAULT_GAME_SETTINGS.inputBindings);
+
+    // v1 froze W/A/S/D/R/F whenever any button owned focus; the row ignores KeyW,
+    // so the ship must keep responding.
+    const keyDownEvent = domLikeKeyboardEvent('KeyW', ROW_BUTTON_TARGET);
+    model.completedSlots[0]?.handleKeyDown(keyDownEvent);
+    expect(keyDownEvent.defaultPrevented).toBe(false);
+    flight.emitKeyDown(keyDownEvent);
+    flight.step();
+
+    expect(flight.commands.rotate).toHaveBeenCalledWith(ROTATION_RATE_RAD_S, 0, 0);
   });
 
   it('publishes a stable live summary as active and completed state changes', () => {

@@ -10,7 +10,8 @@ core  ←  sim  ←  game  ←  render / ui
 
 - **`src/core/`** — zero-dependency utilities: float64 vector math (`vec3.ts`, plain `{x,y,z}` numbers), `time.ts` (SimClock: float64 TDB seconds since epoch, warp ladder), `constants.ts`, typed event bus.
 - **`src/sim/`** — PURE physics. **No three.js, no DOM, no globals, no side effects.** Fully unit-testable, portable to Web Workers verbatim. This purity is the load-bearing invariant of the whole codebase.
-- **`src/game/`** — orchestration: scene state machine, save/load, settings, input mapping.
+- **`src/game/`** — orchestration: scene state machine, save/load, settings, the input engine
+  (`game/input/`: binding registry, shared UI-focus policy, pointer lock, per-frame `InputFrame`).
 - **`src/render/`** — three.js scenes. Consumes snapshots, owns the float64→float32 camera-relative boundary.
 - **`src/ui/`** — Preact + @preact/signals HUD overlay (DOM, above the canvas).
 
@@ -62,7 +63,7 @@ src/
 ├── core/time.ts                            # MOD  MAX_THRUST_WARP retune (T0115)
 ├── game/
 │   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
-│   ├── input/                              # NEW  input engine (T0105) + gamepad (T0106)
+│   ├── input/                              # LANDED engine+bindings (T0105); gamepad next (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
 │   ├── cameraDirector.ts                   # NEW  4 modes + transitions (T0110/24/25)
 │   ├── chaseCameraController.ts            # NEW  spring-arm f64 controller (T0110)
@@ -115,6 +116,19 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 - `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`; (deferred launch phase adds `setPitchRate(r)`, `stage()` via ADR when built)
 
 `render/` and `ui/` are pure consumers of `SimSnapshot`. They never mutate sim state. UI agents and physics agents meet ONLY at these two interfaces — this is what makes parallel multi-agent work safe.
+
+## Player intent: `InputFrame` (`game/input/`)
+
+Raw devices never reach `Commands` directly. `game/input/inputEngine.ts` accumulates keyboard and
+pointer-lock events into one preallocated `InputFrame`
+(`{lookYawRad, lookPitchRad, axes: {pitch, yaw, roll, throttle}, pressed(action)}`) published by a
+single `poll(wallDtSec)` per frame; `game/input/bindings.ts` owns the `KeyboardEvent.code` binding
+registry and the one UI-focus policy every keyboard consumer shares (only `INPUT`/`SELECT`/
+`TEXTAREA`/`contenteditable` and an already-`preventDefault`ed key suppress game input — never a
+focused button, never `Shift`). DOM access stays behind structural ports; `main.ts` supplies the
+adapters. `game/input/inputCommandBridge.ts` is the interim `InputFrame → Commands` translator and is
+replaced by `game/flight/flightController.ts` (T0108). Design:
+`docs/superpowers/specs/2026-08-14-input-engine-design.md`.
 
 ## Scene state machine (`game/sceneManager.ts`)
 

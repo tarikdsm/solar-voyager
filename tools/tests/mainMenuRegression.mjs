@@ -185,6 +185,24 @@ async function waitForSpace(page, timeout = 30_000, expectedResources = ACTIVE_R
   }
 }
 
+async function waitForRenderedFrame(page, timeout = 30_000) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        return (
+          canvas instanceof globalThis.HTMLCanvasElement &&
+          (canvas.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > 0
+        );
+      },
+      undefined,
+      { timeout },
+    );
+  } catch (cause) {
+    throw new Error('the migrated session must render frames', { cause });
+  }
+}
+
 async function dismissHardwareWarningIfPresent(page) {
   const warning = page.locator('#hardware-acceleration-warning');
   if (!(await warning.isVisible())) {
@@ -341,7 +359,7 @@ async function runLegacyV2SaveFlow(browser) {
     const runtime = await readRuntimeState(page);
     assert.equal(runtime.canvasCount, 1);
     assert.deepEqual(runtime.resources, ACTIVE_RUNTIME_RESOURCES_WITHOUT_TRAJECTORY);
-    assert.ok(runtime.frameCount > 0, 'the migrated session must render frames');
+    await waitForRenderedFrame(page);
 
     await page.locator('#session-settings').evaluate((details) => {
       details.open = true;
