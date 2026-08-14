@@ -14,6 +14,14 @@ const TRANSFER_FRAMES = 90;
 const TRANSFER_ZOOM_FRAME = 45;
 const DELTA_SEC = 1 / 60;
 
+async function readPointerLockState(page) {
+  return page.evaluate(() => ({
+    locked: globalThis.document.pointerLockElement?.id ?? null,
+    pauseRequests:
+      globalThis.document.querySelector('#space-canvas')?.dataset.pauseRequests ?? null,
+  }));
+}
+
 function cameraDistance(left, right) {
   return Math.hypot(
     right.cameraX - left.cameraX,
@@ -249,6 +257,36 @@ try {
       jupiterGreen > jupiterBlue + 3,
     `production disc lacks Jupiter's ochre color signature (${productionJupiter.upperCenterMeanRgb.join(',')})`,
   );
+  // T0105 pointer-lock seam: double-click takes the lock, Escape releases it and
+  // raises the pause intent that T0112 will turn into a real menu.
+  const pointerLockBefore = await readPointerLockState(productionPage);
+  assert.equal(pointerLockBefore.locked, null, 'pointer lock was held before any gesture');
+  await productionPage.mouse.dblclick(640, 360);
+  await productionPage.waitForFunction(
+    () => globalThis.document.pointerLockElement !== null,
+    undefined,
+    { timeout: 10_000 },
+  );
+  const pointerLockAcquired = await readPointerLockState(productionPage);
+  assert.equal(
+    pointerLockAcquired.locked,
+    'space-canvas',
+    'double-click did not take pointer lock on the canvas',
+  );
+  await productionPage.keyboard.press('Escape');
+  await productionPage.waitForFunction(
+    () => globalThis.document.pointerLockElement === null,
+    undefined,
+    { timeout: 10_000 },
+  );
+  const pointerLockReleased = await readPointerLockState(productionPage);
+  assert.equal(pointerLockReleased.locked, null, 'Escape did not release pointer lock');
+  assert.equal(
+    pointerLockReleased.pauseRequests,
+    String(Number(pointerLockAcquired.pauseRequests ?? '0') + 1),
+    'Escape did not raise exactly one pause request',
+  );
+
   assert.deepEqual(productionErrors, []);
 
   process.stdout.write(
@@ -263,6 +301,9 @@ try {
         arrivalStepKm: stepDistancesKm.at(-1),
         finalLitPixels: finalFrame.litPixels,
         productionShortcut: 'Focus: Jupiter',
+        pointerLockAcquired: pointerLockAcquired.locked,
+        pointerLockReleased: pointerLockReleased.locked,
+        pauseRequestsAfterEscape: pointerLockReleased.pauseRequests,
         productionEarthSha256: productionEarth.sha256,
         productionJupiterCenterRgb: productionJupiter.centerRgb,
         productionJupiterUpperCenterMeanRgb: productionJupiter.upperCenterMeanRgb,

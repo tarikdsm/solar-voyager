@@ -7,7 +7,8 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './createNewGameSimulation.js';
-import { KeyboardCommandMapper, type KeyboardInputTarget } from './inputMapping.js';
+import { InputCommandBridge } from './input/inputCommandBridge.js';
+import { InputEngine, type InputKeyboardTarget } from './input/inputEngine.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from './saveLoad.js';
 import { GameSessionController } from './sessionController.js';
 import {
@@ -83,16 +84,22 @@ describe('GameSessionController', () => {
 
   it('preserves manual rotation through restore and tutorial-only settings publications', () => {
     const storage = new MemoryStorage();
-    let mapper: KeyboardCommandMapper | null = null;
+    let engine: InputEngine | null = null;
+    let bridge: InputCommandBridge | null = null;
     const controller = new GameSessionController({
       createNewSimulation: () => createNewGameSimulation(VESSEL),
       createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
       initialSimulation: createNewGameSimulation(VESSEL),
       saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
+      onSimulationReplaced: (simulation) => {
+        engine?.setThrottleAxis(simulation.snapshot.throttle);
+      },
       onSettingsChanged: (settings, origin) => {
-        if (origin === 'restore') mapper?.restoreBindings(settings.inputBindings);
-        else mapper?.updateBindings(settings.inputBindings);
+        engine?.applyBindings(settings.inputBindings);
+        engine?.releaseHeldKeys();
+        if (origin === 'restore') bridge?.resetAxes();
+        else bridge?.releaseAxes();
       },
     });
     const sessionCommands: Commands = {
@@ -102,22 +109,21 @@ describe('GameSessionController', () => {
       setThrottle: (fraction) => controller.simulation.commands.setThrottle(fraction),
       setWarp: (warp) => controller.simulation.commands.setWarp(warp),
     };
-    const keyboardTarget: KeyboardInputTarget = {
+    const keyboardTarget: InputKeyboardTarget = {
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
     };
-    mapper = new KeyboardCommandMapper(
+    engine = new InputEngine({
+      bindings: controller.settings.inputBindings,
       keyboardTarget,
-      sessionCommands,
-      () => controller.simulation.snapshot,
-      controller.settings.inputBindings,
-    );
+    });
+    bridge = new InputCommandBridge(sessionCommands, () => controller.simulation.snapshot);
     controller.simulation.commands.rotate(0.1, 0.2, 0.3);
     expect(controller.saveLocal()).toMatchObject({ ok: true });
     controller.simulation.commands.rotate(0, 0, 0);
 
     expect(controller.loadLocal()).toMatchObject({ ok: true });
-    mapper.update();
+    bridge.apply(engine.poll(1 / 60));
     controller.simulation.step(1 / 60);
 
     expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([
@@ -130,7 +136,7 @@ describe('GameSessionController', () => {
     expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([
       0.1, 0.2, 0.3,
     ]);
-    mapper.dispose();
+    engine.dispose();
   });
 
   it('keeps the live session and settings unchanged if replacement construction fails', () => {

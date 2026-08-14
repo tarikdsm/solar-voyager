@@ -1,6 +1,7 @@
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useRef } from 'preact/hooks';
 
+import { isEditableTarget } from '../game/input/bindings.js';
 import type { SystemMapController } from '../game/systemMapController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import type { TrajectoryPredictionDisplaySignals } from './trajectoryPredictionSignals.js';
@@ -24,32 +25,6 @@ export interface SystemMapKeyboardEvent {
 export interface SystemMapKeyboardTarget {
   addEventListener(type: 'keydown', listener: (event: SystemMapKeyboardEvent) => void): void;
   removeEventListener(type: 'keydown', listener: (event: SystemMapKeyboardEvent) => void): void;
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (target === null) return false;
-  const candidate = target as EventTarget & {
-    readonly isContentEditable?: boolean;
-    closest?: (selectors: string) => {
-      readonly isContentEditable?: boolean;
-      getAttribute?: (name: string) => string | null;
-    } | null;
-    matches?: (selectors: string) => boolean;
-  };
-  if (
-    (typeof candidate.matches === 'function' && candidate.matches('input, select, textarea')) ||
-    (typeof candidate.closest === 'function' &&
-      candidate.closest('input, select, textarea') !== null)
-  ) {
-    return true;
-  }
-  if (candidate.isContentEditable === true) return true;
-  if (typeof candidate.closest !== 'function') return false;
-  const editableOwner = candidate.closest('[contenteditable]');
-  if (editableOwner === null) return false;
-  if (editableOwner.isContentEditable === true) return true;
-  const attributeValue = editableOwner.getAttribute?.('contenteditable');
-  return attributeValue === '' || attributeValue?.toLowerCase() === 'true';
 }
 
 export class SystemMapPanelModel {

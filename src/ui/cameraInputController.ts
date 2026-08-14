@@ -1,3 +1,5 @@
+import { blocksGameKey } from '../game/input/bindings.js';
+
 const ORBIT_RADIANS_PER_PIXEL = 0.004;
 const KEYBOARD_ORBIT_STEP_RAD = 0.12;
 const KEYBOARD_ZOOM_STEP = 120;
@@ -16,22 +18,6 @@ export interface CameraControlPort {
 
 function formatFocusLabel(id: string): string {
   return `Focus: ${id.charAt(0).toUpperCase()}${id.slice(1)}`;
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (target === null || typeof target !== 'object') return false;
-  const candidate = target as EventTarget & {
-    readonly isContentEditable?: boolean;
-    readonly tagName?: string;
-    closest?: (selectors: string) => Element | null;
-  };
-  if (candidate.isContentEditable === true) return true;
-  const tagName = candidate.tagName?.toUpperCase();
-  if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
-    return true;
-  }
-  if (typeof candidate.closest !== 'function') return false;
-  return candidate.closest('input, select, textarea, [contenteditable="true"]') !== null;
 }
 
 /** Owns disposable DOM input listeners for the orbit camera. */
@@ -83,13 +69,9 @@ export class CameraInputController {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (!this.enabled) return;
-    if (
-      event.repeat ||
-      event.ctrlKey ||
-      event.altKey ||
-      event.metaKey ||
-      isEditableTarget(event.target)
-    ) {
+    // Same focus policy as the flight input engine (game/input/bindings.ts), so a
+    // given focus state never means two different things across subsystems.
+    if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || blocksGameKey(event)) {
       return;
     }
     if (event.shiftKey) {

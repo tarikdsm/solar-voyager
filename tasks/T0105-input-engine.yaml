@@ -1,0 +1,48 @@
+id: T0105
+title: New input engine - pointer lock, analog axes, UI-focus policy
+status: REVIEW
+agent: claude
+branch: task/T0105-input-engine
+depends_on: [T0103]
+milestone: V2M1
+spec: |
+  Replace the v1 keyboard mapper with a real input engine: pointer-lock mouse-look
+  producing wall-frame deltas, continuous analog throttle, one shared UI-focus policy,
+  and a stable allocation-free InputFrame that the flight controller, gamepad layer and
+  chase camera are written against. Kill the two v1 defects that made flying impossible:
+  a focused HUD button froze all flight keys, and holding Shift disabled every control.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 4.2
+  and 7; design doc docs/superpowers/specs/2026-08-14-input-engine-design.md;
+  contract in docs/superpowers/plans/2026-08-14-v2-free-flight.md section 2.
+acceptance:
+  - Pointer-lock mouse-look deltas exposed as wall-frame rad; ESC releases lock and opens pause (stub until T0112)
+  - Flight input NEVER disabled by focused BUTTON elements or held Shift (regression tests for both v1 defects)
+  - Analog throttle axis [0,1] with keyboard ramp (full sweep 1.5 s) replacing the 10-step ratchet
+  - KeyboardCommandMapper removed; all 13 existing bindings preserved via the new bindings registry; rebind UI still works
+  - Zero frame-loop allocations (heap gate green)
+handoff_notes: |
+  Contract shipped as a strict superset of plan section 2: pressCount() (two warp taps between
+  polls must both register), held() (level query T0116 needs for cruise decompression), and
+  poll(wallDtSec). Plan section 2 updated in the same PR per its own naming rule.
+  Three source files, not two: src/game/input/inputCommandBridge.ts is an explicitly interim,
+  unit-tested InputFrame->Commands translator, because this task deletes the only thing feeding
+  the sim and T0108 does not exist yet. T0108 deletes it and must MOVE (not delete)
+  ROTATION_RATE_RAD_S — three files import from it, including src/ui/BurnLogPanel.test.tsx.
+  Focus policy has three clauses: only INPUT/TEXTAREA/SELECT/contenteditable block flight keys;
+  defaultPrevented is honoured (load-bearing for burn-log arrow navigation, which preventDefaults
+  without stopPropagation); and Space/Enter/NumpadEnter on an activatable target belong to that
+  control. That third clause exists because binding a flight action to Space would otherwise have
+  killed keyboard activation of every HUD button - a NEW accessibility regression created by the
+  correct "buttons do not block" rule. Space/Enter are deliberately NOT added to RESERVED_CODES:
+  parseInputBindings runs at load time with no rewrite hook, so both repositories would fail
+  closed on a profile that legally bound them under v1.
+  Throttle model is max(TAP_STEP, RAMP * heldSec) re-anchored per press: monotonic in hold
+  duration, any tap moves at least 10%, rest-to-full lands at exactly 1.5 s.
+  Pointer lock is on double-click as an interim gesture so single-click orbit drag survives until
+  T0110 owns camera input; while locked, orbit drag still runs (T0110 resolves).
+  ESC opens pause is conditional today: SystemMapPanel preventDefaults Escape while the map is
+  open. T0112 owns the real pause menu and must resolve that.
+  Verification: 869 Vitest passed / 3 skipped, lint, typecheck, twelve browser harnesses including
+  new pointer-lock coverage inside the existing camera-controls step (no new CI time);
+  docs/bench/T0105-summary.md with real before/after runs; heap -1,823 B, goldens 10 draw calls /
+  77,071 triangles unchanged, bundle 127,190 entry / 556,970 total gzip.

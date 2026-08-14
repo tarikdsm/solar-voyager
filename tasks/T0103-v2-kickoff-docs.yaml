@@ -1,6 +1,6 @@
 id: T0103
 title: Add v2 kickoff ADR, roadmap milestones V2M1-V2M6, doc pointers
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0103-v2-kickoff-docs
 depends_on: [T0102]

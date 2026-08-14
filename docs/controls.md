@@ -1,7 +1,12 @@
 # Controls
 
 Solar Voyager supports keyboard-only flight and pointer-assisted camera control. Controls are active
-only after a session enters space; typing in an input, select, or text area does not steer the ship.
+only after a session enters space.
+
+Flight input is suppressed in exactly two situations: while you are typing in an input, select, text
+area, or editable region, and for a key that the focused control itself handles (for example the
+arrow keys that move through burn-log rows). A focused button never disables the rest of the ship,
+and `Shift` is an ordinary modifier — you can steer and move the camera at the same time.
 
 ## Rebindable flight controls
 
@@ -20,13 +25,17 @@ keys remain reserved for UI, browser, or operating-system behavior.
 | Prograde hold       | `2`       |
 | Retrograde hold     | `3`       |
 
-Flight axes are continuous while held. Throttle changes in ten-percent steps. Time warp follows the
-canonical ladder and may be clamped automatically for safety or integration accuracy.
+Flight axes are continuous while held. The throttle is a continuous lever in the 0–100% range: a tap
+nudges it by ten percent, and holding the key sweeps the full range in 1.5 seconds. Time warp follows
+the canonical ladder and may be clamped automatically for safety or integration accuracy; above the
+thrust-warp ceiling the drive is cut and resumes at the same lever position once warp drops back.
 
 ## Camera and focus
 
 | Action                     | Control                           |
 | -------------------------- | --------------------------------- |
+| Mouse-look (pointer lock)  | Double-click the view             |
+| Release mouse-look         | `Escape`                          |
 | Orbit camera               | Primary-button drag               |
 | Zoom camera                | Mouse wheel / trackpad scroll     |
 | Keyboard orbit             | `Shift` + arrow keys              |

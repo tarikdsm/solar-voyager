@@ -5,7 +5,8 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from '../../src/game/createNewGameSimulation.js';
-import { KeyboardCommandMapper, type KeyboardInputTarget } from '../../src/game/inputMapping.js';
+import { InputCommandBridge } from '../../src/game/input/inputCommandBridge.js';
+import { InputEngine, type InputKeyboardTarget } from '../../src/game/input/inputEngine.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from '../../src/game/saveLoad.js';
 import { GameSessionController } from '../../src/game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from '../../src/game/settings.js';
@@ -51,7 +52,8 @@ const root = document.querySelector('#session-root');
 if (!(root instanceof HTMLElement)) throw new Error('session regression root is missing');
 
 const storage = new MemoryStorage();
-let mapper: KeyboardCommandMapper | null = null;
+let engine: InputEngine | null = null;
+let bridge: InputCommandBridge | null = null;
 const controller = new GameSessionController({
   initialSimulation: createNewGameSimulation(VESSEL),
   createNewSimulation: () => createNewGameSimulation(VESSEL),
@@ -59,11 +61,14 @@ const controller = new GameSessionController({
   settingsRepository: new SettingsRepository(storage),
   createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
   onSimulationReplaced: (simulation) => {
-    mapper?.updateCommands(simulation.commands, currentSnapshot);
+    engine?.setThrottleAxis(simulation.snapshot.throttle);
+    bridge?.updateCommands(simulation.commands, currentSnapshot);
   },
   onSettingsChanged: (settings, origin) => {
-    if (origin === 'restore') mapper?.restoreBindings(settings.inputBindings);
-    else mapper?.updateBindings(settings.inputBindings);
+    engine?.applyBindings(settings.inputBindings);
+    engine?.releaseHeldKeys();
+    if (origin === 'restore') bridge?.resetAxes();
+    else bridge?.releaseAxes();
   },
 });
 
@@ -71,12 +76,11 @@ function currentSnapshot() {
   return controller.simulation.snapshot;
 }
 
-mapper = new KeyboardCommandMapper(
-  window as unknown as KeyboardInputTarget,
-  controller.simulation.commands,
-  currentSnapshot,
-  controller.settings.inputBindings,
-);
+engine = new InputEngine({
+  bindings: controller.settings.inputBindings,
+  keyboardTarget: window as unknown as InputKeyboardTarget,
+});
+bridge = new InputCommandBridge(controller.simulation.commands, currentSnapshot);
 
 let exportedJson = '';
 const files: SessionFilePort = {
@@ -106,7 +110,7 @@ window.__sessionHarness = {
   },
   snapshot,
   updateInput: () => {
-    mapper?.update();
+    if (engine !== null && bridge !== null) bridge.apply(engine.poll(1 / 60));
     return {
       pitchRateRadS: controller.simulation.exportPersistentState().rotationRatesRadS[0] ?? 0,
     };
