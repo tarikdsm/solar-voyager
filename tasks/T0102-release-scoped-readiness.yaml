@@ -1,0 +1,35 @@
+id: T0102
+title: Generalize release readiness to release-scoped task sets
+status: REVIEW
+agent: claude
+branch: task/T0102-release-scoped-readiness
+depends_on: []
+milestone: V2M1
+spec: |
+  First v2 task and blocking for the whole release: tools/checks/releaseReadiness.mjs
+  currently fails CI for any task file that is not DONE, so no v2 task YAML can be
+  committed. Introduce a committed release manifest that declares the released scope.
+  Tasks in the v1 released set keep today's exact rules; tasks outside it stay
+  schema-checked but are exempt from the DONE requirement. Support --release=v2 for a
+  future final audit while --release=v1 (default) preserves current semantics.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.1;
+  plan docs/superpowers/plans/2026-08-14-v2-free-flight.md T0102.
+acceptance:
+  - releaseReadiness.mjs validates tasks against a committed release manifest (v1 set frozen; v2 tasks allowed in any status)
+  - CI green on a branch containing a dummy TODO task T9999 (removed before merge)
+  - --final mode for v1 unchanged (proven by existing tests); new --release=v2 mode covered by new unit tests
+  - check:dashboard behavior unchanged; docs/check_plan.html regenerated
+handoff_notes: |
+  ADR-033 records the decision. Manifest tools/checks/releaseManifest.json holds the
+  frozen v1 task-id set (60 ids, generated from tasks/ rather than transcribed); the v2
+  scope is intentionally unseeded, so --release=v2 fails closed until a later task defines
+  it. Missing, malformed, or unknown-scope manifests all fail closed. Verification:
+  11/11 releaseReadiness tests, 833 Vitest passed / 3 skipped, lint, format, typecheck,
+  check:release, check:tasks, check:dashboard; live T9999 exemption proof and
+  missing-manifest fail-closed proof both reproduced independently by review.
+  Review verdict: spec pass, quality approved. Minor findings deferred: ADR-033 methodology
+  sentence is inaccurate (fixed in T0103); no runtime cross-validation of manifest ids vs
+  tasks/ (accepted design); raw ENOENT text on missing manifest; --release=v2 space-separated
+  form unsupported. Interpretation adjudicated by the controller: a CI-process config file is
+  not a runtime data file, so no JSON Schema is required (repo precedent: tasks/*.yaml is
+  validated by bespoke code, not a schema).
