@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { chromium } from 'playwright';
 import { preview } from 'vite';
@@ -15,6 +16,14 @@ const PORT = 4196;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 const EARTH_MEAN_RADIUS_KM = 6_371.0084;
+
+// ADR-034 keeps SAVE_STORAGE_KEY at '.v2' precisely so a document written by the
+// deployed v1.0 build still migrates on read. This is the committed v2 fixture
+// (a real mid-burn LEO state produced by the engine), planted in the real slot.
+const LEGACY_V2_SAVE_JSON = readFileSync(
+  new URL('../../tests/fixtures/save-v2-midburn.json', import.meta.url),
+  'utf8',
+);
 
 const MENU_RUNTIME_RESOURCES = {
   animationLoopStarts: 0,
@@ -302,6 +311,60 @@ async function runFreshAndContinueFlow(browser) {
   }
 }
 
+/**
+ * The production path the retained '.v2' slot key exists to protect: a document
+ * written by the shipped v1.0 build is found in the live slot, migrates to v3 on
+ * read, offers Continue, runs, and is rewritten as v3 on the next save.
+ */
+async function runLegacyV2SaveFlow(browser) {
+  const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
+  const page = await context.newPage();
+  const browserErrors = collectBrowserErrors(page);
+  await disableUnrelatedTrajectoryPrediction(page);
+  await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
+    key: SAVE_STORAGE_KEY,
+    value: LEGACY_V2_SAVE_JSON,
+  });
+  try {
+    await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
+    const planted = JSON.parse(
+      await page.evaluate((key) => globalThis.localStorage.getItem(key), SAVE_STORAGE_KEY),
+    );
+    assert.equal(planted.version, 2, 'the slot must still hold the untouched v2 document');
+    assert.equal(planted.simulation.vessel, undefined);
+
+    await assertFreshMenu(page, true);
+    assert.equal(await dismissHardwareWarningIfPresent(page), true);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await waitForSpace(page, 30_000, ACTIVE_RUNTIME_RESOURCES_WITHOUT_TRAJECTORY);
+
+    const runtime = await readRuntimeState(page);
+    assert.equal(runtime.canvasCount, 1);
+    assert.deepEqual(runtime.resources, ACTIVE_RUNTIME_RESOURCES_WITHOUT_TRAJECTORY);
+    assert.ok(runtime.frameCount > 0, 'the migrated session must render frames');
+
+    await page.locator('#session-settings').evaluate((details) => {
+      details.open = true;
+    });
+    await page.locator('#session-save').click();
+    const rewritten = JSON.parse(
+      await page.evaluate((key) => globalThis.localStorage.getItem(key), SAVE_STORAGE_KEY),
+    );
+    assert.equal(rewritten.version, 3, 'saving must rewrite the same slot as v3');
+    assert.deepEqual(rewritten.simulation.vessel, {
+      restMassKg: 10_000,
+      alphaMaxMS2: 98.0665,
+      alphaManualMaxMS2: 19.6133,
+      maxSlewRadPerSimS: 0.261799,
+    });
+
+    assert.deepEqual(browserErrors, []);
+    return { plantedVersion: planted.version, rewrittenVersion: rewritten.version };
+  } finally {
+    await context.close();
+  }
+}
+
 async function runInvalidSaveFlow(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
@@ -440,10 +503,11 @@ try {
     ],
   });
   const freshAndContinue = await runFreshAndContinueFlow(browser);
+  const legacyV2Save = await runLegacyV2SaveFlow(browser);
   await runInvalidSaveFlow(browser);
   const responsiveAndReducedMotion = await runResponsiveAndReducedMotionFlow(browser);
   process.stdout.write(
-    `${JSON.stringify({ freshAndContinue, responsiveAndReducedMotion }, null, 2)}\n`,
+    `${JSON.stringify({ freshAndContinue, legacyV2Save, responsiveAndReducedMotion }, null, 2)}\n`,
   );
 } finally {
   if (browser !== undefined) await browser.close();
