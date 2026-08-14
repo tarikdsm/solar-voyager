@@ -1,11 +1,11 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { stringify } from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { renderDashboard } from './taskDashboard.mjs';
+import { loadCanonicalTasks, renderDashboard } from './taskDashboard.mjs';
 import { verifyReleaseReadiness } from './releaseReadiness.mjs';
 
 const REQUIRED_DOCS = [
@@ -33,11 +33,33 @@ function task(id, status) {
   };
 }
 
+const V1_RELEASED_TASK_IDS = ['T0001', 'T0060', 'T0061', 'T0062', 'T0101'];
+
+/** Mirrors `npm run generate:dashboard`: regenerates the dashboard for the tasks on disk. */
+async function regenerateDashboard(root) {
+  const dashboardPath = join(root, 'docs', 'check_plan.html');
+  const tasks = await loadCanonicalTasks(join(root, 'tasks'));
+  const current = await readFile(dashboardPath, 'utf8');
+  await writeFile(dashboardPath, renderDashboard(current, tasks));
+}
+
+async function writeReleaseManifest(root, releases) {
+  const manifest = { schemaVersion: 1 };
+  for (const [release, taskIds] of Object.entries(releases)) {
+    manifest[release] = { description: `${release} fixture scope.`, taskIds };
+  }
+  await writeFile(
+    join(root, 'tools', 'checks', 'releaseManifest.json'),
+    JSON.stringify(manifest, null, 2),
+  );
+}
+
 async function createRepository() {
   const root = await mkdtemp(join(tmpdir(), 'solar-voyager-release-'));
   await mkdir(join(root, 'docs'), { recursive: true });
   await mkdir(join(root, 'public'), { recursive: true });
   await mkdir(join(root, 'tasks'));
+  await mkdir(join(root, 'tools', 'checks'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"version":"1.0.0"}\n');
   for (const file of REQUIRED_DOCS) await writeFile(join(root, file), `# ${file}\n`);
   await writeFile(
@@ -54,6 +76,7 @@ async function createRepository() {
   for (const value of tasks) {
     await writeFile(join(root, 'tasks', `${value.id}-task.yaml`), stringify(value));
   }
+  await writeReleaseManifest(root, { v1: V1_RELEASED_TASK_IDS });
   const shell =
     '<script>\n/* TASK_DATA_START */\nconst TASKS = [];\n/* TASK_DATA_END */\n</script>\n';
   await writeFile(join(root, 'docs', 'check_plan.html'), renderDashboard(shell, tasks));
@@ -110,6 +133,136 @@ describe('release readiness', () => {
       await rm(join(root, 'tasks', 'T0062-task.yaml'));
       const findings = await verifyReleaseReadiness(root);
       expect(findings).toContain('missing canonical release task: T0062');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('release-scoped manifest (ADR-033)', () => {
+  it('exempts a task outside the v1 release manifest from the DONE requirement', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(
+        join(root, 'tasks', 'T9999-scratch.yaml'),
+        stringify(task('T9999', 'TODO')),
+      );
+      await regenerateDashboard(root);
+
+      const findings = await verifyReleaseReadiness(root);
+
+      expect(findings).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps exempt tasks out of --final findings too (final only tightens T0101)', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(join(root, 'tasks', 'T0101-task.yaml'), stringify(task('T0101', 'DONE')));
+      await writeFile(
+        join(root, 'tasks', 'T9999-scratch.yaml'),
+        stringify(task('T9999', 'CLAIMED')),
+      );
+      await regenerateDashboard(root);
+
+      const findings = await verifyReleaseReadiness(root, { final: true });
+
+      expect(findings).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('still requires v1-scoped tasks to be DONE alongside an exempt task', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(join(root, 'tasks', 'T0001-task.yaml'), stringify(task('T0001', 'REVIEW')));
+      await writeFile(
+        join(root, 'tasks', 'T9999-scratch.yaml'),
+        stringify(task('T9999', 'TODO')),
+      );
+      await regenerateDashboard(root);
+
+      const findings = await verifyReleaseReadiness(root);
+
+      expect(findings).toContain('T0001 must be DONE; found REVIEW');
+      expect(findings).not.toContain('T9999 must be DONE; found TODO');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when the requested release scope is not defined in the manifest', async () => {
+    const root = await createRepository();
+    try {
+      const findings = await verifyReleaseReadiness(root, { release: 'v2' });
+
+      expect(
+        findings.some(
+          (finding) =>
+            finding.startsWith('release manifest: ') && finding.includes('"v2"'),
+        ),
+      ).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when the release manifest is malformed', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(join(root, 'tools', 'checks', 'releaseManifest.json'), '{ not json');
+
+      const findings = await verifyReleaseReadiness(root);
+
+      expect(findings.some((finding) => finding.startsWith('release manifest: '))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('--release=v2 holds v2-scoped tasks to the DONE rule while v1 keeps exempting them', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(
+        join(root, 'tasks', 'T0102-task.yaml'),
+        stringify(task('T0102', 'TODO')),
+      );
+      await regenerateDashboard(root);
+      await writeReleaseManifest(root, {
+        v1: V1_RELEASED_TASK_IDS,
+        v2: [...V1_RELEASED_TASK_IDS, 'T0102'],
+      });
+
+      const v1Findings = await verifyReleaseReadiness(root, { release: 'v1' });
+      const defaultFindings = await verifyReleaseReadiness(root);
+      const v2Findings = await verifyReleaseReadiness(root, { release: 'v2' });
+
+      expect(v1Findings.some((finding) => finding.startsWith('T0102 '))).toBe(false);
+      expect(defaultFindings.some((finding) => finding.startsWith('T0102 '))).toBe(false);
+      expect(v2Findings).toContain('T0102 must be DONE; found TODO');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('v2 scope still enforces the permanent T0060-T0062 and T0101 invariants', async () => {
+    const root = await createRepository();
+    try {
+      await writeFile(join(root, 'tasks', 'T0060-task.yaml'), stringify(task('T0060', 'DONE')));
+      await regenerateDashboard(root);
+      await writeReleaseManifest(root, {
+        v1: V1_RELEASED_TASK_IDS,
+        v2: V1_RELEASED_TASK_IDS,
+      });
+
+      const findings = await verifyReleaseReadiness(root, { release: 'v2' });
+
+      expect(findings).toContain(
+        'T0060 must remain BLOCKED for the deferred v1 scope; found DONE',
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
