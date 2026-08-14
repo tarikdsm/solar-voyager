@@ -26,9 +26,10 @@ Two defects, both invisible in v1 because nothing rendered the ship.
   `vessel.maxSlewRadPerSimS`, anchored at the **frame-start attitude and
   frame-start simulation time**. Thrust follows the *actual* attitude, never the
   target.
-- The pursuit degenerates **exactly** to the old snap once the target is inside
-  the step budget — the converged branch copies the target quaternion verbatim,
-  bit for bit.
+- The pursuit degenerates to the old snap once the target is inside the step
+  budget — the converged branch copies the target quaternion verbatim, bit for
+  bit. (Scoped by §7.1: the *quaternion* is bit-identical; the thrust direction
+  carries a ≤ 5.6e-8 rad round trip.)
 - `MANUAL_ATTITUDE_MAX_WARP = 100` is exported from `core/time.ts`. Above it,
   `Commands` forces manual rotation rates to zero, mirroring the existing
   `MAX_THRUST_WARP` throttle lockout. The wall-time *normalization*
@@ -67,7 +68,7 @@ form). Rejected steps cost nothing; rollback is automatic; re-evaluating any
 stage yields the same quaternion. `dtSimSec` means *elapsed simulation time since
 the start of this frame*, and nothing else.
 
-### The converged branch is bit-identical to the old snap
+### The converged branch is bit-identical to the old snap (scoped by §7)
 
 ```
 if (!(θ_err > θ_step_budget)) out.set(q_target)   // verbatim copy, no slerp arithmetic
@@ -81,13 +82,14 @@ Copying rather than evaluating `slerp(·, ·, 1)` matters three times over:
    `0.261799·(t − t_frameStart)`. Every hold reference in the game rotates far
    slower than 15°/s (LEO orbital rate ≈ 1.1e-3 rad/s, four hundred times
    slower), so the branch is taken at *every* stage and `q(t) = q_target(t)` —
-   literally the pre-change expression. A converged hold is not an approximation
-   of the old behaviour; it *is* the old behaviour.
+   literally the pre-change expression. (Scoped by §7.2: this fails inside
+   ≈ 0.5° of the target map's `−X̂` singularity, where the *roll* rate is
+   unbounded even though the direction's rate is not.)
 2. **It makes the transient's frame dependence the only frame dependence**
    (§2 below).
-3. **`maxSlewRadPerSimS → ∞` reproduces the pre-change law exactly**, which is
-   how the LEO regression gets a baseline to diff against without committing a
-   new fixture (§4).
+3. **`maxSlewRadPerSimS → ∞` makes the pursuit rate-independent**, reproducing
+   the pre-change law up to §7.1's round trip, which is how the LEO regression
+   gets a baseline to diff against without committing a new fixture (§4).
 
 `!(θ_err > budget)` rather than `θ_err <= budget` so that `θ_err === 0` (and any
 NaN that ever reached here) takes the copy branch instead of dividing by zero.
@@ -252,5 +254,28 @@ ADR-034 §7, re-verified here rather than assumed).
 6. Lockout: rates rejected above 100x, retained at 100x, zeroed by a warp
    increase, holds unaffected.
 7. `npm run bench:sim` before/after; goldens byte-identical via `git diff`.
-</content>
-</invoke>
+
+## 7. Corrections after implementation and review
+
+This document was written before the code. Two claims above were overstated and
+are corrected here; `docs/decisions/ADR-035-attitude-slew.md` is the record of
+record and carries the corrected versions.
+
+1. **"Bit-identical to the old snap" applies to the published quaternion, not to
+   the thrust direction.** The new hold branch re-derives `attitudeDirection`
+   from the published quaternion, which the pre-ADR-035 code never did — it fed
+   the solved direction vector straight to the drive. So even when converged, the
+   thrust direction differs from the old law by one normalize round trip:
+   measured worst case **5.6e-8 rad** over 5·10⁵ sampled directions, flat across
+   the `−X̂` neighbourhood. This is a deliberate improvement (thrust and the
+   rendered nose are now exactly consistent, which a visible ship needs), and it
+   means the `maxSlewRadPerSimS = 1e9` baseline in §6.4 isolates the slew *rate*
+   rather than reproducing the whole old law.
+2. **Convergence is not universal.** §1 claims every hold reference rotates far
+   below the slew limit. True of the hold *directions*, false of the zero-roll
+   *target map* near its coordinate singularity at inertial `−X̂`, where the
+   target's roll rate is `≈ 2ω/ε` and exceeds the limit for
+   `ε < 2ω / maxSlewRadPerSimS` (≈ 0.5° at the LEO rate). Inside that
+   neighbourhood the hold lags in roll and the published quaternion becomes
+   frame-size dependent. Thrust and the ledger are unaffected; a convergence
+   *predicate* is not. See ADR-035 decision 4 and physics-spec §3.0.1.

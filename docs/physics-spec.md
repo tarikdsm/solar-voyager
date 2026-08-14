@@ -134,11 +134,27 @@ derivative evaluation or per accepted step. The attitude is therefore a pure
 function of `(q_frame_start, t_frame_start, t, state(t))`, so rejected DP54
 steps, warp-ladder rollback (§3.2) and a change of tolerance all reproduce the
 same quaternion. When the budget covers the whole separation the target is
-adopted exactly, which is the pre-ADR-035 snap; every hold reference rotates
-far slower than the slew limit, so a *converged* hold tracks its target exactly
-and is unaffected by frame size. The slew *transient* is frame-size dependent at
+adopted exactly, so a *converged* hold tracks its target exactly and is
+unaffected by frame size. The slew *transient* is frame-size dependent at
 `O(ω_target·Δt_frame)`; the ledger (§5) is not, because `E` and scalar `Δv`
 depend on `|α|` only.
+
+Convergence holds wherever `|dq_target/dt| < maxSlewRadPerSimS`, which is
+everywhere except a small neighbourhood of the coordinate singularity of the
+zero-roll target map. `writeQuaternionFromForwardInto` is undefined at inertial
+`−X̂`; for a hold direction sweeping past it at angular distance `ε` and rate
+`ω`, the target quaternion's *roll* rate is
+
+```
+|dq_target/dt| ≈ 2ω/ε          ⇒  copy branch is lost for ε < 2ω / maxSlewRadPerSimS
+```
+
+At the LEO rate `ω = 1.131e-3 rad/s` that threshold is `ε ≈ 8.6e-3 rad ≈ 0.5°`
+(measured: 29% of the limit at `ε = 0.03`, 86% at `0.01`, 288% at `0.003`).
+Inside it the hold lags and the published quaternion becomes frame-size
+dependent. The lag is almost pure roll — the heading component stays bounded by
+`ω` — so the thrust axis `û` and everything derived from it are unaffected; only
+the rendered roll and any convergence *predicate* are.
 
 A 180° reorientation costs `π / maxSlewRadPerSimS = 12.0 s` of **simulation**
 time at every warp tier, hence `12.0 s / warp` of wall time — 12 s at 1x,
@@ -361,4 +377,4 @@ these presentation bounds do not alter the physical definitions above.
 10. **Plane-change pricing:** rotating a 30 km/s velocity vector by 90° at constant speed via continuous thrust — ledger E_spent within 2% of the analytic ∫Fc dt for the flown profile, and strictly greater than c·m·|Δp| (the impulsive lower bound).
 11. **Time dilation:** 1 year of coordinate time at γ = 2 yields τ within 1e-9 of t/2 (with dτ integrated, not recomputed).
 12. **N-body field:** single-body inverse-square acceleration relative error < 1e-14. In an ideal circular Earth-Sun barycentric rotating frame, independently solved L1 lies 1.4e6–1.6e6 km from Earth and satisfies `|g_x + n²·x| / max(|g_x|, |n²·x|) < 1e-10`; Coriolis acceleration is zero for this stationary rotating-frame point.
-13. **Hold-mode slew (§3.0.1, ADR-035):** a step of `θ_step` toward a target `θ_err` away lands on the great circle at exactly `θ_step`, and composing N steps of `θ_step/N` reproduces it to 1e-14. A 90° hold converges in `θ_err / maxSlewRadPerSimS` within one frame; a 180° reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time at every warp tier, i.e. `12.0 s / warp` of wall time (≤ 2.5 s at 5x, ≤ 0.25 s at 50x). One frame reached through the warp ladder publishes the same attitude as the same frame integrated in a single segment, to 1e-12. A converged prograde hold reproduces the pre-ADR-035 snap (equivalently, an unbounded slew rate) over one LEO orbit with position drift < 1e-3 km, and prices energy and proper Δv identically at 1x and 100x to 1e-12.
+13. **Hold-mode slew (§3.0.1, ADR-035):** a step of `θ_step` toward a target `θ_err` away lands on the great circle at exactly `θ_step`, and composing N steps of `θ_step/N` reproduces it to 1e-14. A 90° hold converges in `θ_err / maxSlewRadPerSimS` within one frame; a 180° reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time at every warp tier, i.e. `12.0 s / warp` of wall time (≤ 2.5 s at 5x, ≤ 0.25 s at 50x). One frame reached through the warp ladder, or integrated at a different tolerance, or published after a budget-exhausted tier was rolled back, yields the same attitude as that frame integrated in a single segment, to 1e-12. A converged prograde hold is slew-rate-independent: against an unbounded rate (which reproduces the pre-ADR-035 law up to the ≤ 5.6e-8 rad thrust-direction round trip of §3.0.1) one LEO orbit drifts < 1e-3 km. At 1x versus 100x a converged hold agrees on energy and proper Δv to 1e-12 and on position, celerity, attitude and the per-axis burn decomposition to 1e-9 km / 1e-12 km/s / 1e-12 rad.

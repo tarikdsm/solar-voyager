@@ -218,7 +218,13 @@ Today hold modes snap the quaternion each derivative evaluation. New behavior: p
 q_next  = rotateTowards(q_current, q_target, θ_step)     // slerp by θ_step/θ_err
 ```
 
-At 1× this yields a visible 15°/s slew; at warp ≥ 5× a full 180° flip completes in ≤ 0.24 s wall — matching the approved "negligible at warp" semantics. Existing tests that assert snapped attitude get tolerance updates in the same PR (documented in the ADR).
+At 1× this yields a visible 15°/s slew. **Corrected by T0107 / ADR-035 — the original text here said "at warp ≥ 5× a full 180° flip completes in ≤ 0.24 s wall", which is arithmetically impossible at the contract rate and lost a factor of ten.** The rate is per *simulated* second, so a 180° flip costs `π / 0.261799 = 12.000 s` of simulation time at **every** warp tier, and wall time is `12.000 s / warp`:
+
+| warp | 1× | 5× | 50× | 100× |
+|---|---|---|---|---|
+| wall time for 180° | 12.00 s | 2.40 s | 0.240 s | 0.120 s |
+
+0.24 s is the **50×** figure. Reaching 0.25 s at 5× would require 2.51 rad/s (144°/s), contradicting the "visible 15°/s at 1×" in the same sentence, so the rate was not changed. T0114/T0116 must budget `θ_err / maxSlewRadPerSimS` of *sim* time for any slew (12 s for a flip at the default vessel). Full reasoning in `docs/decisions/ADR-035-attitude-slew.md`. Existing tests that assert snapped attitude get expectation updates in the same PR (documented in the ADR).
 
 ### 3.3 Cruise guidance (T0114 → physics-spec §8)
 
@@ -402,7 +408,11 @@ milestone: V2M1
 spec: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md §4.2,§12.2; plan §3.1-3.2
 acceptance:
   - Hold modes pursue target direction at maxSlewRadPerSimS (vessel), never snap; formula per plan §3.2
-  - At warp >= 5x a 180° reorientation completes in <= 0.25 s wall (test with mocked wall clock)
+  # CORRECTED by ADR-035: the original "warp >= 5x ... <= 0.25 s wall" is impossible
+  # at the contract slew rate. A 180° reorientation costs 12.000 s of SIM time at every
+  # tier, so wall = 12.000/warp: 2.40 s at 5x, 0.240 s at 50x. Verified at both tiers.
+  - A 180° reorientation costs pi/maxSlewRadPerSimS = 12.000 s sim at every warp tier,
+    i.e. 12.000/warp wall: <= 2.5 s at 5x and <= 0.25 s at 50x (test with mocked wall clock)
   - Prograde-hold LEO golden segment: position drift vs pre-change baseline < 1e-3 km over 1 orbit (slew converges then tracks)
   - MANUAL_ATTITUDE_MAX_WARP=100 exported from core/time.ts; rates above it rejected by Commands validation
   - ADR-035 lists every test whose expectation changed
