@@ -28,8 +28,10 @@ an explicit, committed list of "what shipped in this release."
 1. Add a committed `tools/checks/releaseManifest.json`. Its top-level keys are
    named release scopes (`v1` today); each scope is `{ description, taskIds }`
    with `taskIds` an explicit array of task ids. The `v1` scope is frozen to
-   the exact 60 ids that shipped v1.0 GA (enumerated by hand from `tasks/` at
-   the time T0101 went `DONE`) and must not be edited retroactively.
+   the exact 60 ids that shipped v1.0 GA (generated programmatically from the
+   same `loadCanonicalTasks('tasks')` loader the checker itself uses, at the
+   time T0101 went `DONE`, specifically to rule out hand-transcription typos)
+   and must not be edited retroactively.
 2. `verifyReleaseReadiness(root, { final, release })` gains a `release` option
    (default `'v1'`, CLI `--release=<name>`). For any task **not** matched by
    `DEFERRED_TASKS` (`T0060`–`T0062`) or `T0101`: if its id is in the selected
