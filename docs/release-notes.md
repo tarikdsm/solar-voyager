@@ -3,6 +3,14 @@
 The public build includes complete, machine-checked
 [third-party software notices](../public/THIRD_PARTY_LICENSES.txt) at its root.
 
+## v2.0 development
+
+Solar Voyager v2.0 (the free-flight redesign) is in progress. The deployed
+site tracks `main`, so it may include incremental, incomplete v2 work in
+between milestone landings; **v1.0.0 below remains the tagged release** until
+v2.0.0 ships. See `docs/superpowers/specs/2026-08-14-v2-free-flight-design.md`
+and the v2.0 section of `docs/roadmap.md` for the plan.
+
 ## Solar Voyager 1.0.0 — 2026-07-19
 
 The first public release delivers the complete M0–M3 and M5–M6 orbital-exploration experience. It

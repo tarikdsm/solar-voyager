@@ -16,7 +16,7 @@ Every task inherits these. Copy them into per-task specs verbatim where relevant
 
 - Layering `core ← sim ← game ← render/ui` (ESLint-enforced). `sim/`+`core/`: no three.js, no DOM, no side effects. `render` ↮ `ui`.
 - All physics float64; km, km/s, s, km³/s²; heliocentric ecliptic J2000; epoch J2026 (TDB). The only f64→f32 site is `src/render/spaceScene.ts` (`Math.fround` scan-enforced by `tests/render/float32Boundary.test.ts`).
-- `SimSnapshot`, `Commands`, `bodies.json` schema, and physics formulas change only with an ADR in the same PR (`docs/decisions/`). New data files get a JSON Schema + ADR.
+- `SimSnapshot`, `Commands`, `bodies.json` schema, and physics formulas change only with an ADR in the same PR (`docs/decisions/`). New runtime/catalog data files under `data/` (e.g. `bodies.json`, `rings.json`, the planned `atmospheres.json`, `audio-manifest.json`) get a JSON Schema + ADR; CI/process config (e.g. `tools/checks/releaseManifest.json`, `tasks/*.yaml`) is validated by bespoke checked-in code instead.
 - Zero allocations in the frame loop (CI heap gate ≤ 196,608 B growth / 30 s window). Preallocate scratch; no runtime material/geometry creation; precompile shaders via the existing warm-up patterns.
 - 60 fps floor on reference hardware with the adaptive governor; startup ≤ 5,000 ms to first playable (`data/initial-path.json` stays minimal — new heavy assets lazy-load post-activation).
 - Budgets are revised deliberately, never silently: bundle total gzip target ≤ 1,000,000 B (entry ≤ 400,000 B); `public/assets` ≤ 150 MiB; repo ≤ 300 MiB; every budget/golden change is its own reviewed commit with justification (see §Budget re-baseline).

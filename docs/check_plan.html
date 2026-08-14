@@ -1520,6 +1520,25 @@
       "check:dashboard behavior unchanged; docs/check_plan.html regenerated"
     ],
     "handoff_notes": "ADR-033 records the decision. Manifest tools/checks/releaseManifest.json holds the\nfrozen v1 task-id set (60 ids, generated from tasks/ rather than transcribed); the v2\nscope is intentionally unseeded, so --release=v2 fails closed until a later task defines\nit. Missing, malformed, or unknown-scope manifests all fail closed. Verification:\n11/11 releaseReadiness tests, 833 Vitest passed / 3 skipped, lint, format, typecheck,\ncheck:release, check:tasks, check:dashboard; live T9999 exemption proof and\nmissing-manifest fail-closed proof both reproduced independently by review.\nReview verdict: spec pass, quality approved. Minor findings deferred: ADR-033 methodology\nsentence is inaccurate (fixed in T0103); no runtime cross-validation of manifest ids vs\ntasks/ (accepted design); raw ENOENT text on missing manifest; --release=v2 space-separated\nform unsupported. Interpretation adjudicated by the controller: a CI-process config file is\nnot a runtime data file, so no JSON Schema is required (repo precedent: tasks/*.yaml is\nvalidated by bespoke code, not a schema).\n"
+  },
+  {
+    "id": "T0103",
+    "title": "Add v2 kickoff ADR, roadmap milestones V2M1-V2M6, doc pointers",
+    "status": "REVIEW",
+    "agent": "claude",
+    "branch": "task/T0103-v2-kickoff-docs",
+    "depends_on": [
+      "T0102"
+    ],
+    "milestone": "V2M1",
+    "spec": "Lay the documentation foundation for the v2 release. Record the kickoff decision\n(scope, five pillars, non-goals, WebGL2 reaffirmed with WebGPU still deferred per\nADR-008, budget-revision policy). Add the v2 roadmap section with the six milestones\nand their exit criteria. Correct the stale entries the 2026-08-14 audit found in the\ncanonical module map and point agents at the active v2 spec and plan.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 3, 13, 14;\nplan docs/superpowers/plans/2026-08-14-v2-free-flight.md T0103.\n",
+    "acceptance": [
+      "docs/decisions/ADR-032 added (scope, WebGL2 reaffirm, budget policy)",
+      "docs/roadmap.md gains a v2 section with V2M1-V2M6 exits copied from the spec",
+      "docs/architecture.md directory map corrected (removes phantom files noted in the 2026-08-14 audit) and lists planned v2 modules",
+      "AGENTS.md points to the v2 spec+plan as active work"
+    ],
+    "handoff_notes": "Docs-only; zero src/ changes. Controller added three items beyond the four acceptance\ncriteria: corrected ADR-033's account of how the v1 manifest id list was produced\n(generated via loadCanonicalTasks, not hand-enumerated), scoped the plan's JSON-Schema\nGlobal Constraint to runtime/catalog data under data/ rather than CI-process config, and\nadded a v2.0-development note to release-notes.md. Review found one Important defect —\nthe new planned-modules section claimed no listed file existed while ~10 MOD entries are\nreal files — fixed in 209f072 together with two minor attribution errors. Verification:\nformat:check, check:tasks (61), check:release, check:dashboard, 833 Vitest passed / 3\nskipped; the reviewer independently re-derived the module map against the real tree.\nDeferred minors: directory-layout lines remain partial by convention (sim/analysis lists\n4 of 8 modules); expansion-hooks rows for Vessel and SystemDefinition still describe hooks\nthat do not exist in src/ (pre-existing text; Vessel becomes real in T0104).\n"
   }
 ];
     /* TASK_DATA_END */
