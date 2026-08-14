@@ -62,12 +62,23 @@ nothing new (performance-spec §5).
 The vessel is a field of `SimulationPersistentState`, not a sibling of it.
 
 `simulation.ts` captures a burn basis on throttle change and prices energy as
-`E = ∫ m·α·c dt` and power as `P = m·α·c`; `simulationState.ts`
-(`validateActiveBurnConsistency`) re-derives and cross-validates the same energy /
-proper-Δv quantities when a save is loaded. Those recorded joules are only
-meaningful against the mass that produced them. Putting `vessel` inside the
-persistent state makes that self-consistent by construction: the document that
-carries the ledger also carries the mass that priced it.
+`E = ∫ m·α·c dt` and power as `P = m·α·c`. Those recorded joules are only
+meaningful against the mass that produced them.
+
+Note precisely what the loader does **not** do:
+`simulationState.ts`'s `validateActiveBurnConsistency` compares the burn entry
+against deltas of the *same document's* state vector, so no mass term enters any
+comparison — it is an internal-consistency check and is mass-independent by
+construction. `initialKineticEnergyJ` cannot substitute for one either: it is a
+session-start baseline that legitimately diverges from the current state once the
+ship maneuvers. So no downstream validator can detect a mass substitution.
+
+Putting `vessel` inside the persistent state therefore does not *verify* the
+pairing; it makes it structural, so the document that carries the ledger cannot
+be separated from the mass that priced it. Legacy documents have no such
+structure, so `migrateV1`/`migrateV2` assert the caller's vessel carries the
+10 000 kg rest mass that priced every pre-v3 document, and fail closed
+otherwise (`requireLegacyRestMass`).
 
 Precedence on restore follows the existing pattern for every other persisted field
 (`simTimeSec`, `effectiveWarp`, `warpClampReason`): **the persisted vessel wins**
@@ -128,7 +139,8 @@ remains the physical reference the 10 g and 2 g defaults are expressed against.
 | `src/game/flightBenchmarkRoute.ts` | `SHIP_MASS_KG` deleted → `DEFAULT_VESSEL` |
 | `src/main.ts` | `SHIP_MASS_KG` deleted → `DEFAULT_VESSEL` |
 | `tools/bench/simulationCoreBench.mjs` | loads `DEFAULT_VESSEL` |
-| `tests/fixtures/save-v2.json` | NEW — committed v2 migration fixture |
+| `tests/fixtures/save-v2.json` | NEW — committed v2 migration fixture (coasting) |
+| `tests/fixtures/save-v2-midburn.json` | NEW — committed v2 fixture with an active burn |
 | `docs/physics-spec.md` §3.0.1 | default α_max now vessel-supplied |
 | `docs/architecture.md` | save v3 line, `ship/vessel.ts` promoted from planned |
 | `docs/decisions/ADR-034-vessel-config.md` | NEW |

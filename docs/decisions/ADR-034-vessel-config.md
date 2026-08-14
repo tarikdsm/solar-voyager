@@ -28,10 +28,29 @@ Three constraints shaped the design:
 
 1. **The ledger/persistence coupling.** `sim/simulation.ts` prices energy as
    `E = ∫ m·α·c dt` and power as `P = m·α·c`, and captures an orbital burn basis
-   on each throttle change; `sim/simulationState.ts` re-derives and
-   cross-validates those same energy and proper-Δv quantities when a save is
-   loaded, throwing if they disagree. Recorded joules are only meaningful
-   against the mass that produced them.
+   on each throttle change. Recorded joules are only meaningful against the mass
+   that produced them, and **a document does not record that mass anywhere a
+   validator can recover it.**
+
+   It is important to be exact about what the existing loader does and does not
+   guarantee, because the natural assumption is wrong.
+   `validateActiveBurnConsistency` in `sim/simulationState.ts` compares the
+   active burn entry's `energySpentJ` / `properDeltaVMS` / per-axis components
+   against deltas taken from the *same document's* state vector
+   (`state[STATE_ENERGY_J] − active.startEnergyJ`, and so on). Both sides of
+   every comparison come from the same document, and **no mass term appears in
+   any of them**. The check is therefore an internal-consistency check — it
+   catches a hand-edited or truncated burn log — and it is *mass-independent by
+   construction*. It cannot detect that a document priced by one ship is being
+   restored under another. Nor can `initialKineticEnergyJ` be used for that: it
+   is the kinetic-energy baseline at *session start*, while `state` holds the
+   current celerity, and the two legitimately diverge the moment the ship
+   maneuvers — that divergence is exactly what the published
+   `kineticEnergyChangeJ` reports.
+
+   The consequence is that the mass mismatch has exactly one place it can be
+   caught: the boundary where a mass-less legacy document acquires a vessel. See
+   decision 5.
 2. **The goldens are inviolable** (`docs/coding-standards.md`, ADR-017).
    Changing the default α must not move a single golden byte.
 3. **v1.0 is deployed** to GitHub Pages with real saves in real browsers, and
@@ -75,7 +94,10 @@ Three constraints shaped the design:
    `SimulationPersistentState` — a field of the same document that carries the
    ledger it priced — and is validated by
    `copyAndValidateSimulationPersistentState` through the same
-   `validateVesselConfig`. The settings profile
+   `validateVesselConfig`. Co-locating them does not *verify* the pairing
+   (nothing can, per constraint 1); it makes the pairing structural, so a v3
+   document can never be separated from the mass that priced it in the first
+   place. The settings profile
    (`solar-voyager.settings.v2`) is untouched, and the embedded
    `GameSettingsV1` preferences DTO stays exactly as it is: that is a
    deliberate compatibility contract, and a vessel is not a preference.
@@ -83,22 +105,34 @@ Three constraints shaped the design:
 4. **The persisted vessel wins on restore.** When `persistentState` is present,
    its vessel supersedes `options.vessel`, matching how every other persisted
    field (`simTimeSec`, `effectiveWarp`, `warpClampReason`) already behaves.
-   `options.vessel` is the fresh-session vessel. This is what keeps constraint 1
-   honest: a save's recorded energy and proper Δv are restored under the mass
-   that produced them, never silently re-priced.
+   `options.vessel` is the fresh-session vessel. For a v3 document this is what
+   keeps constraint 1 honest: the recorded energy and proper Δv are restored
+   under the mass stored alongside them, so a caller cannot re-price them by
+   passing a different vessel. It is a *structural* guarantee, not a checked
+   one — see decision 5 for the case where no such structure exists.
 
 5. **Save envelope v3, same storage slot.** `CURRENT_SAVE_VERSION` becomes `3`
    and the `simulation` sub-document gains `vessel`.
    `SAVE_STORAGE_KEY` deliberately **stays** `'solar-voyager.save.v2'`: the key
    names the storage *slot*, the document names its own version. Migration is
-   explicit and total — `v1 -> v3` and `v2 -> v3`, each with a committed fixture
-   (`tests/fixtures/save-v1.json`, `tests/fixtures/save-v2.json`). A migrated
-   document adopts the vessel the caller is running (`DEFAULT_VESSEL`
-   everywhere in the repo), which is safe because every v2 document was written
-   by the 10 t ship whose rest mass equals `DEFAULT_VESSEL.restMassKg`, so its
-   ledger stays consistent. v2 and v3 are validated against separate strict key
-   lists, so a v2 document carrying a `vessel` and a v3 document missing one are
-   both rejected.
+   explicit and total — `v1 -> v3` and `v2 -> v3`, each with committed fixtures
+   (`tests/fixtures/save-v1.json`, `tests/fixtures/save-v2.json`, and
+   `tests/fixtures/save-v2-midburn.json` for the active-burn case). v2 and v3 are
+   validated against separate strict key lists, so a v2 document carrying a
+   `vessel` and a v3 document missing one are both rejected.
+
+   A migrated document adopts the vessel the caller is running, but **only if
+   that vessel's `restMassKg` is `LEGACY_SAVE_REST_MASS_KG` (10 000)** — the rest
+   mass of the only ship that ever wrote a pre-v3 document. Otherwise migration
+   fails closed with an explicit error. This assertion is the *entire* protection
+   against re-pricing a legacy ledger: per constraint 1 nothing downstream can
+   detect the substitution, so a mid-burn v2 document migrated under, say, a 42 t
+   vessel would otherwise parse silently, keeping its 10 t-priced burn log while
+   the continuation ran at 42 t. Latent while every caller passes
+   `DEFAULT_VESSEL`, but live the moment a non-default vessel exists — which is
+   where T0108/T0116 are heading. `alphaMaxMS2`, `alphaManualMaxMS2` and
+   `maxSlewRadPerSimS` may differ freely: they govern future thrust only and
+   appear nowhere in the ledger.
 
 6. **`DEFAULT_MAX_PROPER_ACCELERATION_M_S2` is renamed to
    `STANDARD_GRAVITY_M_S2`.** After this ADR 9.80665 m/s² is not any default;
@@ -137,6 +171,15 @@ Three constraints shaped the design:
   supported (v1 -> v2 had the same property) and remains out of scope.
 - Later vessel fields (RCS authority, drive efficiency, multiple hulls) are now
   additive: one field, one `requireExactKeys` entry, one migration.
+- A player who somehow holds a legacy save and a non-10 t vessel gets a hard,
+  explanatory load failure rather than a quietly mis-priced session. No such
+  combination is reachable today; the guard exists so it stays unreachable.
+- **Guidance for later tasks:** do not treat any loader check as protection
+  against a mass mismatch. `validateActiveBurnConsistency` is mass-independent
+  and `initialKineticEnergyJ` is a session-start baseline that legitimately
+  disagrees with the current state. If a future feature can pair a ledger with a
+  mass it was not priced by, that pairing must be rejected where it is created,
+  the way `requireLegacyRestMass` does at the migration boundary.
 
 ## Alternatives considered
 
@@ -150,14 +193,15 @@ Three constraints shaped the design:
   optional parameters with silent defaults is the failure mode this task was
   created to end, and each new field would need its own envelope migration.
 - **Store the vessel as a sibling of `simulation` in the envelope, or in the
-  settings profile.** Rejected: it breaks constraint 1. The loader in
-  `simulationState.ts` cross-validates mass-derived ledger totals, so the mass
-  must arrive in the same validated document; and a settings profile is shared
-  across sessions, which would let a preference change retroactively re-price a
-  saved ledger.
+  settings profile.** Rejected: it breaks constraint 1. Since nothing downstream
+  can *detect* a mass substitution, the only available defence is to make the
+  pairing structural — the mass must arrive inside the same document as the
+  ledger it priced, so the two cannot drift apart. A sibling field can be edited
+  independently; a settings profile is worse still, being shared across sessions,
+  so a preference change would retroactively re-price every saved ledger.
 - **Let `options.vessel` win over the persisted vessel on restore.** Rejected
   for the same reason: it would re-price a completed burn history against a
-  different mass, exactly the inconsistency `validateActiveBurnConsistency`
-  exists to catch.
+  different mass, silently — `validateActiveBurnConsistency` would *not* catch
+  it, because it compares document-internal deltas that contain no mass term.
 - **Regenerate the goldens at 10 g.** Never considered viable — the goldens are
   inviolable (ADR-017) and, as it happens, structurally independent of α.
