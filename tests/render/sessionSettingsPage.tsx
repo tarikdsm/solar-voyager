@@ -5,12 +5,14 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from '../../src/game/createNewGameSimulation.js';
-import { InputCommandBridge } from '../../src/game/input/inputCommandBridge.js';
+import { FlightController } from '../../src/game/flight/flightController.js';
+import { FlightInputRouter } from '../../src/game/flight/flightInputRouter.js';
 import { InputEngine, type InputKeyboardTarget } from '../../src/game/input/inputEngine.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from '../../src/game/saveLoad.js';
 import { GameSessionController } from '../../src/game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from '../../src/game/settings.js';
 import { DEFAULT_VESSEL } from '../../src/sim/ship/vessel.js';
+import type { Commands } from '../../src/sim/simulationSnapshot.js';
 import { SessionSettingsPanel, type SessionFilePort } from '../../src/ui/SessionSettingsPanel.js';
 
 const VESSEL = DEFAULT_VESSEL;
@@ -53,7 +55,7 @@ if (!(root instanceof HTMLElement)) throw new Error('session regression root is 
 
 const storage = new MemoryStorage();
 let engine: InputEngine | null = null;
-let bridge: InputCommandBridge | null = null;
+let flight: FlightController | null = null;
 const controller = new GameSessionController({
   initialSimulation: createNewGameSimulation(VESSEL),
   createNewSimulation: () => createNewGameSimulation(VESSEL),
@@ -61,14 +63,14 @@ const controller = new GameSessionController({
   settingsRepository: new SettingsRepository(storage),
   createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
   onSimulationReplaced: (simulation) => {
-    engine?.setThrottleAxis(simulation.snapshot.throttle);
-    bridge?.updateCommands(simulation.commands, currentSnapshot);
+    flight?.setVessel(simulation.vessel);
+    engine?.setThrottleAxis(flight?.adoptCommandedThrottle(simulation.snapshot.throttle) ?? 0);
   },
   onSettingsChanged: (settings, origin) => {
     engine?.applyBindings(settings.inputBindings);
     engine?.releaseHeldKeys();
-    if (origin === 'restore') bridge?.resetAxes();
-    else bridge?.releaseAxes();
+    if (origin === 'restore') flight?.resetAxes();
+    else flight?.releaseAxes();
   },
 });
 
@@ -76,11 +78,24 @@ function currentSnapshot() {
   return controller.simulation.snapshot;
 }
 
+// Stable facade over the replaceable simulation, exactly as `main.ts` does it:
+// the controller must survive a restore without being pointed at the abandoned
+// core, and without flushing zeroes over the rates the restore just applied.
+const sessionCommands: Commands = {
+  rotate: (pitch, yaw, roll) => controller.simulation.commands.rotate(pitch, yaw, roll),
+  setAttitudeMode: (mode) => controller.simulation.commands.setAttitudeMode(mode),
+  setTarget: (bodyId) => controller.simulation.commands.setTarget(bodyId),
+  setThrottle: (fraction) => controller.simulation.commands.setThrottle(fraction),
+  setWarp: (warp) => controller.simulation.commands.setWarp(warp),
+};
+
 engine = new InputEngine({
   bindings: controller.settings.inputBindings,
   keyboardTarget: window as unknown as InputKeyboardTarget,
 });
-bridge = new InputCommandBridge(controller.simulation.commands, currentSnapshot);
+const flightPorts = { commands: sessionCommands, snapshot: currentSnapshot, vessel: VESSEL };
+flight = new FlightController(flightPorts);
+const router = new FlightInputRouter(flight, flightPorts);
 
 let exportedJson = '';
 const files: SessionFilePort = {
@@ -110,7 +125,10 @@ window.__sessionHarness = {
   },
   snapshot,
   updateInput: () => {
-    if (engine !== null && bridge !== null) bridge.apply(engine.poll(1 / 60));
+    if (engine !== null && flight !== null) {
+      router.apply(engine.poll(1 / 60));
+      flight.update(1 / 60);
+    }
     return {
       pitchRateRadS: controller.simulation.exportPersistentState().rotationRatesRadS[0] ?? 0,
     };

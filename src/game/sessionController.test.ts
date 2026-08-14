@@ -7,7 +7,8 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './createNewGameSimulation.js';
-import { InputCommandBridge } from './input/inputCommandBridge.js';
+import { FlightController } from './flight/flightController.js';
+import { FlightInputRouter } from './flight/flightInputRouter.js';
 import { InputEngine, type InputKeyboardTarget } from './input/inputEngine.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from './saveLoad.js';
 import { GameSessionController } from './sessionController.js';
@@ -85,7 +86,7 @@ describe('GameSessionController', () => {
   it('preserves manual rotation through restore and tutorial-only settings publications', () => {
     const storage = new MemoryStorage();
     let engine: InputEngine | null = null;
-    let bridge: InputCommandBridge | null = null;
+    let flight: FlightController | null = null;
     const controller = new GameSessionController({
       createNewSimulation: () => createNewGameSimulation(VESSEL),
       createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
@@ -93,13 +94,14 @@ describe('GameSessionController', () => {
       saveRepository: new SaveRepository(storage, VESSEL),
       settingsRepository: new SettingsRepository(storage),
       onSimulationReplaced: (simulation) => {
-        engine?.setThrottleAxis(simulation.snapshot.throttle);
+        flight?.setVessel(simulation.vessel);
+        engine?.setThrottleAxis(flight?.adoptCommandedThrottle(simulation.snapshot.throttle) ?? 0);
       },
       onSettingsChanged: (settings, origin) => {
         engine?.applyBindings(settings.inputBindings);
         engine?.releaseHeldKeys();
-        if (origin === 'restore') bridge?.resetAxes();
-        else bridge?.releaseAxes();
+        if (origin === 'restore') flight?.resetAxes();
+        else flight?.releaseAxes();
       },
     });
     const sessionCommands: Commands = {
@@ -117,13 +119,20 @@ describe('GameSessionController', () => {
       bindings: controller.settings.inputBindings,
       keyboardTarget,
     });
-    bridge = new InputCommandBridge(sessionCommands, () => controller.simulation.snapshot);
+    const flightPorts = {
+      commands: sessionCommands,
+      snapshot: () => controller.simulation.snapshot,
+      vessel: VESSEL,
+    };
+    flight = new FlightController(flightPorts);
+    const router = new FlightInputRouter(flight, flightPorts);
     controller.simulation.commands.rotate(0.1, 0.2, 0.3);
     expect(controller.saveLocal()).toMatchObject({ ok: true });
     controller.simulation.commands.rotate(0, 0, 0);
 
     expect(controller.loadLocal()).toMatchObject({ ok: true });
-    bridge.apply(engine.poll(1 / 60));
+    router.apply(engine.poll(1 / 60));
+    flight.update(1 / 60);
     controller.simulation.step(1 / 60);
 
     expect([...controller.simulation.exportPersistentState().rotationRatesRadS]).toEqual([

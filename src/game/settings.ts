@@ -12,6 +12,13 @@ export const INPUT_ACTIONS = Object.freeze([
   'attitudeManual',
   'attitudePrograde',
   'attitudeRetrograde',
+  'attitudeNormal',
+  'attitudeAntinormal',
+  'attitudeRadialOut',
+  'attitudeRadialIn',
+  'attitudeTarget',
+  'killRotation',
+  'stabilityAssistToggle',
 ] as const);
 
 export const TUTORIAL_STEP_IDS = Object.freeze([
@@ -96,7 +103,28 @@ const DEFAULT_INPUT_BINDINGS: Record<InputAction, string> = {
   attitudeManual: 'Digit1',
   attitudePrograde: 'Digit2',
   attitudeRetrograde: 'Digit3',
+  attitudeNormal: 'Digit4',
+  attitudeAntinormal: 'Digit5',
+  attitudeRadialOut: 'Digit6',
+  attitudeRadialIn: 'Digit7',
+  attitudeTarget: 'Digit8',
+  killRotation: 'KeyX',
+  stabilityAssistToggle: 'KeyT',
 };
+
+/**
+ * Prefix of the placeholder code a backfilled action gets when its default is taken.
+ *
+ * `KeyboardEvent.code` never contains a dot, so a placeholder can never be
+ * produced by a keyboard and the action is simply unbound until the player
+ * rebinds it. See `parseInputBindings`.
+ */
+const UNBOUND_CODE_PREFIX = 'unbound.';
+
+/** True for the placeholder an append-safe backfill assigns to an unbindable action. */
+export function isUnboundInputCode(code: string): boolean {
+  return code.startsWith(UNBOUND_CODE_PREFIX);
+}
 
 function freezeV1Settings(
   qualityLock: QualityLock,
@@ -180,6 +208,16 @@ function validateCode(code: unknown, action: InputAction): string {
   return code;
 }
 
+/**
+ * Parses a binding map, treating `INPUT_ACTIONS` as an append-only registry.
+ *
+ * A document written before an action existed is incomplete, not corrupt.
+ * Rejecting it would be fatal rather than strict: this runs inside
+ * `parseGameSettings`, which every `SaveEnvelope` load goes through, so any
+ * later task that adds an action would make every existing save unloadable.
+ * Missing actions are therefore backfilled from the defaults; unknown actions,
+ * duplicate codes and reserved codes still throw.
+ */
 function parseInputBindings(value: unknown): Record<InputAction, string> {
   if (!isRecord(value)) throw new RangeError('inputBindings must be an object');
   const actualKeys = Object.keys(value);
@@ -189,13 +227,31 @@ function parseInputBindings(value: unknown): Record<InputAction, string> {
       throw new RangeError(`unknown input action: ${key}`);
     }
   }
-  const result = {} as Record<InputAction, string>;
   const assignedCodes = new Set<string>();
+  const explicitCodes: (string | undefined)[] = [];
   for (let index = 0; index < INPUT_ACTIONS.length; index += 1) {
     const action = INPUT_ACTIONS[index];
     if (action === undefined) throw new RangeError('input action list is sparse');
+    if (!(action in value)) continue;
     const code = validateCode(value[action], action);
     if (assignedCodes.has(code)) throw new RangeError(`input code ${code} is already bound`);
+    assignedCodes.add(code);
+    explicitCodes[index] = code;
+  }
+  // Written in registry order so `Object.keys` matches `INPUT_ACTIONS`, which
+  // the settings tests and the rebinding panel both rely on.
+  const result = {} as Record<InputAction, string>;
+  for (let index = 0; index < INPUT_ACTIONS.length; index += 1) {
+    const action = INPUT_ACTIONS[index] as InputAction;
+    const explicit = explicitCodes[index];
+    if (explicit !== undefined) {
+      result[action] = explicit;
+      continue;
+    }
+    // A pre-existing binding may already occupy a new action's default key.
+    // Leaving that action unbindable beats failing the whole document.
+    const preferred = DEFAULT_INPUT_BINDINGS[action];
+    const code = assignedCodes.has(preferred) ? `${UNBOUND_CODE_PREFIX}${action}` : preferred;
     assignedCodes.add(code);
     result[action] = code;
   }

@@ -126,9 +126,23 @@ single `poll(wallDtSec)` per frame; `game/input/bindings.ts` owns the `KeyboardE
 registry and the one UI-focus policy every keyboard consumer shares (only `INPUT`/`SELECT`/
 `TEXTAREA`/`contenteditable` and an already-`preventDefault`ed key suppress game input — never a
 focused button, never `Shift`). DOM access stays behind structural ports; `main.ts` supplies the
-adapters. `game/input/inputCommandBridge.ts` is the interim `InputFrame → Commands` translator and is
-replaced by `game/flight/flightController.ts` (T0108). Design:
-`docs/superpowers/specs/2026-08-14-input-engine-design.md`.
+adapters. Design: `docs/superpowers/specs/2026-08-14-input-engine-design.md`.
+
+## Flight control (`game/flight/`)
+
+`game/flight/flightController.ts` is the only writer of attitude and throttle `Commands`. It takes
+decomposed setters (`setLookDelta`, `setRotationAxes`, `setThrottleAxis`, `stepThrottle`,
+`requestHold`, `killRotation`) rather than an `InputFrame`, so a gamepad (T0106) and the
+`CruiseDirector` (T0116) drive the same surface. Two channels, deliberately different: mouse-look
+deltas integrate into a desired attitude pursued by a critically damped law (`k_p = 6.0`,
+`k_d = 2*sqrt(k_p)`), while keyboard/gamepad axes are direct rate demands that re-anchor the desired
+attitude while deflected. Plan §3.1's wall-time normalization
+(`clamp(wallRate / effectiveWarp, ±0.6)`) and the `requestedWarp > MANUAL_ATTITUDE_MAX_WARP` lockout
+both live here; the throttle lever is scaled by a `thrustRegime` that caps manual flight at the
+vessel's `alphaManualMaxMS2`. `game/flight/flightInputRouter.ts` is the one module that knows both
+`InputFrame` and the controller, and owns the time-warp ladder. `update()` is allocation-free and
+covered by `bench:sim`. Design:
+`docs/superpowers/specs/2026-08-14-flight-controller-design.md`.
 
 ## Scene state machine (`game/sceneManager.ts`)
 

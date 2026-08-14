@@ -155,7 +155,12 @@ describe('save envelope', () => {
       saveV2Fixture.simulation.initialKineticEnergyJ,
     );
     expect(migrated.simulation.burnLog.entries).toEqual(saveV2Fixture.simulation.burnLog.entries);
-    expect(migrated.settings).toEqual(saveV2Fixture.settings);
+    // T0108 appended seven input actions. A document written before they existed
+    // is backfilled from the defaults, never rejected: `parseGameSettings` is on
+    // the critical path of every save load, so rejecting would have made this
+    // committed fixture — and every real pre-T0108 save — unloadable.
+    expect(migrated.settings).toMatchObject(saveV2Fixture.settings);
+    expect(migrated.settings.inputBindings).toEqual(DEFAULT_GAME_SETTINGS.inputBindings);
   });
 
   it('migrates a mid-burn v2 fixture with its active burn and ledger intact', () => {

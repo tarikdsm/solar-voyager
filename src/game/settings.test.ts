@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_GAME_SETTINGS,
   INPUT_ACTIONS,
+  isUnboundInputCode,
   LEGACY_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
@@ -201,7 +202,7 @@ describe('game settings', () => {
     expect(repository.save(DEFAULT_GAME_SETTINGS)).toMatchObject({ ok: false });
   });
 
-  it('rejects duplicate, reserved, missing, and extra bindings', () => {
+  it('rejects duplicate, reserved, and extra bindings', () => {
     const duplicate = mutableDocument();
     const duplicateBindings = duplicate.inputBindings as Record<string, unknown>;
     duplicateBindings.pitchUp = duplicateBindings.pitchDown;
@@ -211,13 +212,51 @@ describe('game settings', () => {
     (reserved.inputBindings as Record<string, unknown>).pitchUp = 'F3';
     expect(() => parseGameSettings(reserved)).toThrow(/reserved/u);
 
-    const missing = mutableDocument();
-    delete (missing.inputBindings as Record<string, unknown>).rollLeft;
-    expect(() => parseGameSettings(missing)).toThrow(/rollLeft/u);
-
     const extra = mutableDocument();
-    (extra.inputBindings as Record<string, unknown>).teleport = 'KeyT';
+    (extra.inputBindings as Record<string, unknown>).teleport = 'F8';
     expect(() => parseGameSettings(extra)).toThrow(/unknown input action/u);
+  });
+
+  it('backfills actions a document predates instead of rejecting the document', () => {
+    // `parseGameSettings` runs on every save load, so an appended action must not
+    // be able to make an older document — or an older save — unloadable.
+    const missing = mutableDocument();
+    const bindings = missing.inputBindings as Record<string, unknown>;
+    delete bindings.rollLeft;
+    delete bindings.killRotation;
+
+    const parsed = parseGameSettings(missing);
+
+    expect(parsed.inputBindings.rollLeft).toBe(DEFAULT_GAME_SETTINGS.inputBindings.rollLeft);
+    expect(parsed.inputBindings.killRotation).toBe(
+      DEFAULT_GAME_SETTINGS.inputBindings.killRotation,
+    );
+    expect(parsed.inputBindings.pitchUp).toBe('KeyW');
+    expect(Object.keys(parsed.inputBindings)).toEqual([...INPUT_ACTIONS]);
+  });
+
+  it('leaves a backfilled action unbound when its default key is already taken', () => {
+    const missing = mutableDocument();
+    const bindings = missing.inputBindings as Record<string, unknown>;
+    delete bindings.killRotation;
+    // A player who bound something else to the new action's default: the document
+    // is legal and must survive, so the new action arrives unbound instead.
+    bindings.rollLeft = DEFAULT_GAME_SETTINGS.inputBindings.killRotation;
+
+    const parsed = parseGameSettings(missing);
+
+    expect(parsed.inputBindings.rollLeft).toBe('KeyX');
+    expect(isUnboundInputCode(parsed.inputBindings.killRotation)).toBe(true);
+    expect(isUnboundInputCode(parsed.inputBindings.rollLeft)).toBe(false);
+    // Still a valid document: it round-trips and rebinds normally.
+    expect(() => parseGameSettings(parsed)).not.toThrow();
+    const profile = parseProfileSettings({
+      version: 2,
+      qualityLock: 'auto',
+      inputBindings: parsed.inputBindings,
+      tutorial: { status: 'unoffered', stepId: 'focus-target' },
+    });
+    expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
 
   it('rejects unsupported versions, quality locks, and unknown top-level fields', () => {
