@@ -1,30 +1,32 @@
 /**
- * Shared browser waits for the T0110 camera, budgeted in **rendered frames**.
+ * Shared browser waits for the T0110 camera, bounded in **both** dimensions.
  *
- * Why frames and not milliseconds. `CameraDirector` advances its 1.5 s mode
- * blend by the frame delta, and `RenderTelemetry.beginFrame` clamps that delta to
- * `MAX_GAME_DELTA_SEC = 0.1`. A mode change therefore costs **at least 15
- * rendered frames**, whatever the frame rate, and settles after
- * `max(1.5 s, 15 / fps)` of wall clock: 1.8 s at the 8 fps this repo's harnesses
- * see on a software rasteriser, 15 s at 1 fps, a minute at 0.25 fps on a
- * contended runner.
+ * Why frames. `CameraDirector` advances its 1.5 s mode blend by the frame delta,
+ * and `RenderTelemetry.beginFrame` clamps that delta to `MAX_GAME_DELTA_SEC = 0.1`.
+ * A mode change therefore costs **at least 15 rendered frames** whatever the
+ * frame rate, and settles after `max(1.5 s, 15 / fps)`: 1.8 s at the ~8 fps a
+ * software rasteriser gives this page, 15 s at 1 fps, over a minute below
+ * 0.25 fps. A wall-clock-only timeout around that is a frame-rate assumption,
+ * which is what made the first two versions of this gate fail wrongly.
  *
- * A wall-clock timeout around that is a frame-rate assumption wearing a
- * timeout's clothes — the same defect that made the first version of this gate
- * flaky one level down, and then made its replacement time out in CI. So the
- * patience is expressed in the quantity the director actually consumes, and the
- * wall clock is left as a backstop for the one thing frames cannot detect: a
- * frame loop that has stopped entirely.
+ * Why also a wall cap. A frame budget alone is unbounded in time — 600 frames at
+ * 0.3 fps is half an hour — and an hour-long hang is strictly worse than a wrong
+ * failure in four minutes: it burns the runner, blocks the queue and yields no
+ * signal. So every wait carries a frame budget *and* a wall cap, and the caps on
+ * one harness's critical path are sized to sum inside its `timeout-minutes`, so
+ * the step always fails with a diagnostic rather than being killed without one.
  *
- * The failure message distinguishes the two, because "it was slow" and "it is
- * dead" need completely different responses and guessing between them has
- * already cost two CI rounds.
+ * Whichever bound trips, the message reports frames advanced, frames needed and
+ * the observed frame rate, so "runner at 0.3 fps", "frame loop dead" and "mode
+ * never changed" are distinguishable without re-deriving any of it.
  */
 
-/** Blend frames needed at the clamped delta (1.5 / 0.1), times four for headroom. */
+/** Frames a blend needs at the clamped delta (1.5 / 0.1). */
+export const BLEND_FRAME_COST = 15;
+/** Four times the blend cost: generous for a stall, tight enough to fail fast. */
 const DEFAULT_FRAME_BUDGET = 60;
-/** Only ever reached when the frame loop has stopped, or is below ~0.2 fps. */
-const WALL_BACKSTOP_MS = 300_000;
+/** Sized with the rest of a harness's critical path to fit its step timeout. */
+const DEFAULT_WALL_CAP_MS = 45_000;
 
 async function readCameraState(page) {
   return page.evaluate(() => {
@@ -44,14 +46,39 @@ async function readCameraState(page) {
 }
 
 /**
+ * Turns "it did not happen" into a statement of which bound tripped and why.
+ *
+ * The three causes need opposite responses — wait longer, fix the app, fix the
+ * runner — and telling them apart from a bare timeout has already cost two CI
+ * rounds on this branch.
+ */
+export function describeCameraWait(label, before, after, elapsedMs, frameBudget) {
+  const frames = after.frameCount - before.frameCount;
+  const fps = elapsedMs > 0 ? (frames / elapsedMs) * 1_000 : 0;
+  const cause =
+    frames <= 1
+      ? 'the frame loop stopped — no frames rendered while waiting'
+      : frames > frameBudget
+        ? `the app rendered ${String(frames)} frames without getting there, past the ` +
+          `${String(frameBudget)}-frame budget (a blend needs ${String(BLEND_FRAME_COST)}), ` +
+          'so this is the app, not the runner'
+        : `the runner rendered only ${String(frames)} frames in ${String(Math.round(elapsedMs))} ms ` +
+          `(${fps.toFixed(2)} fps); a blend needs ${String(BLEND_FRAME_COST)} frames, so this is ` +
+          'the runner being slow, not the app being wrong';
+  return `${label}: ${cause}. ${JSON.stringify({ after, before, elapsedMs: Math.round(elapsedMs), fps: Number(fps.toFixed(2)) })}`;
+}
+
+/**
  * Waits for the camera to reach `mode` and stop animating into it.
  *
- * Gives up after `frameBudget` *rendered* frames, so a slow renderer takes
- * longer instead of failing, and a genuinely stuck director still fails fast.
+ * Bounded by rendered frames first and wall clock second; both report through
+ * {@link describeCameraWait}.
  */
 export async function waitForCameraMode(page, mode, options = {}) {
   const frameBudget = options.frameBudget ?? DEFAULT_FRAME_BUDGET;
+  const wallCapMs = options.wallCapMs ?? DEFAULT_WALL_CAP_MS;
   const before = await readCameraState(page);
+  const startedMs = Date.now();
   try {
     await page.waitForFunction(
       ({ budget, expected, startedAtFrame }) => {
@@ -61,27 +88,21 @@ export async function waitForCameraMode(page, mode, options = {}) {
         if (camera.mode === expected && !camera.transitioning) return true;
         const rendered =
           (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) - startedAtFrame;
-        if (rendered > budget) {
-          throw new Error(
-            `the camera never reached "${expected}": still mode=${camera.mode} ` +
-              `transitioning=${String(camera.transitioning)} after ${String(rendered)} ` +
-              `rendered frames (a mode blend needs 15)`,
-          );
-        }
+        if (rendered > budget) throw new Error(`frame budget exhausted after ${String(rendered)}`);
         return false;
       },
       { budget: frameBudget, expected: mode, startedAtFrame: before.frameCount },
-      { timeout: WALL_BACKSTOP_MS },
+      { timeout: wallCapMs },
     );
   } catch (cause) {
-    const after = await readCameraState(page);
-    const rendered = after.frameCount - before.frameCount;
-    const reason =
-      rendered <= 1
-        ? 'the frame loop stopped: no frames rendered while waiting'
-        : `only ${String(rendered)} frames rendered in ${String(WALL_BACKSTOP_MS)} ms`;
     throw new Error(
-      `waitForCameraMode(${mode}) failed — ${reason}. ${JSON.stringify({ after, before })}`,
+      describeCameraWait(
+        `waitForCameraMode(${mode})`,
+        before,
+        await readCameraState(page),
+        Date.now() - startedMs,
+        frameBudget,
+      ),
       { cause },
     );
   }

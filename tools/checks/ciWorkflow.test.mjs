@@ -38,6 +38,13 @@ describe('CI workflow', () => {
     expect(workflow).toContain(
       '- name: Trajectory overlay regression\n        timeout-minutes: 8\n        run: npm run test:trajectory-overlay',
     );
+    // T0110 — this step had no cap of its own and inherited the job budget, so a
+    // hung camera wait ran for 65 minutes before a human killed it. The waits
+    // inside the harness are now sized to fail with a diagnostic inside this cap;
+    // the cap is what guarantees the step ends either way.
+    expect(workflow).toContain(
+      '- name: Camera controls regression\n        timeout-minutes: 8\n        run: npm run test:camera-controls',
+    );
     expect(workflow).toContain(
       '- name: Startup quality and loading regression\n        timeout-minutes: 8\n        run: npm run test:startup',
     );
