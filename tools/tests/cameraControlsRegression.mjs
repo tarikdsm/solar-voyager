@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { createServer } from 'vite';
 
+import { waitForCameraMode } from './cameraWaits.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
@@ -65,11 +66,16 @@ async function readCameraDiagnostic(page) {
  * @param untilSettled also wait for `transitioning` to go true and back to false,
  *   then keep sampling for a short stationary tail so a mode change is bracketed
  *   by frames on both sides of the move whatever the frame rate
- * @param timeoutMs generous upper bound; reaching it is reported, never silent
+ * @param maxSamples frame budget; the recorder samples once per rendered frame,
+ *   so this is patience measured in the same unit the director spends. A wall
+ *   clock here would be a frame-rate assumption: a mode blend costs at least 15
+ *   frames whatever the rate (`cameraWaits.mjs` explains the arithmetic).
+ * @param timeoutMs backstop for a frame loop that has stopped entirely, not for
+ *   one that is merely slow; reaching it is reported, never silent
  */
 async function recordCameraPath(page, options) {
   return page.evaluate(
-    async ({ keyToDispatch, minSamples, timeoutMs, trailingSamples, untilSettled }) => {
+    async ({ keyToDispatch, maxSamples, minSamples, timeoutMs, trailingSamples, untilSettled }) => {
       const canvas = globalThis.document.querySelector('#space-canvas');
       const camera = canvas?.solarVoyagerCamera;
       if (camera === undefined) throw new Error('camera diagnostic missing');
@@ -100,7 +106,7 @@ async function recordCameraPath(page, options) {
           const settled =
             !untilSettled ||
             (settledAtIndex >= 0 && samples.length - settledAtIndex > trailingSamples);
-          if (elapsedMs >= timeoutMs) {
+          if (samples.length >= maxSamples || elapsedMs >= timeoutMs) {
             timedOut = true;
             resolve();
           } else if (samples.length >= minSamples && settled) resolve();
@@ -112,30 +118,12 @@ async function recordCameraPath(page, options) {
     },
     {
       keyToDispatch: options.keyToDispatch ?? null,
+      maxSamples: options.maxSamples ?? 600,
       minSamples: options.minSamples,
-      timeoutMs: options.timeoutMs ?? 60_000,
+      timeoutMs: options.timeoutMs ?? 300_000,
       trailingSamples: options.trailingSamples ?? 4,
       untilSettled: options.untilSettled ?? false,
     },
-  );
-}
-
-/**
- * Waits for the camera to reach a mode and stop animating into it.
- *
- * Replaces the fixed `waitForTimeout` calls this phase used after a mode change.
- * The director advances its 1.5 s blend by the frame delta (clamped to 100 ms),
- * so on a slow renderer the change takes *more* wall time than 1.5 s — a fixed
- * sleep is a frame-rate assumption wearing a timeout's clothes.
- */
-async function waitForCameraMode(page, mode) {
-  await page.waitForFunction(
-    (expected) => {
-      const camera = globalThis.document.querySelector('#space-canvas')?.solarVoyagerCamera;
-      return camera !== undefined && camera.mode === expected && !camera.transitioning;
-    },
-    mode,
-    { timeout: 60_000 },
   );
 }
 
@@ -159,8 +147,10 @@ function summarizePath(recording, label) {
   assert.equal(
     timedOut,
     false,
-    `${label}: the camera recorder hit its timeout before the condition it was waiting for; ` +
-      `collected ${String(samples.length)} frames`,
+    `${label}: the camera recorder gave up before the condition it was waiting for, after ` +
+      `${String(samples.length)} rendered frames. A mode blend needs 15; hitting the frame ` +
+      `budget means the director never settled, and hitting the wall backstop with few frames ` +
+      `means the frame loop stopped`,
   );
   assert.ok(
     samples.length >= 2,
