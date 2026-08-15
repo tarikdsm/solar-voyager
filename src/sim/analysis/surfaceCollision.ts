@@ -40,6 +40,16 @@ export interface SurfaceCollisionWorkspace {
   /** Chord crossing fraction of the last `scanSurfaceCollisionChord` hit. */
   chordFraction: number;
   readonly contactVelocityKmS: Float64Array;
+  /**
+   * Times a contact probe could not produce a state and the search failed open.
+   *
+   * Failing open is the right default — a probe that exhausts its step budget is
+   * not evidence of a crash, and inventing one would be worse than missing one —
+   * but a fail-open that nothing can see is indistinguishable from working. This
+   * counter makes it detectable; `SimulationCore` republishes it. Monotonic for
+   * the life of the workspace, and expected to stay at zero.
+   */
+  probeFailureCount: number;
 }
 
 /** Allocates the per-core collision scratch once, at construction. */
@@ -59,6 +69,7 @@ export function createSurfaceCollisionWorkspace(bodyCount: number): SurfaceColli
     },
     chordFraction: Number.NaN,
     contactVelocityKmS: new Float64Array(3),
+    probeFailureCount: 0,
   };
 }
 
@@ -157,8 +168,15 @@ export function scanSurfaceCollisionChord(
   return bestBodyIndex;
 }
 
-/** Probes one time; true when the propagated ship is at or inside the sphere. */
+/**
+ * Probes one time; true when the propagated ship is at or inside the sphere.
+ *
+ * A probe that cannot produce a state reports "not penetrating" and bumps
+ * `workspace.probeFailureCount`, so the fail-open is observable rather than
+ * silent.
+ */
 function penetratesAt(
+  workspace: SurfaceCollisionWorkspace,
   timeSec: number,
   offset: number,
   squaredRadiusKm2: number,
@@ -167,7 +185,10 @@ function penetratesAt(
   bodyPositionsKm: Float64Array,
   scratchState: Float64Array,
 ): boolean {
-  if (!evaluateShipState(timeSec, scratchState)) return false;
+  if (!evaluateShipState(timeSec, scratchState)) {
+    workspace.probeFailureCount += 1;
+    return false;
+  }
   evaluateRails(timeSec);
   return (
     squaredDistanceKm2(
@@ -217,7 +238,10 @@ export function refineSurfaceContactInto(
   // A segment that opens inside the sphere is contact at its own start time;
   // there is no bracket to bisect and none is needed.
   if (chordFraction === 0) {
-    if (!evaluateShipState(segmentStartTimeSec, scratchState)) return contact;
+    if (!evaluateShipState(segmentStartTimeSec, scratchState)) {
+      workspace.probeFailureCount += 1;
+      return contact;
+    }
     evaluateRails(segmentStartTimeSec);
     writeContact(
       workspace,
@@ -242,6 +266,7 @@ export function refineSurfaceContactInto(
   // allocates nothing.
   if (
     penetratesAt(
+      workspace,
       chordTimeSec,
       offset,
       squaredRadiusKm2,
@@ -254,6 +279,7 @@ export function refineSurfaceContactInto(
     highSec = chordTimeSec;
   } else if (
     penetratesAt(
+      workspace,
       segmentEndTimeSec,
       offset,
       squaredRadiusKm2,
@@ -273,6 +299,7 @@ export function refineSurfaceContactInto(
       const sampleTimeSec = segmentStartTimeSec + (spanSec * sample) / BRACKET_SAMPLE_COUNT;
       if (
         penetratesAt(
+          workspace,
           sampleTimeSec,
           offset,
           squaredRadiusKm2,
@@ -296,6 +323,7 @@ export function refineSurfaceContactInto(
     if (midSec <= lowSec || midSec >= highSec) break;
     if (
       penetratesAt(
+        workspace,
         midSec,
         offset,
         squaredRadiusKm2,
@@ -313,7 +341,13 @@ export function refineSurfaceContactInto(
 
   // Re-evaluate at the reported time: the probes left the scratch state and the
   // rails wherever the last one landed, which is not necessarily `lowSec`.
-  if (!evaluateShipState(lowSec, scratchState)) return contact;
+  // Discarding an already-confirmed contact, which is the most consequential
+  // fail-open of the three: the bisection proved a penetration and this drops
+  // it. Counted so it cannot happen invisibly.
+  if (!evaluateShipState(lowSec, scratchState)) {
+    workspace.probeFailureCount += 1;
+    return contact;
+  }
   evaluateRails(lowSec);
   writeContact(
     workspace,

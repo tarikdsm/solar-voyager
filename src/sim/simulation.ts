@@ -43,6 +43,7 @@ import {
 import {
   createCommandController,
   createSimulationSnapshotBuffer,
+  WarningFlag,
   WarpClampReason,
   type Commands,
   type CommandState,
@@ -430,6 +431,15 @@ export class SimulationCore {
     return this.currentSnapshotIndex === 0 ? this.snapshots[0] : this.snapshots[1];
   }
 
+  /**
+   * ADR-036 — times a contact probe could not produce a state and the collision
+   * search failed open. Expected to stay 0; a nonzero value means contact
+   * detection silently declined to decide, which is otherwise invisible.
+   */
+  get surfaceProbeFailureCount(): number {
+    return this.collisionWorkspace.probeFailureCount;
+  }
+
   /** Allocates an ownership-safe setup document only for an explicit save. */
   exportPersistentState(): SimulationPersistentState {
     return {
@@ -700,6 +710,11 @@ export class SimulationCore {
     snapshot.impactBodyIndex = this.impactBodyIndex;
     snapshot.impactSpeedKmS = this.impactSpeedKmS;
     snapshot.impactSimTimeSec = this.impactSimTimeSec;
+    // ADR-036 — first writer of `warningFlags`, declared since v1 and never set.
+    // Assignment rather than a bitwise OR because this is still the only owned
+    // bit; a task that lands ATMOSPHERE_ENTRY, SOI_CHANGE or ESCAPE must combine
+    // them here instead of adding a second writer.
+    snapshot.warningFlags = this.impactOccurred === 1 ? WarningFlag.IMPACT : WarningFlag.NONE;
     snapshot.attitudeQuaternion.set(this.attitudeQuaternion);
     snapshot.shipProperAccelerationKmS2.set(this.endpointProperAccelerationKmS2);
     writeThrustForceInto(

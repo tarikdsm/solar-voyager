@@ -10,6 +10,7 @@ import {
 import { CONTACT_TIME_TOLERANCE_SEC } from './analysis/surfaceCollision.js';
 import { compileRailsCatalog } from './propagation/rails.js';
 import { SimulationCore } from './simulation.js';
+import { WarningFlag } from './simulationSnapshot.js';
 import { copyAndValidateSimulationPersistentState } from './simulationState.js';
 import { STANDARD_GRAVITY_M_S2 } from './ship/thrust.js';
 import { DEFAULT_VESSEL, type VesselConfig } from './ship/vessel.js';
@@ -193,6 +194,28 @@ describe('surface collision - physics-spec.md section 6, ADR-036', () => {
     expect(after.requestedWarp).toBe(1);
     expect(after.throttle).toBe(0);
     expect(after.impactOccurred).toBe(1);
+  });
+
+  it('raises the IMPACT warning flag, which nothing wrote before this task', () => {
+    const core = createCore(restingState(EARTH_RADIUS_KM + 400));
+    expect(core.snapshot.warningFlags).toBe(WarningFlag.NONE);
+
+    const snapshot = flyUntilImpact(core, 1, 400);
+
+    expect(snapshot.impactOccurred).toBe(1);
+    expect(snapshot.warningFlags & WarningFlag.IMPACT).toBe(WarningFlag.IMPACT);
+  });
+
+  it('keeps the fail-open probe counter observable and at zero in normal flight', () => {
+    // A silent fail-open is indistinguishable from working, so the counter is
+    // part of the contract even though it is expected never to move.
+    const core = createCore(circularState(EARTH_RADIUS_KM + 0.1));
+    for (let frame = 0; frame < 200; frame += 1) core.step(20);
+    expect(core.surfaceProbeFailureCount).toBe(0);
+
+    const impacting = createCore(restingState(EARTH_RADIUS_KM + 400));
+    flyUntilImpact(impacting, 1, 400);
+    expect(impacting.surfaceProbeFailureCount).toBe(0);
   });
 
   it('treats a state that starts inside a body as immediate contact', () => {

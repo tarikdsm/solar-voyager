@@ -273,6 +273,72 @@ describe('surfaceCollision refinement - ADR-036 section 3.2', () => {
     expect(contact.timeSec).toBeLessThan(20);
   });
 
+  it('counts a fail-open instead of hiding it', () => {
+    // A probe that cannot produce a state reports "no contact". That is the
+    // right default over inventing a crash, but it must not be invisible.
+    const workspace = workspaceAtOrigin();
+    workspace.chordFraction = 0.5;
+    expect(workspace.probeFailureCount).toBe(0);
+
+    const contact = refineSurfaceContactInto(
+      workspace,
+      0,
+      0,
+      200,
+      () => false,
+      noRails,
+      bodyPositionsKm,
+      bodyVelocitiesKmS,
+      collisionRadiiKm,
+      new Float64Array(12),
+    );
+
+    expect(contact.bodyIndex).toBe(-1);
+    expect(workspace.probeFailureCount).toBeGreaterThan(0);
+  });
+
+  it('counts a confirmed contact discarded by a failing final re-evaluation', () => {
+    // The most consequential fail-open: the bisection proved a penetration and
+    // the closing evaluation drops it.
+    const descend = descentEvaluator(RADIUS_KM + 100, 1);
+    const refine = (evaluator: typeof descend, workspace = workspaceAtOrigin()) => {
+      workspace.chordFraction = 0.5;
+      const contact = refineSurfaceContactInto(
+        workspace,
+        0,
+        0,
+        200,
+        evaluator,
+        noRails,
+        bodyPositionsKm,
+        bodyVelocitiesKmS,
+        collisionRadiiKm,
+        new Float64Array(12),
+      );
+      return { contact, workspace };
+    };
+
+    // Count the evaluations a converging search makes, so the failure lands on
+    // the closing one rather than on a guessed iteration.
+    let totalCalls = 0;
+    const baseline = refine((timeSec, out) => {
+      totalCalls += 1;
+      return descend(timeSec, out);
+    });
+    expect(baseline.contact.bodyIndex).toBe(0);
+    expect(baseline.workspace.probeFailureCount).toBe(0);
+
+    let calls = 0;
+    const { contact, workspace } = refine((timeSec, out) => {
+      calls += 1;
+      if (calls === totalCalls) return false;
+      return descend(timeSec, out);
+    });
+
+    expect(contact.bodyIndex).toBe(-1);
+    expect(workspace.probeFailureCount).toBe(1);
+  });
+
   it('rejects a workspace sized for a different catalog', () => {
     const workspace = createSurfaceCollisionWorkspace(2);
 
