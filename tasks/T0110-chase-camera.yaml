@@ -1,0 +1,67 @@
+id: T0110
+title: Chase camera with spring arm; CameraDirector chase and observatory
+status: REVIEW
+agent: claude
+branch: task/T0110-chase-camera
+depends_on: [T0108, T0109]
+milestone: V2M1
+spec: |
+  v1's camera could only orbit celestial bodies, so as the ship coasted away the view stayed bolted
+  to a planet. Put the camera behind the ship: a spring-arm chase view as the default, an observatory
+  mode preserving v1's body framing, and a director that animates between them using the existing
+  focus-transition machinery. This is the task that makes the game third-person.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 5;
+  contract in docs/superpowers/plans/2026-08-14-v2-free-flight.md section 2;
+  design doc docs/superpowers/specs/2026-08-15-chase-camera-design.md.
+acceptance:
+  - Chase pose ship - forward*d + up*0.35d, d in 2 to 50 ship lengths on the wheel, critically damped with settle under 0.8 s and zero overshoot, attitude follow at 120 ms lag
+  - FOV widens up to 8 degrees at full throttle smoothed over 0.5 s; shake at most 0.15 degrees at 5 g; both toggleable and default subtle
+  - CameraDirector cycles chase and observatory with the existing smootherstep and log-distance transition, never a hard cut
+  - Allocation-free update; camera-controls harness extended; 60 fps maintained with bench evidence
+handoff_notes: |
+  CHASE IS THE DEFAULT CAMERA. The brief left this open; the implementer chose it and review endorsed
+  it, because a third-person camera you opt into every session is not a third-person game. Reverting
+  is one line at createEpochWorld({ initialCameraMode: 'observatory' }) but would also require
+  reverting the workload golden and two production harness phases.
+  SPRING CONSTANTS ARE DERIVED, NOT TUNED. The spring damps the ARM OFFSET, not the world position:
+  a critically damped tracker following a ramp settles at 2v/omega, which is 1.9 km at LEO speed
+  against a 157 m arm — the ship would sit permanently off screen. Translation is therefore rigid and
+  only re-aiming and zooming are damped, pinned to 12 decimals across 4,600 km of flight.
+  omega = 8 rad/s gives settle = 5.834/omega = 0.729 s against the 0.8 s budget. ZERO OVERSHOOT IS
+  ANALYTIC, not a lucky measurement: integration is the exact closed form, the error term changes sign
+  only at a negative time, and review confirmed the sign invariant is PRESERVED ACROSS STEPS, so it
+  holds at any dt including a 100 ms hitch.
+  SHAKE uses A*sin(e)cos(r) and A*sin(e)sin(r) so hypot = A*|sin e| <= A exactly. The obvious
+  implementation — two independent +-A sinusoids — peaks at A*sqrt(2), which is 41% over the 0.15
+  degree contract.
+  WORKLOAD GOLDEN RE-BASELINED in its own commit: 10 -> 33 draw calls, 77,071 -> 82,429 triangles.
+  The arithmetic is 33 = 10 - 1 + 24 and 82,429 = 77,071 - 180 + 5,538, NOT a plain +23. The ship
+  costs exactly T0109's 24 draw calls and 5,538 triangles; the missing 180-triangle draw is the MOON,
+  identified by elimination (540 non-indexed vertices is the shared tier-2 icosphere on a plain
+  Lambert program; Earth is tier 3 in both frames and the Sun compiles to a different program via
+  onBeforeCompile) and proved to be bearing-dependent frustum culling by an azimuth sweep: the draw
+  reappears at 17 of 42 bearings with workload exactly 34 / 82,609, and the UNMODIFIED base build
+  swings between 9 and 11 draw calls under the same sweep. Nothing was disabled. Note for whoever
+  next touches this golden: the workload is bearing-sensitive by +-1 call and +-180 triangles in both
+  cameras, absorbed by the 10% tolerance. Commit 365f3e9's message is imprecise and is superseded by
+  the reconciliation in docs/bench/T0110-summary.md; the history rewrite was declined deliberately.
+  ship.glb STAYS OFF THE CRITICAL PATH and this is structural, not luck: ShipVisual is constructed
+  with lazyLoadingEnabled false, and enableLazyLoading() runs only at space-phase activation, after
+  the measured startup window closes. test:startup now asserts shipLoadState 'idle' AND
+  shipResolved true at ready, so moving the fetch earlier fails loudly.
+  A SECOND focus-label bug surfaced while running the browser gate: two CameraInputControllers share
+  the label element and both wrote it at construction, so the DISABLED map controller always won and
+  the HUD read "Focus: Earth" while the game was behind the ship. The label now has a single owner.
+  Camera settings live in profile generation v4 with its own storage key; four migration tiers now
+  share one migrateForward helper without weakening any tier's validation.
+  writeUpFromQuaternionInto was added to src/sim/ship/attitude.ts, a layer the plan fences off.
+  RATIFIED by the controller: it is the third column of a rotation matrix whose first column that
+  module already reads, it changes no snapshot field and no formula, and the body frame is fixed by
+  ADR-025 section 4. No ADR required.
+  KNOWN LIMIT: the 60 fps floor is NOT demonstrated. The bench box measured p75 30.3 ms before AND
+  after (Intel UHD, 640x360) with frame work flat at 3.2 ms median, so the delta is sound but the
+  absolute floor is not. T0151 owns the reference-hardware re-baseline.
+  Verification: 1156 Vitest passed / 3 skipped, lint, typecheck, format; perf gates findings [] with
+  workload matching the new golden bit-for-bit and both negative controls still failing as designed;
+  camera-controls, ship-visual, startup, smoke, relativistic-visuals, impact-overlay and tutorial
+  harnesses green. Third-person proof shot at docs/bench/T0110-chase-earth.png.
