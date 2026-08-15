@@ -36,6 +36,42 @@ where `p` is geometric albedo and the Lambert phase function is
 are clamped to finite physical fallback distances so tier attributes never
 receive NaN or infinity.
 
+### 3.1 The ship (T0109)
+
+The player vessel uses the **same ladder primitives** with only two rungs,
+because it has no fallback sphere worth drawing:
+
+| Rung | Condition | Representation |
+|---|---|---|
+| Point | < 1.8 px (drops back below 1.2 px) | A slot in the same additive `BodyPointCloud` as the 43 catalog bodies — no extra draw call. |
+| Mesh | ≥ 1.8 px | `ship.glb` through `BodyAssetLoader`, lazily fetched on first resolve, `compileAsync`-precompiled before it is ever visible, cross-faded in over the shared 250 ms. |
+
+- Photometry reuses the reflected-body formula above with the hull's geometric
+  albedo `0.45` and a bounding radius of `0.01306 km` (half the 26.12 m authored
+  length). A 26 m hull is therefore magnitude ≈ −1.5 at 1,000 km and ≈ 24 at
+  1 AU: **correctly invisible** across interplanetary distance. The photon-drive
+  plume (spec §6.3) is what later makes a *burning* ship readable at range, by
+  adding its luminance into this same point.
+- Position and attitude come from `SimSnapshot`: the ship occupies one extra
+  triple at the end of the packed float64 position array, so the camera-relative
+  boundary, the camera focus targets and the solar-lighting focus all address it
+  exactly as they address a body.
+- ADR-025 makes local `+X` the nose and thrust axis. The exported asset is Y-up
+  while the physics body frame is Z-up, so the render quaternion is
+  `q_attitude ⊗ rotation(+90° about X)`; the rendered nose stays exactly the
+  physics forward vector, which is asserted in unit tests and against the real
+  `.glb` in `tools/tests/shipVisualRegression.mjs`.
+- The authored hull is metallic (0.78–0.9). three.js gives `AmbientLight` to the
+  diffuse term only, so a metal has nothing to reflect and renders black; the
+  ship's materials therefore carry a constant environment at the scene's ambient
+  radiance, not a studio fill light. `getIBLIrradiance` returns
+  `π × texel × envMapIntensity` while `AmbientLight.intensity` is already an
+  irradiance, so the white sky texel uses
+  `envMapIntensity = AMBIENT_LIGHT_INTENSITY / π`. The ship keeps its ambient
+  light as well, so its dielectrics receive ambient irradiance twice (0.04 rather
+  than 0.02) — 1.3 % of the direct solar term at 1 AU, deliberately not chased.
+  Real planetshine from the dominant body is Front C work.
+
 ## 4. Lighting & post
 
 - **One directional light**, positioned in the focus-to-Sun direction and aimed

@@ -28,8 +28,10 @@ import { prepareRingSystem, type PreparedRingSystem } from './ringSystem.js';
 import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
 import {
   apparentMagnitude,
+  pointIntensityForMagnitude,
   projectedDiameterPx,
   selectVisualTier,
+  TIER_FADE_DURATION_MS,
   type VisualTier,
 } from './visualTier.js';
 
@@ -55,7 +57,7 @@ export interface BodyVisualAssetLoader {
 export type BodyModelCompiler = (root: Object3D) => Promise<void>;
 export type BodyModelLoadState = 'idle' | 'loading' | 'ready' | 'failed';
 
-const FADE_DURATION_MS = 250;
+const FADE_DURATION_MS = TIER_FADE_DURATION_MS;
 const INITIAL_POINT_FADE_OPACITY = 1 / 15;
 const LOAD_IDLE = 0;
 const LOAD_LOADING = 1;
@@ -128,13 +130,31 @@ export class BodyVisualSystem {
     private readonly compileModel: BodyModelCompiler,
     private readonly proceduralSun: ProceduralSunMaterialPort,
     private lazyLoadingEnabled = true,
+    /**
+     * Colours for point-cloud slots that follow the catalog bodies in the same
+     * packed array and are written by another owner (T0109's ship). This system
+     * allocates them so distant non-catalog visuals share one additive draw, and
+     * never touches their appearance itself.
+     */
+    auxiliaryPointColors: readonly number[] = [],
   ) {
-    if (definitions.length === 0 || positionsKm.length !== definitions.length * 3) {
+    const auxiliaryPointCount = auxiliaryPointColors.length;
+    if (
+      definitions.length === 0 ||
+      positionsKm.length !== (definitions.length + auxiliaryPointCount) * 3
+    ) {
       throw new RangeError('Body definitions and packed positions must have matching counts.');
     }
 
     const count = definitions.length;
-    const colors = new Uint32Array(count);
+    const colors = new Uint32Array(count + auxiliaryPointCount);
+    for (let index = 0; index < auxiliaryPointCount; index += 1) {
+      const color = auxiliaryPointColors[index];
+      if (!Number.isInteger(color) || (color as number) < 0 || (color as number) > 0xff_ffff) {
+        throw new RangeError('Auxiliary point colours must be 24-bit RGB integers.');
+      }
+      colors[count + index] = color as number;
+    }
     let foundSunIndex = -1;
     for (let index = 0; index < count; index += 1) {
       const definition = definitions[index];
@@ -387,7 +407,7 @@ export class BodyVisualSystem {
         this.positionsKm,
         cameraPositionKm,
       );
-      const intensity = Math.min(8, Math.pow(10, -0.4 * (magnitude - 6)));
+      const intensity = pointIntensityForMagnitude(magnitude);
       this.pointCloud.writeAppearance(
         index,
         diameterPx,

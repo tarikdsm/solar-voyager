@@ -27,6 +27,14 @@ export interface EpochState {
   readonly positionsKm: Float64Array;
   readonly cameraPositionKm: ReadonlyVec3;
   readonly cameraLookDirection: ReadonlyVec3;
+  /**
+   * Where `createNewGameLeoState` places the ship at epoch.
+   *
+   * Setup-time render resources need a finite ship position before the first
+   * simulation step publishes one; this is the same anti-sunward LEO point the
+   * sim computes, so nothing has to guess or use a placeholder origin.
+   */
+  readonly shipPositionKm: ReadonlyVec3;
 }
 
 /** Evaluates the catalog's fixed J2026 rails and initial LEO camera state. */
@@ -84,6 +92,11 @@ export function createEpochState(): EpochState {
       x: -sunwardX,
       y: -sunwardY,
       z: -sunwardZ,
+    },
+    shipPositionKm: {
+      x: earthX - sunwardX * cameraDistanceKm,
+      y: earthY - sunwardY * cameraDistanceKm,
+      z: earthZ - sunwardZ * cameraDistanceKm,
     },
   };
 }

@@ -15,7 +15,6 @@ import {
   type InputPointerMotionEvent,
   type PointerLockSurface,
 } from './game/input/inputEngine.js';
-import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
 import { replacementInvalidatesRestorePoints, RestorePointRing } from './game/restorePoints.js';
@@ -44,6 +43,8 @@ import {
 import { createRenderer, type RendererBootstrap } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
+import type { BodyModelLoadState } from './render/bodyVisualSystem.js';
+import { SHIP_ASSET_ID } from './render/shipVisual.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
@@ -56,7 +57,8 @@ import type { Commands, SimSnapshot } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
-import { CameraInputController, type CameraControlPort } from './ui/cameraInputController.js';
+import { CameraInputController } from './ui/cameraInputController.js';
+import { SharedCameraControls } from './ui/sharedCameraControls.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
@@ -83,10 +85,22 @@ interface RuntimeResourceCounts {
   scrollListeners: number;
   sessionSimulationCreations: number;
   sessionSimulationReplacements: number;
+  shipVisualCreations: number;
   spacePhaseActivationRequests: number;
   spacePhaseActivations: number;
   stateVectorLayoutObservers: number;
   trajectoryWorkers: number;
+}
+
+interface ShipRuntimeDiagnostics {
+  readonly loadState: BodyModelLoadState;
+  readonly resolved: boolean;
+  readonly diameterPx: number;
+  readonly pointOpacity: number;
+  readonly modelOpacity: number;
+  readonly noseAlignment: number;
+  readonly noseNodeAlignment: number;
+  readonly focused: boolean;
 }
 
 interface SystemMapRuntimeDiagnostics {
@@ -183,39 +197,6 @@ function copyDiagnosticEntry(
   target.radialDeltaVMS = source.radialDeltaVMS;
 }
 
-class SharedCameraControls implements CameraControlPort {
-  constructor(
-    private readonly camera: OrbitCameraController,
-    private readonly map: SystemMapController,
-    private readonly commands: Commands,
-  ) {}
-
-  get focusId(): string {
-    return this.map.focusId;
-  }
-
-  orbitBy(deltaYawRad: number, deltaPitchRad: number): void {
-    this.camera.orbitBy(deltaYawRad, deltaPitchRad);
-  }
-
-  zoomByWheel(wheelDelta: number): void {
-    this.camera.zoomByWheel(wheelDelta);
-  }
-
-  focusBody(id: string): boolean {
-    const changed = this.map.focusBody(id);
-    if (id === this.map.focusId) this.commands.setTarget(id);
-    return changed;
-  }
-
-  cycleFocus(step: number): string {
-    const id = this.camera.cycleFocus(step);
-    this.map.focusBody(id);
-    this.commands.setTarget(id);
-    return id;
-  }
-}
-
 const canvasElement = document.querySelector('#space-canvas');
 const appElement = document.querySelector('#app');
 const startupLoadingElement = document.querySelector('#startup-loading');
@@ -286,6 +267,7 @@ const runtimeResources: RuntimeResourceCounts = {
   scrollListeners: 0,
   sessionSimulationCreations: 0,
   sessionSimulationReplacements: 0,
+  shipVisualCreations: 0,
   spacePhaseActivationRequests: 0,
   spacePhaseActivations: 0,
   stateVectorLayoutObservers: 0,
@@ -713,7 +695,14 @@ const sessionCommands: Commands = {
   setAttitudeMode: (mode) => session.simulation.commands.setAttitudeMode(mode),
   setTarget: (bodyId) => {
     session.simulation.commands.setTarget(bodyId);
-    if (bodyId !== null) systemMapController.focusBody(bodyId);
+    if (bodyId !== null) {
+      systemMapController.focusBody(bodyId);
+      // The map only relays focus to the camera when its own focus moves, and
+      // since T0109 the camera can be on the ship while the map is not. Selecting
+      // a target has always recentred the camera; make that unconditional rather
+      // than dependent on the relay firing.
+      world?.cameraController.focusBody(bodyId);
+    }
     invalidateTrajectoryPrediction();
   },
   setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
@@ -875,6 +864,9 @@ function renderFrame(nowMs: number): void {
   restorePoints.update(session.simulation, deltaSec);
   impactStore.publish(snapshot, restorePoints.count);
   world.positionsKm.set(snapshot.bodyPositionsKm);
+  // Before the camera reads its focus offset, so a ship-focused camera tracks
+  // this step's position instead of the previous one.
+  world.shipVisual.writeState(snapshot.shipState, snapshot.attitudeQuaternion);
   if (systemMapRuntimeDiagnostics !== null) {
     systemMapRuntimeDiagnostics.simulationTimeSec = snapshot.simTimeSec;
     systemMapRuntimeDiagnostics.targetBodyId =
@@ -928,6 +920,12 @@ function renderFrame(nowMs: number): void {
       spaceScene.camera.fov * (Math.PI / 180),
       nowMs,
       snapshot.simTimeSec,
+    );
+    world.shipVisual.update(
+      cameraPositionKm,
+      Math.max(1, canvas.clientHeight),
+      spaceScene.camera.fov * (Math.PI / 180),
+      nowMs,
     );
     lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
     lighting.update();
@@ -1056,6 +1054,41 @@ async function prepareApplication(): Promise<void> {
     onProgress: publishStartupMilestone,
   });
   runtimeResources.epochWorldCreations += 1;
+  runtimeResources.shipVisualCreations += 1;
+  const shipVisual = world.shipVisual;
+  const shipCameraController = world.cameraController;
+  const shipRuntimeDiagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get loadState() {
+          return shipVisual.loadState;
+        },
+        get resolved() {
+          return shipVisual.resolved;
+        },
+        get diameterPx() {
+          return shipVisual.diameterPx;
+        },
+        get pointOpacity() {
+          return shipVisual.pointOpacity;
+        },
+        get modelOpacity() {
+          return shipVisual.modelOpacity;
+        },
+        get noseAlignment() {
+          return shipVisual.noseAlignment;
+        },
+        get noseNodeAlignment() {
+          return shipVisual.noseNodeAlignment;
+        },
+        get focused() {
+          return shipCameraController.focusId === SHIP_ASSET_ID;
+        },
+      },
+      null,
+    ),
+  ) as ShipRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerShip', { value: shipRuntimeDiagnostics });
   world.systemMap.focusBody(systemMapController.focusId);
   systemMapRuntimeDiagnostics = {
     scene: world.systemMap.diagnostics,
@@ -1180,6 +1213,7 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   const activeWorld = world;
   if (activeWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
   activeWorld.visualSystem.enableLazyLoading();
+  activeWorld.shipVisual.enableLazyLoading();
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
@@ -1217,15 +1251,18 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   // Frozen CI contract field: it counts one input owner per space-phase
   // activation, which is now the input engine rather than v1's mapper.
   runtimeResources.keyboardCommandMappers += 1;
+  const catalogBodyIds = session.simulation.snapshot.bodyIds;
   const spaceCameraControls = new SharedCameraControls(
     activeWorld.cameraController,
     systemMapController,
     sessionCommands,
+    catalogBodyIds,
   );
   const mapCameraControls = new SharedCameraControls(
     activeWorld.systemMap.cameraController,
     systemMapController,
     sessionCommands,
+    catalogBodyIds,
   );
   cameraInput = new CameraInputController(
     canvas,

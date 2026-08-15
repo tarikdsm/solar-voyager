@@ -10,6 +10,11 @@ const SPHERE_TO_MODEL_PX = 240;
 const MODEL_TO_SPHERE_PX = 160;
 const MIN_BRIGHTNESS_RATIO = 1e-300;
 const MAX_BRIGHTNESS_RATIO = 1e300;
+const MAX_POINT_INTENSITY = 8;
+const POINT_INTENSITY_REFERENCE_MAGNITUDE = 6;
+
+/** Shared cross-fade duration for every point/sphere/model tier transition. */
+export const TIER_FADE_DURATION_MS = 250;
 
 function assertFiniteNonnegative(label: string, value: number): void {
   if (!Number.isFinite(value) || value < 0) {
@@ -56,6 +61,19 @@ export function projectedDiameterPx(
   return (angularDiameterRad * viewportHeightPx) / verticalFovRad;
 }
 
+/**
+ * Decides whether a visual resolves into geometry at all, with the twenty-percent
+ * hysteresis band shared by every representation ladder in the renderer.
+ *
+ * This is the single point/geometry boundary: `selectVisualTier` routes its
+ * tier-1 decisions through it, and visuals with only two representations (the
+ * ship) consult it directly instead of growing a parallel ladder.
+ */
+export function selectResolvedRepresentation(resolved: boolean, diameterPx: number): boolean {
+  assertFiniteNonnegative('diameterPx', diameterPx);
+  return diameterPx >= (resolved ? SPHERE_TO_POINT_PX : POINT_TO_SPHERE_PX);
+}
+
 /** Selects a representation with twenty-percent hysteresis around both boundaries. */
 export function selectVisualTier(
   current: VisualTier,
@@ -69,20 +87,24 @@ export function selectVisualTier(
   if (!Number.isFinite(modelThresholdScale) || modelThresholdScale < 1) {
     throw new RangeError('model threshold scale must be finite and at least one.');
   }
-  const sphereToModelPx = SPHERE_TO_MODEL_PX * modelThresholdScale;
-  const modelToSpherePx = MODEL_TO_SPHERE_PX * modelThresholdScale;
+  if (!selectResolvedRepresentation(current !== 1, diameterPx)) return 1;
+  if (current === 3) return diameterPx < MODEL_TO_SPHERE_PX * modelThresholdScale ? 2 : 3;
+  return diameterPx >= SPHERE_TO_MODEL_PX * modelThresholdScale ? 3 : 2;
+}
 
-  switch (current) {
-    case 1:
-      if (diameterPx >= sphereToModelPx) return 3;
-      return diameterPx >= POINT_TO_SPHERE_PX ? 2 : 1;
-    case 2:
-      if (diameterPx >= sphereToModelPx) return 3;
-      return diameterPx < SPHERE_TO_POINT_PX ? 1 : 2;
-    case 3:
-      if (diameterPx < SPHERE_TO_POINT_PX) return 1;
-      return diameterPx < modelToSpherePx ? 2 : 3;
-  }
+/**
+ * Converts an apparent magnitude into the additive point-cloud intensity scale.
+ *
+ * Shared by every point-cloud writer so the visual brightness of a body and of
+ * the ship come from one curve: magnitude 6 (the naked-eye limit) renders at
+ * unit intensity and the clamp keeps the brightest objects from washing the
+ * additive buffer out.
+ */
+export function pointIntensityForMagnitude(magnitude: number): number {
+  return Math.min(
+    MAX_POINT_INTENSITY,
+    Math.pow(10, -0.4 * (magnitude - POINT_INTENSITY_REFERENCE_MAGNITUDE)),
+  );
 }
 
 /**

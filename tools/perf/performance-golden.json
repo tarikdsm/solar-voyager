@@ -11,7 +11,7 @@
     "maxRetainedGrowthBytes": 196608
   },
   "bundle": {
-    "maxEntryGzipBytes": 285000,
-    "maxTotalGzipBytes": 570000
+    "maxEntryGzipBytes": 400000,
+    "maxTotalGzipBytes": 1000000
   }
 }

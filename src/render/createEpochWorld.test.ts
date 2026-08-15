@@ -148,9 +148,27 @@ describe('createEpochWorld', () => {
     expect(world.proceduralSun.billboard.name).toBe('sun-glare');
     expect(world.spaceScene.scene.getObjectByName('sun-glare')).toBe(world.proceduralSun.billboard);
     expect(world.lighting.directionalLight.intensity).toBeGreaterThan(0);
+    // One extra additive point beyond the catalog: the ship shares the body
+    // point cloud rather than adding a second draw (T0109).
     expect(world.visualSystem.pointCloud.points.geometry.getAttribute('position').count).toBe(
-      bodyCount,
+      bodyCount + 1,
     );
+    expect(world.positionsKm).toHaveLength((bodyCount + 1) * 3);
+    expect(world.shipVisual.loadState).toBe('idle');
+    expect(world.shipVisual.resolved).toBe(false);
+    expect(world.shipVisual.pointOpacity).toBe(1);
+    expect(world.shipVisual.modelOpacity).toBe(0);
+    expect(world.shipVisual.noseAlignment).toBeCloseTo(1, 15);
+    expect(world.cameraController.focusBody('ship')).toBe(true);
+    world.cameraController.update(1.5);
+    expect(world.cameraController.focusId).toBe('ship');
+    expect(world.cameraController.distanceKm).toBeLessThan(0.05);
+    expect(world.cameraController.focusPositionKm.x).toBeCloseTo(
+      world.positionsKm[bodyCount * 3] as number,
+      6,
+    );
+    expect(world.cameraController.focusBody('jupiter')).toBe(true);
+    world.cameraController.update(1.5);
     expect(world.starfield.points.name).toBe('starfield');
     expect(world.starfield.points.parent).toBe(world.spaceScene.scene);
     expect(world.starfield.points.geometry.getAttribute('position').count).toBe(

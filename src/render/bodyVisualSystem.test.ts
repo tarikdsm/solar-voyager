@@ -1,4 +1,5 @@
 import {
+  Color,
   DataTexture,
   Group,
   Mesh,
@@ -103,6 +104,59 @@ describe('BodyVisualSystem structure', () => {
     expect(sunFallback.material.emissiveIntensity).toBeGreaterThan(1);
     expect(earthFallback.material.emissive.getHex()).toBe(0x000000);
     expect(spaceScene.scene.children).toHaveLength(5);
+  });
+
+  it('reserves auxiliary point-cloud slots without owning them', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async () => null),
+    };
+    const positionsKm = new Float64Array([0, 0, 0, AU_KM, 0, 0, AU_KM, 100, 0]);
+    const system = new BodyVisualSystem(
+      spaceScene,
+      definitions(),
+      positionsKm,
+      loader,
+      vi.fn(async () => undefined),
+      PROCEDURAL_SUN_STUB,
+      false,
+      [0xdf_e6_ef],
+    );
+
+    const points = spaceScene.scene.children.filter((child) => child.type === 'Points');
+    expect(points).toHaveLength(1);
+    expect(system.pointCloud.points.geometry.getAttribute('position').count).toBe(3);
+    const colors = system.pointCloud.points.geometry.getAttribute('aColor');
+    expect(colors.getX(2)).toBeCloseTo(new Color().setHex(0xdf_e6_ef).r, 6);
+    // Bodies own indices 0..1 only: the auxiliary slot keeps the values its own
+    // owner wrote after a body update pass.
+    system.pointCloud.writeAppearance(2, 1, 0.25, 3);
+    system.update({ x: AU_KM + 1_000, y: 0, z: 0 }, 720, 1, 0);
+    expect(system.pointCloud.points.geometry.getAttribute('aOpacity').getX(2)).toBe(0.25);
+    expect(system.pointCloud.points.geometry.getAttribute('aIntensity').getX(2)).toBe(3);
+  });
+
+  it('rejects packed positions that do not cover bodies plus auxiliary slots', () => {
+    const loader: BodyVisualAssetLoader = {
+      preloadHeroSpheres: vi.fn(async () => undefined),
+      loadSphereAlbedo: vi.fn(async () => null),
+      loadModel: vi.fn(async () => null),
+    };
+    expect(
+      () =>
+        new BodyVisualSystem(
+          new CameraRelativeSpaceScene(),
+          definitions(),
+          positions(),
+          loader,
+          vi.fn(async () => undefined),
+          PROCEDURAL_SUN_STUB,
+          false,
+          [0xff_ff_ff],
+        ),
+    ).toThrow(RangeError);
   });
 
   it('preloads hero sphere textures without requesting a model', async () => {
