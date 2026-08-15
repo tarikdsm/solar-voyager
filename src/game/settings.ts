@@ -91,13 +91,42 @@ export interface GameSettingsV2 {
   readonly tutorial: TutorialProgress;
 }
 
-/** Independent profile settings document stored outside save slots. */
+/**
+ * Independent profile settings document, superseded by {@link GameSettingsV4}.
+ *
+ * Kept only as the strict parse target for the one-time v3->v4 migration
+ * (`parseProfileSettingsV3`), exactly as V2 is kept for v2->v3.
+ */
 export interface GameSettingsV3 {
   readonly version: 3;
   readonly qualityLock: QualityLock;
   readonly inputBindings: InputBindings;
   readonly tutorial: TutorialProgress;
   readonly gamepad: GamepadSettings;
+}
+
+/**
+ * Chase-camera presentation toggles (T0110).
+ *
+ * Both default on: the effects are sized to be subtle (+8 deg of field at full
+ * throttle, 0.15 deg of shake at 5 g), not to be opt-in. They are switchable
+ * because motion sensitivity is a real accessibility concern, not a preference.
+ */
+export interface CameraSettings {
+  /** Widen the field of view with throttle. */
+  readonly fovWidening: boolean;
+  /** Shake the camera under high proper acceleration. */
+  readonly shake: boolean;
+}
+
+/** Independent profile settings document stored outside save slots. */
+export interface GameSettingsV4 {
+  readonly version: 4;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
+  readonly camera: CameraSettings;
 }
 
 export interface KeyValueStorage {
@@ -108,12 +137,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV3;
+      readonly settings: GameSettingsV4;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV3;
+      readonly settings: GameSettingsV4;
       readonly error: string;
     };
 
@@ -140,7 +169,9 @@ export type SettingsSaveResult =
  * older build never touches it, so the newer document simply waits
  * untouched until a v3-aware build reads it again.
  */
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
+/** The v3 profile key (T0106's era, pre-camera) — read-and-migrate-forward only. */
+export const LEGACY_V3_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';
 /** The v2 profile key (T0108's era) — read-and-migrate-forward only, never written by a v3+ build. */
 export const LEGACY_V2_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v2';
 export const LEGACY_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';
@@ -307,11 +338,46 @@ function freezeV3Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV3Settings(
+function freezeCameraSettings(fovWidening: boolean, shake: boolean): CameraSettings {
+  return Object.freeze({ fovWidening, shake });
+}
+
+/** Chase-camera effects on, at the subtle amplitudes T0110 specifies. */
+export const DEFAULT_CAMERA_SETTINGS = freezeCameraSettings(true, true);
+
+function freezeV4Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+  camera: CameraSettings,
+): GameSettingsV4 {
+  return Object.freeze({
+    version: 4 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+    camera: Object.isFrozen(camera)
+      ? camera
+      : freezeCameraSettings(camera.fovWidening, camera.shake),
+  });
+}
+
+export const DEFAULT_GAME_SETTINGS = freezeV4Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
   DEFAULT_GAMEPAD_SETTINGS,
+  DEFAULT_CAMERA_SETTINGS,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -522,8 +588,14 @@ function parseProfileSettingsV2(value: unknown): GameSettingsV2 {
   );
 }
 
-/** Strictly parses the independent version-3 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV3 {
+/**
+ * Strictly parses the superseded version-3 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v3->v4 migration inside
+ * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
+ * `parseProfileSettings` used to do before `camera` existed.
+ */
+function parseProfileSettingsV3(value: unknown): GameSettingsV3 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -539,6 +611,38 @@ export function parseProfileSettings(value: unknown): GameSettingsV3 {
     parseInputBindings(value.inputBindings),
     parseTutorial(value.tutorial),
     parseGamepadSettings(value.gamepad),
+  );
+}
+
+/** Strictly parses camera presentation toggles. Every field is required. */
+function parseCameraSettings(value: unknown): CameraSettings {
+  if (!isRecord(value)) throw new RangeError('camera settings must be an object');
+  assertExactKeys(value, ['fovWidening', 'shake'], 'unknown camera settings field');
+  if (typeof value.fovWidening !== 'boolean') {
+    throw new RangeError('camera fovWidening must be a boolean');
+  }
+  if (typeof value.shake !== 'boolean') throw new RangeError('camera shake must be a boolean');
+  return freezeCameraSettings(value.fovWidening, value.shake);
+}
+
+/** Strictly parses the independent version-4 profile settings document. */
+export function parseProfileSettings(value: unknown): GameSettingsV4 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    ['version', 'qualityLock', 'inputBindings', 'tutorial', 'gamepad', 'camera'],
+    'unknown profile settings field',
+  );
+  if (value.version !== 4) throw new RangeError('profile settings version must be 4');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV4Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+    parseCameraSettings(value.camera),
   );
 }
 
@@ -559,64 +663,102 @@ function migrateProfileV2ToV3(settings: GameSettingsV2): GameSettingsV3 {
   );
 }
 
+/**
+ * Lifts a superseded v3 profile to v4 by attaching default camera toggles.
+ *
+ * Same shape as `migrateProfileV2ToV3` one version up: `camera` is a brand-new
+ * required object with no prior partial state anywhere in a v3 document to
+ * recover from, so this is a whole-document migration rather than a per-field
+ * backfill.
+ */
+function migrateProfileV3ToV4(settings: GameSettingsV3): GameSettingsV4 {
+  return freezeV4Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    settings.gamepad,
+    DEFAULT_CAMERA_SETTINGS,
+  );
+}
+
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV3): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV4): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
 
-/** Merges imported save preferences while preserving profile-only tutorial and gamepad state. */
+/**
+ * Merges imported save preferences while preserving profile-only state.
+ *
+ * Tutorial progress, gamepad calibration and camera toggles belong to the
+ * player's profile, not to a mission someone emailed them, so only the two
+ * fields the save DTO actually carries are taken from the import.
+ */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV3,
+  profile: GameSettingsV4,
   preferences: GameSettingsV1,
-): GameSettingsV3 {
+): GameSettingsV4 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV3Settings(
+  return freezeV4Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
     validatedProfile.gamepad,
+    validatedProfile.camera,
   );
 }
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV3,
+  settings: GameSettingsV4,
   tutorial: TutorialProgress,
-): GameSettingsV3 {
+): GameSettingsV4 {
   return parseProfileSettings({ ...settings, tutorial });
+}
+
+/** Returns a validated frozen profile with the chase field-of-view widening toggled. */
+export function updateCameraFovWidening(
+  settings: GameSettingsV4,
+  fovWidening: boolean,
+): GameSettingsV4 {
+  return parseProfileSettings({ ...settings, camera: { ...settings.camera, fovWidening } });
+}
+
+/** Returns a validated frozen profile with the chase camera shake toggled. */
+export function updateCameraShake(settings: GameSettingsV4, shake: boolean): GameSettingsV4 {
+  return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV3,
+  settings: GameSettingsV4,
   action: InputAction,
   code: string,
-): GameSettingsV3 {
+): GameSettingsV4 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
 }
 
 /** Returns a validated frozen profile with the global gamepad deadzone updated. */
-export function updateGamepadDeadzone(settings: GameSettingsV3, deadzone: number): GameSettingsV3 {
+export function updateGamepadDeadzone(settings: GameSettingsV4, deadzone: number): GameSettingsV4 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
 }
 
 /** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
 export function updateGamepadCurveExponent(
-  settings: GameSettingsV3,
+  settings: GameSettingsV4,
   curveExponent: number,
-): GameSettingsV3 {
+): GameSettingsV4 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
 }
 
 /** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
 export function updateGamepadAxisInvert(
-  settings: GameSettingsV3,
+  settings: GameSettingsV4,
   axis: GamepadAxisId,
   invert: boolean,
-): GameSettingsV3 {
+): GameSettingsV4 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -628,10 +770,10 @@ export function updateGamepadAxisInvert(
 
 /** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
 export function updateGamepadAxisSensitivity(
-  settings: GameSettingsV3,
+  settings: GameSettingsV4,
   axis: GamepadAxisId,
   sensitivity: number,
-): GameSettingsV3 {
+): GameSettingsV4 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -691,7 +833,25 @@ export class SettingsRepository {
       }
     }
 
-    // Tier 2: the v2 key (T0108's era, pre-gamepad). Migrate up one step and
+    // Tier 2: the v3 key (T0106's era, pre-camera). Migrate up one step and
+    // persist forward to the current key.
+    let legacyV3Text: string | null;
+    try {
+      legacyV3Text = this.storage.getItem(LEGACY_V3_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV3Text !== null) {
+      return this.migrateForward(() =>
+        migrateProfileV3ToV4(parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown)),
+      );
+    }
+
+    // Tier 3: the v2 key (T0108's era, pre-gamepad). Migrate up two steps and
     // persist forward to the current key.
     let legacyV2Text: string | null;
     try {
@@ -704,31 +864,16 @@ export class SettingsRepository {
       };
     }
     if (legacyV2Text !== null) {
-      let migrated: GameSettingsV3;
-      try {
-        migrated = migrateProfileV2ToV3(
-          parseProfileSettingsV2(JSON.parse(legacyV2Text) as unknown),
-        );
-      } catch (error: unknown) {
-        return {
-          ok: false,
-          settings: DEFAULT_GAME_SETTINGS,
-          error: `Unable to parse settings: ${describeError(error)}`,
-        };
-      }
-      try {
-        this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(migrated));
-      } catch (error: unknown) {
-        return {
-          ok: false,
-          settings: DEFAULT_GAME_SETTINGS,
-          error: `Unable to migrate settings: ${describeError(error)}`,
-        };
-      }
-      return { ok: true, settings: migrated, source: 'migrated' };
+      return this.migrateForward(() =>
+        migrateProfileV3ToV4(
+          migrateProfileV2ToV3(
+            parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+          ),
+        ),
+      );
     }
 
-    // Tier 3: the v1 key (pre-T0108, standalone-profile era). Migrate up two
+    // Tier 4: the v1 key (pre-T0108, standalone-profile era). Migrate up three
     // steps and persist forward to the current key.
     let legacyV1Text: string | null;
     try {
@@ -744,16 +889,33 @@ export class SettingsRepository {
       return { ok: true, settings: DEFAULT_GAME_SETTINGS, source: 'default' };
     }
 
-    let migrated: GameSettingsV3;
+    return this.migrateForward(
+      () =>
+        migrateProfileV3ToV4(
+          migrateProfileV2ToV3(
+            migrateLegacySettings(parseGameSettings(JSON.parse(legacyV1Text as string) as unknown)),
+          ),
+        ),
+      'legacy settings',
+    );
+  }
+
+  /**
+   * Runs one migration tier: parse, then persist forward under the current key.
+   *
+   * Every tier does exactly this, and each added generation made the copy-paste
+   * version of it longer; sharing it means a future v5 adds one `if` block
+   * instead of another twenty lines of identical error plumbing.
+   */
+  private migrateForward(migrate: () => GameSettingsV4, label = 'settings'): SettingsLoadResult {
+    let migrated: GameSettingsV4;
     try {
-      migrated = migrateProfileV2ToV3(
-        migrateLegacySettings(parseGameSettings(JSON.parse(legacyV1Text) as unknown)),
-      );
+      migrated = migrate();
     } catch (error: unknown) {
       return {
         ok: false,
         settings: DEFAULT_GAME_SETTINGS,
-        error: `Unable to parse legacy settings: ${describeError(error)}`,
+        error: `Unable to parse ${label}: ${describeError(error)}`,
       };
     }
     try {
@@ -768,7 +930,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV3): SettingsSaveResult {
+  save(settings: GameSettingsV4): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

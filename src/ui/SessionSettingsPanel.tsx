@@ -13,14 +13,14 @@ import {
   INPUT_ACTIONS,
   isUnboundInputCode,
   type GamepadAxisId,
-  type GameSettingsV3,
+  type GameSettingsV4,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV3;
+  readonly settings: GameSettingsV4;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;
@@ -30,6 +30,8 @@ export interface SessionSettingsPort {
   setGamepadAxisSensitivity(axis: GamepadAxisId, sensitivity: number): SessionActionResult;
   setGamepadCurveExponent(curveExponent: number): SessionActionResult;
   setGamepadDeadzone(deadzone: number): SessionActionResult;
+  setCameraFovWidening(fovWidening: boolean): SessionActionResult;
+  setCameraShake(shake: boolean): SessionActionResult;
   updateQualityLock(qualityLock: QualityLock): SessionActionResult;
 }
 
@@ -54,6 +56,8 @@ export interface SessionSettingsModel {
   selectGamepadCurveExponent(value: string): PanelActionResult;
   setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): PanelActionResult;
   selectGamepadAxisSensitivity(axis: GamepadAxisId, value: string): PanelActionResult;
+  setCameraFovWidening(fovWidening: boolean): PanelActionResult;
+  setCameraShake(shake: boolean): PanelActionResult;
 }
 
 export type SessionActivationCallback = (result: SessionActionResult) => void;
@@ -177,6 +181,8 @@ export function createSessionSettingsModel(
         ? { ok: false, message: 'Unsupported gamepad sensitivity' }
         : simplify(session.setGamepadAxisSensitivity(axis, sensitivity));
     },
+    setCameraFovWidening: (fovWidening) => simplify(session.setCameraFovWidening(fovWidening)),
+    setCameraShake: (shake) => simplify(session.setCameraShake(shake)),
   };
 }
 
@@ -415,6 +421,37 @@ export function SessionSettingsPanel({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section aria-labelledby="camera-settings-title">
+          <h2 id="camera-settings-title">Camera</h2>
+          <p class="camera-settings-hint">
+            The chase camera opens its field of view under thrust and vibrates under heavy
+            acceleration. Both are deliberately subtle; turn them off here if motion is
+            uncomfortable.
+          </p>
+          <div class="camera-settings-grid">
+            <label for="camera-fov-widening">
+              <input
+                id="camera-fov-widening"
+                type="checkbox"
+                checked={settings.camera.fovWidening}
+                onChange={(event) =>
+                  publish(model.setCameraFovWidening(event.currentTarget.checked))
+                }
+              />
+              Widen field of view with throttle
+            </label>
+            <label for="camera-shake">
+              <input
+                id="camera-shake"
+                type="checkbox"
+                checked={settings.camera.shake}
+                onChange={(event) => publish(model.setCameraShake(event.currentTarget.checked))}
+              />
+              Shake under high acceleration
+            </label>
           </div>
         </section>
 
