@@ -1,0 +1,55 @@
+id: T0109
+title: Render the ship and register it as a camera focus target
+status: REVIEW
+agent: claude
+branch: task/T0109-ship-visual
+depends_on: [T0103]
+milestone: V2M1
+spec: |
+  v1 built, textured, tier-optimized, manifest-registered and deployed ship.glb, and no code path
+  ever loaded it — the game's protagonist was invisible. Load the existing asset, bind it through
+  the camera-relative scene from ship state and attitude, register it as a camera focus target, and
+  make it visible at every distance through the existing apparent-magnitude ladder.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md sections 5 and 6.3;
+  design doc docs/superpowers/specs/2026-08-14-ship-visual-design.md.
+acceptance:
+  - ship.glb loaded via BodyAssetLoader, bound through CameraRelativeSpaceScene, attitude-driven from the snapshot quaternion
+  - Ship appears in the camera target list with a position offset from ship state; bracket-key cycling includes it
+  - Sunlit correctly at LEO; visible at all tiers (point sprite beyond the resolve threshold) reusing the apparent-magnitude path with hull albedo 0.45
+  - Draw-call golden re-baselined in a dedicated commit if the workload moves; heap gate green; new Playwright harness test:ship-visual in CI
+handoff_notes: |
+  THE SHIP IS RENDERED. docs/bench/T0109-ship-leo.png is the first image of it in project history.
+  The hull reads as a dark silhouette and Earth clips to white: both are known and correctly scoped
+  out — exposure is T0127, the PBR re-author is T0121, planetshine is T0123.
+  DRAW-CALL GOLDEN DELIBERATELY NOT RE-BASELINED, and review confirmed that is correct rather than a
+  dodge. In the perf-gate scenario the ship sits 13,542 km from the camera and subtends 0.00106 px,
+  three orders below the 1.8 px resolve threshold, and a 44th vertex in an existing Points object
+  counts into info.render.points, never .triangles — the workload is bit-identical, not merely within
+  tolerance. MEASURED RESOLVED COST FOR T0110 TO RE-BASELINE AGAINST: 24 draw calls / 5,538 triangles
+  (about 34 total, well under the 150 budget).
+  BUNDLE CEILING RAISED in its own commit per plan section 13 and ADR-032: total gzip
+  570,000 -> 1,000,000 B, entry 285,000 -> 400,000 B. Measured after: 132,330 entry / 562,110 total.
+  No other gate was touched. ADR-032 decision 4 requires maintainer sign-off for a ceiling raise.
+  One tier ladder, not two: selectResolvedRepresentation is shared with the body system and a test
+  asserts the two agree at every boundary crossing. No second Math.fround site was added.
+  Ambient environment: a 0.78-0.9 metalness hull renders black under AmbientLight alone, because
+  three.js routes ambient into the diffuse term only. The ship's own materials get a constant sky
+  radiance at AMBIENT_LIGHT_INTENSITY / Math.PI — the 1/pi is required because three.js IBL diffuse
+  returns PI * envMapColor * envMapIntensity while AmbientLight.intensity is irradiance. The
+  remaining AmbientLight double-count (ship dielectrics receive 0.04 against 0.02 elsewhere) is
+  stated in the code, the design doc and rendering-spec section 3.1 rather than glossed.
+  SharedCameraControls moved from main.ts to src/ui/sharedCameraControls.ts so it could be tested
+  (main.ts has top-level DOM side effects). ui -> game is an allowed direction; the six frozen canvas
+  diagnostics and RuntimeResourceCounts are untouched and T0113's decomposition is slightly easier.
+  For T0110: EpochWorld.shipPositionOffset is exposed; SHIP_LENGTH_M = 26.12 is exported; ship world
+  position is written before the camera update each frame. Two latent issues become reachable once
+  camera modes multiply and MUST be handled there: main.ts setTarget now recenters the camera but does
+  not write the focus label, so the on-screen "Focus: X" text can go stale; and if chase becomes the
+  default camera under autostart, ship.glb moves onto the startup path, which hits test:startup's
+  first-frame program-count assertion and its 5,000 ms budget, not just the draw-call golden.
+  shipVisual.ts is 510 lines against the 300-line guideline; the split seam is named in the design
+  doc section 9 as a hard prerequisite for T0122's plume.
+  Verification: 964 Vitest passed / 3 skipped, lint, typecheck, format, build; perf gates clean;
+  ship-visual, startup, smoke, main-menu, visual-tiers, camera-controls and system-map harnesses green.
+  The nose-versus-physics-forward check reads the real hull_tip node out of the real glb and dots it
+  with the physics forward vector — measured 1.0 across five attitudes in the shipped game.
