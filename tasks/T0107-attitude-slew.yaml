@@ -1,6 +1,6 @@
 id: T0107
 title: Slew-limited hold modes and wall-time rotation authority contract
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0107-attitude-slew
 depends_on: [T0104]

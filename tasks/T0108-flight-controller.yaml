@@ -1,0 +1,56 @@
+id: T0108
+title: FlightController - mouse-look pursuit, throttle, hold orchestration
+status: REVIEW
+agent: claude
+branch: task/T0108-flight-controller
+depends_on: [T0105, T0107]
+milestone: V2M1
+spec: |
+  Turn player intent into Commands so the ship flies like a vehicle with mass: mouse-look
+  integrates into a desired attitude pursued by a critically damped rate-limited control law,
+  the throttle is analog with a manual-regime acceleration cap, and all eight attitude holds are
+  reachable. Establishes the wall-time authority behaviour so a given deflection feels the same at
+  every warp tier. Replaces the interim InputFrame->Commands bridge shipped by T0105.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.2;
+  contract in docs/superpowers/plans/2026-08-14-v2-free-flight.md section 2; formula in section 3.1;
+  design doc docs/superpowers/specs/2026-08-14-flight-controller-design.md.
+acceptance:
+  - Mouse-look desired attitude pursued with rate caps per plan section 3.1; critically damped, no overshoot beyond 2 degrees
+  - Manual throttle capped at alphaManualMaxMS2/alphaMaxMS2; full range remains available to the cruise director
+  - All 8 AttitudeMode holds reachable from bindings; kill-rotation on idle default and toggleable
+  - update() allocation-free; bench:sim extended with controller cost; retained-heap delta zero
+handoff_notes: |
+  TUNED CONSTANTS SUPERSEDE THE PLAN'S SUGGESTION: k_p = 6.0 s^-2, k_d = 2*sqrt(6) = 4.898979485566356
+  (zeta = 1.0 exactly). The plan suggested k_p=2.5 / k_d=0.9, which is zeta=0.28 and about 39.3%
+  overshoot — it fails this task's own acceptance bound. Measured overshoot is 0 degrees for steps up
+  to 180 degrees; the rate-saturation knee sits near 45 degrees. Plan section 2 was updated with the
+  shipped surface (eleven members beyond the original eight, each justified) per its own naming rule.
+  CLAMP ORDER: the control law saturates against RATE_MAX in the WALL frame first, then the plan
+  section 3.1 formula is applied on top, where it is provably a no-op for bounded inputs. Applying the
+  spec formula to a raw PD output is not warp-invariant. physics-spec section 3.0.1 and architecture.md
+  now label both clamps with their frames and state the sim envelope as RATE_MAX/effectiveWarp.
+  No formula changed, so no ADR.
+  WARP SPLIT: the rotate lockout keys on requestedWarp (command validation must not depend on
+  integrator outcome) while rate normalization divides by effectiveWarp. Both directions are tested,
+  including the governor-clamped disagreement case.
+  COAST RULING: with the stability assist off, a coasting rotation stays constant in the SIM frame
+  across a warp change — momentum is physical, only commanded input is normalized. Documented in
+  physics-spec, controls.md and the design doc, and pinned by tests. The review probe exposed a real
+  defect underneath: commandedRateRadS was stale by the warp ratio across a tier change; the coast
+  rate is now re-derived each frame from lastIssuedSimRate * effectiveWarp.
+  Settings schema grew by 7 input actions, which forced parseInputBindings to backfill missing
+  actions — without it every existing save would have become unloadable, since parseGameSettings runs
+  on every save load. Backfill cannot mask a malformed profile: explicit bindings populate the
+  assigned-code set before backfill runs, so wrong-typed, duplicate, reserved and unknown-action
+  documents still fail closed. The placeholder is collision-proof by construction.
+  For T0112: SimSnapshot publishes no body rates, so a restored spin is invisible to the controller
+  and resetAxes zeroes its internal model on restore. One ADR-gated snapshot field resolves both.
+  BUDGET WATCH: total gzip is 559,645 B against the v1 ceiling of 570,000 B — 10,355 B of headroom.
+  The next JS-adding task must land the plan section 13 budget raise as its own reviewed commit.
+  Verification: 938 Vitest passed / 3 skipped, lint, typecheck, format, build; perf gates clean
+  (heap -202,795 B, draw calls 10 / triangles 77,071 on golden, no re-baseline); bench:sim controller
+  cost 0.52 microseconds per frame; smoke, camera-controls, session-settings, burn-log and tutorial
+  harnesses green; docs/bench/T0108-summary.md carries the evidence.
+  Review took two fix rounds. The second caught that the new coast regression test did not
+  discriminate its own regression (at full deflection the clamp ceiling swallowed the difference);
+  it now coasts at 10% deflection and was proven by ablation to fail against the reverted code.
