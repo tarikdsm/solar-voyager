@@ -8,6 +8,7 @@ import {
   writeForwardFromQuaternionInto,
   writeQuaternionFromForwardInto,
   writeSlewLimitedQuaternionInto,
+  writeUpFromQuaternionInto,
 } from './attitude.js';
 
 function expectVector(actual: Float64Array, expected: readonly number[]): void {
@@ -207,5 +208,48 @@ describe('orbital attitude directions', () => {
     );
 
     expectVector(output, [0, 0, 1]);
+  });
+});
+
+describe('writeUpFromQuaternionInto', () => {
+  it('returns the world +Z axis for the identity attitude', () => {
+    const output = new Float64Array(3);
+    writeUpFromQuaternionInto(output, new Float64Array([0, 0, 0, 1]));
+    expectVector(output, [0, 0, 1]);
+  });
+
+  it('is the third column of the same rotation the forward extractor reads', () => {
+    // ADR-025 section 4: body +X is the nose, body +Z is the vessel up. A quarter
+    // roll about the nose therefore leaves forward alone and swings up onto -Y.
+    const roll = new Float64Array([Math.SQRT1_2, 0, 0, Math.SQRT1_2]);
+    const forward = new Float64Array(3);
+    const up = new Float64Array(3);
+    writeForwardFromQuaternionInto(forward, roll);
+    writeUpFromQuaternionInto(up, roll);
+    expectVector(forward, [1, 0, 0]);
+    expectVector(up, [0, -1, 0]);
+  });
+
+  it('stays orthonormal to forward through an arbitrary rotation', () => {
+    const axisLength = Math.hypot(0.3, -0.7, 0.5);
+    const angle = 1.1;
+    const sin = Math.sin(angle / 2);
+    const quaternion = new Float64Array([
+      (0.3 / axisLength) * sin,
+      (-0.7 / axisLength) * sin,
+      (0.5 / axisLength) * sin,
+      Math.cos(angle / 2),
+    ]);
+    const forward = new Float64Array(3);
+    const up = new Float64Array(3);
+    writeForwardFromQuaternionInto(forward, quaternion);
+    writeUpFromQuaternionInto(up, quaternion);
+
+    expect(Math.hypot(up[0] as number, up[1] as number, up[2] as number)).toBeCloseTo(1, 15);
+    expect(
+      (forward[0] as number) * (up[0] as number) +
+        (forward[1] as number) * (up[1] as number) +
+        (forward[2] as number) * (up[2] as number),
+    ).toBeCloseTo(0, 15);
   });
 });

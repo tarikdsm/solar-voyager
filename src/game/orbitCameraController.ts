@@ -1,9 +1,13 @@
 import type { ReadonlyVec3 } from '../core/vec3.js';
+import { clamp, smootherstep } from './cameraTransition.js';
 
-const DEFAULT_TRANSFER_DURATION_SEC = 1.5;
+/** Shared by every animated camera move, including `CameraDirector`'s mode cross-fade. */
+export const DEFAULT_TRANSFER_DURATION_SEC = 1.5;
 const DEFAULT_MAX_DISTANCE_KM = 1e10;
-const MIN_CLEARANCE_KM = 0.002;
-const RELATIVE_CLEARANCE = 1e-6;
+/** Absolute floor on camera-to-surface clearance (2 m), shared with the chase arm. */
+export const MIN_CLEARANCE_KM = 0.002;
+/** Relative clearance term, so huge bodies keep a proportional standoff. */
+export const RELATIVE_CLEARANCE = 1e-6;
 const DEFAULT_FRAME_RADIUS_MULTIPLIER = 3;
 const TRANSFER_CONTEXT_RATIO = 0.15;
 const WHEEL_EXPONENT_PER_DELTA = 0.0015;
@@ -37,12 +41,9 @@ function assertFiniteVec3(label: string, value: ReadonlyVec3): void {
   }
 }
 
-function smootherstep(value: number): number {
-  return value * value * value * (value * (value * 6 - 15) + 10);
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
+/** Minimum camera distance for a body of this radius (radius + clearance). */
+export function minimumCameraDistanceKm(radiusKm: number): number {
+  return radiusKm + Math.max(MIN_CLEARANCE_KM, radiusKm * RELATIVE_CLEARANCE);
 }
 
 /** Allocation-free float64 orbit camera state for camera-relative rendering. */
@@ -312,7 +313,7 @@ export class OrbitCameraController {
   private minimumDistanceForTarget(index: number): number {
     const radiusKm = this.targets[index]?.meanRadiusKm;
     if (radiusKm === undefined) throw new Error('Camera target radius is missing.');
-    return radiusKm + Math.max(MIN_CLEARANCE_KM, radiusKm * RELATIVE_CLEARANCE);
+    return minimumCameraDistanceKm(radiusKm);
   }
 
   private transitionMinimumDistanceAtCurrentTime(): number {
