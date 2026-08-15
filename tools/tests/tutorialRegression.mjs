@@ -14,11 +14,13 @@ import {
 const HOST = '127.0.0.1';
 const PORT = 4201;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
-// T0106: the live profile key is now generation-specific — 'solar-voyager.settings.v3',
-// not '.v2' (that key is the older, migrate-on-read-only tier; see
-// src/game/settings.ts's SETTINGS_STORAGE_KEY / LEGACY_V2_SETTINGS_STORAGE_KEY and
-// docs/superpowers/specs/2026-08-15-gamepad-design.md's "Storage key" section for why).
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';
+// T0110: the live profile key is generation-specific and moved again with the
+// camera settings — 'solar-voyager.settings.v4'. Older keys are migrate-on-read
+// tiers only; see src/game/settings.ts's SETTINGS_STORAGE_KEY /
+// LEGACY_V3_SETTINGS_STORAGE_KEY and the "Storage key" reasoning in
+// docs/superpowers/specs/2026-08-15-gamepad-design.md for why each generation
+// gets its own key instead of one bumped in place.
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 
 function collectBrowserErrors(page) {
