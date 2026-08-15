@@ -129,6 +129,10 @@ const cameraPosition = {
   y: earthY + (earthY / earthDistance) * cameraDistance,
   z: earthZ + (earthZ / earthDistance) * cameraDistance,
 };
+// `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is the
+// ship's, so `lookAt` alone no longer reproduces this fixture's framing. State the
+// world-frame up this measurement has always assumed.
+world.spaceScene.camera.up.set(0, 1, 0);
 world.spaceScene.camera.lookAt(-earthX, -earthY, -earthZ);
 world.spaceScene.camera.updateMatrix();
 
