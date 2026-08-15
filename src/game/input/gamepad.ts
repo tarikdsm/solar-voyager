@@ -1,8 +1,6 @@
 import type { GamepadSettings, InputAction } from '../settings.js';
 import { INPUT_ACTION_COUNT, actionIndex } from './bindings.js';
 
-export { INPUT_ACTION_COUNT };
-
 /** Standard `Gamepad` mapping axis indices (https://www.w3.org/TR/gamepad/#remapping). */
 const AXIS_LEFT_X = 0;
 const AXIS_LEFT_Y = 1;
@@ -41,6 +39,24 @@ function clampAxis(value: number): number {
 function clamp01(value: number): number {
   if (value <= 0) return 0;
   return value >= 1 ? 1 : value;
+}
+
+/**
+ * Sanitizes one raw device reading at the boundary where untrusted data enters.
+ *
+ * A conforming `Gamepad` never reports a non-finite axis/button value, but
+ * nothing enforces that on the object a browser hands back — an unofficial
+ * adapter or a mid-transition read could. `shapeGamepadAxis` propagates NaN
+ * rather than rejecting it (`NaN <= x` is always false, so every early-out
+ * guard it relies on is skipped), and downstream `InputEngine.setThrottleAxis`
+ * *throws* on a non-finite value, which — called from inside the per-frame
+ * `renderFrame`, one `requestAnimationFrame` call before it would reschedule
+ * itself — would freeze the render loop permanently. Treating a non-finite
+ * reading as "not deflected" here, once, is cheaper and safer than teaching
+ * every downstream consumer to distrust its input.
+ */
+function finiteOrZero(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 /**
@@ -204,7 +220,12 @@ export class GamepadPoller implements GamepadSource {
 
   poll(): void {
     if (this.primaryIndex < 0) {
-      this.resetSample();
+      // Already reset — by the field initializers above at construction, or by
+      // rescanConnectedGamepads() at the moment of the connected->disconnected
+      // transition. Nothing changed since, so there is nothing to redo every
+      // subsequent disconnected frame: this is the literal single comparison
+      // the CI heap gate and the design doc's allocation-discipline section
+      // describe.
       return;
     }
     const pads = this.host.getGamepads();
@@ -222,9 +243,11 @@ export class GamepadPoller implements GamepadSource {
     const curveExponent = this.settings.curveExponent;
     const axisSettings = this.settings.axes;
 
-    const rawLeftX = axes[AXIS_LEFT_X] ?? 0;
-    const rawLeftY = axes[AXIS_LEFT_Y] ?? 0;
-    const rawRightX = axes[AXIS_RIGHT_X] ?? 0;
+    // finiteOrZero is the device boundary: everything past this point trusts
+    // that pitch/yaw/roll/trigger inputs to shapeGamepadAxis are finite.
+    const rawLeftX = finiteOrZero(axes[AXIS_LEFT_X]);
+    const rawLeftY = finiteOrZero(axes[AXIS_LEFT_Y]);
+    const rawRightX = finiteOrZero(axes[AXIS_RIGHT_X]);
     // Left-stick Y is +1 toward the player per the standard-mapping spec; the
     // keyboard/mouse-look convention this game already ships is "away from the
     // body = pitch up" (see gamepad-design.md), hence the negation here.
@@ -232,8 +255,8 @@ export class GamepadPoller implements GamepadSource {
     this._yawAxis = shapeGamepadAxis(rawLeftX, deadzone, curveExponent, axisSettings.yaw);
     this._rollAxis = shapeGamepadAxis(rawRightX, deadzone, curveExponent, axisSettings.roll);
 
-    const leftTrigger = buttons[BUTTON_LEFT_TRIGGER]?.value ?? 0;
-    const rightTrigger = buttons[BUTTON_RIGHT_TRIGGER]?.value ?? 0;
+    const leftTrigger = finiteOrZero(buttons[BUTTON_LEFT_TRIGGER]?.value);
+    const rightTrigger = finiteOrZero(buttons[BUTTON_RIGHT_TRIGGER]?.value);
     const shapedThrottle = shapeGamepadAxis(
       rightTrigger - leftTrigger,
       deadzone,

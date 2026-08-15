@@ -68,23 +68,23 @@ with no setup: connect it and move a stick. Keyboard and gamepad axes add togeth
 resting on the desk never fights a keyboard-only player, and a connected gamepad never steals input
 while a text field — a rebinding capture, an import/export box — has focus.
 
-| Control                | Action                                             |
-| ----------------------- | -------------------------------------------------- |
-| Left stick               | Pitch (up/down) and yaw (left/right)                |
-| Right stick X             | Roll                                                |
-| Right trigger             | Throttle up, proportional to how far it is pressed  |
-| Left trigger              | Throttle down / cut                                 |
-| A                         | Reserved for cruise engage (not yet implemented)    |
-| B                         | Reserved for cruise abort (not yet implemented)      |
+| Control       | Action                                             |
+| ------------- | -------------------------------------------------- |
+| Left stick    | Pitch (up/down) and yaw (left/right)               |
+| Right stick X | Roll                                               |
+| Right trigger | Throttle up, proportional to how far it is pressed |
+| Left trigger  | Throttle down / cut                                |
+| A             | Reserved for cruise engage (not yet implemented)   |
+| B             | Reserved for cruise abort (not yet implemented)    |
 
-The left and right stick, the response curve, and the deadzone are shared with every axis; **Session &
-settings → Gamepad** exposes the deadzone, the response-curve exponent, and per-axis invert and
-sensitivity for pitch, yaw, roll, and throttle independently. Inverting the pitch axis switches between
-"stick away from you pitches up" (the default, matching mouse-look) and the aircraft-yoke convention.
-The throttle trigger sets the lever directly rather than ramping it the way the keyboard `R`/`F` keys
-do: releasing the trigger holds the lever where the trigger left it, exactly like releasing `R`/`F`.
-Manual rotation is still locked above the same warp tier as keyboard and mouse-look, and gamepad rates
-are normalized by time warp identically to every other input source.
+The response curve and the deadzone are shared across every axis; **Session & settings → Gamepad**
+exposes both, plus per-axis invert and sensitivity for pitch, yaw, roll, and throttle independently.
+Inverting the pitch axis switches between "stick away from you pitches up" (the default, matching
+mouse-look) and the aircraft-yoke convention. The throttle trigger sets the lever directly rather than
+ramping it the way the keyboard `R`/`F` keys do: releasing the trigger holds the lever where the
+trigger left it, exactly like releasing `R`/`F`. Manual rotation is still locked above the same warp
+tier as keyboard and mouse-look, and gamepad rates are normalized by time warp identically to every
+other input source.
 
 ## Camera and focus
 

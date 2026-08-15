@@ -120,7 +120,29 @@ export type SettingsLoadResult =
 export type SettingsSaveResult =
   { readonly ok: true } | { readonly ok: false; readonly error: string };
 
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v2';
+/**
+ * Storage keys, one per profile-document generation.
+ *
+ * Each schema-incompatible profile version gets its own key (the same choice
+ * T0108 made going from v1 to v2), not a shared key with the document version
+ * bumped in place. `SaveEnvelopeV3` deliberately keeps one slot name across
+ * document versions (ADR-034 §4) — but that precedent doesn't transfer here:
+ * the save slot has no fallback-read tier below it (renaming it would orphan
+ * deployed saves with no path back to them), whereas the profile document
+ * already has a proven two-tier fallback-read/migrate/write-forward
+ * mechanism, so extending it to a third tier costs little. Sharing a key
+ * would also mean a downgraded build (an older, pre-v3 build a player reverts
+ * to, or a rolled-back deploy) reads the newer document, fails to parse it,
+ * falls back to defaults for that session, and then — on the next settings
+ * write triggered by perfectly ordinary play (tutorial progress, a quality
+ * change) — persists a fresh older-schema document over it, silently
+ * destroying the newer one. A dedicated key makes that non-destructive: the
+ * older build never touches it, so the newer document simply waits
+ * untouched until a v3-aware build reads it again.
+ */
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';
+/** The v2 profile key (T0108's era) — read-and-migrate-forward only, never written by a v3+ build. */
+export const LEGACY_V2_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v2';
 export const LEGACY_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';
 
 const RESERVED_CODES = Object.freeze(
@@ -639,6 +661,10 @@ export class SettingsRepository {
   constructor(private readonly storage: KeyValueStorage) {}
 
   load(): SettingsLoadResult {
+    // Tier 1: the current key. Present-but-invalid fails closed here — it
+    // does not cascade to older keys, the same "a present current document
+    // that is broken is a real error, not a version guess" rule the v1/v2
+    // boundary already established.
     let text: string | null;
     try {
       text = this.storage.getItem(SETTINGS_STORAGE_KEY);
@@ -650,9 +676,39 @@ export class SettingsRepository {
       };
     }
     if (text !== null) {
-      let parsed: unknown;
       try {
-        parsed = JSON.parse(text);
+        return {
+          ok: true,
+          settings: parseProfileSettings(JSON.parse(text) as unknown),
+          source: 'stored',
+        };
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          settings: DEFAULT_GAME_SETTINGS,
+          error: `Unable to parse settings: ${describeError(error)}`,
+        };
+      }
+    }
+
+    // Tier 2: the v2 key (T0108's era, pre-gamepad). Migrate up one step and
+    // persist forward to the current key.
+    let legacyV2Text: string | null;
+    try {
+      legacyV2Text = this.storage.getItem(LEGACY_V2_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV2Text !== null) {
+      let migrated: GameSettingsV3;
+      try {
+        migrated = migrateProfileV2ToV3(
+          parseProfileSettingsV2(JSON.parse(legacyV2Text) as unknown),
+        );
       } catch (error: unknown) {
         return {
           ok: false,
@@ -661,38 +717,22 @@ export class SettingsRepository {
         };
       }
       try {
-        return { ok: true, settings: parseProfileSettings(parsed), source: 'stored' };
-      } catch (currentVersionError: unknown) {
-        // Not (yet) a v3 document. It may be a genuine pre-gamepad v2 profile —
-        // the same document `parseProfileSettings` accepted before this task —
-        // so try that before failing closed, exactly as the v1->v2 path below
-        // does for the legacy storage key.
-        let migrated: GameSettingsV3;
-        try {
-          migrated = migrateProfileV2ToV3(parseProfileSettingsV2(parsed));
-        } catch {
-          return {
-            ok: false,
-            settings: DEFAULT_GAME_SETTINGS,
-            error: `Unable to parse settings: ${describeError(currentVersionError)}`,
-          };
-        }
-        try {
-          this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(migrated));
-        } catch (error: unknown) {
-          return {
-            ok: false,
-            settings: DEFAULT_GAME_SETTINGS,
-            error: `Unable to migrate settings: ${describeError(error)}`,
-          };
-        }
-        return { ok: true, settings: migrated, source: 'migrated' };
+        this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(migrated));
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          settings: DEFAULT_GAME_SETTINGS,
+          error: `Unable to migrate settings: ${describeError(error)}`,
+        };
       }
+      return { ok: true, settings: migrated, source: 'migrated' };
     }
 
-    let legacyText: string | null;
+    // Tier 3: the v1 key (pre-T0108, standalone-profile era). Migrate up two
+    // steps and persist forward to the current key.
+    let legacyV1Text: string | null;
     try {
-      legacyText = this.storage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
+      legacyV1Text = this.storage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
     } catch (error: unknown) {
       return {
         ok: false,
@@ -700,14 +740,14 @@ export class SettingsRepository {
         error: `Unable to read legacy settings: ${describeError(error)}`,
       };
     }
-    if (legacyText === null) {
+    if (legacyV1Text === null) {
       return { ok: true, settings: DEFAULT_GAME_SETTINGS, source: 'default' };
     }
 
     let migrated: GameSettingsV3;
     try {
       migrated = migrateProfileV2ToV3(
-        migrateLegacySettings(parseGameSettings(JSON.parse(legacyText) as unknown)),
+        migrateLegacySettings(parseGameSettings(JSON.parse(legacyV1Text) as unknown)),
       );
     } catch (error: unknown) {
       return {

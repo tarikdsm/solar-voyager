@@ -139,7 +139,22 @@ class FakePointerLock implements PointerLockSurface {
   }
 }
 
-/** Minimal fake of the real `navigator.getGamepads()` + connect/disconnect events. */
+/** Same deep-clone requirement as `gamepad.test.ts`'s `clonePad` — see that file's doc comment. */
+function clonePad(pad: GamepadLike): GamepadLike {
+  return {
+    connected: pad.connected,
+    mapping: pad.mapping,
+    axes: [...pad.axes],
+    buttons: pad.buttons.map((button) => ({ pressed: button.pressed, value: button.value })),
+  };
+}
+
+/**
+ * Minimal fake of the real `navigator.getGamepads()` + connect/disconnect
+ * events. Every call returns a fresh top-level array *and* a fresh cloned pad
+ * (fresh `axes`/`buttons` too) so a caching shortcut in `InputEngine`'s merge
+ * path can't accidentally read a stale-but-still-correct reference.
+ */
 class FakeGamepadHost implements GamepadHost {
   private readonly slots = new Map<number, GamepadLike>();
   private readonly connectedListeners: (() => void)[] = [];
@@ -148,8 +163,10 @@ class FakeGamepadHost implements GamepadHost {
   getGamepads(): readonly (GamepadLike | null)[] {
     const highestIndex = Math.max(-1, ...this.slots.keys());
     const snapshot: (GamepadLike | null)[] = [];
-    for (let index = 0; index <= highestIndex; index += 1)
-      snapshot.push(this.slots.get(index) ?? null);
+    for (let index = 0; index <= highestIndex; index += 1) {
+      const pad = this.slots.get(index);
+      snapshot.push(pad === undefined ? null : clonePad(pad));
+    }
     return snapshot; // a fresh array every call, faithful to the real API
   }
 
@@ -621,6 +638,85 @@ describe('InputEngine — gamepad integration (T0106)', () => {
     keyboard.press('KeyR');
     const afterTap = engine.poll(1 / 60);
     expect(afterTap.axes.throttle).toBeCloseTo(expectedLever + THROTTLE_TAP_STEP, 9);
+  });
+
+  it('trigger and keyboard throttle held simultaneously: the trigger wins every frame, deterministically', () => {
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    const triggerValue = 0.6;
+    const expectedLever = Math.max(
+      0,
+      shapeGamepadAxis(
+        triggerValue,
+        DEFAULT_GAMEPAD_SETTINGS.deadzone,
+        DEFAULT_GAMEPAD_SETTINGS.curveExponent,
+        DEFAULT_GAMEPAD_SETTINGS.axes.throttle,
+      ),
+    );
+    gamepadHost.connect(0, standardPad({ buttons: { 7: { value: triggerValue, pressed: true } } }));
+    keyboard.press('KeyR'); // throttleIncrease, held for the whole scenario
+
+    // Both sources are active every frame for 30 frames (0.5 s): the lever
+    // must sit exactly at the trigger's shaped value every single frame —
+    // never drifting toward the keyboard ramp's ceiling of 1, never
+    // oscillating between the two. pollGamepad() runs after the keyboard
+    // ramp is computed and unconditionally overwrites axes.throttle while
+    // throttleActive, so this is deterministic by construction, not by luck.
+    for (let frame = 0; frame < 30; frame += 1) {
+      const result = engine.poll(1 / 60);
+      expect(result.axes.throttle).toBeCloseTo(expectedLever, 12);
+    }
+  });
+
+  it('releasing the trigger while still holding the throttle key jumps by one tap step, not a resumed ramp', () => {
+    // Documents a real, understood residual (see gamepad-design.md): holding
+    // R and the trigger together re-anchors the keyboard ramp's hold origin
+    // every single frame (setThrottleAxis always resets throttleHoldSec to
+    // 0), so the first frame after the trigger releases always measures
+    // exactly one frame's worth of held time. max(TAP_STEP, RAMP * oneFrameDt)
+    // is TAP_STEP at any real frame rate, so the lever jumps by a discrete
+    // 0.1 instead of continuing the smooth ramp a keyboard-only hold of the
+    // same wall-clock duration would show. This is a one-frame artifact, not
+    // a sustained glitch — pinned here so a future change to the re-anchor
+    // logic is a deliberate decision, not an unnoticed regression either way.
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    const triggerValue = 0.6;
+    const expectedLever = Math.max(
+      0,
+      shapeGamepadAxis(
+        triggerValue,
+        DEFAULT_GAMEPAD_SETTINGS.deadzone,
+        DEFAULT_GAMEPAD_SETTINGS.curveExponent,
+        DEFAULT_GAMEPAD_SETTINGS.axes.throttle,
+      ),
+    );
+    gamepadHost.connect(0, standardPad({ buttons: { 7: { value: triggerValue, pressed: true } } }));
+    keyboard.press('KeyR');
+    engine.poll(1 / 60);
+    engine.poll(1 / 60);
+    expect(engine.poll(1 / 60).axes.throttle).toBeCloseTo(expectedLever, 12);
+
+    gamepadHost.update(0, standardPad()); // release the trigger; KeyR stays held
+    // Captured as a primitive immediately: `engine.poll()` returns the same
+    // reused mutable frame every call (InputFrame's own contract), so holding
+    // the frame object itself across the loop below and re-reading its
+    // `.axes.throttle` later would silently observe the *latest* poll's
+    // value instead of this one.
+    const afterReleaseThrottle = engine.poll(1 / 60).axes.throttle;
+    expect(afterReleaseThrottle).toBeCloseTo(expectedLever + THROTTLE_TAP_STEP, 9);
+
+    // Not a sustained glitch: continuing to hold R resumes a normal monotonic
+    // ramp from the jumped value — it never re-jumps and never reverses. The
+    // ramp floors at TAP_STEP for a short hold regardless of source (the same
+    // "never moves the lever backwards" property a keyboard-only press
+    // already has — RAMP * heldSec does not exceed TAP_STEP until ~9 frames
+    // at 60 Hz), then climbs past it.
+    let last = afterReleaseThrottle;
+    for (let frame = 0; frame < 30; frame += 1) {
+      const value = engine.poll(1 / 60).axes.throttle;
+      expect(value).toBeGreaterThanOrEqual(last);
+      last = value;
+    }
+    expect(last).toBeGreaterThan(afterReleaseThrottle);
   });
 
   it('a text field in focus suppresses gamepad axes and buttons but not the keyboard', () => {

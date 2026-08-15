@@ -48,12 +48,39 @@ function standardPad(overrides: PadOverrides = {}): GamepadLike {
 }
 
 /**
+ * Deep-clones a pad: a fresh object with fresh `axes`/`buttons` arrays and
+ * fresh button objects. This is what makes the fake below actually defend the
+ * invariant `GamepadPoller` depends on — see the class doc comment.
+ */
+function clonePad(pad: GamepadLike): GamepadLike {
+  return {
+    connected: pad.connected,
+    mapping: pad.mapping,
+    axes: [...pad.axes],
+    buttons: pad.buttons.map((button) => ({ pressed: button.pressed, value: button.value })),
+  };
+}
+
+/**
  * A faithful fake of `navigator.getGamepads()` + the window connect/disconnect
  * events: a fresh array object on every `getGamepads()` call (the documented
  * Chromium quirk this task must not choke on), and connect/disconnect
  * listeners that fire independent of any event payload — `GamepadPoller`
  * rescans by calling `getGamepads()` itself rather than reading an event
  * argument, so the fakes below deliberately pass no gamepad through the event.
+ *
+ * Every `getGamepads()` call also returns a **fresh `GamepadLike` object with
+ * fresh `axes`/`buttons` arrays** (via `clonePad`), not the same object handed
+ * back repeatedly. On real Chrome, `navigator.getGamepads()` returns fresh
+ * snapshot objects every call; the single most tempting future "optimization"
+ * — caching the pad object at connect time and reading `pad.axes` on each
+ * `poll()` instead of re-indexing into a fresh `getGamepads()` result — would
+ * pass every test here undetected if this fake handed back the same object
+ * reference, because the cached reference would still happen to see updated
+ * values. Cloning makes a cached reference go stale (frozen at whatever
+ * `update()` last cloned from when the cache was taken), which is what would
+ * actually happen against a browser that hands back fresh snapshots, so the
+ * shortcut fails loudly here instead of shipping a Chrome-only bug.
  */
 class FakeGamepadHost implements GamepadHost {
   getGamepadsCallCount = 0;
@@ -66,7 +93,8 @@ class FakeGamepadHost implements GamepadHost {
     const highestIndex = Math.max(-1, ...this.slots.keys());
     const snapshot: (GamepadLike | null)[] = [];
     for (let index = 0; index <= highestIndex; index += 1) {
-      snapshot.push(this.slots.get(index) ?? null);
+      const pad = this.slots.get(index);
+      snapshot.push(pad === undefined ? null : clonePad(pad));
     }
     return snapshot;
   }
@@ -398,6 +426,67 @@ describe('GamepadPoller — trigger throttle', () => {
     poller.poll();
 
     expect(poller.throttleActive).toBe(false);
+  });
+});
+
+describe('GamepadPoller — non-finite device data (review finding: sanitize at the boundary)', () => {
+  // A conforming Gamepad never reports NaN/Infinity, but nothing enforces
+  // that on the object a browser hands back. Left unguarded, NaN propagates
+  // through shapeGamepadAxis (every early-out there is a `<=`/`===` compare,
+  // which NaN always fails) and reaches InputEngine.setThrottleAxis, which
+  // *throws* on a non-finite value from inside the per-frame render loop —
+  // a permanent freeze, since nothing downstream of that throw reschedules
+  // requestAnimationFrame. These pin the fix: a non-finite reading is treated
+  // as "not deflected", not "the sim gets a NaN telling the render loop it is
+  // programmer error".
+  it('a NaN stick axis reports 0, not NaN', () => {
+    const host = new FakeGamepadHost();
+    const poller = new GamepadPoller(host, DEFAULT_GAMEPAD_SETTINGS);
+
+    host.connect(0, standardPad({ axes: [Number.NaN, Number.NaN, Number.NaN, 0] }));
+    poller.poll();
+
+    expect(poller.pitchAxis).toBe(0);
+    expect(poller.yawAxis).toBe(0);
+    expect(poller.rollAxis).toBe(0);
+    expect(Number.isNaN(poller.pitchAxis)).toBe(false);
+  });
+
+  it('an Infinity stick axis also reports 0', () => {
+    const host = new FakeGamepadHost();
+    const poller = new GamepadPoller(host, DEFAULT_GAMEPAD_SETTINGS);
+
+    host.connect(
+      0,
+      standardPad({ axes: [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, 0] }),
+    );
+    poller.poll();
+
+    expect(poller.yawAxis).toBe(0);
+    expect(poller.pitchAxis).toBe(0);
+  });
+
+  it('a NaN trigger value never activates the throttle and never yields a NaN lever', () => {
+    const host = new FakeGamepadHost();
+    const poller = new GamepadPoller(host, DEFAULT_GAMEPAD_SETTINGS);
+
+    host.connect(0, standardPad({ buttons: { 7: { value: Number.NaN, pressed: true } } }));
+    poller.poll();
+
+    expect(poller.throttleActive).toBe(false);
+    expect(poller.throttleValue).toBe(0);
+    expect(Number.isNaN(poller.throttleValue)).toBe(false);
+  });
+
+  it('one non-finite axis does not corrupt the others read from the same pad', () => {
+    const host = new FakeGamepadHost();
+    const poller = new GamepadPoller(host, DEFAULT_GAMEPAD_SETTINGS);
+
+    host.connect(0, standardPad({ axes: [1, Number.NaN, 0, 0] })); // yaw finite, pitch NaN
+    poller.poll();
+
+    expect(poller.yawAxis).toBeCloseTo(1, 12);
+    expect(poller.pitchAxis).toBe(0);
   });
 });
 

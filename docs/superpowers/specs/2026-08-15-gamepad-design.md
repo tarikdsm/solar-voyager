@@ -168,11 +168,38 @@ not from a stale pre-trigger value or a discontinuous jump.
 When the trigger pair is at rest (both under deadzone, `shaped === 0`), the
 gamepad contributes nothing that frame — the keyboard ramp's own output from
 earlier in `poll()` stands untouched. This is deliberate: a gamepad sitting on
-the desk next to a keyboard-only player must never fight the keyboard, and a
+the desk next to a keyboard-near player must never fight the keyboard, and a
 trigger released to exactly zero should mean "I'm not touching this control"
 (lever holds), not "force the lever to zero" (which is what a naive
 "always overwrite" merge would do to a keyboard-set throttle the instant a
 connected-but-unused controller is polled).
+
+**Concurrent use is deterministic, traced by hand and pinned by a test**
+(`inputEngine.test.ts`, "trigger and keyboard throttle held simultaneously"):
+`pollGamepad()` runs *after* the keyboard ramp is computed, so while the
+trigger stays actively deflected it unconditionally overwrites
+`axes.throttle` every frame — the keyboard side never wins, never oscillates,
+and the two never visibly fight, for as long as both are held.
+
+**Documented residual: releasing the trigger while still holding the throttle
+key produces a one-frame jump, not a resumed ramp.** Holding `R` and the
+trigger together re-anchors the keyboard ramp's hold-origin *every frame*
+(`setThrottleAxis` unconditionally resets `throttleHoldSec` to 0), so the
+first frame after the trigger releases always measures exactly one frame's
+held duration. `max(TAP_STEP, RAMP · oneFrameDt)` is `TAP_STEP` at any real
+frame rate (crossing that floor needs ~9 frames' worth of continuous hold at
+60 Hz), so the lever jumps by a discrete 0.1 instead of continuing the smooth
+ramp a keyboard-only hold of the same wall-clock duration would show. This is
+a one-frame artifact — the ramp resumes normally from the jumped value on the
+next frame, never re-jumps, never reverses — pinned by a dedicated test
+(`inputEngine.test.ts`, "releasing the trigger while still holding the
+throttle key…") specifically so a future change to the re-anchor logic is a
+deliberate decision, not an unnoticed regression in either direction. Left
+unfixed: the interaction (both devices driving the same axis at once) is rare
+enough, and the artifact small and self-correcting enough, that smoothing it
+over would add real complexity to `setThrottleAxis`'s re-anchoring — which the
+restore-from-snapshot path also depends on being unconditional — for a
+one-frame cosmetic wrinkle in an edge case most players will never hit.
 
 ## Button wiring: `cruiseEngage` / `cruiseAbort`, deliberately inert
 
@@ -215,37 +242,91 @@ so that is what this does: `GameSettingsV2` (unchanged, `version: 2`, no
 (`parseProfileSettingsV2`) used only by the new migration; the exported,
 "live" `parseProfileSettings` now requires `version: 3` and a `gamepad` field.
 
-`SettingsRepository.load()` gains one fallback layer, structurally identical to
-the existing v1→v2 one:
+### Storage key: a new one per generation, not a shared key with the document version bumped in place
+
+**Review round finding, resolved with a real decision, not the path of least
+resistance.** The first cut of this task kept `SETTINGS_STORAGE_KEY` at
+`'solar-voyager.settings.v2'` and bumped only the *document's* `version` field
+to 3, mirroring `SaveEnvelopeV3` (ADR-034 §4), which deliberately keeps one
+slot name across document versions because renaming it would orphan deployed
+saves with no fallback-read path back to them. Review pushed on whether that
+precedent actually transfers, and it doesn't: the save slot has no
+fallback-read tier below it, so keeping the name was the only option that
+didn't strand data; the profile document already has a *proven* two-tier
+fallback-read/migrate/write-forward mechanism (this is literally how v1→v2
+already worked), so extending it to a third tier costs one more exported
+constant and one more repeated branch in `load()` — cheap, and it buys real
+safety a shared key does not have.
+
+The concrete risk of sharing the key: a downgraded build (a player manually
+reverting, or a bad deploy rolled back — GitHub Pages deploys are frequent and
+incremental per the v2 plan's Global Constraints) reads the newer v3 document
+through its own old, strict v2 parser, fails, and falls back to defaults for
+that session. Merely booting doesn't destroy anything yet — but perfectly
+ordinary further play (a tutorial-progress update, a quality-lock change, any
+settings write at all) then persists a fresh, older-schema document *over*
+the v3 one, silently destroying the player's gamepad calibration (and
+whatever else future tasks add to the profile) with no error surfaced
+anywhere. This is exactly the failure mode the v1→v2 boundary already avoids
+by using a separate key: an old build that doesn't know a newer key exists
+can never write to it, so the newer document simply waits untouched.
+
+Settled design: three keys, one per generation, checked oldest-to-newest is
+wrong — checked **current-first**, falling back to older keys only when the
+current one is absent (not when it's merely invalid, which still fails
+closed):
+
+```ts
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';           // current
+export const LEGACY_V2_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v2'; // T0108 era
+export const LEGACY_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v1';    // pre-T0108
+```
+
+`SettingsRepository.load()`:
 
 ```
-text present at SETTINGS_STORAGE_KEY
-  → JSON.parse fails                    → ok:false, "Unable to parse settings"        (unchanged)
-  → parses, parseProfileSettings (v3) succeeds → ok:true, source:'stored'              (unchanged)
-  → v3 parse fails, parseProfileSettingsV2 (v2) succeeds
-      → migrateProfileV2ToV3 (adds DEFAULT_GAMEPAD_SETTINGS), write back
-      → ok:true, source:'migrated'                                                     (NEW)
-  → v2 parse also fails                 → ok:false, "Unable to parse settings" (the v3 error) (NEW branch, old outcome)
-text absent → existing legacy-key (v1) path, now composed with migrateProfileV2ToV3
-              before returning/persisting                                              (extended)
+tier 1 (SETTINGS_STORAGE_KEY, v3)
+  text absent           → fall through to tier 2
+  text present, invalid → ok:false, fails closed HERE — never falls through
+  text present, valid   → ok:true, source:'stored'
+
+tier 2 (LEGACY_V2_SETTINGS_STORAGE_KEY, v2)
+  text absent           → fall through to tier 3
+  text present, invalid → ok:false, fails closed HERE — never falls through to v1
+  text present, valid   → migrateProfileV2ToV3 (adds DEFAULT_GAMEPAD_SETTINGS),
+                           write to SETTINGS_STORAGE_KEY (never back to the v2 key),
+                           ok:true, source:'migrated'
+
+tier 3 (LEGACY_SETTINGS_STORAGE_KEY, v1)
+  text absent            → ok:true, DEFAULT_GAME_SETTINGS, source:'default'
+  text present, invalid  → ok:false
+  text present, valid    → migrateLegacySettings then migrateProfileV2ToV3,
+                            write to SETTINGS_STORAGE_KEY, ok:true, source:'migrated'
 ```
 
-A stored, syntactically valid, but neither-v3-nor-v2 document still fails
-closed — this only adds a migration path for a document that is a legitimate
-v2 profile, it does not loosen validation. `mergeGameSettingsPreferences` also
-grows one line: it already preserves `tutorial` (profile-only state a save
-import must not clobber) across an import, and now preserves `gamepad` for the
-same reason — a `.save.json` import carries only `GameSettingsV1` (quality +
+Each tier's "present but invalid fails closed, does not cascade" behavior is
+the same rule the v1/v2 boundary already established (a present, broken,
+*current* document is a real error, not a version guess) — now enforced
+identically at both boundaries, with a dedicated test per boundary
+(`settings.test.ts`) plus one proving a stale v2 key sitting *alongside* a
+valid v3 key is never consulted (the direct behavioral statement of the
+downgrade-safety property above). `mergeGameSettingsPreferences` also grows
+one line: it already preserves `tutorial` (profile-only state a save import
+must not clobber) across an import, and now preserves `gamepad` for the same
+reason — a `.save.json` import carries only `GameSettingsV1` (quality +
 bindings), never gamepad calibration.
 
 **Real-world exercise of this path, not just unit tests**: `tools/perf/
 browserSettings.mjs` (consumed by `test:perf-gates` and `bench`) plants a
-hand-written `version: 2`, 13-binding, no-`gamepad` document directly into
-`localStorage` before every perf/bench run, deliberately left that way since
+hand-written `version: 2`, 13-binding, no-`gamepad` document directly at what
+is now `LEGACY_V2_SETTINGS_STORAGE_KEY`, deliberately left that way since
 T0108 (see that task's design doc §11) specifically *because* it exercises the
 backfill on a real load path with a pinned assertion (`qualityLock: 'high'`)
 that would visibly break if migration regressed. It now also exercises the
-v2→v3 gamepad-default migration on every gate run for free.
+v2→v3 gamepad-default migration, and the write-forward-to-the-new-key
+behavior, on every gate run for free — the file's literal key string is
+unchanged (only which exported constant *means* it changed), so it needed no
+code change, just a comment recording the coupling.
 
 ### New settings surface
 
@@ -263,7 +344,12 @@ Four narrow mutators mirror `rebindInput`'s shape exactly (validated primitive
 in, `parseProfileSettings` re-validates and re-freezes the whole document out):
 `updateGamepadDeadzone`, `updateGamepadCurveExponent`, `updateGamepadAxisInvert`,
 `updateGamepadAxisSensitivity`. `GameSessionController` gets one method per
-mutator, `SessionSettingsPanel` one control group per mutator.
+mutator, named `setGamepad*` rather than reusing the `settings.ts` function
+names verbatim — a same-named class method and free function resolve
+correctly (a method name is not a bare identifier inside another method's own
+body), but `rebind`/`rebindInput` already established that this codebase
+prefers a visibly distinct name over relying on that scoping rule.
+`SessionSettingsPanel` gets one control group per mutator.
 
 ## Accessibility: never steal a focused text field
 
