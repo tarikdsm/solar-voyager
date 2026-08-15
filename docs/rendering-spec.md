@@ -72,6 +72,56 @@ because it has no fallback sphere worth drawing:
   than 0.02) — 1.3 % of the direct solar term at 1 AU, deliberately not chased.
   Real planetshine from the dominant body is Front C work.
 
+## 3.6 Camera (T0110)
+
+The space camera is owned by `game/cameraDirector.ts`, a pure float64 module with
+one three.js adapter (`render/cameraRig.ts`). It publishes a single `CameraPose`
+— world position, look direction, up direction, field of view — and
+`EpochWorld.cameraPositionKm` is a live reference to that pose's position, so the
+camera-relative boundary in section 1 is unchanged.
+
+Two modes, both running every frame so a switch always cross-fades between live
+poses:
+
+- **chase** (default): a spring arm at `position = ship − forward·d + up·0.35d`,
+  `d` selectable on the wheel between 2 and 50 ship lengths (default 6 ≈ 157 m).
+  The damped quantity is the *arm offset*, never the world position — a
+  critically damped world-space tracker would sit `2v/ω` behind a moving target,
+  1.9 km at LEO speed. The arm follows the ship's attitude through a 120 ms
+  first-order quaternion lag, so the camera rolls with the ship. Integration is
+  the exact critically damped solution over the frame, giving zero overshoot at
+  any frame delta and a 2 % settle in 0.729 s (`ω = 8 rad/s`).
+- **observatory**: v1's `OrbitCameraController`, unchanged, reporting the scene
+  camera's default `+Y` up so every existing framing is bit-identical.
+
+Mode changes animate with the same primitives as a focus transfer
+(`game/cameraTransition.ts`): smootherstep on the anchor, **logarithmic** on the
+distance — mandatory when the two ends are 157 m and 210,000 km apart — and
+unit-vector slerp on the arm direction, look and up. The orbit camera's
+`0.15 × travel × sin²(πt)` context pull-back is deliberately not applied at
+director level; with anchors up to 4 AU apart it would add 10⁸ km of swing.
+
+Two throttle/acceleration-driven effects, both switchable in **Session &
+settings → Camera** and both on by default because they are sized to be subtle:
+
+- field of view widens up to **+8°** at full throttle, reaching 98 % of a step in
+  0.5 s;
+- shake reaches **0.15°** of angular deviation at 5 g and saturates there. The
+  two components are `A·sin(e)cos(r)` and `A·sin(e)sin(r)`, so their magnitude is
+  `A·|sin(e)| ≤ A` exactly; two independent ±A sinusoids would peak at `A√2` and
+  quietly break the contract by 41 %.
+
+The arm clamps its **output** position (not its spring state) to
+`radius + max(2 m, radius·1e-6)` around the dominant body — the same
+minimum-distance rule the orbit camera uses — so a ship frozen against a surface
+by ADR-036 collision does not leave the camera underground. While frozen, the
+shake phase and the attitude lag stop advancing.
+
+Focus and mode are separate concerns: only the camera input port
+(`focusBody`/`cycleFocus`/`O`) may change the mode. `Commands.setTarget` and the
+system map re-aim the observatory camera through `focusObservatoryBody` and
+never pull the player out of the chase view.
+
 ## 4. Lighting & post
 
 - **One directional light**, positioned in the focus-to-Sun direction and aimed

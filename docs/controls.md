@@ -88,17 +88,43 @@ other input source.
 
 ## Camera and focus
 
+The game starts behind your ship. The **chase** camera hangs on a spring arm a
+few ship lengths back and slightly above, follows your attitude with a short
+deliberate lag, and rolls when you roll — so a roll reads as the world turning
+around you rather than the ship turning inside a fixed frame. The **observatory**
+camera is v1's: it orbits a celestial body and ignores the ship entirely.
+
+`O` switches between them, always as an animated move, never a cut. Focusing a
+body (`[`, `]`, `E`, `J`) also switches to the observatory camera, and stepping
+the focus ring back onto the ship returns you to chase.
+
+Choosing a **navigation target** is not a camera command: it re-aims the
+observatory camera for when you next switch to it and leaves you in the chase
+view. The `Focus:` line in the HUD always names what the camera is actually
+looking at, which is not necessarily your target.
+
 | Action                     | Control                           |
 | -------------------------- | --------------------------------- |
 | Mouse-look (pointer lock)  | Double-click the view             |
 | Release mouse-look         | `Escape`                          |
-| Orbit camera               | Primary-button drag               |
+| Switch camera mode         | `O`                               |
+| Swing the camera           | Primary-button drag               |
 | Zoom camera                | Mouse wheel / trackpad scroll     |
 | Keyboard orbit             | `Shift` + arrow keys              |
 | Keyboard zoom              | `Shift` + `Page Up` / `Page Down` |
 | Previous / next focus body | `[` / `]`                         |
 | Focus Earth                | `E`                               |
 | Focus Jupiter              | `J`                               |
+
+In chase, dragging swings the arm around your own ship and the wheel sets its
+length between 2 and 50 ship lengths; both keep working through any manoeuvre
+because the offsets live in the ship's frame. In observatory, the same gestures
+orbit and zoom the focused body exactly as they did in v1.
+
+The chase camera also opens its field of view slightly as you advance the
+throttle, and vibrates very slightly under heavy acceleration (0.15° at 5 g).
+Both are on by default and both can be turned off in **Session & settings →
+Camera**.
 
 ## Panels and session
 
