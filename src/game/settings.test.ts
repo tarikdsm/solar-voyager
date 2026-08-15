@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import profileV2Fixture from '../../tests/fixtures/settings-profile-v2.json';
 import {
   DEFAULT_GAME_SETTINGS,
+  DEFAULT_GAMEPAD_SETTINGS,
+  GAMEPAD_AXES,
   INPUT_ACTIONS,
   isUnboundInputCode,
   LEGACY_SETTINGS_STORAGE_KEY,
@@ -12,7 +15,12 @@ import {
   rebindInput,
   SETTINGS_STORAGE_KEY,
   SettingsRepository,
+  updateGamepadAxisInvert,
+  updateGamepadAxisSensitivity,
+  updateGamepadCurveExponent,
+  updateGamepadDeadzone,
   updateTutorialSettings,
+  type GamepadAxisId,
   type KeyValueStorage,
 } from './settings.js';
 
@@ -251,12 +259,13 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 2,
+      version: 3,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
+      gamepad: DEFAULT_GAME_SETTINGS.gamepad,
     });
-    expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
+    expect(rebindInput(profile, 'killRotation', 'KeyI').inputBindings.killRotation).toBe('KeyI');
   });
 
   it('never emits a placeholder that another action already holds', () => {
@@ -317,5 +326,146 @@ describe('game settings', () => {
       /already bound/u,
     );
     expect(() => rebindInput(rebound, 'pitchUp', 'Escape')).toThrow(/reserved/u);
+  });
+
+  describe('gamepad settings (T0106)', () => {
+    it('ships the brief defaults and includes cruise actions in the registry', () => {
+      expect(DEFAULT_GAME_SETTINGS.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
+      expect(DEFAULT_GAME_SETTINGS.gamepad.deadzone).toBe(0.08);
+      expect(DEFAULT_GAME_SETTINGS.gamepad.curveExponent).toBe(1.6);
+      expect(INPUT_ACTIONS).toContain('cruiseEngage');
+      expect(INPUT_ACTIONS).toContain('cruiseAbort');
+      expect(DEFAULT_GAME_SETTINGS.inputBindings.cruiseEngage).toBe('KeyG');
+      expect(DEFAULT_GAME_SETTINGS.inputBindings.cruiseAbort).toBe('KeyV');
+    });
+
+    it('rejects an out-of-range deadzone, curve exponent, or sensitivity', () => {
+      expect(() => updateGamepadDeadzone(DEFAULT_GAME_SETTINGS, -0.01)).toThrow(/deadzone/u);
+      expect(() => updateGamepadDeadzone(DEFAULT_GAME_SETTINGS, 0.51)).toThrow(/deadzone/u);
+      expect(() => updateGamepadDeadzone(DEFAULT_GAME_SETTINGS, Number.NaN)).toThrow(/deadzone/u);
+      expect(() => updateGamepadCurveExponent(DEFAULT_GAME_SETTINGS, 0.1)).toThrow(
+        /curve exponent/u,
+      );
+      expect(() => updateGamepadCurveExponent(DEFAULT_GAME_SETTINGS, 10)).toThrow(
+        /curve exponent/u,
+      );
+      expect(() => updateGamepadAxisSensitivity(DEFAULT_GAME_SETTINGS, 'pitch', 0)).toThrow(
+        /sensitivity/u,
+      );
+      expect(() => updateGamepadAxisSensitivity(DEFAULT_GAME_SETTINGS, 'pitch', 5)).toThrow(
+        /sensitivity/u,
+      );
+    });
+
+    it('rejects an incomplete or excess gamepad document', () => {
+      expect(() =>
+        parseProfileSettings({
+          ...DEFAULT_GAME_SETTINGS,
+          gamepad: { deadzone: 0.08, curveExponent: 1.6 },
+        }),
+      ).toThrow(/field is missing: axes/u);
+      expect(() =>
+        parseProfileSettings({
+          ...DEFAULT_GAME_SETTINGS,
+          gamepad: { ...DEFAULT_GAME_SETTINGS.gamepad, extra: true },
+        }),
+      ).toThrow(/unknown gamepad settings field/u);
+      expect(() =>
+        parseProfileSettings({
+          ...DEFAULT_GAME_SETTINGS,
+          gamepad: {
+            ...DEFAULT_GAME_SETTINGS.gamepad,
+            axes: { pitch: { invert: false, sensitivity: 1 } },
+          },
+        }),
+      ).toThrow(/field is missing: yaw/u);
+    });
+
+    it('updates deadzone and curve exponent immutably and validates the whole document', () => {
+      const next = updateGamepadCurveExponent(
+        updateGamepadDeadzone(DEFAULT_GAME_SETTINGS, 0.15),
+        2,
+      );
+
+      expect(next).not.toBe(DEFAULT_GAME_SETTINGS);
+      expect(next.gamepad.deadzone).toBe(0.15);
+      expect(next.gamepad.curveExponent).toBe(2);
+      expect(DEFAULT_GAME_SETTINGS.gamepad.deadzone).toBe(0.08); // original untouched
+      expect(Object.isFrozen(next.gamepad)).toBe(true);
+      expect(Object.isFrozen(next.gamepad.axes)).toBe(true);
+    });
+
+    it('updates one axis without disturbing the other three', () => {
+      const inverted = updateGamepadAxisInvert(DEFAULT_GAME_SETTINGS, 'roll', true);
+      const sensitized = updateGamepadAxisSensitivity(inverted, 'roll', 2.5);
+
+      expect(sensitized.gamepad.axes.roll).toEqual({ invert: true, sensitivity: 2.5 });
+      for (const axis of GAMEPAD_AXES) {
+        if (axis === 'roll') continue;
+        expect(sensitized.gamepad.axes[axis as GamepadAxisId]).toEqual({
+          invert: false,
+          sensitivity: 1,
+        });
+      }
+    });
+
+    it('preserves gamepad calibration across a save import, like tutorial progress', () => {
+      const customized = updateGamepadAxisSensitivity(
+        updateGamepadAxisInvert(DEFAULT_GAME_SETTINGS, 'pitch', true),
+        'throttle',
+        1.75,
+      );
+      const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS); // a save carries no gamepad data
+
+      const merged = mergeGameSettingsPreferences(customized, imported);
+
+      expect(merged.gamepad).toEqual(customized.gamepad);
+    });
+
+    it('migrates a stored v2 profile (no gamepad field) to v3 and writes it back', () => {
+      const storage = new MemoryStorage();
+      storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(profileV2Fixture));
+
+      const result = new SettingsRepository(storage).load();
+
+      expect(result).toMatchObject({ ok: true, source: 'migrated' });
+      expect(result.settings.version).toBe(3);
+      expect(result.settings.qualityLock).toBe('medium');
+      expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
+      expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
+      // Actions the v2 fixture predates (T0106's cruise pair) are backfilled.
+      expect(result.settings.inputBindings.cruiseEngage).toBe('KeyG');
+      expect(result.settings.inputBindings.cruiseAbort).toBe('KeyV');
+      expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
+      expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
+      expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+    });
+
+    it('a document matching neither v3 nor v2 still fails closed', () => {
+      // Right shape for v3 (so the v3 attempt fails only on the version
+      // number), but the extra `gamepad` field also disqualifies it from the
+      // v2 fallback — genuinely neither schema, not just malformed JSON.
+      const storage = new MemoryStorage();
+      storage.values.set(
+        SETTINGS_STORAGE_KEY,
+        JSON.stringify({ ...DEFAULT_GAME_SETTINGS, version: 99 }),
+      );
+
+      const result = new SettingsRepository(storage).load();
+
+      expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 3/u);
+    });
+
+    it('fails closed when writing a migrated v2->v3 profile fails', () => {
+      const storage = new MemoryStorage();
+      storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(profileV2Fixture));
+      storage.setError = new Error('quota');
+
+      const result = new SettingsRepository(storage).load();
+
+      expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
+      if (!result.ok) expect(result.error).toMatch(/migrate settings.*quota/iu);
+    });
   });
 });

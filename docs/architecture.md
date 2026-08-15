@@ -63,7 +63,7 @@ src/
 ├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
 ├── game/
 │   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
-│   ├── input/                              # LANDED engine+bindings (T0105); gamepad next (T0106)
+│   ├── input/                              # LANDED engine+bindings (T0105) + gamepad (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
 │   ├── cameraDirector.ts                   # NEW  4 modes + transitions (T0110/24/25)
 │   ├── chaseCameraController.ts            # NEW  spring-arm f64 controller (T0110)
@@ -119,14 +119,20 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 
 ## Player intent: `InputFrame` (`game/input/`)
 
-Raw devices never reach `Commands` directly. `game/input/inputEngine.ts` accumulates keyboard and
-pointer-lock events into one preallocated `InputFrame`
+Raw devices never reach `Commands` directly. `game/input/inputEngine.ts` accumulates keyboard,
+pointer-lock, and (T0106) gamepad events into one preallocated `InputFrame`
 (`{lookYawRad, lookPitchRad, axes: {pitch, yaw, roll, throttle}, pressed(action)}`) published by a
 single `poll(wallDtSec)` per frame; `game/input/bindings.ts` owns the `KeyboardEvent.code` binding
 registry and the one UI-focus policy every keyboard consumer shares (only `INPUT`/`SELECT`/
 `TEXTAREA`/`contenteditable` and an already-`preventDefault`ed key suppress game input — never a
-focused button, never `Shift`). DOM access stays behind structural ports; `main.ts` supplies the
-adapters. Design: `docs/superpowers/specs/2026-08-14-input-engine-design.md`.
+focused button, never `Shift`). `game/input/gamepad.ts` (`GamepadPoller`) polls the standard-mapping
+Gamepad API and is merged into the same frame — keyboard and gamepad axes add together, a trigger sets
+the throttle lever directly rather than joining the keyboard ramp, and `A`/`B` latch two reserved
+actions (`cruiseEngage`/`cruiseAbort`) for T0116 — never a second path into `FlightController`. Connect/
+disconnect gates every `getGamepads()` call, so an unconnected pad costs nothing per frame. DOM access
+stays behind structural ports; `main.ts` supplies the adapters. Design:
+`docs/superpowers/specs/2026-08-14-input-engine-design.md`,
+`docs/superpowers/specs/2026-08-15-gamepad-design.md`.
 
 ## Flight control (`game/flight/`)
 

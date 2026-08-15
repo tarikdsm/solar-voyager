@@ -10,7 +10,11 @@ import { FlightInputRouter } from '../../src/game/flight/flightInputRouter.js';
 import { InputEngine, type InputKeyboardTarget } from '../../src/game/input/inputEngine.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from '../../src/game/saveLoad.js';
 import { GameSessionController } from '../../src/game/sessionController.js';
-import { SettingsRepository, type KeyValueStorage } from '../../src/game/settings.js';
+import {
+  SETTINGS_STORAGE_KEY,
+  SettingsRepository,
+  type KeyValueStorage,
+} from '../../src/game/settings.js';
 import { DEFAULT_VESSEL } from '../../src/sim/ship/vessel.js';
 import type { Commands } from '../../src/sim/simulationSnapshot.js';
 import { SessionSettingsPanel, type SessionFilePort } from '../../src/ui/SessionSettingsPanel.js';
@@ -24,6 +28,8 @@ interface SessionHarnessSnapshot {
   readonly savePresent: boolean;
   readonly simTimeSec: number;
   readonly status: string;
+  /** The persisted profile document, verbatim — proves a setting reached storage, not just state. */
+  readonly storedProfileJson: string;
 }
 
 interface SessionHarness {
@@ -115,6 +121,7 @@ function snapshot(): SessionHarnessSnapshot {
     savePresent: storage.values.has(SAVE_STORAGE_KEY),
     simTimeSec: controller.simulation.snapshot.simTimeSec,
     status: document.querySelector('#session-status')?.textContent ?? '',
+    storedProfileJson: storage.values.get(SETTINGS_STORAGE_KEY) ?? '',
   };
 }
 

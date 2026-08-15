@@ -19,7 +19,15 @@ export const INPUT_ACTIONS = Object.freeze([
   'attitudeTarget',
   'killRotation',
   'stabilityAssistToggle',
+  // Reserved for T0116's CruiseDirector. Registered now so the gamepad A/B
+  // buttons (T0106) and the keyboard rebinding UI have a real action to
+  // target; nothing reads these yet (see game/input/gamepad.ts).
+  'cruiseEngage',
+  'cruiseAbort',
 ] as const);
+
+/** Per-axis gamepad calibration: pitch/yaw/roll are rate axes, throttle is the trigger pair. */
+export const GAMEPAD_AXES = Object.freeze(['pitch', 'yaw', 'roll', 'throttle'] as const);
 
 export const TUTORIAL_STEP_IDS = Object.freeze([
   'focus-target',
@@ -41,6 +49,7 @@ export type InputBindings = Readonly<Record<InputAction, string>>;
 export type QualityLock = 'auto' | 'low' | 'medium' | 'high';
 export type TutorialStepId = (typeof TUTORIAL_STEP_IDS)[number];
 export type TutorialStatus = 'unoffered' | 'active' | 'skipped' | 'completed';
+export type GamepadAxisId = (typeof GAMEPAD_AXES)[number];
 
 /** Preferences DTO embedded in SaveEnvelopeV3. Its schema intentionally remains version 1. */
 export interface GameSettingsV1 {
@@ -54,12 +63,41 @@ export interface TutorialProgress {
   readonly stepId: TutorialStepId;
 }
 
-/** Independent profile settings document stored outside save slots. */
+/** Per-axis gamepad calibration: invert flips sign, sensitivity scales after the response curve. */
+export interface GamepadAxisSettings {
+  readonly invert: boolean;
+  readonly sensitivity: number;
+}
+
+export type GamepadAxisSettingsMap = Readonly<Record<GamepadAxisId, GamepadAxisSettings>>;
+
+/** Gamepad calibration: global deadzone/curve shared by every axis, invert/sensitivity per axis. */
+export interface GamepadSettings {
+  readonly deadzone: number;
+  readonly curveExponent: number;
+  readonly axes: GamepadAxisSettingsMap;
+}
+
+/**
+ * Independent profile settings document stored outside save slots, superseded by
+ * {@link GameSettingsV3}. Kept only as the strict parse target for the one-time
+ * v2->v3 migration (`parseProfileSettingsV2`) — do not use this as "the" profile
+ * type in new code.
+ */
 export interface GameSettingsV2 {
   readonly version: 2;
   readonly qualityLock: QualityLock;
   readonly inputBindings: InputBindings;
   readonly tutorial: TutorialProgress;
+}
+
+/** Independent profile settings document stored outside save slots. */
+export interface GameSettingsV3 {
+  readonly version: 3;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
 }
 
 export interface KeyValueStorage {
@@ -70,12 +108,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV2;
+      readonly settings: GameSettingsV3;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV2;
+      readonly settings: GameSettingsV3;
       readonly error: string;
     };
 
@@ -110,7 +148,20 @@ const DEFAULT_INPUT_BINDINGS: Record<InputAction, string> = {
   attitudeTarget: 'Digit8',
   killRotation: 'KeyX',
   stabilityAssistToggle: 'KeyT',
+  cruiseEngage: 'KeyG',
+  cruiseAbort: 'KeyV',
 };
+
+/** Gamepad shaping defaults and valid ranges (T0106 brief: deadzone 0.08, curve exponent 1.6). */
+export const GAMEPAD_DEADZONE_DEFAULT = 0.08;
+export const GAMEPAD_DEADZONE_MIN = 0;
+export const GAMEPAD_DEADZONE_MAX = 0.5;
+export const GAMEPAD_CURVE_EXPONENT_DEFAULT = 1.6;
+export const GAMEPAD_CURVE_EXPONENT_MIN = 0.5;
+export const GAMEPAD_CURVE_EXPONENT_MAX = 4;
+export const GAMEPAD_SENSITIVITY_DEFAULT = 1;
+export const GAMEPAD_SENSITIVITY_MIN = 0.1;
+export const GAMEPAD_SENSITIVITY_MAX = 4;
 
 /**
  * Prefix of the placeholder code a backfilled action gets when its default is taken.
@@ -177,10 +228,68 @@ function freezeV2Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV2Settings(
+function freezeGamepadAxisSettings(invert: boolean, sensitivity: number): GamepadAxisSettings {
+  return Object.freeze({ invert, sensitivity });
+}
+
+function freezeGamepadSettings(
+  deadzone: number,
+  curveExponent: number,
+  axes: Record<GamepadAxisId, GamepadAxisSettings>,
+): GamepadSettings {
+  const frozenAxes = {} as Record<GamepadAxisId, GamepadAxisSettings>;
+  for (let index = 0; index < GAMEPAD_AXES.length; index += 1) {
+    const axis = GAMEPAD_AXES[index] as GamepadAxisId;
+    const setting = axes[axis];
+    frozenAxes[axis] = Object.isFrozen(setting)
+      ? setting
+      : freezeGamepadAxisSettings(setting.invert, setting.sensitivity);
+  }
+  return Object.freeze({ deadzone, curveExponent, axes: Object.freeze(frozenAxes) });
+}
+
+const DEFAULT_GAMEPAD_AXIS_SETTINGS = freezeGamepadAxisSettings(false, GAMEPAD_SENSITIVITY_DEFAULT);
+
+/** Default gamepad calibration: no inversion, unit sensitivity, the brief's deadzone/curve. */
+export const DEFAULT_GAMEPAD_SETTINGS = freezeGamepadSettings(
+  GAMEPAD_DEADZONE_DEFAULT,
+  GAMEPAD_CURVE_EXPONENT_DEFAULT,
+  {
+    pitch: DEFAULT_GAMEPAD_AXIS_SETTINGS,
+    yaw: DEFAULT_GAMEPAD_AXIS_SETTINGS,
+    roll: DEFAULT_GAMEPAD_AXIS_SETTINGS,
+    throttle: DEFAULT_GAMEPAD_AXIS_SETTINGS,
+  },
+);
+
+function freezeV3Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+): GameSettingsV3 {
+  return Object.freeze({
+    version: 3 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+  });
+}
+
+export const DEFAULT_GAME_SETTINGS = freezeV3Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
+  DEFAULT_GAMEPAD_SETTINGS,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -219,6 +328,62 @@ function isTutorialStatus(value: unknown): value is TutorialStatus {
 
 function isTutorialStepId(value: unknown): value is TutorialStepId {
   return TUTORIAL_STEP_IDS.includes(value as TutorialStepId);
+}
+
+function isFiniteNumberInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
+function validateDeadzone(value: unknown): number {
+  if (!isFiniteNumberInRange(value, GAMEPAD_DEADZONE_MIN, GAMEPAD_DEADZONE_MAX)) {
+    throw new RangeError(
+      `gamepad deadzone must be a number in [${String(GAMEPAD_DEADZONE_MIN)}, ${String(GAMEPAD_DEADZONE_MAX)}]`,
+    );
+  }
+  return value;
+}
+
+function validateCurveExponent(value: unknown): number {
+  if (!isFiniteNumberInRange(value, GAMEPAD_CURVE_EXPONENT_MIN, GAMEPAD_CURVE_EXPONENT_MAX)) {
+    throw new RangeError(
+      `gamepad curve exponent must be a number in [${String(GAMEPAD_CURVE_EXPONENT_MIN)}, ${String(GAMEPAD_CURVE_EXPONENT_MAX)}]`,
+    );
+  }
+  return value;
+}
+
+function validateSensitivity(value: unknown, axis: GamepadAxisId): number {
+  if (!isFiniteNumberInRange(value, GAMEPAD_SENSITIVITY_MIN, GAMEPAD_SENSITIVITY_MAX)) {
+    throw new RangeError(
+      `gamepad axis ${axis} sensitivity must be a number in [${String(GAMEPAD_SENSITIVITY_MIN)}, ${String(GAMEPAD_SENSITIVITY_MAX)}]`,
+    );
+  }
+  return value;
+}
+
+function parseGamepadAxisSettings(value: unknown, axis: GamepadAxisId): GamepadAxisSettings {
+  if (!isRecord(value)) throw new RangeError(`gamepad axis ${axis} must be an object`);
+  assertExactKeys(value, ['invert', 'sensitivity'], `unknown gamepad axis field (${axis})`);
+  if (typeof value.invert !== 'boolean') {
+    throw new RangeError(`gamepad axis ${axis} invert must be a boolean`);
+  }
+  return freezeGamepadAxisSettings(value.invert, validateSensitivity(value.sensitivity, axis));
+}
+
+/** Strictly parses gamepad calibration. Every field is required — there is no prior version to backfill from. */
+function parseGamepadSettings(value: unknown): GamepadSettings {
+  if (!isRecord(value)) throw new RangeError('gamepad settings must be an object');
+  assertExactKeys(value, ['deadzone', 'curveExponent', 'axes'], 'unknown gamepad settings field');
+  const deadzone = validateDeadzone(value.deadzone);
+  const curveExponent = validateCurveExponent(value.curveExponent);
+  if (!isRecord(value.axes)) throw new RangeError('gamepad axes must be an object');
+  assertExactKeys(value.axes, [...GAMEPAD_AXES], 'unknown gamepad axis');
+  const axes = {} as Record<GamepadAxisId, GamepadAxisSettings>;
+  for (let index = 0; index < GAMEPAD_AXES.length; index += 1) {
+    const axis = GAMEPAD_AXES[index] as GamepadAxisId;
+    axes[axis] = parseGamepadAxisSettings(value.axes[axis], axis);
+  }
+  return freezeGamepadSettings(deadzone, curveExponent, axes);
 }
 
 function validateCode(code: unknown, action: InputAction): string {
@@ -308,8 +473,16 @@ export function parseGameSettings(value: unknown): GameSettingsV1 {
   return freezeV1Settings(value.qualityLock, parseInputBindings(value.inputBindings));
 }
 
-/** Strictly parses the independent version-2 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV2 {
+/**
+ * Strictly parses the superseded version-2 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v2->v3 migration inside
+ * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what this
+ * function used to do before `gamepad` existed, so a genuine pre-T0106
+ * document (no `gamepad` field) still parses here even though it now fails
+ * the current `parseProfileSettings`.
+ */
+function parseProfileSettingsV2(value: unknown): GameSettingsV2 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -327,42 +500,123 @@ export function parseProfileSettings(value: unknown): GameSettingsV2 {
   );
 }
 
+/** Strictly parses the independent version-3 profile settings document. */
+export function parseProfileSettings(value: unknown): GameSettingsV3 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    ['version', 'qualityLock', 'inputBindings', 'tutorial', 'gamepad'],
+    'unknown profile settings field',
+  );
+  if (value.version !== 3) throw new RangeError('profile settings version must be 3');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV3Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+  );
+}
+
+/**
+ * Lifts a superseded v2 profile to v3 by attaching default gamepad calibration.
+ *
+ * Mirrors `migrateLegacySettings` (v1->v2) one version up: a whole-document
+ * migration rather than a per-field backfill, because `gamepad` is a brand-new
+ * required object with no prior partial state to recover — there is nothing to
+ * backfill *from* inside an existing v2 document.
+ */
+function migrateProfileV2ToV3(settings: GameSettingsV2): GameSettingsV3 {
+  return freezeV3Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    DEFAULT_GAMEPAD_SETTINGS,
+  );
+}
+
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV2): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV3): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
 
-/** Merges imported save preferences while preserving profile-only tutorial progress. */
+/** Merges imported save preferences while preserving profile-only tutorial and gamepad state. */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV2,
+  profile: GameSettingsV3,
   preferences: GameSettingsV1,
-): GameSettingsV2 {
+): GameSettingsV3 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV2Settings(
+  return freezeV3Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
+    validatedProfile.gamepad,
   );
 }
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV2,
+  settings: GameSettingsV3,
   tutorial: TutorialProgress,
-): GameSettingsV2 {
+): GameSettingsV3 {
   return parseProfileSettings({ ...settings, tutorial });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV2,
+  settings: GameSettingsV3,
   action: InputAction,
   code: string,
-): GameSettingsV2 {
+): GameSettingsV3 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
+}
+
+/** Returns a validated frozen profile with the global gamepad deadzone updated. */
+export function updateGamepadDeadzone(settings: GameSettingsV3, deadzone: number): GameSettingsV3 {
+  return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
+}
+
+/** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
+export function updateGamepadCurveExponent(
+  settings: GameSettingsV3,
+  curveExponent: number,
+): GameSettingsV3 {
+  return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
+}
+
+/** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
+export function updateGamepadAxisInvert(
+  settings: GameSettingsV3,
+  axis: GamepadAxisId,
+  invert: boolean,
+): GameSettingsV3 {
+  return parseProfileSettings({
+    ...settings,
+    gamepad: {
+      ...settings.gamepad,
+      axes: { ...settings.gamepad.axes, [axis]: { ...settings.gamepad.axes[axis], invert } },
+    },
+  });
+}
+
+/** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
+export function updateGamepadAxisSensitivity(
+  settings: GameSettingsV3,
+  axis: GamepadAxisId,
+  sensitivity: number,
+): GameSettingsV3 {
+  return parseProfileSettings({
+    ...settings,
+    gamepad: {
+      ...settings.gamepad,
+      axes: { ...settings.gamepad.axes, [axis]: { ...settings.gamepad.axes[axis], sensitivity } },
+    },
+  });
 }
 
 function migrateLegacySettings(settings: GameSettingsV1): GameSettingsV2 {
@@ -396,18 +650,43 @@ export class SettingsRepository {
       };
     }
     if (text !== null) {
+      let parsed: unknown;
       try {
-        return {
-          ok: true,
-          settings: parseProfileSettings(JSON.parse(text) as unknown),
-          source: 'stored',
-        };
+        parsed = JSON.parse(text);
       } catch (error: unknown) {
         return {
           ok: false,
           settings: DEFAULT_GAME_SETTINGS,
           error: `Unable to parse settings: ${describeError(error)}`,
         };
+      }
+      try {
+        return { ok: true, settings: parseProfileSettings(parsed), source: 'stored' };
+      } catch (currentVersionError: unknown) {
+        // Not (yet) a v3 document. It may be a genuine pre-gamepad v2 profile —
+        // the same document `parseProfileSettings` accepted before this task —
+        // so try that before failing closed, exactly as the v1->v2 path below
+        // does for the legacy storage key.
+        let migrated: GameSettingsV3;
+        try {
+          migrated = migrateProfileV2ToV3(parseProfileSettingsV2(parsed));
+        } catch {
+          return {
+            ok: false,
+            settings: DEFAULT_GAME_SETTINGS,
+            error: `Unable to parse settings: ${describeError(currentVersionError)}`,
+          };
+        }
+        try {
+          this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(migrated));
+        } catch (error: unknown) {
+          return {
+            ok: false,
+            settings: DEFAULT_GAME_SETTINGS,
+            error: `Unable to migrate settings: ${describeError(error)}`,
+          };
+        }
+        return { ok: true, settings: migrated, source: 'migrated' };
       }
     }
 
@@ -425,9 +704,11 @@ export class SettingsRepository {
       return { ok: true, settings: DEFAULT_GAME_SETTINGS, source: 'default' };
     }
 
-    let migrated: GameSettingsV2;
+    let migrated: GameSettingsV3;
     try {
-      migrated = migrateLegacySettings(parseGameSettings(JSON.parse(legacyText) as unknown));
+      migrated = migrateProfileV2ToV3(
+        migrateLegacySettings(parseGameSettings(JSON.parse(legacyText) as unknown)),
+      );
     } catch (error: unknown) {
       return {
         ok: false,
@@ -447,7 +728,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV2): SettingsSaveResult {
+  save(settings: GameSettingsV3): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

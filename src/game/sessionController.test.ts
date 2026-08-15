@@ -204,6 +204,32 @@ describe('GameSessionController', () => {
     expect(controller.settings).toBe(before);
   });
 
+  it('persists gamepad calibration updates only after validation succeeds (T0106)', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+
+    expect(controller.setGamepadDeadzone(0.2)).toMatchObject({ ok: true });
+    expect(controller.setGamepadCurveExponent(2)).toMatchObject({ ok: true });
+    expect(controller.setGamepadAxisInvert('pitch', true)).toMatchObject({ ok: true });
+    expect(controller.setGamepadAxisSensitivity('pitch', 1.5)).toMatchObject({ ok: true });
+    expect(controller.settings.gamepad).toEqual({
+      deadzone: 0.2,
+      curveExponent: 2,
+      axes: {
+        ...DEFAULT_GAME_SETTINGS.gamepad.axes,
+        pitch: { invert: true, sensitivity: 1.5 },
+      },
+    });
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '{}').gamepad).toEqual(
+      controller.settings.gamepad,
+    );
+
+    const before = controller.settings;
+    expect(controller.setGamepadDeadzone(5)).toMatchObject({ ok: false });
+    expect(controller.setGamepadAxisSensitivity('roll', 0)).toMatchObject({ ok: false });
+    expect(controller.settings).toBe(before);
+  });
+
   it('owns functional tutorial transitions without publishing preferences', () => {
     const storage = new MemoryStorage();
     const published: string[] = [];

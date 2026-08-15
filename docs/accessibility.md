@@ -14,7 +14,10 @@ claim of formal WCAG conformance.
   controls with visible focus. Keyboard shortcuts are listed in [controls](controls.md).
 - Keyboard flight and keyboard panel navigation coexist: a focused button keeps its own keys (they
   are consumed at the control) while every other flight key stays live, so tabbing through the HUD
-  never silently disables the ship. `Shift` chords remain available alongside flight input.
+  never silently disables the ship. `Shift` chords remain available alongside flight input. A
+  connected gamepad follows the same rule: it never drives the ship or fires an action while a text
+  field, select, or editable region has focus, so a controller resting near the keyboard cannot
+  interrupt filling in a rebinding capture or an import/export box.
 - HUD values are text in definition lists or labeled panels rather than text painted only into the
   WebGL canvas. Important trajectory events pair color with labels and marker shapes.
 - The interface honors `prefers-reduced-motion: reduce`; quality can be manually locked to reduce
