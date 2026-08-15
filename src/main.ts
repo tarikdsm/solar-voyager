@@ -12,7 +12,6 @@ import {
   type InputPointerMotionEvent,
   type PointerLockSurface,
 } from './game/input/inputEngine.js';
-import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
 import { GameSessionController } from './game/sessionController.js';
@@ -53,7 +52,8 @@ import type { Commands, SimSnapshot } from './sim/simulationSnapshot.js';
 import type { PredictorResponseMessage } from './workers/predictorProtocol.js';
 import './style.css';
 import { App } from './ui/App.js';
-import { CameraInputController, type CameraControlPort } from './ui/cameraInputController.js';
+import { CameraInputController } from './ui/cameraInputController.js';
+import { SharedCameraControls } from './ui/sharedCameraControls.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
@@ -190,51 +190,6 @@ function copyDiagnosticEntry(
   target.progradeDeltaVMS = source.progradeDeltaVMS;
   target.normalDeltaVMS = source.normalDeltaVMS;
   target.radialDeltaVMS = source.radialDeltaVMS;
-}
-
-class SharedCameraControls implements CameraControlPort {
-  constructor(
-    private readonly camera: OrbitCameraController,
-    private readonly map: SystemMapController,
-    private readonly commands: Commands,
-    /**
-     * The camera focus ring now contains the ship (T0109), which is not a
-     * catalog body: the system map has no icon for it and `Commands.setTarget`
-     * throws on an id the simulation does not know. Everything routed at the
-     * simulation is gated on this list.
-     */
-    private readonly catalogBodyIds: readonly string[],
-  ) {}
-
-  /**
-   * Reported from the camera rather than the map so the focus label follows a
-   * focus the map cannot represent.
-   */
-  get focusId(): string {
-    return this.camera.focusId;
-  }
-
-  orbitBy(deltaYawRad: number, deltaPitchRad: number): void {
-    this.camera.orbitBy(deltaYawRad, deltaPitchRad);
-  }
-
-  zoomByWheel(wheelDelta: number): void {
-    this.camera.zoomByWheel(wheelDelta);
-  }
-
-  focusBody(id: string): boolean {
-    const changed = this.map.focusBody(id);
-    if (id === this.map.focusId) this.commands.setTarget(id);
-    return changed;
-  }
-
-  cycleFocus(step: number): string {
-    const id = this.camera.cycleFocus(step);
-    if (!this.catalogBodyIds.includes(id)) return id;
-    this.map.focusBody(id);
-    this.commands.setTarget(id);
-    return id;
-  }
 }
 
 const canvasElement = document.querySelector('#space-canvas');
@@ -705,7 +660,14 @@ const sessionCommands: Commands = {
   setAttitudeMode: (mode) => session.simulation.commands.setAttitudeMode(mode),
   setTarget: (bodyId) => {
     session.simulation.commands.setTarget(bodyId);
-    if (bodyId !== null) systemMapController.focusBody(bodyId);
+    if (bodyId !== null) {
+      systemMapController.focusBody(bodyId);
+      // The map only relays focus to the camera when its own focus moves, and
+      // since T0109 the camera can be on the ship while the map is not. Selecting
+      // a target has always recentred the camera; make that unconditional rather
+      // than dependent on the relay firing.
+      world?.cameraController.focusBody(bodyId);
+    }
     invalidateTrajectoryPrediction();
   },
   setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
