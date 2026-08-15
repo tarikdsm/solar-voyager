@@ -77,8 +77,9 @@ src/
 │   │   ├── flightController.ts             # NEW  intent→Commands, wall-time authority (T0108)
 │   │   ├── assists.ts                      # NEW  approach brake, flip helper (T0118)
 │   │   └── cruiseDirector.ts               # NEW  phase machine + warp pilot (T0116)
-│   ├── cameraDirector.ts                   # NEW  4 modes + transitions (T0110/24/25)
-│   ├── chaseCameraController.ts            # NEW  spring-arm f64 controller (T0110)
+│   ├── cameraDirector.ts                   # LANDED chase/observatory + cross-fade (T0110); cockpit/cinematic (T0124/25)
+│   ├── chaseCameraController.ts            # LANDED spring-arm f64 controller (T0110)
+│   ├── cameraTransition.ts                 # LANDED shared blend primitives (T0110)
 │   ├── diary/
 │   │   ├── milestones.ts                   # NEW  ~50 declarative predicates (T0146)
 │   │   ├── diaryStore.ts                   # NEW  progress state + persistence (T0146)
@@ -200,11 +201,59 @@ export class CruiseDirector {
 
 // game/cameraDirector.ts (T0110, extended T0124/25)
 export type CameraMode = 'chase'|'cockpit'|'cinematic'|'observatory';
-export class CameraDirector {
-  setMode(mode: CameraMode): void; cycle(): void;
-  readonly mode: CameraMode;
-  update(wallDtSec: number, snapshot: SimSnapshot): void;    // writes the render camera pose
+export interface CameraPose {                    // three.js `lookAt` semantics: `upDirection`
+  readonly positionKm: ReadonlyVec3;             // is an up *hint*, not necessarily orthogonal
+  readonly lookDirection: ReadonlyVec3;
+  readonly upDirection: ReadonlyVec3;
+  readonly fovDeg: number;
 }
+export class CameraDirector {
+  setMode(mode: CameraMode): void;               // throws for a mode this build has not implemented
+  cycle(): void;                                 // steps IMPLEMENTED_CAMERA_MODES
+  readonly mode: CameraMode;
+  update(wallDtSec: number, snapshot: SimSnapshot): void;    // runs BOTH cameras, writes the pose
+  prime(attitudeQuaternion: Float64Array): void; // pose before the first simulation step exists
+  // Pose read side. `cameraPositionKm` is the identity `EpochWorld.cameraPositionKm` exposes, so
+  // every camera-relative consumer keeps one live reference (render/cameraRig.ts applies the rest).
+  readonly pose: CameraPose;
+  readonly cameraPositionKm: ReadonlyVec3;
+  readonly isTransitioning: boolean;
+  // Focus. Two entry points on purpose: ONLY the camera input port may change the mode.
+  readonly focusId: string;                      // 'ship' in chase, the orbit focus otherwise
+  readonly focusPositionOffset: number;          // packed-position offset, for SolarLighting
+  focusBody(id: string): boolean;                // input port: ship => chase, body => observatory
+  cycleFocus(step: number): string;              // input port: one ring across both modes
+  focusObservatoryBody(id: string): boolean;     // Commands.setTarget / system map: mode unchanged
+  orbitBy(deltaYawRad: number, deltaPitchRad: number): void;  // routed to the active camera
+  zoomByWheel(wheelDelta: number): void;                      // routed to the active camera
+  applyCameraSettings(settings: CameraSettings): void;        // persisted fov-widening / shake
+  resetChase(): void;                            // restore teleports the ship; snap, do not spring
+  // Chase read side, for the frozen `solarVoyagerCamera` browser diagnostic.
+  readonly chaseDistanceShipLengths: number; readonly chaseArmDistanceKm: number;
+  readonly chaseFovOffsetDeg: number; readonly chaseShakeAmplitudeDeg: number;
+  readonly chaseFovWideningEnabled: boolean; readonly chaseShakeEnabled: boolean;
+}
+export const IMPLEMENTED_CAMERA_MODES: readonly CameraMode[];  // ['chase','observatory'] at T0110
+
+// game/chaseCameraController.ts (T0110) — pure numeric, injected with the ship's packed-position
+// offset and hull length because `game/` may not import `render/`.
+export class ChaseCameraController {
+  update(wallDtSec: number, attitudeQuaternion: Float64Array, throttle01: number,
+    properAccelerationMS2: number, clearanceBodyIndex: number, frozen: boolean): void;
+  setDistanceShipLengths(d: number): void; zoomByWheel(delta: number): void;
+  orbitBy(deltaAzimuthRad: number, deltaElevationRad: number): void;
+  resetArmOffsets(): void; reset(): void;
+  setFovWideningEnabled(enabled: boolean): void; setShakeEnabled(enabled: boolean): void;
+  readonly cameraPositionKm: MutableVec3; readonly subjectPositionKm: MutableVec3;
+  readonly lookDirection: MutableVec3; readonly upDirection: MutableVec3;
+  readonly distanceShipLengths: number; readonly armDistanceKm: number;
+  readonly fovOffsetDeg: number; readonly shakeAmplitudeDeg: number;
+  readonly attitudeLagRad: number;               // the 120 ms criterion, made observable
+  readonly fovWideningEnabled: boolean; readonly shakeEnabled: boolean;
+}
+
+// game/settings.ts (T0110) — profile document generation 4, own storage key
+export interface CameraSettings { readonly fovWidening: boolean; readonly shake: boolean }
 
 // SimSnapshot additions (T0111, ADR): all primitives, double-buffer-safe
 //   impactOccurred: 0|1, impactBodyIndex: number(-1 none), impactSpeedKmS: number,
