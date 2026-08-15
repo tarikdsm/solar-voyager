@@ -3,6 +3,23 @@ import type { SimulationPersistentState } from '../sim/simulationState.js';
 import type { SimulationReplacementOrigin } from './sessionController.js';
 
 /**
+ * Origins that move *within* the mission already in progress (ADR-036).
+ *
+ * Allowlisting the safe origins rather than the invalidating ones is deliberate,
+ * and is the inversion T0111 deferred to T0110. Listing `new-game | load |
+ * import` made an unrecognised future origin default to **keeping** the ring —
+ * so a new timeline-changing origin would silently inherit another mission's
+ * restore points and hand the player a "recover" button that teleports them into
+ * a save they abandoned. Listing the safe pair instead fails closed: an origin
+ * nobody has thought about yet clears the ring, which costs at most six recovery
+ * slots.
+ */
+const MISSION_PRESERVING_ORIGINS: readonly SimulationReplacementOrigin[] = Object.freeze([
+  'restore',
+  'respawn',
+]);
+
+/**
  * Whether a core replacement invalidates the ring.
  *
  * Only a **timeline change** does. Each slot is a self-contained
@@ -15,7 +32,7 @@ import type { SimulationReplacementOrigin } from './sessionController.js';
  * that can drift.
  */
 export function replacementInvalidatesRestorePoints(origin: SimulationReplacementOrigin): boolean {
-  return origin === 'new-game' || origin === 'load' || origin === 'import';
+  return !MISSION_PRESERVING_ORIGINS.includes(origin);
 }
 
 /** Slots retained by the ring; the oldest is overwritten (plan §3.4). */

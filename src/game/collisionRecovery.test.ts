@@ -254,6 +254,44 @@ describe('restore point ring survives recovery - ADR-036 section 5', () => {
     expect(controller.loadLocal().ok).toBe(true);
     expect(ring.count).toBe(0);
   });
+
+  /**
+   * `import` was only ever exercised through the composed origin list, never
+   * against the ring itself (T0111 handoff, deferred to T0110). An imported
+   * document is somebody else's mission: keeping the slots would offer a
+   * "recover" button that teleports the player into a save they never flew.
+   */
+  it('clears the ring on an import, which lands in another timeline entirely', () => {
+    const { controller, ring } = createRingWiredController();
+    fillRing(controller, ring, 4);
+    expect(ring.count).toBe(4);
+
+    const exported = controller.exportJson();
+    expect(exported.ok).toBe(true);
+    if (exported.ok) expect(controller.importJson(exported.json).ok).toBe(true);
+
+    expect(ring.count).toBe(0);
+    expect(ring.latest).toBeNull();
+  });
+
+  /**
+   * T0110 — the allowlist runs the safe way round.
+   *
+   * It used to list the origins that *invalidate*, so an origin added later
+   * defaulted to keeping the ring. Listing the two mission-preserving origins
+   * instead means an unrecognised future origin clears it, which costs six
+   * recovery slots rather than handing the player another mission's states.
+   */
+  it('fails closed for an origin nobody has added yet', () => {
+    expect(replacementInvalidatesRestorePoints('restore')).toBe(false);
+    expect(replacementInvalidatesRestorePoints('respawn')).toBe(false);
+    for (const origin of ['new-game', 'load', 'import'] as const) {
+      expect(replacementInvalidatesRestorePoints(origin)).toBe(true);
+    }
+    expect(
+      replacementInvalidatesRestorePoints('time-travel' as unknown as SimulationReplacementOrigin),
+    ).toBe(true);
+  });
 });
 
 describe('impact recovery - ADR-036 section 5', () => {
