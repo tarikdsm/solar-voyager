@@ -50,12 +50,11 @@ export function createPredictorWorkerRuntime(
   execute: PredictorExecutor = predictThrustFreeTrajectory,
 ): void {
   const catalog = compileRailsCatalog(bodiesDocument.bodies);
-  const collisionRadiiKm = new Float64Array(catalog.bodyCount);
-  for (let bodyIndex = 0; bodyIndex < catalog.bodyCount; bodyIndex += 1) {
-    const body = bodiesDocument.bodies[bodyIndex];
-    if (body === undefined) throw new Error(`missing canonical body at index ${bodyIndex}`);
-    collisionRadiiKm[bodyIndex] = body.meanRadiusKm + (body.surface.atmosphereTopKm ?? 0);
-  }
+  // ADR-036 — the compiler owns this, so the worker and the live sim cannot
+  // drift. The previous local loop also assumed catalog index order matched
+  // `bodiesDocument.bodies` order, which the compiler guarantees but the loop
+  // did not check.
+  const collisionRadiiKm = catalog.collisionRadiiKm;
 
   port.addEventListener('message', (event) => {
     const payload = event.data;

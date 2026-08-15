@@ -269,7 +269,7 @@
       },
       "surface": {
         "kind": "gas",
-        "atmosphereTopKm": null
+        "atmosphereTopKm": 1581.0
       },
       "visual": {
         "albedoColor": "#c9a477",
@@ -424,7 +424,7 @@
       },
       "surface": {
         "kind": "gas",
-        "atmosphereTopKm": null
+        "atmosphereTopKm": 2036.0
       },
       "visual": {
         "albedoColor": "#d8c28e",
@@ -672,7 +672,7 @@
       },
       "surface": {
         "kind": "gas",
-        "atmosphereTopKm": null
+        "atmosphereTopKm": 197.0
       },
       "visual": {
         "albedoColor": "#9ccbd3",
@@ -858,7 +858,7 @@
       },
       "surface": {
         "kind": "gas",
-        "atmosphereTopKm": null
+        "atmosphereTopKm": 142.0
       },
       "visual": {
         "albedoColor": "#4169a9",

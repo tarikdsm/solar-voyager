@@ -1,0 +1,53 @@
+id: T0106
+title: Gamepad support and rebinding UI extension
+status: REVIEW
+agent: claude
+branch: task/T0106-gamepad
+depends_on: [T0105]
+milestone: V2M1
+spec: |
+  Add analog gamepad input on top of the T0105 input engine so a stick becomes a first-class way to
+  fly, with deadzone and response shaping the player can tune. Gamepad axes must feed the existing
+  InputFrame pipeline rather than a parallel path, so the warp normalization and manual-rotation
+  lockout in the flight controller apply unchanged.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7;
+  design doc docs/superpowers/specs/2026-08-15-gamepad-design.md.
+acceptance:
+  - Gamepad API polling mapped to axes (deadzone 0.08, curve exponent 1.6, both configurable in settings)
+  - Standard-mapping default - left stick pitch/yaw, right-X roll, triggers throttle, A cruise-engage, B abort
+  - Settings UI - per-axis invert and sensitivity; profile v2 to v3 settings migration test
+  - No polling cost when no gamepad is connected (zero allocations, early-out)
+handoff_notes: |
+  Cruise actions are wired to the bindings registry but inert: T0116 owns the cruise API. Their
+  keyboard defaults are KeyG and KeyV, not KeyB — KeyB stays free and the pre-existing test that uses
+  it was left alone (a fixture's incidental key must not dictate a shipped default).
+  PROFILE SCHEMA v3 with a THIRD STORAGE KEY, by implementer judgment and endorsed on review: the
+  profile keeps a generation-per-key scheme (.v3 current, .v2 and .v1 as legacy read tiers) rather
+  than versioning a document in place under one key. This differs deliberately from the SAVE envelope
+  (T0104), which kept its slot name because it had no fallback tier and renaming would have stranded
+  deployed player data. The profile already had a working fallback/migrate/write-forward mechanism,
+  so adding a tier is incremental. A rolled-back build therefore cannot clobber a newer profile it
+  cannot parse. Cost: an inert legacy key accumulates per generation, which v1 to v2 already did.
+  Triggers set the throttle lever directly through the public setThrottleAxis, which re-anchors the
+  keyboard hold model, so a later key tap sweeps from where the trigger left it. With both held the
+  trigger wins deterministically every frame. Documented residual: releasing the trigger while still
+  holding the throttle key produces an immediate 0.1 step rather than a resumed ramp.
+  Device data is sanitized at the boundary. This closed a real freeze: a non-finite axis reached
+  setThrottleAxis, which throws, and because requestAnimationFrame is the last statement of
+  renderFrame the render loop would never reschedule again. Review proved it by reverting the fix and
+  watching poll() throw.
+  Non-standard-mapping pads are treated as disconnected: reading index 2 as roll on a pad the browser
+  did not remap is silent nonsense. A plugged-in-but-ignored pad currently gives the player no signal;
+  a connected indicator was deliberately declined and is a follow-up.
+  The fake gamepad clones the pad object and its axes/buttons arrays on every getGamepads() call,
+  because Chrome returns fresh snapshots while Firefox does not. Review verified the guard bites:
+  caching the pad at connect time fails five tests.
+  KNOWN HARNESS GAP, flagged not fixed and now a tracked follow-up: tests/render/sessionSettingsPage.tsx
+  never imports src/ui/app.css, so the settings browser regression asserts layout against unstyled
+  markup. It stayed green while this task shipped an entirely unstyled section; the CSS was caught by
+  review, not CI. Worth closing before T0112 rebuilds that CSS.
+  Verification: 1001 Vitest passed / 3 skipped, lint, typecheck, format, perf gates (negative controls
+  correctly rejected), session-settings, camera-controls and smoke harnesses; UI evidence at
+  docs/bench/T0106-gamepad-settings-ui.png captured from the production page.
+  BUDGET: total gzip 562,590 B against the 570,000 B ceiling still on main — 7,410 B headroom.
+  PR #66 raises the ceiling to 1,000,000 B and is awaiting maintainer sign-off.
