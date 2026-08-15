@@ -25,6 +25,26 @@ const WARP_RUNGS_FOR_CAPTURE = 5;
 // Half of 2*pi*sqrt(r^3/mu) for r = 6,371.0084 + 400 km around Earth.
 const LEO_HALF_PERIOD_SEC = 2_772;
 
+/**
+ * Waits for the camera to reach a mode and stop animating into it.
+ *
+ * The director advances its 1.5 s mode blend by the frame delta (clamped to
+ * 100 ms), so on a contended renderer the change takes *more* than 1.5 s of wall
+ * clock. A fixed sleep here is a frame-rate assumption wearing a timeout's
+ * clothes, and it is the same defect that made this task's first camera gate
+ * flaky.
+ */
+async function waitForCameraMode(page, mode) {
+  await page.waitForFunction(
+    (expected) => {
+      const camera = globalThis.document.querySelector('#space-canvas')?.solarVoyagerCamera;
+      return camera !== undefined && camera.mode === expected && !camera.transitioning;
+    },
+    mode,
+    { timeout: 60_000 },
+  );
+}
+
 function collectBrowserErrors(page) {
   const errors = [];
   page.on('console', (message) => {
@@ -256,7 +276,7 @@ async function runProductionPhase(browser) {
       undefined,
       { timeout: 10_000 },
     );
-    await page.waitForTimeout(2_500);
+    await waitForCameraMode(page, 'observatory');
     const afterCycle = await page.evaluate(
       () => globalThis.document.querySelector('#camera-focus-label')?.textContent ?? null,
     );
@@ -264,6 +284,14 @@ async function runProductionPhase(browser) {
 
     // Tier ladder, from the other end: 1 AU away the 26 m hull is far below the
     // resolve threshold and falls back to its slot in the shared point cloud.
+    // Waited for, not slept for: dropping back to the point sprite runs the same
+    // hysteresis and cross-fade the resolve does.
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.modelOpacity === 0,
+      undefined,
+      { timeout: 60_000 },
+    );
     const distant = await readShip();
     assert.equal(distant.resolved, false, 'the ship still resolves from a Sun-focused camera');
     assert.equal(distant.pointOpacity, 1);
@@ -283,7 +311,13 @@ async function runProductionPhase(browser) {
       undefined,
       { timeout: 10_000 },
     );
-    await page.waitForTimeout(2_500);
+    await waitForCameraMode(page, 'chase');
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.modelOpacity === 1,
+      undefined,
+      { timeout: 60_000 },
+    );
     const returned = await readShip();
     assert.equal(returned.focusLabel, 'Focus: Ship');
     assert.equal(returned.resolved, true);

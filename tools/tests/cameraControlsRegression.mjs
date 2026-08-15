@@ -53,16 +53,32 @@ async function readCameraDiagnostic(page) {
  * before the sampler started or near the end of its window, so the same run
  * would sometimes measure a slice of the move rather than all of it. This is the
  * pattern `tools/bench/flightBench.mjs` already uses for its focus events.
+ *
+ * It stops on a **condition**, never on a wall-clock window. The first version of
+ * this helper sampled for a fixed 1,000 ms and the caller then asserted it had
+ * collected more than ten frames, which is a 10 fps floor written as if it were a
+ * correctness check: on a contended SwiftShader runner fewer frames render in the
+ * window and the gate failed for no reason. A slow renderer must make this take
+ * longer, not fail.
+ *
+ * @param minSamples frames the caller needs before any conclusion is possible
+ * @param untilSettled also wait for `transitioning` to go true and back to false,
+ *   then keep sampling for a short stationary tail so a mode change is bracketed
+ *   by frames on both sides of the move whatever the frame rate
+ * @param timeoutMs generous upper bound; reaching it is reported, never silent
  */
-async function recordCameraPath(page, durationMs, keyToDispatch = null) {
+async function recordCameraPath(page, options) {
   return page.evaluate(
-    async ([windowMs, key]) => {
+    async ({ keyToDispatch, minSamples, timeoutMs, trailingSamples, untilSettled }) => {
       const canvas = globalThis.document.querySelector('#space-canvas');
       const camera = canvas?.solarVoyagerCamera;
       if (camera === undefined) throw new Error('camera diagnostic missing');
       const samples = [];
-      const deadline = globalThis.performance.now() + windowMs;
-      let dispatched = key === null;
+      const startedMs = globalThis.performance.now();
+      let dispatched = keyToDispatch === null;
+      let sawTransition = false;
+      let settledAtIndex = -1;
+      let timedOut = false;
       await new Promise((resolve) => {
         const sample = () => {
           samples.push([
@@ -72,18 +88,54 @@ async function recordCameraPath(page, durationMs, keyToDispatch = null) {
             camera.shipDistanceKm,
             globalThis.performance.now(),
           ]);
+          if (camera.transitioning) sawTransition = true;
+          else if (sawTransition && settledAtIndex < 0) settledAtIndex = samples.length - 1;
           if (!dispatched) {
             dispatched = true;
-            globalThis.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key }));
+            globalThis.dispatchEvent(
+              new globalThis.KeyboardEvent('keydown', { key: keyToDispatch }),
+            );
           }
-          if (globalThis.performance.now() >= deadline) resolve();
+          const elapsedMs = globalThis.performance.now() - startedMs;
+          const settled =
+            !untilSettled ||
+            (settledAtIndex >= 0 && samples.length - settledAtIndex > trailingSamples);
+          if (elapsedMs >= timeoutMs) {
+            timedOut = true;
+            resolve();
+          } else if (samples.length >= minSamples && settled) resolve();
           else globalThis.requestAnimationFrame(sample);
         };
         globalThis.requestAnimationFrame(sample);
       });
-      return samples;
+      return { samples, sawTransition, timedOut };
     },
-    [durationMs, keyToDispatch],
+    {
+      keyToDispatch: options.keyToDispatch ?? null,
+      minSamples: options.minSamples,
+      timeoutMs: options.timeoutMs ?? 60_000,
+      trailingSamples: options.trailingSamples ?? 4,
+      untilSettled: options.untilSettled ?? false,
+    },
+  );
+}
+
+/**
+ * Waits for the camera to reach a mode and stop animating into it.
+ *
+ * Replaces the fixed `waitForTimeout` calls this phase used after a mode change.
+ * The director advances its 1.5 s blend by the frame delta (clamped to 100 ms),
+ * so on a slow renderer the change takes *more* wall time than 1.5 s — a fixed
+ * sleep is a frame-rate assumption wearing a timeout's clothes.
+ */
+async function waitForCameraMode(page, mode) {
+  await page.waitForFunction(
+    (expected) => {
+      const camera = globalThis.document.querySelector('#space-canvas')?.solarVoyagerCamera;
+      return camera !== undefined && camera.mode === expected && !camera.transitioning;
+    },
+    mode,
+    { timeout: 60_000 },
   );
 }
 
@@ -102,7 +154,18 @@ async function recordCameraPath(page, durationMs, keyToDispatch = null) {
  * summary reports the largest step relative to its own neighbours, and the wall
  * time the motion is spread across.
  */
-function summarizePath(samples) {
+function summarizePath(recording, label) {
+  const { samples, timedOut } = recording;
+  assert.equal(
+    timedOut,
+    false,
+    `${label}: the camera recorder hit its timeout before the condition it was waiting for; ` +
+      `collected ${String(samples.length)} frames`,
+  );
+  assert.ok(
+    samples.length >= 2,
+    `${label}: need at least two rendered frames to describe a path, got ${String(samples.length)}`,
+  );
   const stepsKm = [];
   let maximumStepKm = 0;
   let maximumStepIndex = -1;
@@ -404,11 +467,28 @@ try {
     `coasting widened the field of view: ${String(chaseAfterWarp.fovDeg)}`,
   );
 
-  const chasePath = summarizePath(await recordCameraPath(productionPage, 1_000));
-  assert.ok(chasePath.sampleCount > 10, 'the frame loop is not running');
+  // Holds the arm every frame, not just at the two ends. Waits for the frames it
+  // needs rather than asserting a frame rate.
+  const chaseRecording = await recordCameraPath(productionPage, { minSamples: 12 });
+  const chasePath = summarizePath(chaseRecording, 'chase hold');
+  for (const [index, sample] of chaseRecording.samples.entries()) {
+    assert.ok(
+      Math.abs(sample[3] - EXPECTED_CHASE_ARM_KM) < 1e-3,
+      `chase arm drifted on frame ${String(index)}: ${String(sample[3])} km`,
+    );
+  }
 
-  // Mode change: animated, never a cut.
-  const transitionPath = summarizePath(await recordCameraPath(productionPage, 3_000, 'o'));
+  // Mode change: animated, never a cut. Samples until the director reports the
+  // blend has settled, plus a stationary tail, so the whole move is bracketed at
+  // any frame rate.
+  const transitionPath = summarizePath(
+    await recordCameraPath(productionPage, {
+      keyToDispatch: 'o',
+      minSamples: 8,
+      untilSettled: true,
+    }),
+    'chase to observatory',
+  );
   const observatory = await readCameraDiagnostic(productionPage);
   assert.equal(observatory.mode, 'observatory');
   assert.equal(observatory.focusId, 'earth');
@@ -433,7 +513,7 @@ try {
   );
 
   await productionPage.keyboard.press('o');
-  await productionPage.waitForTimeout(2_500);
+  await waitForCameraMode(productionPage, 'chase');
   const backToChase = await readCameraDiagnostic(productionPage);
   assert.equal(backToChase.mode, 'chase');
   assert.equal(backToChase.focusLabel, 'Focus: Ship');
@@ -444,7 +524,7 @@ try {
   await productionPage.waitForFunction(
     () => globalThis.document.querySelector('#camera-focus-label')?.textContent === 'Focus: Earth',
   );
-  await productionPage.waitForTimeout(2_000);
+  await waitForCameraMode(productionPage, 'observatory');
   // ------------------------------------------------------------ end T0110 ---
 
   const productionEarth = await screenshotEvidence(
