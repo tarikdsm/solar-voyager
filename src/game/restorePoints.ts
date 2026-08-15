@@ -1,5 +1,22 @@
 import type { SimulationCore } from '../sim/simulation.js';
 import type { SimulationPersistentState } from '../sim/simulationState.js';
+import type { SimulationReplacementOrigin } from './sessionController.js';
+
+/**
+ * Whether a core replacement invalidates the ring.
+ *
+ * Only a **timeline change** does. Each slot is a self-contained
+ * `SimulationPersistentState`, so after a restore or a respawn the older slots
+ * are still valid, flyable states of the mission still in progress — clearing
+ * them would reduce a six-slot ring to a one-deep undo. A new game, a loaded
+ * save or an import start a mission those slots do not belong to.
+ *
+ * Exported so `main.ts` and the regression test share one rule instead of two
+ * that can drift.
+ */
+export function replacementInvalidatesRestorePoints(origin: SimulationReplacementOrigin): boolean {
+  return origin === 'new-game' || origin === 'load' || origin === 'import';
+}
 
 /** Slots retained by the ring; the oldest is overwritten (plan §3.4). */
 export const RESTORE_POINT_CAPACITY = 6;

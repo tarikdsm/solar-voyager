@@ -16,7 +16,7 @@ import {
 import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
-import { RestorePointRing } from './game/restorePoints.js';
+import { replacementInvalidatesRestorePoints, RestorePointRing } from './game/restorePoints.js';
 import { GameSessionController } from './game/sessionController.js';
 import { createImpactSignalStore } from './ui/impactSignals.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
@@ -414,11 +414,13 @@ const session = new GameSessionController({
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: createTrackedPersistentSimulation,
   createRespawnState: createRespawnPersistentState,
-  onSimulationReplaced: (replacement) => {
+  onSimulationReplaced: (replacement, origin) => {
     runtimeResources.sessionSimulationReplacements += 1;
-    // The ring describes a timeline this core no longer shares, whether the
-    // replacement came from a save, a restore, or a respawn.
-    restorePoints.reset();
+    // Only a timeline change invalidates the ring. A restore or a respawn moves
+    // within the mission already in progress, and the remaining slots are still
+    // valid states of it — clearing them would make a six-slot ring a one-deep
+    // undo.
+    if (replacementInvalidatesRestorePoints(origin)) restorePoints.reset();
     impactStore.publish(replacement.snapshot, restorePoints.count);
     // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
     // and the regime scaling below depends on it — so the vessel goes first.

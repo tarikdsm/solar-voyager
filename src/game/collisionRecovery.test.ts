@@ -7,9 +7,13 @@ import {
   createNewGameSimulation,
   createRespawnPersistentState,
 } from './createNewGameSimulation.js';
-import { RestorePointRing, RESTORE_POINT_CAPACITY } from './restorePoints.js';
+import {
+  replacementInvalidatesRestorePoints,
+  RestorePointRing,
+  RESTORE_POINT_CAPACITY,
+} from './restorePoints.js';
 import { SAVE_STORAGE_KEY, SaveRepository } from './saveLoad.js';
-import { GameSessionController } from './sessionController.js';
+import { GameSessionController, type SimulationReplacementOrigin } from './sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from './settings.js';
 
 const VESSEL = DEFAULT_VESSEL;
@@ -145,6 +149,110 @@ describe('restore point ring - plan section 3.4', () => {
 
     expect(ring.count).toBe(0);
     expect(ring.latest).toBeNull();
+  });
+});
+
+describe('restore point ring survives recovery - ADR-036 section 5', () => {
+  /** Wires the ring to the session exactly as `main.ts` does. */
+  function createRingWiredController() {
+    const storage = new MemoryStorage();
+    const simulation = createNewGameSimulation(VESSEL);
+    const ring = new RestorePointRing(10, RESTORE_POINT_CAPACITY);
+    const origins: SimulationReplacementOrigin[] = [];
+    const controller = new GameSessionController({
+      createNewSimulation: () => createNewGameSimulation(VESSEL),
+      createSimulation: (state) => createGameSimulationFromPersistentState(VESSEL, state),
+      createRespawnState: createRespawnPersistentState,
+      initialSimulation: simulation,
+      saveRepository: new SaveRepository(storage, VESSEL),
+      settingsRepository: new SettingsRepository(storage),
+      onSimulationReplaced: (_replacement, origin) => {
+        origins.push(origin);
+        if (replacementInvalidatesRestorePoints(origin)) ring.reset();
+      },
+    });
+    return { controller, origins, ring, simulation, storage };
+  }
+
+  function fillRing(controller: GameSessionController, ring: RestorePointRing, count: number) {
+    for (let capture = 0; capture < count; capture += 1) {
+      controller.simulation.step(1);
+      ring.update(controller.simulation, 10);
+    }
+  }
+
+  it('reports the origin of every replacement', () => {
+    const { controller, origins, storage } = createRingWiredController();
+    controller.saveLocal();
+
+    controller.restoreFromState(controller.simulation.exportPersistentState());
+    controller.respawnInOrbit();
+    controller.loadLocal();
+    controller.startNewGame();
+    const exported = controller.exportJson();
+    if (exported.ok) controller.importJson(exported.json);
+
+    expect(origins).toEqual(['restore', 'respawn', 'load', 'new-game', 'import']);
+    expect(storage.values.get(SAVE_STORAGE_KEY)).toBeDefined();
+  });
+
+  /**
+   * The defect this guards: `reset()` on every replacement made a six-slot ring
+   * a one-deep undo, because restore and respawn fire the same callback as a new
+   * game. Each slot is a self-contained document, so after a recovery the older
+   * slots are still valid states of the same timeline.
+   */
+  it('keeps every slot across a restore, so the ring is not a one-deep undo', () => {
+    const { controller, ring } = createRingWiredController();
+    fillRing(controller, ring, RESTORE_POINT_CAPACITY);
+    expect(ring.count).toBe(RESTORE_POINT_CAPACITY);
+    const retainedTimes = [];
+    for (let index = 0; index < ring.count; index += 1) {
+      retainedTimes.push(ring.get(index)?.simTimeSec);
+    }
+    const olderSlot = ring.get(RESTORE_POINT_CAPACITY - 1);
+    expect(olderSlot).not.toBeNull();
+
+    const result = controller.restoreFromState(ring.latest?.state as never);
+
+    expect(result.ok).toBe(true);
+    expect(ring.count).toBe(RESTORE_POINT_CAPACITY);
+    const afterTimes = [];
+    for (let index = 0; index < ring.count; index += 1) {
+      afterTimes.push(ring.get(index)?.simTimeSec);
+    }
+    expect(afterTimes).toEqual(retainedTimes);
+
+    // And the depth is real: the oldest surviving slot still restores.
+    const deep = controller.restoreFromState(olderSlot?.state as never);
+    expect(deep.ok).toBe(true);
+    expect(controller.simulation.snapshot.simTimeSec).toBe(olderSlot?.simTimeSec);
+    expect(ring.count).toBe(RESTORE_POINT_CAPACITY);
+  });
+
+  it('keeps every slot across a respawn', () => {
+    const { controller, ring } = createRingWiredController();
+    fillRing(controller, ring, 3);
+    expect(ring.count).toBe(3);
+
+    expect(controller.respawnInOrbit().ok).toBe(true);
+
+    expect(ring.count).toBe(3);
+    expect(ring.latest).not.toBeNull();
+  });
+
+  it('still clears the ring when the timeline changes', () => {
+    const { controller, ring } = createRingWiredController();
+    fillRing(controller, ring, 3);
+    expect(ring.count).toBe(3);
+
+    expect(controller.startNewGame().ok).toBe(true);
+    expect(ring.count).toBe(0);
+
+    fillRing(controller, ring, 2);
+    controller.saveLocal();
+    expect(controller.loadLocal().ok).toBe(true);
+    expect(ring.count).toBe(0);
   });
 });
 

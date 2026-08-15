@@ -28,6 +28,17 @@ export type SessionExportResult =
 
 export type SettingsChangeOrigin = 'restore' | 'user';
 
+/**
+ * Why the simulation core was replaced.
+ *
+ * The distinction that matters to consumers is **timeline change vs recovery**:
+ * `new-game`, `load` and `import` start a mission the previous core knows
+ * nothing about, while `restore` and `respawn` (ADR-036) move within the mission
+ * already in progress. State keyed to the timeline — the restore-point ring
+ * above all — must survive the second kind.
+ */
+export type SimulationReplacementOrigin = 'new-game' | 'load' | 'import' | 'restore' | 'respawn';
+
 export interface GameSessionControllerOptions {
   readonly initialSimulation: SimulationCore;
   readonly saveRepository: SaveRepository;
@@ -43,7 +54,10 @@ export interface GameSessionControllerOptions {
     shipPositionKm: Float64Array,
     bodyIndex: number,
   ) => SimulationPersistentState;
-  readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
+  readonly onSimulationReplaced?: (
+    simulation: SimulationCore,
+    origin: SimulationReplacementOrigin,
+  ) => void;
   readonly onSettingsChanged?: (settings: GameSettingsV2, origin: SettingsChangeOrigin) => void;
 }
 
@@ -64,7 +78,8 @@ export class GameSessionController {
       ) => SimulationPersistentState)
     | null;
 
-  private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
+  private readonly onSimulationReplaced:
+    ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
     ((settings: GameSettingsV2, origin: SettingsChangeOrigin) => void) | null;
 
@@ -105,7 +120,7 @@ export class GameSessionController {
         detail: describeError(error),
       };
     }
-    this.replaceSimulation(candidateSimulation);
+    this.replaceSimulation(candidateSimulation, 'new-game');
     return { ok: true, message: 'New game started' };
   }
 
@@ -124,7 +139,7 @@ export class GameSessionController {
     } catch (error: unknown) {
       return { ok: false, message: 'Unable to restore', detail: describeError(error) };
     }
-    this.replaceSimulation(candidateSimulation);
+    this.replaceSimulation(candidateSimulation, 'restore');
     return { ok: true, message: 'Restored' };
   }
 
@@ -154,7 +169,7 @@ export class GameSessionController {
     } catch (error: unknown) {
       return { ok: false, message: 'Unable to respawn', detail: describeError(error) };
     }
-    this.replaceSimulation(candidateSimulation);
+    this.replaceSimulation(candidateSimulation, 'respawn');
     return { ok: true, message: 'Respawned in orbit' };
   }
 
@@ -189,7 +204,12 @@ export class GameSessionController {
         detail: result.error,
       };
     }
-    return this.replaceFromEnvelope(result.envelope, 'Session loaded', 'Unable to load session');
+    return this.replaceFromEnvelope(
+      result.envelope,
+      'Session loaded',
+      'Unable to load session',
+      'load',
+    );
   }
 
   exportJson(): SessionExportResult {
@@ -207,7 +227,12 @@ export class GameSessionController {
     } catch (error: unknown) {
       return { ok: false, message: 'Imported session is invalid', detail: describeError(error) };
     }
-    return this.replaceFromEnvelope(envelope, 'Session imported', 'Unable to import session');
+    return this.replaceFromEnvelope(
+      envelope,
+      'Session imported',
+      'Unable to import session',
+      'import',
+    );
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
@@ -260,6 +285,7 @@ export class GameSessionController {
     envelope: SaveEnvelopeV3,
     successMessage: string,
     failureMessage: string,
+    origin: SimulationReplacementOrigin,
   ): SessionActionResult {
     let candidateSimulation: SimulationCore;
     try {
@@ -274,14 +300,14 @@ export class GameSessionController {
     }
     this.currentSimulation = candidateSimulation;
     this.currentSettings = candidateSettings;
-    this.onSimulationReplaced?.(candidateSimulation);
+    this.onSimulationReplaced?.(candidateSimulation, origin);
     this.onSettingsChanged?.(candidateSettings, 'restore');
     return { ok: true, message: successMessage };
   }
 
-  private replaceSimulation(simulation: SimulationCore): void {
+  private replaceSimulation(simulation: SimulationCore, origin: SimulationReplacementOrigin): void {
     this.currentSimulation = simulation;
-    this.onSimulationReplaced?.(simulation);
+    this.onSimulationReplaced?.(simulation, origin);
   }
 
   private commitSettings(
