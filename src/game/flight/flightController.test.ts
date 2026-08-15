@@ -13,7 +13,12 @@ import {
   type Commands,
 } from '../../sim/simulationSnapshot.js';
 import { createNewGameSimulation } from '../createNewGameSimulation.js';
-import { FlightController, MAX_UPDATE_DT_SEC, ROTATION_RATE_RAD_S } from './flightController.js';
+import {
+  FlightController,
+  MAX_UPDATE_DT_SEC,
+  PURSUIT_DAMPING_PER_S,
+  ROTATION_RATE_RAD_S,
+} from './flightController.js';
 
 const DEGREE_RAD = Math.PI / 180;
 const FRAME_SEC = 1 / 60;
@@ -465,12 +470,18 @@ describe('FlightController holds and assists', () => {
   });
 
   it('carries an unassisted coast through a warp change as physical momentum', () => {
+    // A PARTIAL deflection on purpose. At full deflection the stale wall-frame
+    // belief (0.6) and the recomputed-then-clamped one (clamp(0.6*50) = 0.6) are
+    // the same number, so the test would pass against the pre-fix code; at 10%
+    // they are 0.06 and 0.6, a factor of ten.
+    const COAST_AXIS = 0.1;
+    const coastWallRateRadS = COAST_AXIS * ROTATION_RATE_RAD_S;
     const rig = new FlightRig();
     rig.flight.setStabilityAssist(false);
-    rig.flight.setRotationAxes(0, 0, 1);
+    rig.flight.setRotationAxes(0, 0, COAST_AXIS);
     rig.step();
     const coastSimRateRadS = rig.state.rotationRatesRadS[2] as number;
-    expect(coastSimRateRadS).toBe(ROTATION_RATE_RAD_S);
+    expect(coastSimRateRadS).toBeCloseTo(coastWallRateRadS, 15);
     rig.flight.setRotationAxes(0, 0, 0);
     rig.step();
 
@@ -482,17 +493,24 @@ describe('FlightController holds and assists', () => {
     // change and the ship genuinely appears to spin 50x faster, the way every
     // other motion does under time compression.
     expect(rig.state.rotationRatesRadS[2] as number).toBe(coastSimRateRadS);
-    expect(rig.wallRateRadS(2)).toBeCloseTo(ROTATION_RATE_RAD_S * 50, 9);
+    expect(rig.wallRateRadS(2)).toBeCloseTo(coastWallRateRadS * 50, 9);
 
-    // What must not go stale is the controller's model of that rate. Taking the
-    // controls back must command against the coast, not with it, and must land
-    // inside the vehicle's authority.
-    rig.flight.setRotationAxes(0, 0, 0);
+    // The regression this pins: the controller's model of that rate must be
+    // re-derived at the tier in force, not carried over from the tier the coast
+    // began on. The ship is turning at 3.0 rad/s of wall rotation, five times its
+    // authority, so the first re-engaged command must be the saturated 0.6
+    // (less one damping step) — a stale model would command a tenth of that.
     rig.flight.setLookDelta(0.001, 0);
     rig.step();
-    const recoveredSimRateRadS = rig.state.rotationRatesRadS[2] as number;
-    expect(Math.abs(recoveredSimRateRadS)).toBeLessThanOrEqual(ROTATION_RATE_RAD_S / 50 + 1e-15);
-    expect(Math.abs(recoveredSimRateRadS)).toBeLessThan(Math.abs(coastSimRateRadS));
+    const recoveredWallRateRadS = Math.abs(rig.wallRateRadS(2));
+    const stalePreFixWallRateRadS = coastWallRateRadS * (1 - PURSUIT_DAMPING_PER_S / 60);
+    expect(recoveredWallRateRadS).toBeGreaterThan(0.5);
+    expect(recoveredWallRateRadS).toBeGreaterThan(stalePreFixWallRateRadS * 5);
+    // Still inside the envelope, and still opposing the coast rather than adding.
+    expect(recoveredWallRateRadS).toBeLessThanOrEqual(ROTATION_RATE_RAD_S + 1e-15);
+    expect(Math.abs(rig.state.rotationRatesRadS[2] as number)).toBeLessThan(
+      Math.abs(coastSimRateRadS),
+    );
 
     rig.flight.killRotation();
     expect([...rig.state.rotationRatesRadS]).toEqual([0, 0, 0]);
