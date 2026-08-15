@@ -197,6 +197,20 @@ describe('CameraInputController', () => {
     expect(preventDefault).toHaveBeenCalledTimes(4);
   });
 
+  it('lets only the enabled controller own the shared focus label', () => {
+    // Two controllers share one label element (space camera and system map).
+    // While both cameras always sat on the same body this could not be seen;
+    // since T0110 the space camera can be on the ship while the map is on Earth,
+    // so a disabled controller writing during construction would mislabel the HUD.
+    const enabled = createFixture(true);
+    const disabled = createFixture(false);
+    expect(enabled.label.textContent).toBe('Focus: Earth');
+    expect(disabled.label.textContent).toBe('');
+
+    disabled.input.setEnabled(true);
+    expect(disabled.label.textContent).toBe('Focus: Earth');
+  });
+
   it('cycles the camera mode on O and relabels from the camera, not the key', () => {
     const { controls, keyboard, label } = createFixture();
     const preventDefault = vi.fn();

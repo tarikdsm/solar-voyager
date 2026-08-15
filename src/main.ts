@@ -119,6 +119,9 @@ interface CameraRuntimeDiagnostics {
   readonly fovWideningEnabled: boolean;
   readonly shakeEnabled: boolean;
   readonly shipDistanceKm: number;
+  readonly positionXKm: number;
+  readonly positionYKm: number;
+  readonly positionZKm: number;
 }
 
 interface SystemMapRuntimeDiagnostics {
@@ -1169,6 +1172,19 @@ async function prepareApplication(): Promise<void> {
         },
         get shakeEnabled() {
           return cameraDirector.chaseShakeEnabled;
+        },
+        /**
+         * Published camera position, so a browser gate can sample the pose per
+         * animation frame and tell an animated mode change from a hard cut.
+         */
+        get positionXKm() {
+          return cameraDirector.pose.positionKm.x;
+        },
+        get positionYKm() {
+          return cameraDirector.pose.positionKm.y;
+        },
+        get positionZKm() {
+          return cameraDirector.pose.positionKm.z;
         },
         /**
          * Distance from the published camera pose to the ship.
