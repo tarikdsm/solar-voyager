@@ -140,6 +140,16 @@ The nested propagation is safe against the in-flight one: it runs to completion
 synchronously, uses its own workspace and result, and the derivative's rails
 cache is keyed on time so the outer loop refreshes it on its next stage.
 
+A probe that cannot produce a state (its own step budget exhausted) reports "not
+penetrating", and the closing re-evaluation discarding an already-confirmed
+contact does the same. **Failing open is deliberate** — an exhausted probe is not
+evidence of a crash, and inventing one is worse than missing one — but a
+fail-open nothing can see is indistinguishable from working, so both sites bump
+`SurfaceCollisionWorkspace.probeFailureCount`, republished as
+`SimulationCore.surfaceProbeFailureCount`. It is expected to stay 0, is asserted
+0 across both a sustained 100 m graze and a real impact, and both fail-open
+branches have tests that drive it above 0.
+
 `surfaceCollision.test.ts` asserts the sag claim directly — that the chord fires
 on a 100 m graze over a 20 s step whose true arc is everywhere clear — so the
 confirmation pass has an executable reason to exist and cannot be quietly
@@ -209,14 +219,24 @@ impactSimTimeSec: number;  // bisected to within 1 ms
 `siderealRotationPeriodSec` but the sim has no surface-velocity field, and
 including it would imply a landing model this task does not have.
 
-`WarningFlag.IMPACT` exists and is still **not** written by anything. It is left
-alone deliberately: the plan fixes the snapshot delta at four fields, and
-populating a previously-dead flag is a HUD decision that belongs to T0112.
+`SimulationCore` also becomes the **first writer of `warningFlags`**, which had
+been declared since v1 with zero writers anywhere — a declared-but-never-written
+field in a public interface misleads readers, and this one already misled the v1
+audit. `warningFlags` is assigned `WarningFlag.IMPACT` on contact and
+`WarningFlag.NONE` otherwise. Assignment rather than a bitwise OR because IMPACT
+is still the only owned bit; a task that lands `ATMOSPHERE_ENTRY`, `SOI_CHANGE`
+or `ESCAPE` must combine them at this one site rather than adding a second
+writer. The flag is redundant with `impactOccurred` today and is kept because it
+is the extension point the other three warnings will need; if T0112 concludes
+otherwise, deleting the enum is the correct alternative to leaving it dead.
 
 `CompiledRailsCatalog` gains `collisionRadiiKm`, compiled once from
 `meanRadiusKm + (atmosphereTopKm ?? 0)`, so the sim and the predictor read one
-source instead of two. `RailsBodyInput`'s new fields are optional, so every
-existing caller — including the golden harness — compiles unchanged.
+source instead of two — `predictorWorkerRuntime` consumes it rather than
+recomputing from raw JSON, which also drops that module's unchecked assumption
+that catalog index order matches `bodiesDocument.bodies` order.
+`RailsBodyInput`'s new fields are optional, so every existing caller — including
+the golden harness — compiles unchanged.
 
 ### 8. Recovery is a game-layer concern that reuses the save path
 
@@ -242,6 +262,20 @@ inside the surface it just hit.
 `RestorePointRing` keeps six slots at a 10 s wall-time cadence, driven by the
 frame loop's existing `wallDtSec` (no clock enters `sim/`), and skips capture
 while frozen so the ring never fills with unflyable states.
+
+**Only a timeline change clears it.** `onSimulationReplaced` now carries a
+`SimulationReplacementOrigin`, and `replacementInvalidatesRestorePoints` returns
+true for `new-game`, `load` and `import` but false for `restore` and `respawn`.
+Clearing on every replacement — the first implementation — silently reduced the
+six-slot ring to a one-deep undo, because the two recovery paths fire the same
+callback as a new game. Each slot is a self-contained
+`SimulationPersistentState`, so after a recovery the older slots are still valid,
+flyable states of the mission in progress. The predicate is exported so `main.ts`
+and its regression test share one rule rather than two that can drift.
+
+Whether the UI offers more than `latest` is T0112's call; the depth exists for it
+to expose, and `RestorePointRing.get(index)` is covered by tests that restore
+from the oldest surviving slot.
 
 Capture calls `SimulationCore.exportPersistentState()`, which **allocates**. A
 parallel non-allocating `captureInto` path through `SimulationCore` and
@@ -329,10 +363,23 @@ defensive branch for a class of crash.
 - `writeSlewLimitedQuaternionInto` does not short-circuit a zero slew budget: it
   composes an identity rotation and then renormalizes, so a core rebuilt from a
   persisted document publishes an attitude quaternion ~1 ULP per component off
-  the persisted one. ADR-035's "a non-positive budget holds the current attitude"
-  is true only up to that renormalization. It does not accumulate — restoring the
-  same document twice is bit-identical — and `collisionRecovery.test.ts` documents
-  it. Left for a separate change because it is ADR-035 surface.
+  the persisted one, whenever the persisted quaternion is not exactly float64
+  unit-norm. ADR-035's "a non-positive budget holds the current attitude" is true
+  only up to that renormalization. It does not amplify — restoring the same
+  document twice is bit-identical, and the drift washes out within ~100 steps —
+  and `collisionRecovery.test.ts` documents it. Left for a separate change
+  because it is ADR-035 surface.
+
+  **The follow-up must widen a test, not merely add the guard.** The repo's
+  save/load bit-determinism assertion (`simulation.test.ts:562`) passes today
+  only because it exports in `'manual'` attitude mode, whose sibling
+  `evaluateBodyRateQuaternionInto` *does* have the zero-elapsed short-circuit
+  that `writeSlewLimitedQuaternionInto` lacks. The guarantee is therefore tested
+  exclusively through the one attitude branch that is exempt from the defect.
+  Extending that case to a hold mode is what would actually have caught this.
+- ADR-021 states "the ephemeris baker owns [`visual.polarRadiusRatio`] so
+  regeneration cannot erase it". That invariant is currently false for the giants
+  (see §1) and deserves its own task.
 
 ## Alternatives considered
 
