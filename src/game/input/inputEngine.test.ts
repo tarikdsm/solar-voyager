@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_GAME_SETTINGS, rebindInput } from '../settings.js';
+import { DEFAULT_GAME_SETTINGS, DEFAULT_GAMEPAD_SETTINGS, rebindInput } from '../settings.js';
+import {
+  GamepadPoller,
+  shapeGamepadAxis,
+  type GamepadButtonLike,
+  type GamepadHost,
+  type GamepadLike,
+} from './gamepad.js';
 import {
   DEFAULT_LOOK_RAD_PER_PIXEL,
   InputEngine,
@@ -132,7 +139,95 @@ class FakePointerLock implements PointerLockSurface {
   }
 }
 
-function createEngine(overrides: { readonly onPauseRequested?: () => void } = {}) {
+/** Same deep-clone requirement as `gamepad.test.ts`'s `clonePad` — see that file's doc comment. */
+function clonePad(pad: GamepadLike): GamepadLike {
+  return {
+    connected: pad.connected,
+    mapping: pad.mapping,
+    axes: [...pad.axes],
+    buttons: pad.buttons.map((button) => ({ pressed: button.pressed, value: button.value })),
+  };
+}
+
+/**
+ * Minimal fake of the real `navigator.getGamepads()` + connect/disconnect
+ * events. Every call returns a fresh top-level array *and* a fresh cloned pad
+ * (fresh `axes`/`buttons` too) so a caching shortcut in `InputEngine`'s merge
+ * path can't accidentally read a stale-but-still-correct reference.
+ */
+class FakeGamepadHost implements GamepadHost {
+  private readonly slots = new Map<number, GamepadLike>();
+  private readonly connectedListeners: (() => void)[] = [];
+  private readonly disconnectedListeners: (() => void)[] = [];
+
+  getGamepads(): readonly (GamepadLike | null)[] {
+    const highestIndex = Math.max(-1, ...this.slots.keys());
+    const snapshot: (GamepadLike | null)[] = [];
+    for (let index = 0; index <= highestIndex; index += 1) {
+      const pad = this.slots.get(index);
+      snapshot.push(pad === undefined ? null : clonePad(pad));
+    }
+    return snapshot; // a fresh array every call, faithful to the real API
+  }
+
+  addEventListener(type: 'gamepadconnected' | 'gamepaddisconnected', listener: () => void): void {
+    (type === 'gamepadconnected' ? this.connectedListeners : this.disconnectedListeners).push(
+      listener,
+    );
+  }
+
+  removeEventListener(
+    type: 'gamepadconnected' | 'gamepaddisconnected',
+    listener: () => void,
+  ): void {
+    const list = type === 'gamepadconnected' ? this.connectedListeners : this.disconnectedListeners;
+    const index = list.indexOf(listener);
+    if (index >= 0) list.splice(index, 1);
+  }
+
+  connect(index: number, pad: GamepadLike): void {
+    this.slots.set(index, pad);
+    for (const listener of [...this.connectedListeners]) listener();
+  }
+
+  update(index: number, pad: GamepadLike): void {
+    this.slots.set(index, pad);
+  }
+
+  disconnect(index: number): void {
+    this.slots.delete(index);
+    for (const listener of [...this.disconnectedListeners]) listener();
+  }
+
+  get listenerCount(): number {
+    return this.connectedListeners.length + this.disconnectedListeners.length;
+  }
+}
+
+function standardPad(
+  overrides: {
+    readonly axes?: readonly [number, number, number, number];
+    readonly buttons?: Readonly<Record<number, Partial<GamepadButtonLike>>>;
+  } = {},
+): GamepadLike {
+  const buttons: GamepadButtonLike[] = Array.from({ length: 17 }, () => ({
+    pressed: false,
+    value: 0,
+  }));
+  for (const [index, patch] of Object.entries(overrides.buttons ?? {})) {
+    const existing = buttons[Number(index)];
+    if (existing !== undefined) buttons[Number(index)] = { ...existing, ...patch };
+  }
+  return { connected: true, mapping: 'standard', axes: overrides.axes ?? [0, 0, 0, 0], buttons };
+}
+
+function createEngine(
+  overrides: {
+    readonly onPauseRequested?: () => void;
+    readonly gamepad?: GamepadPoller;
+    readonly isTextEntryActive?: () => boolean;
+  } = {},
+) {
   const keyboard = new FakeKeyboardTarget();
   const pointerLock = new FakePointerLock();
   const engine = new InputEngine({
@@ -142,6 +237,14 @@ function createEngine(overrides: { readonly onPauseRequested?: () => void } = {}
     ...overrides,
   });
   return { engine, keyboard, pointerLock };
+}
+
+function createEngineWithGamepad(
+  isTextEntryActive?: () => boolean,
+): ReturnType<typeof createEngine> & { readonly gamepadHost: FakeGamepadHost } {
+  const gamepadHost = new FakeGamepadHost();
+  const gamepad = new GamepadPoller(gamepadHost, DEFAULT_GAMEPAD_SETTINGS);
+  return { ...createEngine({ gamepad, isTextEntryActive }), gamepadHost };
 }
 
 const BUTTON_TARGET = { isContentEditable: false, tagName: 'BUTTON' } as unknown as EventTarget;
@@ -486,5 +589,213 @@ describe('InputEngine — frame identity and disposal', () => {
     expect(keyboard.listenerCount).toBe(0);
     expect(pointerLock.disposeCount).toBe(1);
     expect(engine.poll(1 / 60).axes.pitch).toBe(0);
+  });
+});
+
+describe('InputEngine — gamepad integration (T0106)', () => {
+  it('sums a connected stick with simultaneous keyboard input, each clamped to [-1, 1]', () => {
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad({ axes: [1, 0, 0, 0] })); // full yaw right
+    keyboard.press('KeyD'); // yawRight, also +1
+
+    const frame = engine.poll(1 / 60);
+
+    expect(frame.axes.yaw).toBe(1); // 1 + 1 clamped, not 2
+  });
+
+  it('a connected-but-centered pad never fights a keyboard-only player', () => {
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad());
+    keyboard.press('KeyW');
+
+    expect(engine.poll(1 / 60).axes.pitch).toBe(1);
+  });
+
+  it('the right trigger sets the throttle lever directly, and keyboard resumes from there', () => {
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    const triggerValue = 0.6;
+    // Trusts the pure function's own exhaustive coverage (gamepad.test.ts);
+    // this test is about the wiring, not re-deriving the deadzone/curve math.
+    const expectedLever = Math.max(
+      0,
+      shapeGamepadAxis(
+        triggerValue,
+        DEFAULT_GAMEPAD_SETTINGS.deadzone,
+        DEFAULT_GAMEPAD_SETTINGS.curveExponent,
+        DEFAULT_GAMEPAD_SETTINGS.axes.throttle,
+      ),
+    );
+    gamepadHost.connect(0, standardPad({ buttons: { 7: { value: triggerValue, pressed: true } } }));
+
+    expect(engine.poll(1 / 60).axes.throttle).toBeCloseTo(expectedLever, 12);
+
+    // Release the trigger: the lever holds (does not snap to 0) because
+    // nothing is actively deflected this frame.
+    gamepadHost.update(0, standardPad());
+    expect(engine.poll(1 / 60).axes.throttle).toBeCloseTo(expectedLever, 12);
+
+    // Keyboard resumes the ramp from the trigger-set position, not from 0.
+    keyboard.press('KeyR');
+    const afterTap = engine.poll(1 / 60);
+    expect(afterTap.axes.throttle).toBeCloseTo(expectedLever + THROTTLE_TAP_STEP, 9);
+  });
+
+  it('trigger and keyboard throttle held simultaneously: the trigger wins every frame, deterministically', () => {
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    const triggerValue = 0.6;
+    const expectedLever = Math.max(
+      0,
+      shapeGamepadAxis(
+        triggerValue,
+        DEFAULT_GAMEPAD_SETTINGS.deadzone,
+        DEFAULT_GAMEPAD_SETTINGS.curveExponent,
+        DEFAULT_GAMEPAD_SETTINGS.axes.throttle,
+      ),
+    );
+    gamepadHost.connect(0, standardPad({ buttons: { 7: { value: triggerValue, pressed: true } } }));
+    keyboard.press('KeyR'); // throttleIncrease, held for the whole scenario
+
+    // Both sources are active every frame for 30 frames (0.5 s): the lever
+    // must sit exactly at the trigger's shaped value every single frame —
+    // never drifting toward the keyboard ramp's ceiling of 1, never
+    // oscillating between the two. pollGamepad() runs after the keyboard
+    // ramp is computed and unconditionally overwrites axes.throttle while
+    // throttleActive, so this is deterministic by construction, not by luck.
+    for (let frame = 0; frame < 30; frame += 1) {
+      const result = engine.poll(1 / 60);
+      expect(result.axes.throttle).toBeCloseTo(expectedLever, 12);
+    }
+  });
+
+  it('releasing the trigger while still holding the throttle key jumps by one tap step, not a resumed ramp', () => {
+    // Documents a real, understood residual (see gamepad-design.md): holding
+    // R and the trigger together re-anchors the keyboard ramp's hold origin
+    // every single frame (setThrottleAxis always resets throttleHoldSec to
+    // 0), so the first frame after the trigger releases always measures
+    // exactly one frame's worth of held time. max(TAP_STEP, RAMP * oneFrameDt)
+    // is TAP_STEP at any real frame rate, so the lever jumps by a discrete
+    // 0.1 instead of continuing the smooth ramp a keyboard-only hold of the
+    // same wall-clock duration would show. This is a one-frame artifact, not
+    // a sustained glitch — pinned here so a future change to the re-anchor
+    // logic is a deliberate decision, not an unnoticed regression either way.
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad();
+    const triggerValue = 0.6;
+    const expectedLever = Math.max(
+      0,
+      shapeGamepadAxis(
+        triggerValue,
+        DEFAULT_GAMEPAD_SETTINGS.deadzone,
+        DEFAULT_GAMEPAD_SETTINGS.curveExponent,
+        DEFAULT_GAMEPAD_SETTINGS.axes.throttle,
+      ),
+    );
+    gamepadHost.connect(0, standardPad({ buttons: { 7: { value: triggerValue, pressed: true } } }));
+    keyboard.press('KeyR');
+    engine.poll(1 / 60);
+    engine.poll(1 / 60);
+    expect(engine.poll(1 / 60).axes.throttle).toBeCloseTo(expectedLever, 12);
+
+    gamepadHost.update(0, standardPad()); // release the trigger; KeyR stays held
+    // Captured as a primitive immediately: `engine.poll()` returns the same
+    // reused mutable frame every call (InputFrame's own contract), so holding
+    // the frame object itself across the loop below and re-reading its
+    // `.axes.throttle` later would silently observe the *latest* poll's
+    // value instead of this one.
+    const afterReleaseThrottle = engine.poll(1 / 60).axes.throttle;
+    expect(afterReleaseThrottle).toBeCloseTo(expectedLever + THROTTLE_TAP_STEP, 9);
+
+    // Not a sustained glitch: continuing to hold R resumes a normal monotonic
+    // ramp from the jumped value — it never re-jumps and never reverses. The
+    // ramp floors at TAP_STEP for a short hold regardless of source (the same
+    // "never moves the lever backwards" property a keyboard-only press
+    // already has — RAMP * heldSec does not exceed TAP_STEP until ~9 frames
+    // at 60 Hz), then climbs past it.
+    let last = afterReleaseThrottle;
+    for (let frame = 0; frame < 30; frame += 1) {
+      const value = engine.poll(1 / 60).axes.throttle;
+      expect(value).toBeGreaterThanOrEqual(last);
+      last = value;
+    }
+    expect(last).toBeGreaterThan(afterReleaseThrottle);
+  });
+
+  it('a text field in focus suppresses gamepad axes and buttons but not the keyboard', () => {
+    let typing = true;
+    const { engine, keyboard, gamepadHost } = createEngineWithGamepad(() => typing);
+    // Pitch is gamepad-only (no keyboard pitch key pressed) so suppression is
+    // observable; yaw is keyboard-only so it proves the gamepad gate never
+    // touches keyboard input.
+    gamepadHost.connect(0, standardPad({ axes: [0, -1, 0, 0], buttons: { 0: { pressed: true } } }));
+    keyboard.press('KeyD'); // yawRight
+
+    const whileTyping = engine.poll(1 / 60);
+    expect(whileTyping.axes.pitch).toBe(0); // full gamepad deflection, still suppressed
+    expect(whileTyping.axes.yaw).toBe(1); // keyboard's own input is never gated by this flag
+    expect(whileTyping.pressed('cruiseEngage')).toBe(false);
+    expect(whileTyping.held('cruiseEngage')).toBe(false);
+
+    typing = false;
+    const afterFocusReturns = engine.poll(1 / 60);
+    expect(afterFocusReturns.axes.pitch).toBeCloseTo(1, 12);
+    // The button was already held throughout the excursion: the poller kept
+    // tracking it internally, so returning focus reports the level, not a
+    // fresh press edge.
+    expect(afterFocusReturns.pressed('cruiseEngage')).toBe(false);
+    expect(afterFocusReturns.held('cruiseEngage')).toBe(true);
+  });
+
+  it('a disconnected gamepad cannot leave a button stuck held when the keyboard never touched it', () => {
+    const { engine, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad({ buttons: { 0: { pressed: true } } }));
+    expect(engine.poll(1 / 60).held('cruiseEngage')).toBe(true);
+
+    gamepadHost.disconnect(0);
+
+    expect(engine.poll(1 / 60).held('cruiseEngage')).toBe(false);
+  });
+
+  it('A/B report a one-poll press edge mapped to cruiseEngage/cruiseAbort', () => {
+    const { engine, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad({ buttons: { 0: { pressed: true } } }));
+
+    const first = engine.poll(1 / 60);
+    expect(first.pressed('cruiseEngage')).toBe(true);
+    expect(first.pressed('cruiseAbort')).toBe(false);
+
+    const second = engine.poll(1 / 60);
+    expect(second.pressed('cruiseEngage')).toBe(false);
+    expect(second.held('cruiseEngage')).toBe(true);
+  });
+
+  it('applyGamepadSettings reaches the wired poller and changes shaping on the next poll', () => {
+    const { engine, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad({ axes: [1, 0, 0, 0] }));
+    expect(engine.poll(1 / 60).axes.yaw).toBeCloseTo(1, 12);
+
+    engine.applyGamepadSettings({
+      ...DEFAULT_GAMEPAD_SETTINGS,
+      axes: { ...DEFAULT_GAMEPAD_SETTINGS.axes, yaw: { invert: true, sensitivity: 1 } },
+    });
+
+    expect(engine.poll(1 / 60).axes.yaw).toBeCloseTo(-1, 12);
+  });
+
+  it('never calls getGamepads when no gamepad is wired at all', () => {
+    const { engine, keyboard } = createEngine(); // no gamepad option at all
+    keyboard.press('KeyW');
+
+    expect(() => engine.poll(1 / 60)).not.toThrow();
+    expect(engine.poll(1 / 60).axes.pitch).toBe(1);
+  });
+
+  it('dispose releases the gamepad poller too', () => {
+    const { engine, gamepadHost } = createEngineWithGamepad();
+    gamepadHost.connect(0, standardPad({ axes: [1, 0, 0, 0] }));
+    engine.poll(1 / 60);
+    expect(gamepadHost.listenerCount).toBe(2);
+
+    engine.dispose();
+
+    expect(gamepadHost.listenerCount).toBe(0);
   });
 });

@@ -6,7 +6,12 @@ import {
   DEFAULT_GAME_SETTINGS,
   parseProfileSettings,
   rebindInput,
-  type GameSettingsV2,
+  updateGamepadAxisInvert,
+  updateGamepadAxisSensitivity,
+  updateGamepadCurveExponent,
+  updateGamepadDeadzone,
+  type GamepadAxisId,
+  type GameSettingsV3,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
@@ -18,7 +23,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV2 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV3 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -61,6 +66,50 @@ class FakeSession implements SessionSettingsPort {
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
     this.settings = parseProfileSettings({ ...this.settings, qualityLock });
     return { ok: true, message: 'Quality setting updated' };
+  }
+
+  setGamepadDeadzone(deadzone: number): SessionActionResult {
+    try {
+      this.settings = updateGamepadDeadzone(this.settings, deadzone);
+      return { ok: true, message: 'Gamepad deadzone updated' };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad deadzone',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  setGamepadCurveExponent(curveExponent: number): SessionActionResult {
+    try {
+      this.settings = updateGamepadCurveExponent(this.settings, curveExponent);
+      return { ok: true, message: 'Gamepad response curve updated' };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad response curve',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): SessionActionResult {
+    this.settings = updateGamepadAxisInvert(this.settings, axis, invert);
+    return { ok: true, message: 'Gamepad axis invert updated' };
+  }
+
+  setGamepadAxisSensitivity(axis: GamepadAxisId, sensitivity: number): SessionActionResult {
+    try {
+      this.settings = updateGamepadAxisSensitivity(this.settings, axis, sensitivity);
+      return { ok: true, message: 'Gamepad axis sensitivity updated' };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad axis sensitivity',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 }
 
@@ -231,5 +280,49 @@ describe('session settings panel model', () => {
     );
     expect(session.settings).toBe(before);
     expect(model.selectQuality('ultra')).toMatchObject({ ok: false });
+  });
+
+  describe('gamepad settings controls (T0106)', () => {
+    it('parses the deadzone and curve-exponent inputs as numbers', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.selectGamepadDeadzone('0.2')).toMatchObject({ ok: true });
+      expect(session.settings.gamepad.deadzone).toBe(0.2);
+      expect(model.selectGamepadCurveExponent('2')).toMatchObject({ ok: true });
+      expect(session.settings.gamepad.curveExponent).toBe(2);
+    });
+
+    it('rejects an empty or non-numeric input without touching settings', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+      const before = session.settings;
+
+      expect(model.selectGamepadDeadzone('')).toMatchObject({ ok: false });
+      expect(model.selectGamepadDeadzone('not-a-number')).toMatchObject({ ok: false });
+      expect(model.selectGamepadCurveExponent('  ')).toMatchObject({ ok: false });
+      expect(session.settings).toBe(before);
+    });
+
+    it('surfaces the underlying range validation as a failed result', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.selectGamepadDeadzone('5')).toMatchObject({ ok: false });
+      expect(model.selectGamepadAxisSensitivity('pitch', '99')).toMatchObject({ ok: false });
+    });
+
+    it('toggles one axis invert flag and parses that axis sensitivity independently', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.setGamepadAxisInvert('roll', true)).toMatchObject({ ok: true });
+      expect(session.settings.gamepad.axes.roll.invert).toBe(true);
+      expect(session.settings.gamepad.axes.pitch.invert).toBe(false);
+
+      expect(model.selectGamepadAxisSensitivity('throttle', '1.75')).toMatchObject({ ok: true });
+      expect(session.settings.gamepad.axes.throttle.sensitivity).toBe(1.75);
+      expect(session.settings.gamepad.axes.roll.invert).toBe(true); // still set from above
+    });
   });
 });

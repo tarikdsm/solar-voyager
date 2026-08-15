@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "qualityLock": "medium",
+  "inputBindings": {
+    "throttleIncrease": "KeyR",
+    "throttleDecrease": "KeyF",
+    "warpIncrease": "Equal",
+    "warpDecrease": "Minus",
+    "pitchUp": "KeyI",
+    "pitchDown": "KeyK",
+    "yawLeft": "KeyA",
+    "yawRight": "KeyD",
+    "rollLeft": "KeyZ",
+    "rollRight": "KeyC",
+    "attitudeManual": "Digit1",
+    "attitudePrograde": "Digit2",
+    "attitudeRetrograde": "Digit3",
+    "attitudeNormal": "Digit4",
+    "attitudeAntinormal": "Digit5",
+    "attitudeRadialOut": "Digit6",
+    "attitudeRadialIn": "Digit7",
+    "attitudeTarget": "Digit8",
+    "killRotation": "KeyX",
+    "stabilityAssistToggle": "KeyT"
+  },
+  "tutorial": {
+    "status": "skipped",
+    "stepId": "focus-target"
+  }
+}

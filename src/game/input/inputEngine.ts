@@ -1,3 +1,4 @@
+import type { GamepadSettings } from '../settings.js';
 import {
   BindingTable,
   INPUT_ACTION_COUNT,
@@ -6,6 +7,7 @@ import {
   type InputAction,
   type InputBindings,
 } from './bindings.js';
+import type { GamepadSource } from './gamepad.js';
 
 export type { InputAction, InputBindings };
 
@@ -132,6 +134,15 @@ export interface InputEngineOptions {
   /** Raised when the player asks to pause. T0112 owns the menu; T0105 wires a stub. */
   readonly onPauseRequested?: () => void;
   readonly lookRadPerPixel?: number;
+  /** T0106: polls the Gamepad API and is merged into the same frame every poll(). */
+  readonly gamepad?: GamepadSource;
+  /**
+   * True while a real text-entry control has focus. Keyboard gates this per
+   * `KeyboardEvent.target`; a gamepad has no event target to check, so the
+   * frame loop supplies this instead. Defaults to "never typing" so tests and
+   * callers that never wire a gamepad are unaffected.
+   */
+  readonly isTextEntryActive?: () => boolean;
 }
 
 /**
@@ -146,9 +157,20 @@ export interface InputEngineOptions {
 export class InputEngine {
   private readonly frame = new MutableInputFrame();
   private readonly pendingEdges = new Uint8Array(INPUT_ACTION_COUNT);
+  /**
+   * Keyboard-only down state, mutated directly by key events. `frame.down` is
+   * no longer written here: it is republished from this array every `poll()`
+   * and then OR-combined with the gamepad's own down state, so a released
+   * gamepad button cannot leave a bit stuck when the keyboard never touched
+   * that action (a plain "OR into the shared frame array and never clear"
+   * merge would do exactly that).
+   */
+  private readonly keyboardDown = new Uint8Array(INPUT_ACTION_COUNT);
   private readonly bindingTable: BindingTable;
   private readonly keyboardTarget: InputKeyboardTarget;
   private readonly pointerLock: PointerLockSurface | null;
+  private readonly gamepad: GamepadSource | null;
+  private readonly isTextEntryActive: () => boolean;
   private readonly onPauseRequested: (() => void) | null;
   private readonly lookRadPerPixel: number;
   private pendingLookYawRad = 0;
@@ -173,7 +195,7 @@ export class InputEngine {
     const index = actionIndex(action);
     if (index < 0) return;
     event.preventDefault();
-    this.frame.down[index] = 1;
+    this.keyboardDown[index] = 1;
     const count = this.pendingEdges[index] ?? 0;
     if (count < MAX_EDGE_COUNT) this.pendingEdges[index] = count + 1;
   };
@@ -184,8 +206,8 @@ export class InputEngine {
     const action = this.bindingTable.resolve(event.code);
     if (action === undefined) return;
     const index = actionIndex(action);
-    if (index < 0 || this.frame.down[index] === 0) return;
-    this.frame.down[index] = 0;
+    if (index < 0 || this.keyboardDown[index] === 0) return;
+    this.keyboardDown[index] = 0;
     event.preventDefault();
   };
 
@@ -217,6 +239,8 @@ export class InputEngine {
     this.keyboardTarget = options.keyboardTarget;
     this.bindingTable = new BindingTable(options.bindings);
     this.pointerLock = options.pointerLock ?? null;
+    this.gamepad = options.gamepad ?? null;
+    this.isTextEntryActive = options.isTextEntryActive ?? (() => false);
     this.onPauseRequested = options.onPauseRequested ?? null;
     this.lookRadPerPixel = options.lookRadPerPixel ?? DEFAULT_LOOK_RAD_PER_PIXEL;
     this.keyboardTarget.addEventListener('keydown', this.handleKeyDown);
@@ -233,6 +257,7 @@ export class InputEngine {
   /** Publishes one frame of intent. Allocation-free; returns the same object every call. */
   poll(wallDtSec: number): InputFrame {
     const frame = this.frame;
+    frame.down.set(this.keyboardDown);
     frame.edges.set(this.pendingEdges);
     this.pendingEdges.fill(0);
     frame.lookYawRad = this.pendingLookYawRad;
@@ -243,11 +268,17 @@ export class InputEngine {
     frame.axes.yaw = this.axisValue('yawRight', 'yawLeft');
     frame.axes.roll = this.axisValue('rollRight', 'rollLeft');
     frame.axes.throttle = this.integrateThrottle(frame, wallDtSec);
+    this.pollGamepad(frame);
     return frame;
   }
 
   applyBindings(bindings: InputBindings): void {
     this.bindingTable.rebuild(bindings);
+  }
+
+  /** Applies new deadzone/curve/invert/sensitivity calibration to the gamepad, if one is wired. */
+  applyGamepadSettings(settings: GamepadSettings): void {
+    this.gamepad?.applySettings(settings);
   }
 
   /**
@@ -257,6 +288,7 @@ export class InputEngine {
    * otherwise fire on the next poll and steal a warp rung or an attitude mode.
    */
   releaseHeldKeys(): void {
+    this.keyboardDown.fill(0);
     this.frame.down.fill(0);
     this.pendingEdges.fill(0);
   }
@@ -291,6 +323,7 @@ export class InputEngine {
     this.keyboardTarget.removeEventListener('keyup', this.handleKeyUp);
     this.keyboardTarget.removeEventListener('blur', this.handleBlur);
     this.pointerLock?.dispose();
+    this.gamepad?.dispose();
   }
 
   private requestPause(): void {
@@ -301,7 +334,33 @@ export class InputEngine {
   private axisValue(positive: InputAction, negative: InputAction): number {
     const positiveIndex = actionIndex(positive);
     const negativeIndex = actionIndex(negative);
-    return (this.frame.down[positiveIndex] ?? 0) - (this.frame.down[negativeIndex] ?? 0);
+    return (this.keyboardDown[positiveIndex] ?? 0) - (this.keyboardDown[negativeIndex] ?? 0);
+  }
+
+  /**
+   * Merges gamepad state into the frame keyboard already populated.
+   *
+   * Always polls the device (when one is wired) so its own edge-tracking
+   * ("was this button already down") stays correct across a text-entry
+   * excursion — otherwise a button held throughout a form fill-in would
+   * report a false press the moment focus returns. Only the *merge* into the
+   * frame is skipped while disconnected or while a text field is focused, so
+   * a connected-but-unused pad can never fight the keyboard and never steals
+   * input from a focused control (docs/accessibility.md).
+   */
+  private pollGamepad(frame: MutableInputFrame): void {
+    const gamepad = this.gamepad;
+    if (gamepad === null) return;
+    gamepad.poll();
+    if (!gamepad.connected || this.isTextEntryActive()) return;
+    frame.axes.pitch = clampAxis(frame.axes.pitch + gamepad.pitchAxis);
+    frame.axes.yaw = clampAxis(frame.axes.yaw + gamepad.yawAxis);
+    frame.axes.roll = clampAxis(frame.axes.roll + gamepad.rollAxis);
+    // The trigger pair is an absolute position, not a rate: it sets the lever
+    // directly (and re-anchors the keyboard ramp) rather than participating
+    // in integrateThrottle's hold-and-sweep model. See gamepad-design.md.
+    if (gamepad.throttleActive) this.setThrottleAxis(gamepad.throttleValue);
+    gamepad.mergeButtonsInto(frame.down, frame.edges);
   }
 
   /**
@@ -341,4 +400,9 @@ export class InputEngine {
 function clamp01(value: number): number {
   if (value <= 0) return 0;
   return value >= 1 ? 1 : value;
+}
+
+function clampAxis(value: number): number {
+  if (value > 1) return 1;
+  return value < -1 ? -1 : value;
 }

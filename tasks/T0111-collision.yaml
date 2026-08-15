@@ -1,6 +1,6 @@
 id: T0111
 title: Surface collision with impact event, restore points, respawn
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0111-collision
 depends_on: [T0104]

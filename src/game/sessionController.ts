@@ -11,8 +11,13 @@ import {
   parseProfileSettings,
   projectGameSettingsV1,
   rebindInput,
+  updateGamepadAxisInvert,
+  updateGamepadAxisSensitivity,
+  updateGamepadCurveExponent,
+  updateGamepadDeadzone,
   updateTutorialSettings,
-  type GameSettingsV2,
+  type GamepadAxisId,
+  type GameSettingsV3,
   type InputAction,
   type QualityLock,
   type SettingsRepository,
@@ -58,13 +63,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV2, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV3, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV2;
+  private currentSettings: GameSettingsV3;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -81,7 +86,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV2, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV3, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -101,7 +106,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV2 {
+  get settings(): GameSettingsV3 {
     return this.currentSettings;
   }
 
@@ -257,6 +262,63 @@ export class GameSessionController {
     }
   }
 
+  // Named distinctly from the `settings.ts` builders they call (`set*` here
+  // vs `update*` there), the same way `rebind`/`rebindInput` already are —
+  // a class method and a same-named free function would still resolve
+  // correctly (methods are not bare identifiers), but distinct names read
+  // unambiguously instead of relying on that scoping rule.
+  setGamepadDeadzone(deadzone: number): SessionActionResult {
+    try {
+      const candidate = updateGamepadDeadzone(this.currentSettings, deadzone);
+      return this.commitSettings(candidate, 'Gamepad deadzone updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad deadzone',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  setGamepadCurveExponent(curveExponent: number): SessionActionResult {
+    try {
+      const candidate = updateGamepadCurveExponent(this.currentSettings, curveExponent);
+      return this.commitSettings(candidate, 'Gamepad response curve updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad response curve',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): SessionActionResult {
+    try {
+      const candidate = updateGamepadAxisInvert(this.currentSettings, axis, invert);
+      return this.commitSettings(candidate, 'Gamepad axis invert updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad axis invert',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  setGamepadAxisSensitivity(axis: GamepadAxisId, sensitivity: number): SessionActionResult {
+    try {
+      const candidate = updateGamepadAxisSensitivity(this.currentSettings, axis, sensitivity);
+      return this.commitSettings(candidate, 'Gamepad axis sensitivity updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update gamepad axis sensitivity',
+        detail: describeError(error),
+      };
+    }
+  }
+
   updateTutorial(transition: (current: TutorialProgress) => TutorialProgress): SessionActionResult {
     try {
       const candidate = updateTutorialSettings(
@@ -311,7 +373,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV2,
+    settings: GameSettingsV3,
     successMessage: string,
     publish = true,
   ): SessionActionResult {

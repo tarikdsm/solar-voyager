@@ -7,6 +7,8 @@ import {
 } from './game/createNewGameSimulation.js';
 import { FlightController } from './game/flight/flightController.js';
 import { FlightInputRouter } from './game/flight/flightInputRouter.js';
+import { isEditableTarget } from './game/input/bindings.js';
+import { GamepadPoller, type GamepadHost } from './game/input/gamepad.js';
 import {
   InputEngine,
   type InputKeyboardTarget,
@@ -452,6 +454,7 @@ const session = new GameSessionController({
   },
   onSettingsChanged: (settings, origin) => {
     inputEngine?.applyBindings(settings.inputBindings);
+    inputEngine?.applyGamepadSettings(settings.gamepad);
     inputEngine?.releaseHeldKeys();
     // A restore already carries the saved rotation rates: adopt them instead of
     // flushing the (now released) axes over them.
@@ -646,6 +649,24 @@ function createCanvasPointerLockSurface(element: HTMLCanvasElement): PointerLock
       ownerDocument.removeEventListener('pointerlockchange', handleLockChange);
       motionListener = null;
       lockChangeListener = null;
+    },
+  };
+}
+
+/**
+ * Browser adapter for `GamepadHost` — `navigator.getGamepads()` plus the two
+ * window connect/disconnect events, exactly as `createCanvasPointerLockSurface`
+ * adapts the pointer-lock API. `game/input/` never touches `navigator`/`window`
+ * directly; `GamepadPoller` only sees this port.
+ */
+function createBrowserGamepadHost(): GamepadHost {
+  return {
+    getGamepads: () => navigator.getGamepads(),
+    addEventListener: (type, listener) => {
+      window.addEventListener(type, listener);
+    },
+    removeEventListener: (type, listener) => {
+      window.removeEventListener(type, listener);
     },
   };
 }
@@ -1163,11 +1184,22 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
   }
+  // Feature-detected: browsers without the Gamepad API (or a hostile test
+  // environment) get no poller at all rather than a port that would throw the
+  // first time InputEngine called it.
+  const gamepadSource =
+    typeof navigator.getGamepads === 'function'
+      ? new GamepadPoller(createBrowserGamepadHost(), session.settings.gamepad)
+      : undefined;
   inputEngine = new InputEngine({
     bindings: session.settings.inputBindings,
     keyboardTarget: window as unknown as InputKeyboardTarget,
     onPauseRequested: handlePauseRequested,
     pointerLock: createCanvasPointerLockSurface(canvas),
+    gamepad: gamepadSource,
+    // A gamepad has no per-event target to gate on the way keyboard does;
+    // this is the one shared UI-focus predicate every input source uses.
+    isTextEntryActive: () => isEditableTarget(document.activeElement),
   });
   flightController = new FlightController({
     commands: sessionCommands,

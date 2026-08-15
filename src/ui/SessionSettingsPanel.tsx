@@ -3,21 +3,33 @@ import { useMemo, useState } from 'preact/hooks';
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import type { TutorialController } from '../game/tutorialController.js';
 import {
+  GAMEPAD_AXES,
+  GAMEPAD_CURVE_EXPONENT_MAX,
+  GAMEPAD_CURVE_EXPONENT_MIN,
+  GAMEPAD_DEADZONE_MAX,
+  GAMEPAD_DEADZONE_MIN,
+  GAMEPAD_SENSITIVITY_MAX,
+  GAMEPAD_SENSITIVITY_MIN,
   INPUT_ACTIONS,
   isUnboundInputCode,
-  type GameSettingsV2,
+  type GamepadAxisId,
+  type GameSettingsV3,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV2;
+  readonly settings: GameSettingsV3;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;
   rebind(action: InputAction, code: string): SessionActionResult;
   saveLocal(): SessionActionResult;
+  setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): SessionActionResult;
+  setGamepadAxisSensitivity(axis: GamepadAxisId, sensitivity: number): SessionActionResult;
+  setGamepadCurveExponent(curveExponent: number): SessionActionResult;
+  setGamepadDeadzone(deadzone: number): SessionActionResult;
   updateQualityLock(qualityLock: QualityLock): SessionActionResult;
 }
 
@@ -38,6 +50,10 @@ export interface SessionSettingsModel {
   importFile(file: File | null): Promise<PanelActionResult | null>;
   selectQuality(value: string): PanelActionResult;
   captureBinding(action: InputAction, code: string): PanelActionResult;
+  selectGamepadDeadzone(value: string): PanelActionResult;
+  selectGamepadCurveExponent(value: string): PanelActionResult;
+  setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): PanelActionResult;
+  selectGamepadAxisSensitivity(axis: GamepadAxisId, value: string): PanelActionResult;
 }
 
 export type SessionActivationCallback = (result: SessionActionResult) => void;
@@ -64,6 +80,17 @@ const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze
   attitudeTarget: 'Target hold',
   killRotation: 'Kill rotation',
   stabilityAssistToggle: 'Stability assist',
+  // Registered in the bindings registry for the gamepad A/B defaults (T0106);
+  // CruiseDirector (T0116) is what makes pressing either key do something.
+  cruiseEngage: 'Cruise engage (reserved)',
+  cruiseAbort: 'Cruise abort (reserved)',
+});
+
+const GAMEPAD_AXIS_LABELS: Readonly<Record<GamepadAxisId, string>> = Object.freeze({
+  pitch: 'Pitch',
+  yaw: 'Yaw',
+  roll: 'Roll',
+  throttle: 'Throttle',
 });
 
 const UNBOUND_BINDING_LABEL = 'Unbound';
@@ -79,6 +106,12 @@ function simplify(result: SessionActionResult): PanelActionResult {
 
 function isQualityLock(value: string): value is QualityLock {
   return value === 'auto' || value === 'low' || value === 'medium' || value === 'high';
+}
+
+/** `<input type="number">.value` is always a string, including "" and non-numeric text. */
+function parseFiniteNumber(value: string): number | null {
+  const parsed = Number(value);
+  return value.trim().length > 0 && Number.isFinite(parsed) ? parsed : null;
 }
 
 /** Builds the event-driven panel behavior independently from Preact and browser files. */
@@ -125,6 +158,25 @@ export function createSessionSettingsModel(
         ? simplify(session.updateQualityLock(value))
         : { ok: false, message: 'Unsupported quality setting' },
     captureBinding: (action, code) => simplify(session.rebind(action, code)),
+    selectGamepadDeadzone: (value) => {
+      const deadzone = parseFiniteNumber(value);
+      return deadzone === null
+        ? { ok: false, message: 'Unsupported gamepad deadzone' }
+        : simplify(session.setGamepadDeadzone(deadzone));
+    },
+    selectGamepadCurveExponent: (value) => {
+      const curveExponent = parseFiniteNumber(value);
+      return curveExponent === null
+        ? { ok: false, message: 'Unsupported gamepad response curve' }
+        : simplify(session.setGamepadCurveExponent(curveExponent));
+    },
+    setGamepadAxisInvert: (axis, invert) => simplify(session.setGamepadAxisInvert(axis, invert)),
+    selectGamepadAxisSensitivity: (axis, value) => {
+      const sensitivity = parseFiniteNumber(value);
+      return sensitivity === null
+        ? { ok: false, message: 'Unsupported gamepad sensitivity' }
+        : simplify(session.setGamepadAxisSensitivity(axis, sensitivity));
+    },
   };
 }
 
@@ -288,6 +340,79 @@ export function SessionSettingsPanel({
                     {capturing ? 'Press key' : describeBinding(settings.inputBindings[action])}
                   </kbd>
                 </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section aria-labelledby="gamepad-settings-title">
+          <h2 id="gamepad-settings-title">Gamepad</h2>
+          <p class="gamepad-settings-hint">
+            Standard-mapping default: left stick pitch/yaw, right stick X roll, triggers throttle. A
+            and B are reserved for the cruise system and do nothing yet.
+          </p>
+          <div class="gamepad-shaping-grid">
+            <label for="gamepad-deadzone">
+              Deadzone
+              <input
+                id="gamepad-deadzone"
+                type="number"
+                min={GAMEPAD_DEADZONE_MIN}
+                max={GAMEPAD_DEADZONE_MAX}
+                step="0.01"
+                value={settings.gamepad.deadzone}
+                onChange={(event) =>
+                  publish(model.selectGamepadDeadzone(event.currentTarget.value))
+                }
+              />
+            </label>
+            <label for="gamepad-curve-exponent">
+              Response curve
+              <input
+                id="gamepad-curve-exponent"
+                type="number"
+                min={GAMEPAD_CURVE_EXPONENT_MIN}
+                max={GAMEPAD_CURVE_EXPONENT_MAX}
+                step="0.1"
+                value={settings.gamepad.curveExponent}
+                onChange={(event) =>
+                  publish(model.selectGamepadCurveExponent(event.currentTarget.value))
+                }
+              />
+            </label>
+          </div>
+          <div class="gamepad-axis-grid">
+            {GAMEPAD_AXES.map((axis) => {
+              const axisSettings = settings.gamepad.axes[axis];
+              return (
+                <div key={axis} class="gamepad-axis-row">
+                  <span class="gamepad-axis-label">{GAMEPAD_AXIS_LABELS[axis]}</span>
+                  <label for={`gamepad-axis-${axis}-invert`}>
+                    <input
+                      id={`gamepad-axis-${axis}-invert`}
+                      type="checkbox"
+                      checked={axisSettings.invert}
+                      onChange={(event) =>
+                        publish(model.setGamepadAxisInvert(axis, event.currentTarget.checked))
+                      }
+                    />
+                    Invert
+                  </label>
+                  <label for={`gamepad-axis-${axis}-sensitivity`}>
+                    Sensitivity
+                    <input
+                      id={`gamepad-axis-${axis}-sensitivity`}
+                      type="number"
+                      min={GAMEPAD_SENSITIVITY_MIN}
+                      max={GAMEPAD_SENSITIVITY_MAX}
+                      step="0.1"
+                      value={axisSettings.sensitivity}
+                      onChange={(event) =>
+                        publish(model.selectGamepadAxisSensitivity(axis, event.currentTarget.value))
+                      }
+                    />
+                  </label>
+                </div>
               );
             })}
           </div>
