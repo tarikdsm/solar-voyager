@@ -254,6 +254,44 @@ describe('CameraDirector', () => {
       expect(maximumStepKm).toBeLessThan(travelKm * 0.04);
     });
 
+    it('spends the whole blend duration moving, with no isolated spike', () => {
+      // The two properties `test:camera-controls` used to measure in the browser
+      // and now measures here, where the frame delta is exactly 1/60 instead of
+      // whatever a contended software rasteriser managed. Both are stricter for
+      // it: the browser could only say "spread over more than 250 ms" from ~20
+      // ragged samples; this counts every frame of the move.
+      const harness = createHarness();
+      harness.step(0);
+      harness.director.focusBody('jupiter');
+
+      let previous = { ...harness.director.pose.positionKm };
+      const stepsKm: number[] = [];
+      for (let frame = 0; frame < 120; frame += 1) {
+        harness.step();
+        stepsKm.push(poseDistanceKm(harness, previous));
+        previous = { ...harness.director.pose.positionKm };
+      }
+
+      const pathLengthKm = stepsKm.reduce((total, step) => total + step, 0);
+      const movingFrames = stepsKm.filter((step) => step > pathLengthKm * 1e-4).length;
+      // 1.5 s of blend at 1/60 is 90 frames, and 79 of them carry measurable
+      // motion: smootherstep is deliberately flat at both ends, so the first
+      // handful move less than 1e-4 of the path. The property is that the move
+      // occupies the blend window rather than being a jump followed by
+      // stillness — a cut would score 1.
+      expect(movingFrames).toBeGreaterThan(70);
+      expect(movingFrames).toBeLessThanOrEqual(91);
+
+      // No isolated spike: the busiest frame has busy neighbours. A cut is one
+      // enormous step between two stationary stretches.
+      let peakIndex = 0;
+      for (let index = 1; index < stepsKm.length; index += 1) {
+        if ((stepsKm[index] as number) > (stepsKm[peakIndex] as number)) peakIndex = index;
+      }
+      const neighbourMeanKm = ((stepsKm[peakIndex - 1] ?? 0) + (stepsKm[peakIndex + 1] ?? 0)) / 2;
+      expect((stepsKm[peakIndex] as number) / neighbourMeanKm).toBeLessThan(1.2);
+    });
+
     it('reverses mid-transition without cutting', () => {
       const harness = createHarness();
       harness.step(0);
