@@ -102,16 +102,64 @@ came out _negative_ on the second run — the 30 s window ended below where it
 started after a forced double-GC, which is what an allocation-free frame path
 looks like against collector noise.
 
-T0109 measured a resolved ship at 24 draw calls and 5,538 triangles and named
-this task as the one that would have to pay it. Measured: **+23 draw calls and
-+5,358 triangles**. The perf-gate scenario is `?autostart=1`, which now opens in
-the chase camera with the hull filling ~87 px, so the ship is resolved on every
-frame instead of subtending 0.001 px from the far side of Earth.
+### Where the numbers come from, exactly
+
+The perf-gate scenario is `?autostart=1`, which now opens in the chase camera
+with the hull filling ~87 px, so the ship is resolved on every frame instead of
+subtending 0.001 px from the far side of Earth.
+
+The net delta is **+23 draw calls and +5,358 triangles**, and that is _not_ the
+ship's price. It is two separate movements, established by hooking the raw GL
+draw entry points on the production page, labelling every draw by the `#define`
+set of its shader program, and capturing one settled frame from each build:
+
+|                                 | draw calls |  triangles |
+| ------------------------------- | ---------: | ---------: |
+| base `daf5199`, v1 camera       |         10 |     77,071 |
+| present only in the base frame  |         −1 |       −180 |
+| present only in the chase frame |        +24 |     +5,538 |
+| branch, chase camera            |     **33** | **82,429** |
+
+`33 = 10 − 1 + 24` and `82,429 = 77,071 − 180 + 5,538`. The +24 / +5,538 is
+T0109's hull figure **exactly** — all 24 nodes are present in the chase frame.
+
+The −1 / −180 is a single non-indexed `drawArrays(TRIANGLES, 540)` whose program
+is a plain `LAMBERT + USE_MAP` (no procedural-sun shader chunks). 540 vertices is
+180 non-indexed triangles, which is `IcosahedronGeometry(1, 2)` — 20 base faces ×
+(2+1)² — the shared tier-2 sphere geometry in `bodyVisualSystem.ts`, drawn with
+its `MeshLambertMaterial` textured variant. Of the three eagerly textured hero
+spheres, Earth is at tier 3 in **both** frames (its three 48,384-index model
+draws appear in both) and the Sun's spheres compile through
+`prepareProceduralSunMaterial`'s `onBeforeCompile` + `customProgramCacheKey`, so
+they are a different program. By elimination the object is the **Moon**.
+
+**It did not stop rendering.** Staying in the chase camera and sweeping the arm's
+azimuth with `Shift`+arrows across 42 bearings, the same 540-vertex draw
+reappears at 17 of them, and on those frames the workload is **34 draw calls and
+82,609 triangles** — precisely `33 + 1` and `82,429 + 180`. The same sweep on the
+unmodified base build moves its workload between 9 and 11 draw calls. So the
+Moon's presence is a function of camera bearing in v1 exactly as it is in chase:
+ordinary view-frustum culling, unchanged by this task. What moved is the bearing
+the default camera happens to hold, because the chase arm points along the ship's
+attitude rather than at Earth.
+
+This is worth stating plainly because "an object stopped rendering when the
+default camera changed" is exactly the class of regression a golden re-baseline
+can bury. It is not what happened here, and the sweep is the proof.
+
+Note: commit `365f3e9`'s message attributes the whole delta to the hull and is
+therefore imprecise on this point; this section supersedes it. The gate values
+themselves are unaffected.
 
 33 of the 150-call budget in `rendering-spec.md` §8. The 24-calls-for-6-materials
 shape is the asset's, not the renderer's, and merging by material belongs to the
 Front C remodel that owns `tools/blender/build_ship.py` — doing it at load time
 would bake away the `engine_nozzle` and `rcs_*` nodes T0122 needs.
+
+One consequence for whoever next touches this golden: **the perf-gate workload is
+bearing-sensitive by ±1 draw call / ±180 triangles**, in v1 and in chase alike.
+33 and 82,429 are what the deterministic `?autostart=1` opening bearing produces,
+reproduced across four independent runs here. The 10 % tolerance absorbs it.
 
 Triangles were re-baselined even though 82,429 sits inside the 10 % tolerance of
 77,071 and would not have failed on its own: leaving it would have left 3 % of
@@ -157,6 +205,18 @@ widening approaches its target exponentially and would otherwise rebuild forever
 
 Measured: 20,264 B retained over the CI gate's 30 s window against a 196,608 B
 ceiling.
+
+## Test threshold changed (not a gate)
+
+`tools/tests/shipVisualRegression.mjs` relaxed its focused-ship size assertion
+from `diameterPx > 100` to `> 60`. It is a readability floor in a browser
+harness, not a budget or a golden, but it is a relaxation and should not land
+silently: T0109 measured 100+ px with the _observatory_ camera framing the ship
+at 3 × its bounding radius (39 m), while the chase arm holds it at 157 m by
+design. Measured at the new distance: 86.6 px at 720 p in the production phase,
+43.3 px at the 640 × 360 perf-gate viewport. 60 keeps the assertion meaningful at
+720 p — it still fails if the ship falls back to a point sprite — without
+encoding the old camera's distance.
 
 ## Known visual limitation (not this task's scope)
 
