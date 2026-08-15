@@ -16,8 +16,8 @@ const PRODUCTION_URL = `http://${HOST}:${String(PRODUCTION_PORT)}/solar-voyager/
 const CAPTURE_FLAG_INDEX = process.argv.indexOf('--capture');
 const CAPTURE_PATH =
   CAPTURE_FLAG_INDEX < 0 ? null : path.resolve(process.argv[CAPTURE_FLAG_INDEX + 1] ?? '');
-// The ship is the last catalog target and `]` from it wraps onto the Sun (index
-// 0), so four backward steps from the Sun wrap around to the ship again.
+// The ship is the last catalog target, so `]` from it wraps onto the Sun (index
+// 0) and a single `[` wraps straight back onto the ship.
 const FOCUS_CYCLE_BACKWARD_PRESSES = 1;
 const NOSE_ALIGNMENT_TOLERANCE = 1e-6;
 // WARP_LADDER = [1, 5, 10, 50, 100, 1e3, ...]; five rungs reaches 1000x.

@@ -372,8 +372,8 @@ export class ChaseCameraController {
     // Surface standoff. Applied to the *output* rather than to the spring state,
     // so a pinned arm slides along the surface and lets go smoothly when the ship
     // climbs, instead of the spring integrating against a wall.
-    const radiusKm = this.bodyRadiiKm[clearanceBodyIndex];
-    if (clearanceBodyIndex >= 0 && radiusKm !== undefined && radiusKm > 0) {
+    const radiusKm = clearanceBodyIndex >= 0 ? this.bodyRadiiKm[clearanceBodyIndex] : undefined;
+    if (radiusKm !== undefined && radiusKm > 0) {
       const bodyOffset = clearanceBodyIndex * 3;
       const bodyXKm = this.positionsKm[bodyOffset] as number;
       const bodyYKm = this.positionsKm[bodyOffset + 1] as number;

@@ -95,6 +95,8 @@ async function readStartup(page) {
       resourceCount: startup.resourceCount,
       rendererName: canvas.dataset.rendererName ?? null,
       selectedRung: startup.selectedRung,
+      shipLoadState: canvas.solarVoyagerShip?.loadState ?? null,
+      shipResolved: canvas.solarVoyagerShip?.resolved ?? null,
       softwareRasterizer: canvas.dataset.softwareRasterizer ?? null,
       stage: startup.stage,
       transferBytes: startup.transferBytes,
@@ -208,6 +210,14 @@ async function runColdLoad(browser) {
     assert.ok(ready.resourceCount > 0);
     assert.ok(ready.programCountAtReady > 0);
     assert.equal(ready.programCountCurrent, ready.programCountAtReady);
+    // T0110 — the pre-activation guard `shipVisualRegression` used to own.
+    // Chase is the default camera, so the ship is *resolved* from the first
+    // frame; its model must still not have been fetched at this point, or
+    // `ship.glb` would belong on `data/initial-path.json` and inside the
+    // first-playable budget. This is the race-free place to check it: the space
+    // phase, which enables lazy loading, does not exist until New Game below.
+    assert.equal(ready.shipLoadState, 'idle', 'the ship model was fetched before first playable');
+    assert.equal(ready.shipResolved, true, 'the chase camera did not resolve the ship');
     assert.equal(ready.frozen, true);
     assert.equal(ready.nullPrototype, true);
     assert.equal(ready.readOnly, true);
@@ -300,6 +310,8 @@ async function runColdLoad(browser) {
       resourceCount: ready.resourceCount,
       rendererName: ready.rendererName,
       selectedRung: ready.selectedRung,
+      shipLoadState: ready.shipLoadState,
+      shipResolved: ready.shipResolved,
       softwareRasterizer: ready.softwareRasterizer,
       transferBytes: ready.transferBytes,
     };

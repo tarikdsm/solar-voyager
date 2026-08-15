@@ -4,10 +4,10 @@ import { clamp, smootherstep } from './cameraTransition.js';
 /** Shared by every animated camera move, including `CameraDirector`'s mode cross-fade. */
 export const DEFAULT_TRANSFER_DURATION_SEC = 1.5;
 const DEFAULT_MAX_DISTANCE_KM = 1e10;
-/** Absolute floor on camera-to-surface clearance (2 m), shared with the chase arm. */
-export const MIN_CLEARANCE_KM = 0.002;
+/** Absolute floor on camera-to-surface clearance, 2 m. */
+const MIN_CLEARANCE_KM = 0.002;
 /** Relative clearance term, so huge bodies keep a proportional standoff. */
-export const RELATIVE_CLEARANCE = 1e-6;
+const RELATIVE_CLEARANCE = 1e-6;
 const DEFAULT_FRAME_RADIUS_MULTIPLIER = 3;
 const TRANSFER_CONTEXT_RATIO = 0.15;
 const WHEEL_EXPONENT_PER_DELTA = 0.0015;

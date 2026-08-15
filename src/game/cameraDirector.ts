@@ -279,10 +279,6 @@ export class CameraDirector {
     return this.chase.shakeAmplitudeDeg;
   }
 
-  get chaseAttitudeLagRad(): number {
-    return this.chase.attitudeLagRad;
-  }
-
   get chaseFovWideningEnabled(): boolean {
     return this.chase.fovWideningEnabled;
   }
