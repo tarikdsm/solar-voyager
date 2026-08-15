@@ -3,9 +3,12 @@ import { h, render } from 'preact';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
+  createRespawnPersistentState,
 } from './game/createNewGameSimulation.js';
 import { FlightController } from './game/flight/flightController.js';
 import { FlightInputRouter } from './game/flight/flightInputRouter.js';
+import { isEditableTarget } from './game/input/bindings.js';
+import { GamepadPoller, type GamepadHost } from './game/input/gamepad.js';
 import {
   InputEngine,
   type InputKeyboardTarget,
@@ -14,7 +17,9 @@ import {
 } from './game/input/inputEngine.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
+import { replacementInvalidatesRestorePoints, RestorePointRing } from './game/restorePoints.js';
 import { GameSessionController } from './game/sessionController.js';
+import { createImpactSignalStore } from './ui/impactSignals.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { StartupTracker } from './game/startupTracker.js';
 import { SystemMapController, type SystemMapMode } from './game/systemMapController.js';
@@ -382,14 +387,25 @@ function updateBurnLogRuntime(view: BurnLogView): void {
   burnLogRuntimeDiagnostics.structuralRebuildCount = burnLogStore.structuralRebuildCount;
 }
 
+// ADR-036 — recovery sources for a surface-contact freeze.
+const restorePoints = new RestorePointRing();
+const impactStore = createImpactSignalStore();
+
 const session = new GameSessionController({
   initialSimulation,
   createNewSimulation: createTrackedNewGameSimulation,
   saveRepository: new SaveRepository(browserStorage, DEFAULT_VESSEL),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: createTrackedPersistentSimulation,
-  onSimulationReplaced: (replacement) => {
+  createRespawnState: createRespawnPersistentState,
+  onSimulationReplaced: (replacement, origin) => {
     runtimeResources.sessionSimulationReplacements += 1;
+    // Only a timeline change invalidates the ring. A restore or a respawn moves
+    // within the mission already in progress, and the remaining slots are still
+    // valid states of it — clearing them would make a six-slot ring a one-deep
+    // undo.
+    if (replacementInvalidatesRestorePoints(origin)) restorePoints.reset();
+    impactStore.publish(replacement.snapshot, restorePoints.count);
     // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
     // and the regime scaling below depends on it — so the vessel goes first.
     flightController?.setVessel(replacement.vessel);
@@ -420,6 +436,7 @@ const session = new GameSessionController({
   },
   onSettingsChanged: (settings, origin) => {
     inputEngine?.applyBindings(settings.inputBindings);
+    inputEngine?.applyGamepadSettings(settings.gamepad);
     inputEngine?.releaseHeldKeys();
     // A restore already carries the saved rotation rates: adopt them instead of
     // flushing the (now released) axes over them.
@@ -614,6 +631,24 @@ function createCanvasPointerLockSurface(element: HTMLCanvasElement): PointerLock
       ownerDocument.removeEventListener('pointerlockchange', handleLockChange);
       motionListener = null;
       lockChangeListener = null;
+    },
+  };
+}
+
+/**
+ * Browser adapter for `GamepadHost` — `navigator.getGamepads()` plus the two
+ * window connect/disconnect events, exactly as `createCanvasPointerLockSurface`
+ * adapts the pointer-lock API. `game/input/` never touches `navigator`/`window`
+ * directly; `GamepadPoller` only sees this port.
+ */
+function createBrowserGamepadHost(): GamepadHost {
+  return {
+    getGamepads: () => navigator.getGamepads(),
+    addEventListener: (type, listener) => {
+      window.addEventListener(type, listener);
+    },
+    removeEventListener: (type, listener) => {
+      window.removeEventListener(type, listener);
     },
   };
 }
@@ -823,6 +858,11 @@ function renderFrame(nowMs: number): void {
     flightController.update(deltaSec);
   }
   const snapshot = session.simulation.step(deltaSec);
+  // ADR-036 — one capture per 10 s of wall time, skipped while frozen. The
+  // publish below short-circuits on the frame where nothing about the overlay
+  // has changed, which is every frame that is not a crash.
+  restorePoints.update(session.simulation, deltaSec);
+  impactStore.publish(snapshot, restorePoints.count);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   // Before the camera reads its focus offset, so a ship-focused camera tracks
   // this step's position instead of the previous one.
@@ -923,6 +963,22 @@ if (autostart) {
 }
 let spacePhaseActivation: Promise<void> | null = null;
 
+/**
+ * ADR-036 — the two ways out of a freeze. Both go through the session
+ * controller, so both are validated by the rules a loaded save must satisfy and
+ * both fire `onSimulationReplaced`, which re-points the flight controller.
+ */
+const impactActions = {
+  onRestore: (): void => {
+    const point = restorePoints.latest;
+    if (point === null) return;
+    session.restoreFromState(point.state);
+  },
+  onRespawn: (): void => {
+    session.respawnInOrbit();
+  },
+};
+
 function renderApplication(): void {
   render(
     h(App, {
@@ -933,6 +989,10 @@ function renderApplication(): void {
       hardwareWarning,
       hud: hudStore.display,
       hudState: hudStore.signals,
+      impact: {
+        actions: impactActions,
+        display: impactStore.display,
+      },
       perfPanel: perfPanelStore,
       sceneManager,
       session,
@@ -1158,11 +1218,22 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
   }
+  // Feature-detected: browsers without the Gamepad API (or a hostile test
+  // environment) get no poller at all rather than a port that would throw the
+  // first time InputEngine called it.
+  const gamepadSource =
+    typeof navigator.getGamepads === 'function'
+      ? new GamepadPoller(createBrowserGamepadHost(), session.settings.gamepad)
+      : undefined;
   inputEngine = new InputEngine({
     bindings: session.settings.inputBindings,
     keyboardTarget: window as unknown as InputKeyboardTarget,
     onPauseRequested: handlePauseRequested,
     pointerLock: createCanvasPointerLockSurface(canvas),
+    gamepad: gamepadSource,
+    // A gamepad has no per-event target to gate on the way keyboard does;
+    // this is the one shared UI-focus predicate every input source uses.
+    isTextEntryActive: () => isEditableTarget(document.activeElement),
   });
   flightController = new FlightController({
     commands: sessionCommands,

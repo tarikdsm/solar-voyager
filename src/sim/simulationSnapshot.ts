@@ -90,6 +90,17 @@ export interface SimSnapshot {
   readonly warningFlags: number;
   readonly targetBodyIndex: number;
   readonly targetBodyId: string | null;
+  /**
+   * ADR-036 — surface contact. `1` freezes integration until the game layer
+   * restores or respawns; the remaining three fields are meaningless while `0`.
+   */
+  readonly impactOccurred: 0 | 1;
+  /** Body contacted, or -1 when none. */
+  readonly impactBodyIndex: number;
+  /** Closing speed against the body centre at contact, km/s. */
+  readonly impactSpeedKmS: number;
+  /** Coordinate time of contact, bisected to within 1 ms. */
+  readonly impactSimTimeSec: number;
 }
 
 /** Internal writable form of one preallocated snapshot buffer. */
@@ -116,6 +127,10 @@ export interface SimulationSnapshotBuffer extends SimSnapshot {
   warningFlags: number;
   targetBodyIndex: number;
   targetBodyId: string | null;
+  impactOccurred: 0 | 1;
+  impactBodyIndex: number;
+  impactSpeedKmS: number;
+  impactSimTimeSec: number;
 }
 
 /** Mutable command values retained without allocating in the frame loop. */
@@ -126,6 +141,13 @@ export interface CommandState {
   requestedWarp: WarpFactor;
   targetBodyIndex: number;
   targetBodyId: string | null;
+  /**
+   * ADR-036 — set by `SimulationCore` on surface contact. Commands clamp to a
+   * frozen ship's reality (no thrust, no rates, 1x) exactly as they already
+   * clamp above `MAX_THRUST_WARP` and `MANUAL_ATTITUDE_MAX_WARP`, so a UI that
+   * keeps sending intent cannot open a burn at a frozen timestamp.
+   */
+  impactFrozen: boolean;
 }
 
 /** The only public route for player intent to enter `SimulationCore`. */
@@ -206,6 +228,10 @@ export function createSimulationSnapshotBuffer(
     warningFlags: WarningFlag.NONE,
     targetBodyIndex: -1,
     targetBodyId: null,
+    impactOccurred: 0,
+    impactBodyIndex: -1,
+    impactSpeedKmS: 0,
+    impactSimTimeSec: 0,
   };
 }
 
@@ -244,7 +270,10 @@ class SimulationCommands implements Commands {
     if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
       throw new RangeError('throttle must be a finite fraction in [0, 1]');
     }
-    const effectiveFraction = this.commandState.requestedWarp > MAX_THRUST_WARP ? 0 : fraction;
+    const effectiveFraction =
+      this.commandState.impactFrozen || this.commandState.requestedWarp > MAX_THRUST_WARP
+        ? 0
+        : fraction;
     if (effectiveFraction === this.commandState.throttle) return;
     const previousThrottle = this.commandState.throttle;
     this.commandState.throttle = effectiveFraction;
@@ -270,7 +299,8 @@ class SimulationCommands implements Commands {
     // ADR-035 — manual rotation is a regime, not a validation error: rates above
     // MANUAL_ATTITUDE_MAX_WARP are forced to zero exactly as setThrottle forces
     // throttle to zero above MAX_THRUST_WARP. Holds remain available there.
-    const locked = this.commandState.requestedWarp > MANUAL_ATTITUDE_MAX_WARP;
+    const locked =
+      this.commandState.impactFrozen || this.commandState.requestedWarp > MANUAL_ATTITUDE_MAX_WARP;
     const effectivePitchRateRadS = locked ? 0 : pitchRateRadS;
     const effectiveYawRateRadS = locked ? 0 : yawRateRadS;
     const effectiveRollRateRadS = locked ? 0 : rollRateRadS;
@@ -291,6 +321,14 @@ class SimulationCommands implements Commands {
 
   setWarp(warp: WarpFactor): void {
     if (!isWarpFactor(warp)) throw new RangeError('warp must use the canonical ladder');
+    // ADR-036 — a frozen ship is pinned at 1x. The ladder means nothing while no
+    // time is passing, and a stored high tier would be re-applied the instant the
+    // player recovers, which is not what pressing a warp button before a restore
+    // means. Throttle and rates are already zero here, so nothing else to clear.
+    if (this.commandState.impactFrozen) {
+      this.commandState.requestedWarp = 1;
+      return;
+    }
     this.commandState.requestedWarp = warp;
     let invalidated = false;
     if (warp > MAX_THRUST_WARP && this.commandState.throttle > 0) {
@@ -351,6 +389,7 @@ export function createCommandController(
     requestedWarp: 1,
     targetBodyIndex: -1,
     targetBodyId: null,
+    impactFrozen: false,
   };
   return {
     commands: new SimulationCommands(bodyIds, state, onTrajectoryInvalidated, onThrottleChanged),

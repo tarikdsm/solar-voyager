@@ -857,6 +857,96 @@
   font-size: 0.62rem;
 }
 
+.gamepad-settings-hint {
+  margin: 0 0 0.6rem;
+  color: rgb(186 230 253 / 62%);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.gamepad-shaping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.gamepad-shaping-grid label {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  color: rgb(186 230 253 / 72%);
+  font-size: 0.6rem;
+}
+
+.gamepad-axis-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.gamepad-axis-row {
+  display: grid;
+  grid-template-columns: minmax(2.9rem, auto) auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgb(125 211 252 / 14%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 46%);
+}
+
+.gamepad-axis-label {
+  overflow: hidden;
+  color: rgb(224 242 254 / 84%);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gamepad-axis-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: rgb(186 230 253 / 68%);
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+
+.gamepad-shaping-grid input[type='number'],
+.gamepad-axis-row input[type='number'] {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.85rem;
+  padding: 0 0.4rem;
+  border: 1px solid rgb(125 211 252 / 22%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 72%);
+  color: #e0f2fe;
+  font: inherit;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gamepad-axis-row input[type='number'] {
+  width: 3.6rem;
+}
+
+.gamepad-shaping-grid input[type='number']:focus-visible,
+.gamepad-axis-row input[type='number']:focus-visible {
+  border-color: rgb(125 211 252 / 64%);
+  outline: 2px solid rgb(94 234 212 / 42%);
+  outline-offset: 1px;
+}
+
+.gamepad-axis-row input[type='checkbox'] {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: #5eead4;
+}
+
 .session-status {
   min-height: 1rem;
   margin: 0.65rem 0 0;
@@ -1786,4 +1876,104 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ADR-036 surface-contact freeze overlay. Modal in intent but not focus-trapped:
+   T0112 owns the HUD rebuild and will re-home this alongside the other dialogs. */
+.impact-overlay {
+  position: fixed;
+  z-index: 40;
+  top: 50%;
+  left: 50%;
+  width: min(26rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.35rem 1.5rem;
+  border: 1px solid rgb(255 111 79 / 68%);
+  border-radius: 0.9rem;
+  background: linear-gradient(140deg, rgb(46 10 10 / 97%), rgb(14 8 14 / 96%));
+  box-shadow: 0 0 3rem rgb(255 65 45 / 26%);
+  color: #ffe1d9;
+  /* `.app-overlay` is pointer-transparent so the canvas gets the camera drag;
+     every interactive panel opts back in, and the recovery buttons are the
+     entire point of this one. */
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+
+.impact-overlay[hidden] {
+  display: none;
+}
+
+.impact-overlay h2 {
+  margin: 0;
+  color: #ff8b73;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.impact-overlay h2:focus-visible {
+  outline: 2px solid #ff8b73;
+  outline-offset: 0.25rem;
+}
+
+.impact-summary {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.impact-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.impact-row dt {
+  color: rgb(255 225 217 / 68%);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.impact-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.impact-note {
+  margin: 0;
+  color: rgb(255 225 217 / 72%);
+  font-size: 0.74rem;
+}
+
+.impact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.impact-actions button {
+  flex: 1 1 10rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgb(255 139 115 / 55%);
+  border-radius: 0.5rem;
+  background: rgb(255 139 115 / 12%);
+  color: #ffe1d9;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.impact-actions button:hover:not(:disabled) {
+  background: rgb(255 139 115 / 22%);
+}
+
+.impact-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

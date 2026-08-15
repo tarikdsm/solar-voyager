@@ -115,6 +115,9 @@ jobs:
       - name: HUD signal granularity regression
         run: npm run test:hud-signals
 
+      - name: Impact overlay regression
+        run: npm run test:impact-overlay
+
       - name: State-vector widget regression
         run: npm run test:state-vectors
 

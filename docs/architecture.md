@@ -63,7 +63,7 @@ src/
 ├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
 ├── game/
 │   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
-│   ├── input/                              # LANDED engine+bindings (T0105); gamepad next (T0106)
+│   ├── input/                              # LANDED engine+bindings (T0105) + gamepad (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
 │   ├── cameraDirector.ts                   # NEW  4 modes + transitions (T0110/24/25)
 │   ├── chaseCameraController.ts            # NEW  spring-arm f64 controller (T0110)
@@ -119,14 +119,20 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 
 ## Player intent: `InputFrame` (`game/input/`)
 
-Raw devices never reach `Commands` directly. `game/input/inputEngine.ts` accumulates keyboard and
-pointer-lock events into one preallocated `InputFrame`
+Raw devices never reach `Commands` directly. `game/input/inputEngine.ts` accumulates keyboard,
+pointer-lock, and (T0106) gamepad events into one preallocated `InputFrame`
 (`{lookYawRad, lookPitchRad, axes: {pitch, yaw, roll, throttle}, pressed(action)}`) published by a
 single `poll(wallDtSec)` per frame; `game/input/bindings.ts` owns the `KeyboardEvent.code` binding
 registry and the one UI-focus policy every keyboard consumer shares (only `INPUT`/`SELECT`/
 `TEXTAREA`/`contenteditable` and an already-`preventDefault`ed key suppress game input — never a
-focused button, never `Shift`). DOM access stays behind structural ports; `main.ts` supplies the
-adapters. Design: `docs/superpowers/specs/2026-08-14-input-engine-design.md`.
+focused button, never `Shift`). `game/input/gamepad.ts` (`GamepadPoller`) polls the standard-mapping
+Gamepad API and is merged into the same frame — keyboard and gamepad axes add together, a trigger sets
+the throttle lever directly rather than joining the keyboard ramp, and `A`/`B` latch two reserved
+actions (`cruiseEngage`/`cruiseAbort`) for T0116 — never a second path into `FlightController`. Connect/
+disconnect gates every `getGamepads()` call, so an unconnected pad costs nothing per frame. DOM access
+stays behind structural ports; `main.ts` supplies the adapters. Design:
+`docs/superpowers/specs/2026-08-14-input-engine-design.md`,
+`docs/superpowers/specs/2026-08-15-gamepad-design.md`.
 
 ## Flight control (`game/flight/`)
 
@@ -174,7 +180,7 @@ simulation, renderer, or runtime GPU resource.
 
 ## State & persistence
 
-- The canonical save slot is `solar-voyager.save.v2` in `localStorage` (the key names the slot, not the document version — ADR-034 kept it while bumping the document to v3 so already-deployed saves stay reachable); the same document is available through JSON export/import. Independent profile settings use `solar-voyager.settings.v2`, so quality, input preferences, and tutorial progress survive without requiring a game save. A valid legacy `solar-voyager.settings.v1` profile is immediately migrated to v2 with tutorial status `skipped`; a missing profile starts `unoffered`. A present but invalid v2 document fails closed and is never replaced from the legacy slot.
+- The canonical save slot is `solar-voyager.save.v2` in `localStorage` (the key names the slot, not the document version — ADR-034 kept it while bumping the document to v3 so already-deployed saves stay reachable, since the save slot has no fallback-read tier below it and renaming it would orphan deployed data); the same document is available through JSON export/import. Independent profile settings take the opposite approach on purpose: **each schema-incompatible profile generation gets its own key** (`solar-voyager.settings.v3` current, `.v2` T0108-era, `.v1` pre-T0108), because the profile document already has a fallback-read/migrate/write-forward mechanism a shared key would not need but also must not risk — a downgraded build silently overwriting a newer document it can't parse with a fresh older-schema one (T0106's design doc, "Storage key" section, has the full reasoning). `SettingsRepository.load()` checks the current key first, then each older key in turn, migrating forward (and persisting to the current key, never back to an older one) on the first match; a present-but-invalid document at any one key fails closed there and does not cascade to older keys. Quality, input bindings, gamepad calibration, and tutorial progress all live in this one document and survive without requiring a game save. A missing profile starts tutorial status `unoffered`; a profile migrated up from the v1 or v2 generation starts `skipped`.
 - Save v3 = `{version: 3, phase: "space", simulation, settings}`. `simulation` contains the float64 ship/ledger state, simulation time, the `VesselConfig` that priced that ledger (rest mass, absolute and manual proper-acceleration limits, hold slew rate — ADR-034), attitude, throttle, rotation rates, requested/effective warp, clamp reason, navigation target, kinetic-energy baseline and complete burn-log continuation state. Its embedded `settings` deliberately remains the strict `GameSettingsV1` preferences DTO containing only the quality governor lock (`auto | low | medium | high`) and rebindable `KeyboardEvent.code` map. Save/load and export/import project or merge that DTO through `GameSessionController`; they never overwrite profile-only tutorial progress.
 - Imported and stored documents are treated as untrusted: parsers reject unknown/missing fields and non-finite or inconsistent simulation values before construction. Loading is atomic — validation and creation of a fresh `SimulationCore` complete before the live session reference and input command target are replaced.
 - Version migrations are explicit and each is covered by a committed fixture (`tests/fixtures/save-v1.json`, `tests/fixtures/save-v2.json`, `tests/fixtures/save-v2-midburn.json`). A migrated document adopts the running vessel, but only if that vessel carries the 10 000 kg rest mass that priced every pre-v3 ledger; any other mass fails the load closed, because no downstream check can detect a mass substitution (ADR-034). Rails bodies are never serialized because their positions and velocities are deterministically derived from `simTimeSec`.

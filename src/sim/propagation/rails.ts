@@ -17,6 +17,10 @@ export interface RailsBodyInput {
   readonly muKm3S2: number;
   readonly soiRadiusKm?: number | null;
   readonly elements: Readonly<OrbitalElements> | null;
+  /** Physical mean radius; absent leaves the compiled collision radius at 0. */
+  readonly meanRadiusKm?: number;
+  /** Collision allowance above the mean radius (ADR-036); null means none. */
+  readonly surface?: { readonly atmosphereTopKm?: number | null } | null;
 }
 
 /** Immutable structure-of-arrays catalog used by the frame-loop evaluator. */
@@ -26,6 +30,13 @@ export interface CompiledRailsCatalog {
   readonly parentIndices: Int32Array;
   readonly muKm3S2: Float64Array;
   readonly soiRadiiKm: Float64Array;
+  /**
+   * physics-spec.md section 6 — `meanRadiusKm + (atmosphereTopKm ?? 0)`, the
+   * single compiled source of the collision sphere for both the live sim and
+   * the predictor. Zero for an input that carries no radius, which disables
+   * collision for that body rather than inventing one.
+   */
+  readonly collisionRadiiKm: Float64Array;
   readonly orbitalMuKm3S2: Float64Array;
   readonly meanMotionRadS: Float64Array;
   readonly semiMajorAxisKm: Float64Array;
@@ -81,6 +92,7 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
   const muKm3S2 = new Float64Array(bodyCount);
   const soiRadiiKm = new Float64Array(bodyCount);
   soiRadiiKm.fill(Number.POSITIVE_INFINITY);
+  const collisionRadiiKm = new Float64Array(bodyCount);
   const orbitalMuKm3S2 = new Float64Array(bodyCount);
   const meanMotionRadS = new Float64Array(bodyCount);
   const semiMajorAxisKm = new Float64Array(bodyCount);
@@ -113,6 +125,23 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
     muKm3S2[index] = body.muKm3S2;
     if (body.soiRadiusKm !== undefined && body.soiRadiusKm !== null) {
       soiRadiiKm[index] = body.soiRadiusKm;
+    }
+
+    // physics-spec.md section 6 — collision sphere, compiled once (ADR-036).
+    const meanRadiusKm = body.meanRadiusKm;
+    if (meanRadiusKm !== undefined) {
+      if (!Number.isFinite(meanRadiusKm) || meanRadiusKm <= 0) {
+        throw new RangeError(`${body.id} mean radius must be finite and positive`);
+      }
+      const atmosphereTopKm = body.surface?.atmosphereTopKm;
+      if (
+        atmosphereTopKm !== undefined &&
+        atmosphereTopKm !== null &&
+        (!Number.isFinite(atmosphereTopKm) || atmosphereTopKm < 0)
+      ) {
+        throw new RangeError(`${body.id} atmosphere top must be finite and non-negative`);
+      }
+      collisionRadiiKm[index] = meanRadiusKm + (atmosphereTopKm ?? 0);
     }
 
     if (index === 0) {
@@ -170,6 +199,7 @@ export function compileRailsCatalog(bodies: ReadonlyArray<RailsBodyInput>): Comp
     parentIndices,
     muKm3S2,
     soiRadiiKm,
+    collisionRadiiKm,
     orbitalMuKm3S2,
     meanMotionRadS,
     semiMajorAxisKm,

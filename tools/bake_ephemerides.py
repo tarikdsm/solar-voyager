@@ -34,6 +34,12 @@ class BodyDefinition:
     procedural_seed: int
     horizons_id_type: Optional[str] = None
     polar_radius_ratio: float = 1.0
+    # Collision-sphere allowance above the mean radius, in km (ADR-036).
+    # radius_col = meanRadiusKm + atmosphereTopKm. For the giants this is
+    # (equatorial radius at 1 bar - volumetric mean radius), so the sphere is the
+    # smallest one containing the 1-bar spheroid. Solid bodies keep None: their
+    # mean radius already is the surface.
+    atmosphere_top_km: Optional[float] = None
 
 
 def _days(value: float) -> float:
@@ -57,12 +63,12 @@ BODY_DEFINITIONS = (
     BodyDefinition("mars", "Mars", "planet", 499, "sun", 42_828.375214, 3_389.5, _days(1.02595675), math.radians(25.19), 0.17, "solid", "#b85c3b", 499),
     BodyDefinition("phobos", "Phobos", "moon", 401, "mars", 0.0007087, 11.08, _days(0.31891023), 0.0, 0.071, "solid", "#8c8175", 401),
     BodyDefinition("deimos", "Deimos", "moon", 402, "mars", 0.0000962, 6.2, _days(1.26244), 0.0, 0.068, "solid", "#9b9185", 402),
-    BodyDefinition("jupiter", "Jupiter", "planet", 599, "sun", 126_686_534.911, 69_911.0, _days(0.41354), math.radians(3.13), 0.538, "gas", "#c9a477", 599),
+    BodyDefinition("jupiter", "Jupiter", "planet", 599, "sun", 126_686_534.911, 69_911.0, _days(0.41354), math.radians(3.13), 0.538, "gas", "#c9a477", 599, atmosphere_top_km=71_492.0 - 69_911.0),
     BodyDefinition("io", "Io", "moon", 501, "jupiter", 5_959.91547, 1_821.49, _days(1.769137786), 0.0, 0.63, "solid", "#d8c35a", 501),
     BodyDefinition("europa", "Europa", "moon", 502, "jupiter", 3_202.71210, 1_560.80, _days(3.551181), 0.0, 0.67, "solid", "#c7b89a", 502),
     BodyDefinition("ganymede", "Ganymede", "moon", 503, "jupiter", 9_887.83275, 2_631.20, _days(7.154553), 0.0, 0.43, "solid", "#8f8170", 503),
     BodyDefinition("callisto", "Callisto", "moon", 504, "jupiter", 7_179.28340, 2_410.30, _days(16.689018), 0.0, 0.22, "solid", "#69645f", 504),
-    BodyDefinition("saturn", "Saturn", "planet", 699, "sun", 37_931_207.8, 58_232.0, _days(0.44401), math.radians(26.73), 0.499, "gas", "#d8c28e", 699),
+    BodyDefinition("saturn", "Saturn", "planet", 699, "sun", 37_931_207.8, 58_232.0, _days(0.44401), math.radians(26.73), 0.499, "gas", "#d8c28e", 699, atmosphere_top_km=60_268.0 - 58_232.0),
     BodyDefinition("mimas", "Mimas", "moon", 601, "saturn", 2.50349, 198.20, _days(0.9424218), 0.0, 0.962, "solid", "#bdbbb4", 601),
     BodyDefinition("enceladus", "Enceladus", "moon", 602, "saturn", 7.21037, 252.10, _days(1.370218), 0.0, 1.0, "solid", "#e5e6e3", 602),
     BodyDefinition("tethys", "Tethys", "moon", 603, "saturn", 41.21353, 531.10, _days(1.887802), 0.0, 0.80, "solid", "#c8c5bd", 603),
@@ -70,13 +76,13 @@ BODY_DEFINITIONS = (
     BodyDefinition("rhea", "Rhea", "moon", 605, "saturn", 153.94175, 763.50, _days(4.518212), 0.0, 0.949, "solid", "#aaa9a4", 605),
     BodyDefinition("titan", "Titan", "moon", 606, "saturn", 8_978.13710, 2_574.76, _days(15.945421), 0.0, 0.22, "solid", "#c68d42", 606),
     BodyDefinition("iapetus", "Iapetus", "moon", 608, "saturn", 120.51511, 734.30, _days(79.3215), 0.0, 0.05, "solid", "#77736d", 608),
-    BodyDefinition("uranus", "Uranus", "planet", 799, "sun", 5_793_951.322, 25_362.0, _days(-0.71833), math.radians(97.77), 0.488, "gas", "#9ccbd3", 799),
+    BodyDefinition("uranus", "Uranus", "planet", 799, "sun", 5_793_951.322, 25_362.0, _days(-0.71833), math.radians(97.77), 0.488, "gas", "#9ccbd3", 799, atmosphere_top_km=25_559.0 - 25_362.0),
     BodyDefinition("miranda", "Miranda", "moon", 705, "uranus", 4.3, 235.8, _days(1.413479), 0.0, 0.32, "solid", "#a9a6a0", 705),
     BodyDefinition("ariel", "Ariel", "moon", 701, "uranus", 83.5, 578.9, _days(2.520379), 0.0, 0.39, "solid", "#b8b6ae", 701),
     BodyDefinition("umbriel", "Umbriel", "moon", 702, "uranus", 85.1, 584.7, _days(4.144177), 0.0, 0.21, "solid", "#77746f", 702),
     BodyDefinition("titania", "Titania", "moon", 703, "uranus", 226.9, 788.9, _days(8.705872), 0.0, 0.27, "solid", "#a5a29b", 703),
     BodyDefinition("oberon", "Oberon", "moon", 704, "uranus", 205.3, 761.4, _days(13.463239), 0.0, 0.23, "solid", "#8e8981", 704),
-    BodyDefinition("neptune", "Neptune", "planet", 899, "sun", 6_835_099.5, 24_622.0, _days(0.67125), math.radians(28.32), 0.442, "gas", "#4169a9", 899),
+    BodyDefinition("neptune", "Neptune", "planet", 899, "sun", 6_835_099.5, 24_622.0, _days(0.67125), math.radians(28.32), 0.442, "gas", "#4169a9", 899, atmosphere_top_km=24_764.0 - 24_622.0),
     BodyDefinition("triton", "Triton", "moon", 801, "neptune", 1_428.49546, 1_352.60, _days(-5.876854), 0.0, 0.76, "solid", "#b7aca3", 801),
     BodyDefinition("pluto", "Pluto", "dwarf", 999, "sun", 869.3, 1_188.3, _days(-6.3872), math.radians(122.53), 0.3, "solid", "#b7a28c", 999),
     BodyDefinition("charon", "Charon", "moon", 901, "pluto", 106.1, 606.0, _days(6.3872), 0.0, 0.38, "solid", "#8f8b87", 901),
@@ -174,7 +180,10 @@ def build_catalog(elements_by_id: Mapping[str, Mapping[str, float]]) -> Dict[str
                 "geometricAlbedo": definition.geometric_albedo,
                 "soiRadiusKm": soi_radius_km,
                 "elements": elements,
-                "surface": {"kind": definition.surface_kind, "atmosphereTopKm": None},
+                "surface": {
+                    "kind": definition.surface_kind,
+                    "atmosphereTopKm": definition.atmosphere_top_km,
+                },
                 "visual": {
                     "albedoColor": definition.albedo_color,
                     "assetRef": None,

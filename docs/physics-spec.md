@@ -384,6 +384,27 @@ these presentation bounds do not alter the physical definitions above.
   Its ship position and time are linearly interpolated, replace the pending
   output sample as the final polyline point, and stop both propagation loops.
   Impact time-to-impact is crossing time minus prediction start time (ADR-030).
+- **Surface contact (live simulation, ADR-036).** The predictor above is
+  thrust-free and advisory; the flown trajectory is tested independently in
+  `SimulationCore`, so a powered descent the forecast never saw still collides.
+  The collision sphere is the same `meanRadiusKm + atmosphereTopKm` (absent
+  atmosphere top treated as zero), and for the four giants `atmosphereTopKm` is
+  `equatorialRadius(1 bar) − meanRadiusKm`, making the sphere the smallest one
+  containing the 1-bar oblate spheroid. Per **accepted** DP54 step, every body is
+  tested in two stages. Stage one solves the same `|r0 + f·d|² = R²` root as
+  above over the step's chord, sharing `smallestUnitRoot`; because the chord of a
+  gravitating arc sags toward the attractor (≈ 0.31 km over a typical LEO step)
+  this stage is a deliberate superset and is never authoritative. Stage two
+  re-propagates the sub-interval with the production tolerance and bisects the
+  first genuinely penetrating time to **1 ms**, reporting the low bracket
+  endpoint, so the ship comes to rest at or outside the sphere and the central
+  singularity of §3's n-body field stays unreachable for it. A segment that opens
+  at or inside a sphere is immediate contact at its own start time. On contact
+  the integrator freezes: coordinate time stops, warp is forced to 1x, throttle
+  to zero, and the snapshot publishes `impactOccurred`, `impactBodyIndex`,
+  `impactSpeedKmS` (`|v_ship − v_body|` in coordinate velocity; body rotation
+  excluded) and `impactSimTimeSec`. The freeze is derived geometry and is not
+  persisted; a reloaded impacted document re-derives it on its first step.
 - **Warnings:** impact (red, with countdown), atmosphere entry, SOI change, escape from dominant body.
 
 ## 7. Regression & validation tests (must exist before v1)

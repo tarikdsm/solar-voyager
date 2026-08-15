@@ -12,6 +12,8 @@ import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
 import type { PerfPanelStore } from './hud/perfPanelStore.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
+import { ImpactOverlay, type ImpactOverlayActions } from './ImpactOverlay.js';
+import type { ImpactDisplaySignals } from './impactSignals.js';
 import { MainMenu } from './MainMenu.js';
 import { Navball } from './Navball.js';
 import { SessionSettingsPanel, type SessionSettingsPort } from './SessionSettingsPanel.js';
@@ -42,6 +44,8 @@ export interface AppProps {
     readonly onExpandedChange?: ((expanded: boolean) => void) | null;
   }> | null;
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
+  /** ADR-036 surface-contact freeze overlay; absent leaves it unmounted. */
+  readonly impact?: ImpactUiPort | null;
   readonly initialPhase?: GamePhase;
   readonly onSpacePhaseEntered?: (() => void) | null;
   readonly onBurnLogExpandedChange?: ((expanded: boolean) => void) | null;
@@ -61,6 +65,11 @@ export interface AppProps {
 export interface SystemMapUiPort {
   readonly controller: SystemMapController;
   readonly signals: SystemMapSignalStore;
+}
+
+export interface ImpactUiPort {
+  readonly actions: ImpactOverlayActions;
+  readonly display: ImpactDisplaySignals;
 }
 
 export function SpaceHudSurfaces({
@@ -299,6 +308,7 @@ export function App({
   hud,
   hudState,
   hardwareWarning = null,
+  impact = null,
   initialPhase,
   onBurnLogExpandedChange = null,
   onHardwareWarningAcknowledged = null,
@@ -431,6 +441,7 @@ export function App({
           </p>
         </section>
       </SpaceHudSurfaces>
+      {impact === null ? null : <ImpactOverlay actions={impact.actions} display={impact.display} />}
       {tutorial !== null &&
       tutorialProgress !== null &&
       (tutorialProgress.status === 'unoffered' || tutorialProgress.status === 'active') ? (

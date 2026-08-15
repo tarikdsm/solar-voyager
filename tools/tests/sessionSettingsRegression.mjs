@@ -53,7 +53,59 @@ try {
   assert.equal(held.pitchRateRadS, 0.6);
   assert.equal(released.pitchRateRadS, 0);
 
+  // Gamepad settings (T0106): global shaping, per-axis invert/sensitivity, and
+  // the "(reserved)" cruise labels all render and persist through the real
+  // session -> settings repository path, in a real browser.
   await page.getByText('Session & settings', { exact: true }).click();
+  assert.equal(await page.locator('#gamepad-deadzone').inputValue(), '0.08');
+  assert.equal(await page.locator('#gamepad-curve-exponent').inputValue(), '1.6');
+  assert.equal(await page.locator('#gamepad-axis-pitch-invert').isChecked(), false);
+  await page.getByRole('button', { name: 'Cruise engage (reserved): KeyG', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Cruise abort (reserved): KeyV', exact: true }).waitFor();
+
+  await page.locator('#gamepad-deadzone').fill('0.2');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.locator('#session-status').textContent(), 'Gamepad deadzone updated');
+  await page.locator('#gamepad-curve-exponent').fill('2');
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page.locator('#session-status').textContent(),
+    'Gamepad response curve updated',
+  );
+  await page.locator('#gamepad-axis-roll-sensitivity').fill('1.5');
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page.locator('#session-status').textContent(),
+    'Gamepad axis sensitivity updated',
+  );
+  await page.locator('#gamepad-axis-pitch-invert').check();
+  assert.equal(await page.locator('#session-status').textContent(), 'Gamepad axis invert updated');
+
+  assert.equal(await page.locator('#gamepad-deadzone').inputValue(), '0.2');
+  assert.equal(await page.locator('#gamepad-axis-roll-sensitivity').inputValue(), '1.5');
+  assert.equal(await page.locator('#gamepad-axis-pitch-invert').isChecked(), true);
+  const gamepadSnapshot = await page.evaluate(() => globalThis.__sessionHarness.snapshot());
+  const storedGamepad = JSON.parse(gamepadSnapshot.storedProfileJson).gamepad;
+  assert.deepEqual(storedGamepad, {
+    deadzone: 0.2,
+    curveExponent: 2,
+    axes: {
+      pitch: { invert: true, sensitivity: 1 },
+      yaw: { invert: false, sensitivity: 1 },
+      roll: { invert: false, sensitivity: 1.5 },
+      throttle: { invert: false, sensitivity: 1 },
+    },
+  });
+  // An out-of-range value is rejected and leaves the stored document untouched.
+  await page.locator('#gamepad-deadzone').fill('5');
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page.locator('#session-status').textContent(),
+    'Unable to update gamepad deadzone',
+  );
+  const afterRejected = await page.evaluate(() => globalThis.__sessionHarness.snapshot());
+  assert.deepEqual(JSON.parse(afterRejected.storedProfileJson).gamepad, storedGamepad);
+
   await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
   const exported = await page.evaluate(() => globalThis.__sessionHarness.snapshot());
   assert.match(exported.exportedJson, /^\{"version":3,/u);
@@ -91,7 +143,9 @@ try {
   assert.ok(mobile.panelScrollWidth <= mobile.viewportWidth, 'mobile panel exceeds viewport width');
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
-  process.stdout.write(`${JSON.stringify({ saved, loaded, held, released, desktop, mobile }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ saved, loaded, held, released, storedGamepad, desktop, mobile }, null, 2)}\n`,
+  );
 } finally {
   if (browser !== undefined) await browser.close();
   await server.close();

@@ -9,9 +9,10 @@ camera, microphone, contacts, or payment information.
 When used, save and preference controls write only to the current browser profile's `localStorage`:
 
 - `solar-voyager.save.v2` stores the current validated flight;
-- `solar-voyager.settings.v2` stores quality, key bindings, and tutorial progress;
-- `solar-voyager.settings.v1` may be read once to migrate legacy settings and is not the current
-  profile format.
+- `solar-voyager.settings.v3` stores quality, key bindings, gamepad calibration, and tutorial
+  progress — this is the current profile format;
+- `solar-voyager.settings.v2` and `solar-voyager.settings.v1` may each be read once, to migrate an
+  older profile forward, and are not the current profile format.
 
 **Export** creates a JSON file locally through the browser. **Import** reads only the file the player
 selects and validates it locally. The game does not upload either file. Clearing site data deletes

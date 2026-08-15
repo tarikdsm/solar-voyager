@@ -1,0 +1,60 @@
+id: T0111
+title: Surface collision with impact event, restore points, respawn
+status: DONE
+agent: claude
+branch: task/T0111-collision
+depends_on: [T0104]
+milestone: V2M1
+spec: |
+  The ship flies through planets today: the thrust-free predictor warns of an impact and nothing
+  happens, and gravity goes NaN at a body centre. v2 supports low passes over terrain, so contact
+  must mean something. Detect surface crossing per accepted integrator step, bisect to contact,
+  freeze the simulation, and offer sandbox-friendly recovery rather than a punitive game-over.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.4;
+  semantics in docs/superpowers/plans/2026-08-14-v2-free-flight.md section 3.4;
+  design doc docs/superpowers/specs/2026-08-14-collision-design.md.
+acceptance:
+  - Segment/sphere detection per accepted step against meanRadius plus atmosphereTopKm when set; contact bisected to 1 ms; snapshot impact fields per plan section 2
+  - Post-impact step() no-ops; restoreFromState and respawnInOrbit both produce valid golden-consistent states
+  - Restore ring of 6 slots at 10 s wall cadence with zero frame-loop allocation
+  - Gas and ice giants carry cloud-deck collision radii in data; bodies.json otherwise untouched
+  - Impact overlay with speed, body and mission time plus Restore and Respawn; warp forced to 1x
+handoff_notes: |
+  CLOUD DECKS: atmosphereTopKm is an ALTITUDE above meanRadiusKm, not an absolute radius, and the
+  catalog mean radii are already 1-bar volumetric means. Values are 1-bar equatorial minus mean
+  (Jupiter 1581, Saturn 2036, Uranus 197, Neptune 142) from the NASA fact sheets, so the collision
+  sphere is the smallest one containing the 1-bar oblate spheroid and an equatorial pass stops at or
+  above the 1-bar level. A 5000 km cloud-top margin was rejected: it puts contact at 1.2 body radii
+  on Neptune and destroys the low-flyby experience that is explicitly in v2 scope.
+  DETECTION is two-stage and both stages are load-bearing: a conservative chord test against all
+  bodies on every accepted step, then a real DP54 sub-propagation that confirms before halting, then
+  bisection to 1 ms. The chord alone sags below the true arc and would false-positive on a graze;
+  removing the confirmation pass fails seven tests. Review measured detection to be frame-rate
+  independent across a 1200x range of frame sizes (impact time agreeing to 0.03 s at 1/60 s, 1 s,
+  5 s and 20 s), which is the property the two-stage design exists to guarantee.
+  The observer is provably non-numeric: it runs after the accept decision, the endpoint snap and the
+  FSAL write, adds no derivative evaluation, and leaves nextStepSec identical on a non-halting run.
+  Only one of eighteen propagate() call sites passes an observer, so there is no recursion, and the
+  goldens are structurally unreachable.
+  SAVE: impacted sessions are savable and the impact flag is NOT persisted — it is derived geometry
+  re-detected on the first step after load. Save envelope v3 is untouched; no migration this task.
+  RESTORE RING uses the existing exportPersistentState() rather than a parallel non-allocating path,
+  by controller ruling: the zero-allocation rule binds the per-frame path, and two persistence paths
+  that must agree forever is the coupling class that produced T0104's one defect. Measured: retained
+  heap -24,880 B over 600 s and 60 captures, 0.91 microseconds and about 1,029 transient bytes per
+  capture, about 6.2 KB steady.
+  bench:sim moved 0.0779 -> 0.0891 ms, 4.6% of the 2 ms budget, attributable to one extra 43-body
+  rails evaluation per accepted step (the second evaluateRailsInto is a cache hit, verified). The
+  cache-sharing fix that would remove most of it is documented and declined re-decidably. Worst
+  observed step under a sustained low pass with the confirmation pass firing every step: 0.86 ms.
+  BUDGET WATCH for T0112: measured from a real build, entry 133,677 B and total 563,698 B against
+  the 570,000 B golden inherited on main — 6,302 B of headroom. T0109 raises the ceiling to
+  1,000,000 B but is not merged yet. The bench summary records roughly 45,000 B of apparent
+  duplication in dist (three draco_wasm_wrapper copies, basis_transcoder in two places) as the
+  cheapest place to recover headroom if it is ever needed.
+  Deferred minors carried into T0112's brief: replacementInvalidatesRestorePoints allowlists the
+  origins that INVALIDATE, so an unrecognized future origin defaults to keeping the ring — the
+  dangerous direction; inverting it to allowlist restore and respawn fails closed. And import's
+  ring-clearing is only exercised indirectly.
+  Verification: 983 Vitest passed / 3 skipped, lint, typecheck, format, perf gates, impact-overlay
+  harness; goldens byte-identical.
