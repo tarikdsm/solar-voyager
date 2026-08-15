@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { apparentMagnitude, projectedDiameterPx, selectVisualTier } from './visualTier.js';
+import {
+  apparentMagnitude,
+  pointIntensityForMagnitude,
+  projectedDiameterPx,
+  selectResolvedRepresentation,
+  selectVisualTier,
+} from './visualTier.js';
 
 describe('projectedDiameterPx', () => {
   it('is monotonic as the camera approaches and saturates at a surface crossing', () => {
@@ -114,5 +120,51 @@ describe('apparentMagnitude', () => {
     expect(() => apparentMagnitude(1, 0, 1, -0.1, positionsKm, { x: 0, y: 0, z: 0 })).toThrow(
       RangeError,
     );
+  });
+});
+
+describe('selectResolvedRepresentation', () => {
+  it('is the same point boundary the tier ladder uses, with the same hysteresis', () => {
+    expect(selectResolvedRepresentation(false, 1.79)).toBe(false);
+    expect(selectResolvedRepresentation(false, 1.8)).toBe(true);
+    expect(selectResolvedRepresentation(true, 1.2)).toBe(true);
+    expect(selectResolvedRepresentation(true, 1.19)).toBe(false);
+  });
+
+  it('agrees with selectVisualTier at every point boundary crossing', () => {
+    for (const diameterPx of [0, 0.5, 1.19, 1.2, 1.5, 1.79, 1.8, 5, 240, 1_000]) {
+      expect(selectVisualTier(1, diameterPx) === 1).toBe(
+        !selectResolvedRepresentation(false, diameterPx),
+      );
+      for (const current of [2, 3] as const) {
+        expect(selectVisualTier(current, diameterPx) === 1).toBe(
+          !selectResolvedRepresentation(true, diameterPx),
+        );
+      }
+    }
+  });
+
+  it('rejects non-finite diameters', () => {
+    expect(() => selectResolvedRepresentation(false, Number.NaN)).toThrow(RangeError);
+    expect(() => selectResolvedRepresentation(true, -1)).toThrow(RangeError);
+  });
+});
+
+describe('pointIntensityForMagnitude', () => {
+  it('renders the naked-eye limit at unit intensity and saturates on bright objects', () => {
+    expect(pointIntensityForMagnitude(6)).toBeCloseTo(1, 12);
+    expect(pointIntensityForMagnitude(8.5)).toBeCloseTo(0.1, 12);
+    expect(pointIntensityForMagnitude(3.74)).toBeCloseTo(8, 12);
+    expect(pointIntensityForMagnitude(-26.74)).toBe(8);
+    expect(pointIntensityForMagnitude(30)).toBeLessThan(1e-9);
+  });
+
+  it('is strictly decreasing in magnitude below the clamp', () => {
+    let previous = Number.POSITIVE_INFINITY;
+    for (let magnitude = 4; magnitude <= 24; magnitude += 1) {
+      const intensity = pointIntensityForMagnitude(magnitude);
+      expect(intensity).toBeLessThan(previous);
+      previous = intensity;
+    }
   });
 });

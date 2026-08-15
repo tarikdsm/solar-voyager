@@ -16,6 +16,12 @@ import { CameraRelativeSpaceScene } from './spaceScene.js';
 import { SolarLighting } from './solarLighting.js';
 import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { ProceduralSun } from './proceduralSun.js';
+import {
+  ShipVisual,
+  SHIP_ASSET_ID,
+  SHIP_BOUNDING_RADIUS_KM,
+  SHIP_POINT_COLOR,
+} from './shipVisual.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
 import { TrajectoryOverlay } from './trajectoryOverlay.js';
@@ -26,6 +32,7 @@ import starCatalogUrl from '../../data/stars.bin?url';
 export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
+  readonly shipVisual: ShipVisual;
   readonly starfield: Starfield;
   readonly lighting: SolarLighting;
   readonly proceduralSun: ProceduralSun;
@@ -34,6 +41,12 @@ export interface EpochWorld {
   readonly systemMap: SystemMapScene;
   readonly cameraController: OrbitCameraController;
   readonly cameraPositionKm: ReadonlyVec3;
+  /**
+   * Packed float64 positions: one triple per catalog body, then the ship.
+   *
+   * `set(snapshot.bodyPositionsKm)` writes the body prefix and leaves the ship
+   * triple to `ShipVisual.writeState`.
+   */
   readonly positionsKm: Float64Array;
 }
 
@@ -76,6 +89,20 @@ export async function createEpochWorld(
   options: CreateEpochWorldOptions = {},
 ): Promise<EpochWorld> {
   const epochState = createEpochState();
+  const bodyCount = epochState.bodies.length;
+  // One shared packed array: catalog bodies first, then the ship. Every
+  // camera-relative binding, the camera focus targets, the solar lighting focus
+  // and the apparent-magnitude path all address it by offset, so the ship needs
+  // no parallel machinery. The system map keeps a body-only view of the same
+  // buffer because its contract is one icon per catalog body.
+  const positionsKm = new Float64Array((bodyCount + 1) * 3);
+  positionsKm.set(epochState.positionsKm);
+  const shipIndex = bodyCount;
+  const shipPositionOffset = shipIndex * 3;
+  positionsKm[shipPositionOffset] = epochState.shipPositionKm.x;
+  positionsKm[shipPositionOffset + 1] = epochState.shipPositionKm.y;
+  positionsKm[shipPositionOffset + 2] = epochState.shipPositionKm.z;
+  const bodyPositionsKm = positionsKm.subarray(0, bodyCount * 3);
   const definitions: BodyVisualDefinition[] = [];
   const systemMapDefinitions: SystemMapBodyDefinition[] = [];
   const cameraTargets: CameraFocusTarget[] = [];
@@ -143,8 +170,14 @@ export async function createEpochWorld(
     throw new Error('Epoch lighting requires catalogued Sun and Earth definitions.');
   }
 
+  cameraTargets.push({
+    id: SHIP_ASSET_ID,
+    positionOffset: shipPositionOffset,
+    meanRadiusKm: SHIP_BOUNDING_RADIUS_KM,
+  });
+
   const cameraController = new OrbitCameraController({
-    positionsKm: epochState.positionsKm,
+    positionsKm,
     targets: cameraTargets,
     initialFocusId: 'earth',
     initialCameraPositionKm: epochState.cameraPositionKm,
@@ -173,7 +206,7 @@ export async function createEpochWorld(
       : 1;
   const initialViewportWidthPx =
     options.initialViewportWidthPx ?? initialViewportHeightPx * drawingBufferAspect;
-  const systemMap = new SystemMapScene(epochState.positionsKm, systemMapDefinitions, {
+  const systemMap = new SystemMapScene(bodyPositionsKm, systemMapDefinitions, {
     viewportWidthPx: initialViewportWidthPx,
     viewportHeightPx: initialViewportHeightPx,
     pixelRatio: renderer.getPixelRatio(),
@@ -187,14 +220,14 @@ export async function createEpochWorld(
 
   const lighting = new SolarLighting(
     spaceScene,
-    epochState.positionsKm,
+    positionsKm,
     sunIndex * 3,
     earthIndex * 3,
     solarRadiusKm,
   );
   const proceduralSun = new ProceduralSun(
     spaceScene,
-    epochState.positionsKm,
+    positionsKm,
     sunIndex * 3,
     solarRadiusKm,
     sunProceduralSeed,
@@ -218,15 +251,34 @@ export async function createEpochWorld(
   const visualSystem = new BodyVisualSystem(
     spaceScene,
     definitions,
-    epochState.positionsKm,
+    positionsKm,
     assetLoader,
     compileModel,
     proceduralSun,
     false,
+    [SHIP_POINT_COLOR],
   );
+  const shipVisual = new ShipVisual({
+    spaceScene,
+    pointCloud: visualSystem.pointCloud,
+    positionsKm,
+    shipIndex,
+    sunIndex,
+    assetLoader,
+    compileModel,
+    lazyLoadingEnabled: false,
+  });
 
   await visualSystem.initializeEager();
   options.onProgress?.('hero-spheres');
+  // Before the first warm-up render: an unwritten point-cloud slot defaults to a
+  // fully opaque unit-size dot, and the ship owns slot `shipIndex`.
+  shipVisual.update(
+    cameraController.cameraPositionKm,
+    initialViewportHeightPx,
+    spaceScene.camera.fov * (Math.PI / 180),
+    0,
+  );
   spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
   osculatingConic.line.visible = true;
   trajectoryOverlay.prepareCompilationPass(
@@ -255,6 +307,7 @@ export async function createEpochWorld(
   return {
     spaceScene,
     visualSystem,
+    shipVisual,
     starfield,
     lighting,
     proceduralSun,
@@ -263,6 +316,6 @@ export async function createEpochWorld(
     systemMap,
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,
-    positionsKm: epochState.positionsKm,
+    positionsKm,
   };
 }

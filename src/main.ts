@@ -39,6 +39,8 @@ import {
 import { createRenderer, type RendererBootstrap } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
+import type { BodyModelLoadState } from './render/bodyVisualSystem.js';
+import { SHIP_ASSET_ID } from './render/shipVisual.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
@@ -78,10 +80,22 @@ interface RuntimeResourceCounts {
   scrollListeners: number;
   sessionSimulationCreations: number;
   sessionSimulationReplacements: number;
+  shipVisualCreations: number;
   spacePhaseActivationRequests: number;
   spacePhaseActivations: number;
   stateVectorLayoutObservers: number;
   trajectoryWorkers: number;
+}
+
+interface ShipRuntimeDiagnostics {
+  readonly loadState: BodyModelLoadState;
+  readonly resolved: boolean;
+  readonly diameterPx: number;
+  readonly pointOpacity: number;
+  readonly modelOpacity: number;
+  readonly noseAlignment: number;
+  readonly noseNodeAlignment: number;
+  readonly focused: boolean;
 }
 
 interface SystemMapRuntimeDiagnostics {
@@ -183,10 +197,21 @@ class SharedCameraControls implements CameraControlPort {
     private readonly camera: OrbitCameraController,
     private readonly map: SystemMapController,
     private readonly commands: Commands,
+    /**
+     * The camera focus ring now contains the ship (T0109), which is not a
+     * catalog body: the system map has no icon for it and `Commands.setTarget`
+     * throws on an id the simulation does not know. Everything routed at the
+     * simulation is gated on this list.
+     */
+    private readonly catalogBodyIds: readonly string[],
   ) {}
 
+  /**
+   * Reported from the camera rather than the map so the focus label follows a
+   * focus the map cannot represent.
+   */
   get focusId(): string {
-    return this.map.focusId;
+    return this.camera.focusId;
   }
 
   orbitBy(deltaYawRad: number, deltaPitchRad: number): void {
@@ -205,6 +230,7 @@ class SharedCameraControls implements CameraControlPort {
 
   cycleFocus(step: number): string {
     const id = this.camera.cycleFocus(step);
+    if (!this.catalogBodyIds.includes(id)) return id;
     this.map.focusBody(id);
     this.commands.setTarget(id);
     return id;
@@ -281,6 +307,7 @@ const runtimeResources: RuntimeResourceCounts = {
   scrollListeners: 0,
   sessionSimulationCreations: 0,
   sessionSimulationReplacements: 0,
+  shipVisualCreations: 0,
   spacePhaseActivationRequests: 0,
   spacePhaseActivations: 0,
   stateVectorLayoutObservers: 0,
@@ -835,6 +862,9 @@ function renderFrame(nowMs: number): void {
   }
   const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
+  // Before the camera reads its focus offset, so a ship-focused camera tracks
+  // this step's position instead of the previous one.
+  world.shipVisual.writeState(snapshot.shipState, snapshot.attitudeQuaternion);
   if (systemMapRuntimeDiagnostics !== null) {
     systemMapRuntimeDiagnostics.simulationTimeSec = snapshot.simTimeSec;
     systemMapRuntimeDiagnostics.targetBodyId =
@@ -888,6 +918,12 @@ function renderFrame(nowMs: number): void {
       spaceScene.camera.fov * (Math.PI / 180),
       nowMs,
       snapshot.simTimeSec,
+    );
+    world.shipVisual.update(
+      cameraPositionKm,
+      Math.max(1, canvas.clientHeight),
+      spaceScene.camera.fov * (Math.PI / 180),
+      nowMs,
     );
     lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
     lighting.update();
@@ -996,6 +1032,41 @@ async function prepareApplication(): Promise<void> {
     onProgress: publishStartupMilestone,
   });
   runtimeResources.epochWorldCreations += 1;
+  runtimeResources.shipVisualCreations += 1;
+  const shipVisual = world.shipVisual;
+  const shipCameraController = world.cameraController;
+  const shipRuntimeDiagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get loadState() {
+          return shipVisual.loadState;
+        },
+        get resolved() {
+          return shipVisual.resolved;
+        },
+        get diameterPx() {
+          return shipVisual.diameterPx;
+        },
+        get pointOpacity() {
+          return shipVisual.pointOpacity;
+        },
+        get modelOpacity() {
+          return shipVisual.modelOpacity;
+        },
+        get noseAlignment() {
+          return shipVisual.noseAlignment;
+        },
+        get noseNodeAlignment() {
+          return shipVisual.noseNodeAlignment;
+        },
+        get focused() {
+          return shipCameraController.focusId === SHIP_ASSET_ID;
+        },
+      },
+      null,
+    ),
+  ) as ShipRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerShip', { value: shipRuntimeDiagnostics });
   world.systemMap.focusBody(systemMapController.focusId);
   systemMapRuntimeDiagnostics = {
     scene: world.systemMap.diagnostics,
@@ -1120,6 +1191,7 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   const activeWorld = world;
   if (activeWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
   activeWorld.visualSystem.enableLazyLoading();
+  activeWorld.shipVisual.enableLazyLoading();
   const focusLabel = document.querySelector('#camera-focus-label');
   if (!(focusLabel instanceof HTMLElement)) {
     throw new Error('Solar Voyager camera focus label was not found.');
@@ -1146,15 +1218,18 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   // Frozen CI contract field: it counts one input owner per space-phase
   // activation, which is now the input engine rather than v1's mapper.
   runtimeResources.keyboardCommandMappers += 1;
+  const catalogBodyIds = session.simulation.snapshot.bodyIds;
   const spaceCameraControls = new SharedCameraControls(
     activeWorld.cameraController,
     systemMapController,
     sessionCommands,
+    catalogBodyIds,
   );
   const mapCameraControls = new SharedCameraControls(
     activeWorld.systemMap.cameraController,
     systemMapController,
     sessionCommands,
+    catalogBodyIds,
   );
   cameraInput = new CameraInputController(
     canvas,
