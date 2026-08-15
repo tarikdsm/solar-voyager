@@ -23,6 +23,7 @@
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
+    "test:impact-overlay": "node tools/tests/impactOverlayRegression.mjs",
     "test:state-vectors": "node tools/tests/stateVectorWidgetRegression.mjs",
     "test:trajectory-overlay": "node tools/tests/trajectoryOverlayRegression.mjs",
     "test:relativistic-visuals": "node tools/tests/relativisticVisualsRegression.mjs",
