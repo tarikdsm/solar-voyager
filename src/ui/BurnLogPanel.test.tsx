@@ -1,7 +1,8 @@
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, it, vi } from 'vitest';
 
-import { InputCommandBridge, ROTATION_RATE_RAD_S } from '../game/input/inputCommandBridge.js';
+import { FlightController, ROTATION_RATE_RAD_S } from '../game/flight/flightController.js';
+import { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import {
   InputEngine,
   type InputKeyboardEvent,
@@ -9,7 +10,8 @@ import {
   type InputKeyboardTarget,
 } from '../game/input/inputEngine.js';
 import { DEFAULT_GAME_SETTINGS, type InputBindings } from '../game/settings.js';
-import type { Commands } from '../sim/simulationSnapshot.js';
+import { createSimulationSnapshotBuffer, type Commands } from '../sim/simulationSnapshot.js';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 import type { BurnLogEntry, BurnLogView } from '../sim/ship/ledger.js';
 import { createBurnLogSignalStore } from './burnLogSignals.js';
 import {
@@ -126,7 +128,10 @@ function createFlightInputFixture(bindings: InputBindings) {
     setWarp: vi.fn(),
   };
   const engine = new InputEngine({ bindings, keyboardTarget });
-  const bridge = new InputCommandBridge(commands, () => ({ requestedWarp: 1, throttle: 0 }));
+  const snapshot = createSimulationSnapshotBuffer(['earth']);
+  const ports = { commands, snapshot: () => snapshot, vessel: DEFAULT_VESSEL };
+  const controller = new FlightController(ports);
+  const router = new FlightInputRouter(controller, ports);
   return {
     commands,
     emitKeyDown: (event: InputKeyboardEvent) => {
@@ -136,7 +141,8 @@ function createFlightInputFixture(bindings: InputBindings) {
       for (const listener of keyUpListeners) listener(event);
     },
     step: () => {
-      bridge.apply(engine.poll(1 / 60));
+      router.apply(engine.poll(1 / 60));
+      controller.update(1 / 60);
     },
   };
 }

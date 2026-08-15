@@ -4,7 +4,8 @@ import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
 } from './game/createNewGameSimulation.js';
-import { InputCommandBridge } from './game/input/inputCommandBridge.js';
+import { FlightController } from './game/flight/flightController.js';
+import { FlightInputRouter } from './game/flight/flightInputRouter.js';
 import {
   InputEngine,
   type InputKeyboardTarget,
@@ -338,7 +339,8 @@ let postPipeline: LightingPostPipeline | null = null;
 let cameraInput: CameraInputController | null = null;
 let systemMapCameraInput: CameraInputController | null = null;
 let inputEngine: InputEngine | null = null;
-let inputCommandBridge: InputCommandBridge | null = null;
+let flightController: FlightController | null = null;
+let flightInputRouter: FlightInputRouter | null = null;
 let pauseRequestCount = 0;
 let perfGovernor: PerfGovernor | null = null;
 let relativisticVisuals: RelativisticVisualController | null = null;
@@ -406,9 +408,17 @@ const session = new GameSessionController({
   createSimulation: createTrackedPersistentSimulation,
   onSimulationReplaced: (replacement) => {
     runtimeResources.sessionSimulationReplacements += 1;
-    // Seed the analog lever from the restored state, or the bridge would command
-    // the fresh engine value (0) over it on the next frame.
-    inputEngine?.setThrottleAxis(replacement.snapshot.throttle);
+    // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
+    // and the regime scaling below depends on it — so the vessel goes first.
+    flightController?.setVessel(replacement.vessel);
+    // Seed the analog lever from the restored state, or the router would command
+    // the fresh engine value (0) over it on the next frame. `snapshot.throttle`
+    // is already regime-scaled, so the controller un-scales it and both owners
+    // of the lever are seeded from the one figure.
+    inputEngine?.setThrottleAxis(
+      flightController?.adoptCommandedThrottle(replacement.snapshot.throttle) ??
+        replacement.snapshot.throttle,
+    );
     burnLogStore.rebind(replacement.burnLog);
     updateBurnLogRuntime(replacement.burnLog);
     hudStore.publish(replacement.snapshot, performance.now());
@@ -431,8 +441,8 @@ const session = new GameSessionController({
     inputEngine?.releaseHeldKeys();
     // A restore already carries the saved rotation rates: adopt them instead of
     // flushing the (now released) axes over them.
-    if (origin === 'restore') inputCommandBridge?.resetAxes();
-    else inputCommandBridge?.releaseAxes();
+    if (origin === 'restore') flightController?.resetAxes();
+    else flightController?.releaseAxes();
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
@@ -819,8 +829,9 @@ function renderFrame(nowMs: number): void {
   } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
   const simulationStartMs = performance.now();
-  if (inputEngine !== null && inputCommandBridge !== null) {
-    inputCommandBridge.apply(inputEngine.poll(deltaSec));
+  if (inputEngine !== null && flightInputRouter !== null && flightController !== null) {
+    flightInputRouter.apply(inputEngine.poll(deltaSec));
+    flightController.update(deltaSec);
   }
   const snapshot = session.simulation.step(deltaSec);
   world.positionsKm.set(snapshot.bodyPositionsKm);
@@ -1119,8 +1130,18 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     onPauseRequested: handlePauseRequested,
     pointerLock: createCanvasPointerLockSurface(canvas),
   });
-  inputEngine.setThrottleAxis(session.simulation.snapshot.throttle);
-  inputCommandBridge = new InputCommandBridge(sessionCommands, currentInputSnapshot);
+  flightController = new FlightController({
+    commands: sessionCommands,
+    snapshot: currentInputSnapshot,
+    vessel: session.simulation.vessel,
+  });
+  flightInputRouter = new FlightInputRouter(flightController, {
+    commands: sessionCommands,
+    snapshot: currentInputSnapshot,
+  });
+  inputEngine.setThrottleAxis(
+    flightController.adoptCommandedThrottle(session.simulation.snapshot.throttle),
+  );
   canvas.addEventListener('dblclick', handleCanvasDoubleClick);
   // Frozen CI contract field: it counts one input owner per space-phase
   // activation, which is now the input engine rather than v1's mapper.

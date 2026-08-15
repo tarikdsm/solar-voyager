@@ -4,6 +4,7 @@ import type { SessionActionResult, SessionExportResult } from '../game/sessionCo
 import type { TutorialController } from '../game/tutorialController.js';
 import {
   INPUT_ACTIONS,
+  isUnboundInputCode,
   type GameSettingsV2,
   type InputAction,
   type QualityLock,
@@ -56,7 +57,21 @@ const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze
   attitudeManual: 'Manual attitude',
   attitudePrograde: 'Prograde hold',
   attitudeRetrograde: 'Retrograde hold',
+  attitudeNormal: 'Normal hold',
+  attitudeAntinormal: 'Anti-normal hold',
+  attitudeRadialOut: 'Radial-out hold',
+  attitudeRadialIn: 'Radial-in hold',
+  attitudeTarget: 'Target hold',
+  killRotation: 'Kill rotation',
+  stabilityAssistToggle: 'Stability assist',
 });
+
+const UNBOUND_BINDING_LABEL = 'Unbound';
+
+/** Renders the append-safe placeholder an unbindable action carries as plain text. */
+function describeBinding(code: string): string {
+  return isUnboundInputCode(code) ? UNBOUND_BINDING_LABEL : code;
+}
 
 function simplify(result: SessionActionResult): PanelActionResult {
   return { ok: result.ok, message: result.message };
@@ -257,7 +272,7 @@ export function SessionSettingsPanel({
                   aria-label={
                     capturing
                       ? `Press a key for ${label}`
-                      : `${label}: ${settings.inputBindings[action]}`
+                      : `${label}: ${describeBinding(settings.inputBindings[action])}`
                   }
                   onClick={() => setCapturingAction(action)}
                   onKeyDown={(event) => {
@@ -269,7 +284,9 @@ export function SessionSettingsPanel({
                   }}
                 >
                   <span>{label}</span>
-                  <kbd>{capturing ? 'Press key' : settings.inputBindings[action]}</kbd>
+                  <kbd>
+                    {capturing ? 'Press key' : describeBinding(settings.inputBindings[action])}
+                  </kbd>
                 </button>
               );
             })}
