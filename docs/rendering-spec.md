@@ -62,10 +62,15 @@ because it has no fallback sphere worth drawing:
   physics forward vector, which is asserted in unit tests and against the real
   `.glb` in `tools/tests/shipVisualRegression.mjs`.
 - The authored hull is metallic (0.78–0.9). three.js gives `AmbientLight` to the
-  diffuse term only, so the ship's materials additionally carry a constant
-  environment at exactly the scene's ambient radiance — the same isotropic sky a
-  dielectric already receives, not a studio fill light. Real planetshine from the
-  dominant body is Front C work.
+  diffuse term only, so a metal has nothing to reflect and renders black; the
+  ship's materials therefore carry a constant environment at the scene's ambient
+  radiance, not a studio fill light. `getIBLIrradiance` returns
+  `π × texel × envMapIntensity` while `AmbientLight.intensity` is already an
+  irradiance, so the white sky texel uses
+  `envMapIntensity = AMBIENT_LIGHT_INTENSITY / π`. The ship keeps its ambient
+  light as well, so its dielectrics receive ambient irradiance twice (0.04 rather
+  than 0.02) — 1.3 % of the direct solar term at 1 AU, deliberately not chased.
+  Real planetshine from the dominant body is Front C work.
 
 ## 4. Lighting & post
 

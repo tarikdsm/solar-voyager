@@ -66,6 +66,17 @@ const LOAD_FAILED = 3;
 const AMBIENT_SKY_WIDTH = 8;
 const AMBIENT_SKY_HEIGHT = 4;
 
+/**
+ * `envMapIntensity` for a white (1.0) sky texel, chosen so the environment's
+ * radiance equals the scene ambient.
+ *
+ * three.js 0.185.1 `getIBLIrradiance` returns `PI * envMapColor * envMapIntensity`
+ * — an irradiance — while `AmbientLight.intensity` is already an irradiance. The
+ * `1/PI` therefore converts the ambient irradiance into the sky radiance that
+ * produces it, instead of over-driving the environment by a factor of PI.
+ */
+const AMBIENT_SKY_ENV_MAP_INTENSITY = AMBIENT_LIGHT_INTENSITY / Math.PI;
+
 export interface ShipVisualAssetLoader {
   loadModel(id: string): Promise<LoadedBodyModel | null>;
 }
@@ -105,9 +116,18 @@ function loadStateName(state: number): BodyModelLoadState {
  *
  * three.js routes `AmbientLight` into the diffuse term only, and a metal has no
  * diffuse term, so an authored metallic hull renders black without an
- * environment. A constant environment at exactly the ambient radiance gives
- * metal the same isotropic sky a dielectric already receives, rather than
- * inventing a studio fill light the spec rejects.
+ * environment. A constant environment at the scene's ambient radiance gives
+ * metal a sky to reflect, rather than inventing a studio fill light the spec
+ * rejects.
+ *
+ * It is not an exact equivalence: the ship keeps its `AmbientLight` term as well,
+ * so its *dielectrics* receive ambient irradiance twice (0.04 rather than 0.02)
+ * while every other object receives it once. That is deliberate. Suppressing the
+ * double count would require either removing the ship from the ambient light or
+ * halving the sky, and halving the sky would misstate the radiance the metals —
+ * the reason this exists — actually reflect. At 0.04 against roughly 3.14 of
+ * direct solar irradiance the difference is 1.3 % of the lit hull and invisible;
+ * the honest fix is real planetshine (Front C), not a fudged constant.
  */
 function createAmbientSkyEnvironment(): Texture {
   const texels = new Uint8Array(AMBIENT_SKY_WIDTH * AMBIENT_SKY_HEIGHT * 4).fill(255);
@@ -345,6 +365,9 @@ export class ShipVisual {
     // The bound root recomposes its matrix inside `updateCameraRelative`; this
     // getter may be read between a `writeState` and that recomposition, so it
     // repeats the same idempotent compose rather than measuring a stale pose.
+    // Diagnostics/tests only: this mutates render state (the same idempotent
+    // compose `updateCameraRelative` performs) and walks the model's children,
+    // so it must never be polled from the frame loop.
     root.updateMatrix();
     root.updateMatrixWorld(true);
     const offsetX = nose.matrixWorld.elements[12] as number;
@@ -401,7 +424,7 @@ export class ShipVisual {
         if (material === undefined) throw new Error('Ship model material array is sparse.');
         if (material instanceof MeshStandardMaterial) {
           material.envMap = environment;
-          material.envMapIntensity = AMBIENT_LIGHT_INTENSITY;
+          material.envMapIntensity = AMBIENT_SKY_ENV_MAP_INTENSITY;
           material.needsUpdate = true;
         }
         baseOpacities[index] = material.opacity;

@@ -153,3 +153,24 @@ material is 0.78–0.9 metalness programmer-art, and a metal with no image-based
 environment has almost no response away from its specular lobe. This task gives
 it the scene's ambient radiance as a constant environment so it is not literally
 black; genuine planetshine and a re-authored PBR hull are Front C work.
+
+## Post-review re-measurement
+
+Code review added two behaviour fixes (the space camera now moves itself on a
+body focus instead of relying on the system map to relay it, and the ship's
+ambient environment intensity was corrected by `1/π`). Re-measured on the fixed
+tree:
+
+| Figure                          | Feature commit | After review fixes |
+| ------------------------------- | -------------: | -----------------: |
+| Production draw calls           |             10 |                 10 |
+| Production triangles            |         77,071 |             77,071 |
+| Production retained heap / 30 s |      +74,056 B |           +4,544 B |
+| Entry gzip                      |      132,309 B |          132,330 B |
+| Total gzip                      |      562,089 B |          562,110 B |
+
+`findings: []` in both runs. The heap figures are two samples of the same
+allocation-free frame path, three orders of magnitude apart in noise and both far
+below the 196,608 B window; nothing in the fixes touches allocation. The +21 B of
+gzip is the extra `SharedCameraControls` module boundary and the corrected
+constant.

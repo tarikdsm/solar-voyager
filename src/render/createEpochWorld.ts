@@ -48,6 +48,8 @@ export interface EpochWorld {
    * triple to `ShipVisual.writeState`.
    */
   readonly positionsKm: Float64Array;
+  /** Component offset of the ship's triple in `positionsKm`, and its camera-target offset. */
+  readonly shipPositionOffset: number;
 }
 
 export interface CreateEpochWorldOptions {
@@ -317,5 +319,6 @@ export async function createEpochWorld(
     cameraController,
     cameraPositionKm: cameraController.cameraPositionKm,
     positionsKm,
+    shipPositionOffset,
   };
 }

@@ -261,15 +261,27 @@ rather than assumed:
    The fix is a physically-motivated one and is confined to the ship: an 8×4
    equirectangular `DataTexture` of constant radiance equal to the scene's
    ambient term, assigned as `envMap` on the ship's materials only. three.js
-   PMREM-filters it once, during the ship's `compileAsync`. A metal then reflects
-   the same isotropic sky a dielectric already receives through `AmbientLight`,
-   which is the consistent reading of "ambient" rather than a studio fill light
-   (spec §6.3 explicitly rejects a fake three-point rig). Body materials are
-   untouched, so no existing visual regression moves. Real planetshine and a real
-   sky environment are Front C / T0122 work.
+   PMREM-filters it once, during the ship's `compileAsync`. A metal then has a
+   sky to reflect rather than a studio fill light (spec §6.3 explicitly rejects a
+   fake three-point rig). Body materials are untouched, so no existing visual
+   regression moves.
 
-   The exact intensity is derived from `AMBIENT_LIGHT_INTENSITY` so the two
-   ambient paths cannot drift apart.
+   **The units matter and cost a factor of π.** three.js 0.185.1's
+   `getIBLIrradiance` returns `π × envMapColor × envMapIntensity` — an
+   *irradiance* — while `AmbientLight.intensity` is already an irradiance. With a
+   white (1.0) texel the environment therefore uses
+   `envMapIntensity = AMBIENT_LIGHT_INTENSITY / π`, so the sky's radiance is the
+   one that produces the scene's ambient irradiance. Setting it to
+   `AMBIENT_LIGHT_INTENSITY` directly over-drives the environment by π.
+
+   It is still not an exact equivalence, and the honest statement is that it is
+   not: the ship keeps its `AmbientLight` contribution as well, so the ship's
+   *dielectrics* receive ambient irradiance twice (0.04) where every other object
+   receives it once (0.02). Removing the double count would mean either excluding
+   the ship from the ambient light or halving the sky, and halving the sky would
+   misstate the radiance the metals — the whole reason this exists — reflect. At
+   0.04 against ≈ 3.14 of direct solar irradiance the discrepancy is 1.3 % of the
+   lit hull. The honest fix is real planetshine (Front C), not a fudged constant.
 
 ## 7. CI contract surface
 
@@ -313,3 +325,17 @@ rather than assumed:
   silently" policy, with measured before/after numbers in the bench summary.
 - **Heap.** Everything the ship allocates is allocated once, at load. The frame
   path is allocation-free, so the 196,608 B / 30 s window is unaffected.
+
+## 9. Known follow-ups
+
+- **`shipVisual.ts` is 510 lines**, over `coding-standards.md`'s ~300-line
+  guideline. There is a clean seam: `createAmbientSkyEnvironment`,
+  `prepareModel`, `applyModelOpacity` and the four `base*` material-state arrays
+  form a model/material lifecycle concern of roughly 200 lines whose only
+  coupling to the rest is a single opacity setter, leaving roughly 250 lines of
+  tier selection, attitude and photometry. It was left whole here to keep the
+  review surface of a wiring task small. **T0122 must split it before adding the
+  plume**, or the file becomes genuinely unreadable.
+- **`SharedCameraControls` now lives in `src/ui/sharedCameraControls.ts`.** T0109
+  moved it out of `main.ts` so its focus routing could be unit-tested; the rest
+  of the composition-root split remains T0113's.
