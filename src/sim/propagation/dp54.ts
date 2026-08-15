@@ -45,6 +45,17 @@ export type Dp54Derivative = (
   outputDerivative: Float64Array,
 ) => void;
 
+/**
+ * Observes a step the controller has already accepted; returns false to halt.
+ *
+ * Purely observational (ADR-036 §2): it runs after the accept/reject branch and
+ * after `outputState`/`k1` are written, takes no part in the error norm, the
+ * controller factor, or step sizing, and adds no derivative evaluation. Omitting
+ * it costs one comparison per accepted step, so callers that do not collide —
+ * the golden harness and the trajectory predictor — are bit-for-bit unaffected.
+ */
+export type Dp54AcceptedStepObserver = (timeSec: number, state: Float64Array) => boolean;
+
 /** Component tolerances and accepted-step budget for one propagation call. */
 export interface Dp54Tolerance {
   readonly absolute: Float64Array;
@@ -63,6 +74,8 @@ export interface Dp54Result {
   budgetExhausted: boolean;
   stepUnderflow: boolean;
   nonFiniteError: boolean;
+  /** An accepted-step observer stopped the propagation before `endTimeSec`. */
+  halted: boolean;
 }
 
 /** Caller-owned stage storage reused by every propagation. */
@@ -108,6 +121,7 @@ export function createDp54Result(): Dp54Result {
     budgetExhausted: false,
     stepUnderflow: false,
     nonFiniteError: false,
+    halted: false,
   };
 }
 
@@ -146,6 +160,7 @@ export function propagate(
   tolerance: Dp54Tolerance,
   workspace: Dp54Workspace,
   result: Dp54Result,
+  onAcceptedStep?: Dp54AcceptedStepObserver,
 ): Dp54Result {
   const dimension = workspace.dimension;
   for (let index = 0; index < dimension; index += 1) {
@@ -160,6 +175,7 @@ export function propagate(
   result.budgetExhausted = false;
   result.stepUnderflow = false;
   result.nonFiniteError = false;
+  result.halted = false;
 
   if (result.reachedEnd) {
     return result;
@@ -289,6 +305,13 @@ export function propagate(
       }
       result.acceptedSteps += 1;
       hasFirstDerivative = true;
+      // After the accept decision and after the state is committed, so the
+      // observer cannot influence the numerics (ADR-036 §2).
+      if (onAcceptedStep !== undefined && !onAcceptedStep(timeSec, outputState)) {
+        result.halted = true;
+        stepSec *= factor;
+        break;
+      }
     } else {
       result.rejectedSteps += 1;
     }
@@ -298,9 +321,10 @@ export function propagate(
 
   result.reachedTimeSec = timeSec;
   result.nextStepSec = stepSec;
-  result.reachedEnd = timeSec === endTimeSec;
+  result.reachedEnd = timeSec === endTimeSec && !result.halted;
   result.budgetExhausted =
     !result.reachedEnd &&
+    !result.halted &&
     !result.stepUnderflow &&
     result.acceptedSteps >= tolerance.maxAcceptedSteps;
   return result;

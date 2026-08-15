@@ -3,6 +3,7 @@ import { h, render } from 'preact';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
+  createRespawnPersistentState,
 } from './game/createNewGameSimulation.js';
 import { FlightController } from './game/flight/flightController.js';
 import { FlightInputRouter } from './game/flight/flightInputRouter.js';
@@ -15,7 +16,9 @@ import {
 import type { OrbitCameraController } from './game/orbitCameraController.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
+import { replacementInvalidatesRestorePoints, RestorePointRing } from './game/restorePoints.js';
 import { GameSessionController } from './game/sessionController.js';
+import { createImpactSignalStore } from './ui/impactSignals.js';
 import { SettingsRepository, type KeyValueStorage } from './game/settings.js';
 import { StartupTracker } from './game/startupTracker.js';
 import { SystemMapController, type SystemMapMode } from './game/systemMapController.js';
@@ -400,14 +403,25 @@ function updateBurnLogRuntime(view: BurnLogView): void {
   burnLogRuntimeDiagnostics.structuralRebuildCount = burnLogStore.structuralRebuildCount;
 }
 
+// ADR-036 — recovery sources for a surface-contact freeze.
+const restorePoints = new RestorePointRing();
+const impactStore = createImpactSignalStore();
+
 const session = new GameSessionController({
   initialSimulation,
   createNewSimulation: createTrackedNewGameSimulation,
   saveRepository: new SaveRepository(browserStorage, DEFAULT_VESSEL),
   settingsRepository: new SettingsRepository(browserStorage),
   createSimulation: createTrackedPersistentSimulation,
-  onSimulationReplaced: (replacement) => {
+  createRespawnState: createRespawnPersistentState,
+  onSimulationReplaced: (replacement, origin) => {
     runtimeResources.sessionSimulationReplacements += 1;
+    // Only a timeline change invalidates the ring. A restore or a respawn moves
+    // within the mission already in progress, and the remaining slots are still
+    // valid states of it — clearing them would make a six-slot ring a one-deep
+    // undo.
+    if (replacementInvalidatesRestorePoints(origin)) restorePoints.reset();
+    impactStore.publish(replacement.snapshot, restorePoints.count);
     // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
     // and the regime scaling below depends on it — so the vessel goes first.
     flightController?.setVessel(replacement.vessel);
@@ -834,6 +848,11 @@ function renderFrame(nowMs: number): void {
     flightController.update(deltaSec);
   }
   const snapshot = session.simulation.step(deltaSec);
+  // ADR-036 — one capture per 10 s of wall time, skipped while frozen. The
+  // publish below short-circuits on the frame where nothing about the overlay
+  // has changed, which is every frame that is not a crash.
+  restorePoints.update(session.simulation, deltaSec);
+  impactStore.publish(snapshot, restorePoints.count);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   if (systemMapRuntimeDiagnostics !== null) {
     systemMapRuntimeDiagnostics.simulationTimeSec = snapshot.simTimeSec;
@@ -925,6 +944,22 @@ if (autostart) {
 }
 let spacePhaseActivation: Promise<void> | null = null;
 
+/**
+ * ADR-036 — the two ways out of a freeze. Both go through the session
+ * controller, so both are validated by the rules a loaded save must satisfy and
+ * both fire `onSimulationReplaced`, which re-points the flight controller.
+ */
+const impactActions = {
+  onRestore: (): void => {
+    const point = restorePoints.latest;
+    if (point === null) return;
+    session.restoreFromState(point.state);
+  },
+  onRespawn: (): void => {
+    session.respawnInOrbit();
+  },
+};
+
 function renderApplication(): void {
   render(
     h(App, {
@@ -935,6 +970,10 @@ function renderApplication(): void {
       hardwareWarning,
       hud: hudStore.display,
       hudState: hudStore.signals,
+      impact: {
+        actions: impactActions,
+        display: impactStore.display,
+      },
       perfPanel: perfPanelStore,
       sceneManager,
       session,

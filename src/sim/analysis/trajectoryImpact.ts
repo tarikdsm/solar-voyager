@@ -37,7 +37,16 @@ export function captureTrajectoryImpactStepStart(
   workspace.startBodyPositionsKm.set(bodyPositionsKm);
 }
 
-function smallestUnitRoot(halfB: number, a: number, c: number): number {
+/**
+ * Smallest root in [0, 1] of `a f^2 + 2 halfB f + c = 0`, or +Infinity if none.
+ *
+ * The citardauq pairing `q/a`, `c/q` avoids the catastrophic cancellation the
+ * schoolbook root suffers when `a c` is tiny against `halfB^2` — the ordinary
+ * case for a shallow pass. Exported so `surfaceCollision` shares this solver
+ * with the predictor instead of growing a second one that can drift from it
+ * (physics-spec.md section 6, ADR-036).
+ */
+export function smallestUnitRoot(halfB: number, a: number, c: number): number {
   const discriminant = halfB * halfB - a * c;
   if (discriminant < 0 || a === 0) return Number.POSITIVE_INFINITY;
 

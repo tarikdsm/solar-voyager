@@ -28,13 +28,36 @@ export type SessionExportResult =
 
 export type SettingsChangeOrigin = 'restore' | 'user';
 
+/**
+ * Why the simulation core was replaced.
+ *
+ * The distinction that matters to consumers is **timeline change vs recovery**:
+ * `new-game`, `load` and `import` start a mission the previous core knows
+ * nothing about, while `restore` and `respawn` (ADR-036) move within the mission
+ * already in progress. State keyed to the timeline — the restore-point ring
+ * above all — must survive the second kind.
+ */
+export type SimulationReplacementOrigin = 'new-game' | 'load' | 'import' | 'restore' | 'respawn';
+
 export interface GameSessionControllerOptions {
   readonly initialSimulation: SimulationCore;
   readonly saveRepository: SaveRepository;
   readonly settingsRepository: SettingsRepository;
   readonly createNewSimulation: () => SimulationCore;
   readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
-  readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
+  /**
+   * ADR-036 — builds the respawn document for a body index. Injected rather than
+   * imported so the controller keeps knowing nothing about the body catalog.
+   */
+  readonly createRespawnState?: (
+    source: SimulationPersistentState,
+    shipPositionKm: Float64Array,
+    bodyIndex: number,
+  ) => SimulationPersistentState;
+  readonly onSimulationReplaced?: (
+    simulation: SimulationCore,
+    origin: SimulationReplacementOrigin,
+  ) => void;
   readonly onSettingsChanged?: (settings: GameSettingsV2, origin: SettingsChangeOrigin) => void;
 }
 
@@ -47,7 +70,16 @@ export class GameSessionController {
   private readonly settingsRepository: SettingsRepository;
   private readonly createNewSimulation: () => SimulationCore;
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
-  private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
+  private readonly createRespawnState:
+    | ((
+        source: SimulationPersistentState,
+        shipPositionKm: Float64Array,
+        bodyIndex: number,
+      ) => SimulationPersistentState)
+    | null;
+
+  private readonly onSimulationReplaced:
+    ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
     ((settings: GameSettingsV2, origin: SettingsChangeOrigin) => void) | null;
 
@@ -57,6 +89,7 @@ export class GameSessionController {
     this.settingsRepository = options.settingsRepository;
     this.createNewSimulation = options.createNewSimulation;
     this.createSimulation = options.createSimulation;
+    this.createRespawnState = options.createRespawnState ?? null;
     this.onSimulationReplaced = options.onSimulationReplaced ?? null;
     this.onSettingsChanged = options.onSettingsChanged ?? null;
     const settingsResult = this.settingsRepository.load();
@@ -87,8 +120,57 @@ export class GameSessionController {
         detail: describeError(error),
       };
     }
-    this.replaceSimulation(candidateSimulation);
+    this.replaceSimulation(candidateSimulation, 'new-game');
     return { ok: true, message: 'New game started' };
+  }
+
+  /**
+   * ADR-036 — replaces the frozen core with a captured restore point.
+   *
+   * Routed through the same `createSimulation` the save loader uses, so a
+   * restore point is validated by exactly the rules a loaded save must satisfy;
+   * a slot that fails validation leaves the freeze in place rather than
+   * producing a half-restored session.
+   */
+  restoreFromState(state: SimulationPersistentState): SessionActionResult {
+    let candidateSimulation: SimulationCore;
+    try {
+      candidateSimulation = this.createSimulation(state);
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to restore', detail: describeError(error) };
+    }
+    this.replaceSimulation(candidateSimulation, 'restore');
+    return { ok: true, message: 'Restored' };
+  }
+
+  /**
+   * ADR-036 — relocates the ship to a circular orbit two body radii up.
+   *
+   * Defaults to the body that was hit; falls back to the dominant body so the
+   * action still works if it is ever offered outside a freeze.
+   */
+  respawnInOrbit(bodyIndex?: number): SessionActionResult {
+    if (this.createRespawnState === null) {
+      return { ok: false, message: 'Unable to respawn', detail: 'no respawn builder configured' };
+    }
+    const snapshot = this.currentSimulation.snapshot;
+    const selectedBodyIndex =
+      bodyIndex ??
+      (snapshot.impactBodyIndex >= 0 ? snapshot.impactBodyIndex : snapshot.dominantBodyIndex);
+    if (selectedBodyIndex < 0) {
+      return { ok: false, message: 'Unable to respawn', detail: 'no body to orbit' };
+    }
+    let candidateSimulation: SimulationCore;
+    try {
+      const source = this.currentSimulation.exportPersistentState();
+      candidateSimulation = this.createSimulation(
+        this.createRespawnState(source, snapshot.shipState, selectedBodyIndex),
+      );
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to respawn', detail: describeError(error) };
+    }
+    this.replaceSimulation(candidateSimulation, 'respawn');
+    return { ok: true, message: 'Respawned in orbit' };
   }
 
   hasValidLocalSave(): boolean {
@@ -122,7 +204,12 @@ export class GameSessionController {
         detail: result.error,
       };
     }
-    return this.replaceFromEnvelope(result.envelope, 'Session loaded', 'Unable to load session');
+    return this.replaceFromEnvelope(
+      result.envelope,
+      'Session loaded',
+      'Unable to load session',
+      'load',
+    );
   }
 
   exportJson(): SessionExportResult {
@@ -140,7 +227,12 @@ export class GameSessionController {
     } catch (error: unknown) {
       return { ok: false, message: 'Imported session is invalid', detail: describeError(error) };
     }
-    return this.replaceFromEnvelope(envelope, 'Session imported', 'Unable to import session');
+    return this.replaceFromEnvelope(
+      envelope,
+      'Session imported',
+      'Unable to import session',
+      'import',
+    );
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
@@ -193,6 +285,7 @@ export class GameSessionController {
     envelope: SaveEnvelopeV3,
     successMessage: string,
     failureMessage: string,
+    origin: SimulationReplacementOrigin,
   ): SessionActionResult {
     let candidateSimulation: SimulationCore;
     try {
@@ -207,14 +300,14 @@ export class GameSessionController {
     }
     this.currentSimulation = candidateSimulation;
     this.currentSettings = candidateSettings;
-    this.onSimulationReplaced?.(candidateSimulation);
+    this.onSimulationReplaced?.(candidateSimulation, origin);
     this.onSettingsChanged?.(candidateSettings, 'restore');
     return { ok: true, message: successMessage };
   }
 
-  private replaceSimulation(simulation: SimulationCore): void {
+  private replaceSimulation(simulation: SimulationCore, origin: SimulationReplacementOrigin): void {
     this.currentSimulation = simulation;
-    this.onSimulationReplaced?.(simulation);
+    this.onSimulationReplaced?.(simulation, origin);
   }
 
   private commitSettings(

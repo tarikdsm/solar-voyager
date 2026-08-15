@@ -69,9 +69,21 @@ const catalog = readJson('bodies.json') as {
     parentId: string | null;
     soiRadiusKm: number | null;
     muKm3S2: number;
+    meanRadiusKm: number;
+    surface: { kind: string; atmosphereTopKm: number | null };
     elements: OrbitalElements | null;
   }>;
 };
+
+// ADR-036 — collision sphere = smallest sphere containing the 1-bar spheroid, so
+// atmosphereTopKm is (equatorial radius at 1 bar) - meanRadiusKm. Equatorial radii
+// are the NASA planetary fact-sheet 1-bar values.
+const GIANT_EQUATORIAL_RADII_KM: ReadonlyArray<readonly [string, number]> = [
+  ['jupiter', 71_492],
+  ['saturn', 60_268],
+  ['uranus', 25_559],
+  ['neptune', 24_764],
+];
 const checks = readJson('ephemerides-check.json') as {
   frame: string;
   samples: Array<{
@@ -204,6 +216,30 @@ describe('body catalog - physics-spec.md section 2', () => {
       expect(comet?.elements?.semiMajorAxisKm).toBeGreaterThan(0);
       expect(comet?.elements?.eccentricity).toBeGreaterThanOrEqual(0);
       expect(comet?.elements?.eccentricity).toBeLessThan(1);
+    }
+  });
+
+  it('gives every giant a 1-bar cloud-deck collision allowance and no one else one', () => {
+    const giantIds = new Set(GIANT_EQUATORIAL_RADII_KM.map(([bodyId]) => bodyId));
+
+    for (const [bodyId, equatorialRadiusKm] of GIANT_EQUATORIAL_RADII_KM) {
+      const giant = catalog.bodies.find((body) => body.id === bodyId);
+      expect(giant, bodyId).toBeDefined();
+      expect(giant?.surface.kind, bodyId).toBe('gas');
+      // Exact, not approximate: the value is a difference of two integers.
+      expect(giant?.surface.atmosphereTopKm, bodyId).toBe(
+        equatorialRadiusKm - (giant?.meanRadiusKm as number),
+      );
+      // The sphere must contain the whole 1-bar spheroid, equator included.
+      expect(
+        (giant?.meanRadiusKm as number) + (giant?.surface.atmosphereTopKm as number),
+        bodyId,
+      ).toBe(equatorialRadiusKm);
+    }
+
+    for (const body of catalog.bodies) {
+      if (giantIds.has(body.id)) continue;
+      expect(body.surface.atmosphereTopKm, body.id).toBeNull();
     }
   });
 
