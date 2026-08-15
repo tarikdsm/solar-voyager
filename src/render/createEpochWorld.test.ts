@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { SimSnapshot } from '../sim/simulationSnapshot.js';
 import type { BodyVisualAssetLoader } from './bodyVisualSystem.js';
 import { createEpochWorld } from './createEpochWorld.js';
 import type { StarCatalog } from './starCatalog.js';
@@ -35,6 +36,22 @@ function expectAttributeRangeInFrustum(
     expect(projected.z).toBeLessThanOrEqual(1.000_001);
   }
 }
+
+/**
+ * The six snapshot fields `CameraDirector.update` reads.
+ *
+ * A stub rather than a real `SimulationCore`: this suite is about render-world
+ * assembly, and a live simulation would make the camera assertions depend on
+ * whatever the physics happened to produce that frame.
+ */
+const snapshotStub = {
+  attitudeQuaternion: new Float64Array([0, 0, 0, 1]),
+  throttle: 0,
+  shipProperAccelerationKmS2: new Float64Array(3),
+  impactOccurred: 0,
+  impactBodyIndex: -1,
+  dominantBodyIndex: -1,
+} as unknown as SimSnapshot;
 
 describe('createEpochWorld', () => {
   it('registers every J2026 body with shared geometry and no scaffold cube', async () => {
@@ -76,7 +93,11 @@ describe('createEpochWorld', () => {
     const bodyCount = bodiesDocument.bodies.length;
 
     expect(world.spaceScene.camera.position.toArray()).toEqual([0, 0, 0]);
-    expect(world.cameraController.focusId).toBe('earth');
+    // T0110 — the space camera starts in chase, and the orbit camera's ring index
+    // is kept on the ship so `[` / `]` walk one ring across both modes.
+    expect(world.cameraDirector.mode).toBe('chase');
+    expect(world.cameraDirector.focusId).toBe('ship');
+    expect(world.cameraController.focusId).toBe('ship');
     expect(world.systemMap.cameraController.focusId).toBe('sun');
     expect(world.systemMap.cameraPositionKm).toBe(
       world.systemMap.cameraController.cameraPositionKm,
@@ -122,9 +143,20 @@ describe('createEpochWorld', () => {
         world.systemMap.spaceScene.camera,
       );
     }
-    expect(world.cameraPositionKm).toBe(world.cameraController.cameraPositionKm);
-    expect(world.cameraController.focusBody('jupiter')).toBe(true);
-    world.cameraController.update(1.5);
+    expect(world.cameraPositionKm).toBe(world.cameraDirector.cameraPositionKm);
+    // The warm-up pose is the chase arm's, a few hundred metres off the ship,
+    // not the epoch orbit position half an Earth away.
+    expect(
+      Math.hypot(
+        (world.positionsKm[world.shipPositionOffset] as number) - world.cameraPositionKm.x,
+        (world.positionsKm[world.shipPositionOffset + 1] as number) - world.cameraPositionKm.y,
+        (world.positionsKm[world.shipPositionOffset + 2] as number) - world.cameraPositionKm.z,
+      ),
+    ).toBeCloseTo(0.156_72 * Math.sqrt(1 + 0.35 * 0.35), 6);
+    expect(world.cameraDirector.focusBody('jupiter')).toBe(true);
+    world.cameraDirector.update(1.5, snapshotStub);
+    expect(world.cameraDirector.mode).toBe('observatory');
+    expect(world.cameraDirector.focusId).toBe('jupiter');
     expect(world.cameraController.focusId).toBe('jupiter');
     expect(world.spaceScene.camera.getWorldDirection(new Vector3()).length()).toBeCloseTo(1, 12);
     const spheres = world.spaceScene.scene.children.filter(
@@ -154,8 +186,13 @@ describe('createEpochWorld', () => {
       bodyCount + 1,
     );
     expect(world.positionsKm).toHaveLength((bodyCount + 1) * 3);
+    // T0110 — the chase camera resolves the ship during setup, but the model is
+    // still NOT fetched: lazy loading stays off until the space phase activates.
+    // That gap is exactly why `ship.glb` can stay off `data/initial-path.json`
+    // without the first playable frame showing an empty cockpit — the additive
+    // point covers it, at full opacity, until the mesh arrives and cross-fades in.
+    expect(world.shipVisual.resolved).toBe(true);
     expect(world.shipVisual.loadState).toBe('idle');
-    expect(world.shipVisual.resolved).toBe(false);
     expect(world.shipVisual.pointOpacity).toBe(1);
     expect(world.shipVisual.modelOpacity).toBe(0);
     expect(world.shipVisual.noseAlignment).toBeCloseTo(1, 15);
@@ -209,8 +246,8 @@ describe('createEpochWorld', () => {
       world.systemMap.spaceScene.camera,
     );
 
-    expect(world.cameraController.focusBody('earth')).toBe(true);
-    world.cameraController.update(1_000_000);
+    expect(world.cameraDirector.focusBody('earth')).toBe(true);
+    world.cameraDirector.update(1_000_000, snapshotStub);
     world.visualSystem.enableLazyLoading();
     world.visualSystem.update(
       world.cameraPositionKm,
