@@ -9,6 +9,13 @@ import {
 } from '../core/time.js';
 import { evaluateBarycenterInto } from './analysis/barycenter.js';
 import {
+  captureCollisionSegmentStart,
+  createSurfaceCollisionWorkspace,
+  refineSurfaceContactInto,
+  scanSurfaceCollisionChord,
+  type SurfaceCollisionWorkspace,
+} from './analysis/surfaceCollision.js';
+import {
   createOsculatingWorkspace,
   updateOsculatingElements,
   type OsculatingWorkspace,
@@ -19,6 +26,7 @@ import {
   createDp54Workspace,
   createShipDp54Tolerance,
   propagate,
+  type Dp54AcceptedStepObserver,
   type Dp54Result,
   type Dp54Tolerance,
   type Dp54Workspace,
@@ -81,6 +89,15 @@ import {
   type BurnLogPersistence,
   type BurnLogView,
 } from './ship/ledger.js';
+
+/**
+ * Accepted-step budget for one contact probe (ADR-036).
+ *
+ * A probe re-propagates a sub-interval of a step the main integrator already
+ * accepted, so one step normally suffices; the headroom covers the tolerance
+ * controller trimming its way in near a steep gravity gradient.
+ */
+const CONTACT_PROBE_STEP_BUDGET = 64;
 
 /** Setup-time inputs owned by one simulation core instance. */
 export interface SimulationCoreOptions {
@@ -184,10 +201,28 @@ export class SimulationCore {
   private readonly burnNormalBasis: Float64Array;
   private readonly burnRadialBasis: Float64Array;
   private readonly derivative: ReturnType<typeof createRelativisticDerivative>;
+  // ADR-036 collision scratch. The contact search re-propagates inside the
+  // in-flight `propagate` call, so it needs its own workspace and result;
+  // sharing `integrationWorkspace` would corrupt the step being tested.
+  private readonly collisionWorkspace: SurfaceCollisionWorkspace;
+  private readonly collisionRailsState: RailsState;
+  private readonly contactWorkspace: Dp54Workspace;
+  private readonly contactResult: Dp54Result;
+  private readonly contactTolerance: Dp54Tolerance;
+  private readonly contactScratchState: Float64Array;
+  private readonly contactSegmentStartState: Float64Array;
+  private readonly acceptedStepObserver: Dp54AcceptedStepObserver;
+  private readonly evaluateContactShipState: (timeSec: number, out: Float64Array) => boolean;
+  private readonly evaluateContactRails: (timeSec: number) => void;
+  private contactSegmentStartTimeSec = 0;
   private currentSnapshotIndex = 0;
   private stepStartTimeSec = 0;
   private effectiveWarp: WarpFactor = 1;
   private warpClampReason: WarpClampReason = WarpClampReason.NONE;
+  private impactOccurred: 0 | 1 = 0;
+  private impactBodyIndex = -1;
+  private impactSpeedKmS = 0;
+  private impactSimTimeSec = 0;
 
   constructor(options: SimulationCoreOptions) {
     validateInitialState(options.initialShipState);
@@ -258,6 +293,18 @@ export class SimulationCore {
     this.burnProgradeBasis = new Float64Array(3);
     this.burnNormalBasis = new Float64Array(3);
     this.burnRadialBasis = new Float64Array(3);
+    this.collisionWorkspace = createSurfaceCollisionWorkspace(this.catalog.bodyCount);
+    this.collisionRailsState = createRailsState(this.catalog);
+    this.contactWorkspace = createDp54Workspace(SIMULATION_STATE_DIMENSION);
+    this.contactResult = createDp54Result();
+    this.contactTolerance = {
+      absolute: this.integrationTolerance.absolute,
+      relative: this.integrationTolerance.relative,
+      initialStepSec: this.integrationTolerance.initialStepSec,
+      maxAcceptedSteps: CONTACT_PROBE_STEP_BUDGET,
+    };
+    this.contactScratchState = new Float64Array(SIMULATION_STATE_DIMENSION);
+    this.contactSegmentStartState = new Float64Array(SIMULATION_STATE_DIMENSION);
     if (persistentState !== null) {
       this.attitudeQuaternion.set(persistentState.attitudeQuaternion);
       this.stepStartAttitudeQuaternion.set(persistentState.attitudeQuaternion);
@@ -338,6 +385,35 @@ export class SimulationCore {
       },
     );
 
+    // ADR-036 — bound once at construction so the frame loop allocates nothing.
+    // The nested propagation is safe against the in-flight one: it runs to
+    // completion synchronously, uses its own workspace and result, and the
+    // derivative's rails cache is keyed on time, so the outer loop simply
+    // refreshes it on its next stage.
+    this.evaluateContactShipState = (timeSec: number, out: Float64Array): boolean => {
+      if (timeSec === this.contactSegmentStartTimeSec) {
+        out.set(this.contactSegmentStartState);
+        return true;
+      }
+      this.contactTolerance.initialStepSec = Math.abs(timeSec - this.contactSegmentStartTimeSec);
+      propagate(
+        out,
+        this.contactSegmentStartState,
+        this.contactSegmentStartTimeSec,
+        timeSec,
+        this.derivative,
+        this.contactTolerance,
+        this.contactWorkspace,
+        this.contactResult,
+      );
+      return this.contactResult.reachedEnd;
+    };
+    this.evaluateContactRails = (timeSec: number): void => {
+      evaluateRailsInto(this.collisionRailsState, this.catalog, timeSec, this.railsWorkspace);
+    };
+    this.acceptedStepObserver = (timeSec: number, state: Float64Array): boolean =>
+      this.observeAcceptedStep(timeSec, state);
+
     this.evaluateAttitudeAndAcceleration(
       initialTimeSec,
       firstShipState,
@@ -378,6 +454,10 @@ export class SimulationCore {
     if (!Number.isFinite(wallDeltaSec) || wallDeltaSec < 0) {
       throw new RangeError('wall delta must be finite and non-negative');
     }
+    // ADR-036 — after contact the core is inert until the game layer builds a
+    // recovery state and constructs a new core. Validated before the wall-delta
+    // check would matter, and before any clock or ledger touch.
+    if (this.impactOccurred === 1) return this.snapshot;
 
     const requestedWarp = this.commandState.requestedWarp;
     const requestedTargetTimeSec = this.clock.timeSec + wallDeltaSec * requestedWarp;
@@ -410,6 +490,9 @@ export class SimulationCore {
     let completedWarp: WarpFactor | null = null;
     let budgetExhausted = false;
 
+    // Opens the collision segment for the first accepted step of this frame.
+    this.beginCollisionSegment(segmentStartTimeSec, this.checkpointShipState);
+
     for (let warpIndex = 0; warpIndex <= requestedWarpIndex; warpIndex += 1) {
       const candidateWarp = WARP_LADDER[warpIndex] as WarpFactor;
       const candidateTimeSec = frameStartTimeSec + wallDeltaSec * candidateWarp;
@@ -424,8 +507,15 @@ export class SimulationCore {
         this.integrationSegmentTolerance,
         this.integrationWorkspace,
         this.integrationResult,
+        this.acceptedStepObserver,
       );
       acceptedSteps += this.integrationResult.acceptedSteps;
+
+      // `halted` is set only by the accepted-step observer, and the observer
+      // halts only on a confirmed contact — a chord false positive resumes.
+      if (this.integrationResult.halted) {
+        return this.publishContact(nextSnapshotIndex, nextSnapshot, nextShipState);
+      }
 
       if (this.integrationResult.reachedEnd) {
         this.checkpointShipState.set(nextShipState);
@@ -478,6 +568,100 @@ export class SimulationCore {
     return nextSnapshot;
   }
 
+  /** Anchors the collision segment on the state that opens an accepted step. */
+  private beginCollisionSegment(timeSec: number, state: Float64Array): void {
+    this.contactSegmentStartTimeSec = timeSec;
+    this.contactSegmentStartState.set(state);
+    evaluateRailsInto(this.collisionRailsState, this.catalog, timeSec, this.railsWorkspace);
+    captureCollisionSegmentStart(this.collisionWorkspace, this.collisionRailsState.positionsKm);
+  }
+
+  /**
+   * ADR-036 — runs once per accepted DP54 step; returns false to halt on contact.
+   *
+   * Two stages: a conservative chord scan over every body reusing the
+   * predictor's root solver, then confirmation against genuinely propagated
+   * states. The confirmation is not optional — a chord sags ~0.31 km toward the
+   * attractor over a typical LEO step, so the scan alone would turn every low
+   * pass into a crash.
+   */
+  private observeAcceptedStep(timeSec: number, state: Float64Array): boolean {
+    evaluateRailsInto(this.collisionRailsState, this.catalog, timeSec, this.railsWorkspace);
+    const candidateBodyIndex = scanSurfaceCollisionChord(
+      this.collisionWorkspace,
+      this.contactSegmentStartState[0] as number,
+      this.contactSegmentStartState[1] as number,
+      this.contactSegmentStartState[2] as number,
+      state,
+      this.collisionRailsState.positionsKm,
+      this.catalog.collisionRadiiKm,
+    );
+
+    if (candidateBodyIndex >= 0) {
+      const contact = refineSurfaceContactInto(
+        this.collisionWorkspace,
+        candidateBodyIndex,
+        this.contactSegmentStartTimeSec,
+        timeSec,
+        this.evaluateContactShipState,
+        this.evaluateContactRails,
+        this.collisionRailsState.positionsKm,
+        this.collisionRailsState.velocitiesKmS,
+        this.catalog.collisionRadiiKm,
+        this.contactScratchState,
+      );
+      if (contact.bodyIndex >= 0) {
+        this.impactOccurred = 1;
+        this.impactBodyIndex = contact.bodyIndex;
+        this.impactSpeedKmS = contact.speedKmS;
+        this.impactSimTimeSec = contact.timeSec;
+        // `state` is the in-flight propagation's output buffer, which is the
+        // caller's `nextShipState`; overwriting it here is how the contact state
+        // reaches the snapshot without a second copy.
+        state.set(this.contactScratchState);
+        return false;
+      }
+    }
+
+    this.beginCollisionSegment(timeSec, state);
+    return true;
+  }
+
+  /** Freezes the core on the contact state and publishes the impact snapshot. */
+  private publishContact(
+    nextSnapshotIndex: number,
+    nextSnapshot: SimulationSnapshotBuffer,
+    nextShipState: Float64Array,
+  ): SimSnapshot {
+    const contactTimeSec = this.impactSimTimeSec;
+    this.clock.timeSec = contactTimeSec;
+    // Close the ledger on the contact state before the drive is cut, so the
+    // burn's energy and proper delta-v end where the flight ended.
+    this.synchronizeActiveBurn(nextShipState);
+    this.burnLogRecorder.end();
+    this.commandState.throttle = 0;
+    // Cleared for the same reason ADR-035 clears them on a warp increase: rates
+    // that outlive the regime that allowed them come back on the next core that
+    // reads this state, as an unexplained spin.
+    this.commandState.rotationRatesRadS.fill(0);
+    this.commandState.impactFrozen = true;
+    this.commandState.requestedWarp = 1;
+    this.effectiveWarp = 1;
+    this.warpClampReason = WarpClampReason.NONE;
+    this.evaluateAttitudeAndAcceleration(
+      contactTimeSec,
+      nextShipState,
+      this.endpointAttitudeQuaternion,
+      this.endpointProperAccelerationKmS2,
+    );
+    this.attitudeQuaternion.set(this.endpointAttitudeQuaternion);
+    const nextRailsState =
+      nextSnapshotIndex === 0 ? this.snapshotRailsStates[0] : this.snapshotRailsStates[1];
+    this.fillSnapshot(nextSnapshot, nextRailsState, nextShipState);
+    this.currentSnapshotIndex = nextSnapshotIndex;
+    return nextSnapshot;
+  }
+
   private initializeSnapshot(
     snapshot: SimulationSnapshotBuffer,
     railsState: RailsState,
@@ -512,6 +696,10 @@ export class SimulationCore {
     snapshot.attitudeMode = this.commandState.attitudeMode;
     snapshot.targetBodyIndex = this.commandState.targetBodyIndex;
     snapshot.targetBodyId = this.commandState.targetBodyId;
+    snapshot.impactOccurred = this.impactOccurred;
+    snapshot.impactBodyIndex = this.impactBodyIndex;
+    snapshot.impactSpeedKmS = this.impactSpeedKmS;
+    snapshot.impactSimTimeSec = this.impactSimTimeSec;
     snapshot.attitudeQuaternion.set(this.attitudeQuaternion);
     snapshot.shipProperAccelerationKmS2.set(this.endpointProperAccelerationKmS2);
     writeThrustForceInto(
