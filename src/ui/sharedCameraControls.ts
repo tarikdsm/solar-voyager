@@ -1,10 +1,27 @@
-import type { OrbitCameraController } from '../game/orbitCameraController.js';
 import type { SystemMapController } from '../game/systemMapController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import type { CameraControlPort } from './cameraInputController.js';
 
 /**
- * Adapts one orbit camera, the system-map focus and the simulation target to the
+ * What a camera has to offer to be driven by the shared input port.
+ *
+ * `OrbitCameraController` (the system map's camera) and `CameraDirector` (the
+ * space camera, T0110) both satisfy this. Typing the collaborator structurally
+ * rather than as one concrete class is what keeps the mode-aware space camera on
+ * the *same* input path as the map camera instead of growing a second one.
+ */
+export interface SharedCameraTarget {
+  readonly focusId: string;
+  orbitBy(deltaYawRad: number, deltaPitchRad: number): void;
+  zoomByWheel(wheelDelta: number): void;
+  focusBody(id: string): boolean;
+  cycleFocus(step: number): string;
+  /** Only the space camera has modes; see {@link CameraControlPort.cycleCameraMode}. */
+  cycle?(): void;
+}
+
+/**
+ * Adapts one camera, the system-map focus and the simulation target to the
  * single port `CameraInputController` drives.
  *
  * Extracted from `main.ts` by T0109 so its focus routing is unit-testable; the
@@ -12,7 +29,7 @@ import type { CameraControlPort } from './cameraInputController.js';
  */
 export class SharedCameraControls implements CameraControlPort {
   constructor(
-    private readonly camera: OrbitCameraController,
+    private readonly camera: SharedCameraTarget,
     private readonly map: SystemMapController,
     private readonly commands: Commands,
     /**
@@ -63,5 +80,16 @@ export class SharedCameraControls implements CameraControlPort {
     this.map.focusBody(id);
     this.commands.setTarget(id);
     return id;
+  }
+
+  /**
+   * Steps the camera mode ring, when this camera has one.
+   *
+   * Deliberately routed nowhere else: a mode change is a *view* change and must
+   * not move the navigation target or the map, which is the same separation
+   * `CameraDirector.focusObservatoryBody` enforces from the other direction.
+   */
+  cycleCameraMode(): void {
+    this.camera.cycle?.();
   }
 }

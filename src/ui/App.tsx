@@ -436,8 +436,8 @@ export function App({
             Focus: Earth
           </p>
           <p class="camera-instructions">
-            Drag to orbit · Scroll to zoom · Shift + Arrows/Page Up/Page Down · [ / ] change target
-            · E Earth · J Jupiter
+            O chase/observatory · Drag to orbit · Scroll to zoom · Shift + Arrows/Page Up/Page Down
+            · [ / ] change target · E Earth · J Jupiter
           </p>
         </section>
       </SpaceHudSurfaces>

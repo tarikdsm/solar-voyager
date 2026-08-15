@@ -54,6 +54,9 @@ function createFixture(initiallyEnabled = true) {
       focusId = step > 0 ? 'jupiter' : 'venus';
       return focusId;
     }),
+    cycleCameraMode: vi.fn(() => {
+      focusId = focusId === 'ship' ? 'earth' : 'ship';
+    }),
   };
   const interactions: string[] = [];
   const input = new CameraInputController(
@@ -192,6 +195,24 @@ describe('CameraInputController', () => {
     expect(controls.focusBody).toHaveBeenNthCalledWith(2, 'jupiter');
     expect(label.textContent).toBe('Focus: Jupiter');
     expect(preventDefault).toHaveBeenCalledTimes(4);
+  });
+
+  it('cycles the camera mode on O and relabels from the camera, not the key', () => {
+    const { controls, keyboard, label } = createFixture();
+    const preventDefault = vi.fn();
+    const press = { repeat: false, ctrlKey: false, altKey: false, metaKey: false, preventDefault };
+
+    keyboard.emit('keydown', { ...press, key: 'o' });
+
+    expect(controls.cycleCameraMode).toHaveBeenCalledOnce();
+    // The label names what the camera is looking at now, which a mode change can
+    // move without any body being requested (T0110).
+    expect(label.textContent).toBe('Focus: Ship');
+    expect(preventDefault).toHaveBeenCalledOnce();
+
+    keyboard.emit('keydown', { ...press, key: 'O' });
+    expect(controls.cycleCameraMode).toHaveBeenCalledTimes(2);
+    expect(label.textContent).toBe('Focus: Earth');
   });
 
   it('ignores modified/repeated keys and removes every listener on dispose', () => {

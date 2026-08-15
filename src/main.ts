@@ -40,9 +40,11 @@ import {
   type EpochWorld,
   type EpochWorldMilestone,
 } from './render/createEpochWorld.js';
+import { applyCameraPose } from './render/cameraRig.js';
 import { createRenderer, type RendererBootstrap } from './render/createRenderer.js';
 import { calculateDrawingBufferDimension } from './render/drawingBufferSize.js';
 import { LightingPostPipeline } from './render/lightingPostPipeline.js';
+import type { CameraMode } from './game/cameraDirector.js';
 import type { BodyModelLoadState } from './render/bodyVisualSystem.js';
 import { SHIP_ASSET_ID } from './render/shipVisual.js';
 import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
@@ -75,6 +77,8 @@ const SOFTWARE_FALLBACK_EXPOSURE = 3;
 
 interface RuntimeResourceCounts {
   animationLoopStarts: number;
+  /** One space-camera director per epoch world (T0110). */
+  cameraDirectors: number;
   cameraInputControllers: number;
   canvasBindings: number;
   epochWorldCreations: number;
@@ -101,6 +105,20 @@ interface ShipRuntimeDiagnostics {
   readonly noseAlignment: number;
   readonly noseNodeAlignment: number;
   readonly focused: boolean;
+}
+
+interface CameraRuntimeDiagnostics {
+  readonly mode: CameraMode;
+  readonly transitioning: boolean;
+  readonly focusId: string;
+  readonly distanceShipLengths: number;
+  readonly armDistanceKm: number;
+  readonly fovDeg: number;
+  readonly fovOffsetDeg: number;
+  readonly shakeAmplitudeDeg: number;
+  readonly fovWideningEnabled: boolean;
+  readonly shakeEnabled: boolean;
+  readonly shipDistanceKm: number;
 }
 
 interface SystemMapRuntimeDiagnostics {
@@ -257,6 +275,7 @@ async function loadBurnLogRuntimeOrWait() {
 const { BurnLogPanel, createBurnLogSignalStore } = await loadBurnLogRuntimeOrWait();
 const runtimeResources: RuntimeResourceCounts = {
   animationLoopStarts: 0,
+  cameraDirectors: 0,
   cameraInputControllers: 0,
   canvasBindings: 0,
   epochWorldCreations: 0,
@@ -405,6 +424,9 @@ const session = new GameSessionController({
     // valid states of it — clearing them would make a six-slot ring a one-deep
     // undo.
     if (replacementInvalidatesRestorePoints(origin)) restorePoints.reset();
+    // A restore or a new game teleports the ship; without this the chase arm
+    // would spend 0.7 s of spring flying across the gap it never travelled.
+    world?.cameraDirector.resetChase();
     impactStore.publish(replacement.snapshot, restorePoints.count);
     // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
     // and the regime scaling below depends on it — so the vessel goes first.
@@ -442,6 +464,7 @@ const session = new GameSessionController({
     // flushing the (now released) axes over them.
     if (origin === 'restore') flightController?.resetAxes();
     else flightController?.releaseAxes();
+    world?.cameraDirector.applyCameraSettings(settings.camera);
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
@@ -701,7 +724,14 @@ const sessionCommands: Commands = {
       // since T0109 the camera can be on the ship while the map is not. Selecting
       // a target has always recentred the camera; make that unconditional rather
       // than dependent on the relay firing.
-      world?.cameraController.focusBody(bodyId);
+      //
+      // T0110 narrows *which* camera: choosing a navigation target re-aims the
+      // observatory camera but never drags the player out of the chase view. It
+      // also writes the focus label, which this path never did — harmless while
+      // camera focus always equalled map focus, and wrong the moment they could
+      // diverge.
+      world?.cameraDirector.focusObservatoryBody(bodyId);
+      refreshCameraFocusLabel();
     }
     invalidateTrajectoryPrediction();
   },
@@ -722,6 +752,19 @@ function writeCameraFocusLabel(bodyId: string): void {
   }
 }
 
+/**
+ * Rewrites the focus label from the camera's own idea of what it is looking at.
+ *
+ * Every site that can move the camera focus calls this instead of naming a body
+ * itself: since T0110 the camera can be following the ship while the map and the
+ * navigation target sit on something else, so "the id I just asked for" and "the
+ * thing on screen" are no longer the same string.
+ */
+function refreshCameraFocusLabel(): void {
+  const director = world?.cameraDirector;
+  if (director !== undefined) writeCameraFocusLabel(director.focusId);
+}
+
 function handleSystemMapModeChange(mode: SystemMapMode): void {
   systemMapSignals.publishMode(mode);
   cameraInput?.setEnabled(mode === 'space');
@@ -737,9 +780,9 @@ function handleSystemMapModeChange(mode: SystemMapMode): void {
 
 function handleSystemMapFocusChange(bodyId: string): void {
   systemMapSignals.publishFocus(bodyId);
-  world?.cameraController.focusBody(bodyId);
+  world?.cameraDirector.focusObservatoryBody(bodyId);
   world?.systemMap.focusBody(bodyId);
-  writeCameraFocusLabel(bodyId);
+  refreshCameraFocusLabel();
   if (systemMapRuntimeDiagnostics !== null) systemMapRuntimeDiagnostics.focusBodyId = bodyId;
 }
 
@@ -848,7 +891,7 @@ function renderFrame(nowMs: number): void {
     lighting,
     proceduralSun,
     osculatingConic,
-    cameraController,
+    cameraDirector,
     cameraPositionKm,
   } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
@@ -893,14 +936,11 @@ function renderFrame(nowMs: number): void {
   stateVectorStore.publish(snapshot, nowMs);
   const hudEndMs = performance.now();
   const renderStartMs = performance.now();
-  cameraController.update(deltaSec);
-  spaceScene.camera.lookAt(
-    cameraController.lookDirection.x,
-    cameraController.lookDirection.y,
-    cameraController.lookDirection.z,
-  );
-  spaceScene.camera.updateMatrix();
-  spaceScene.camera.updateMatrixWorld(true);
+  // T0110 — the director runs both cameras and publishes one pose; the rig is
+  // the only place that touches three.js. `world.cameraPositionKm` is a live
+  // reference to that pose, so every camera-relative consumer below sees it.
+  cameraDirector.update(deltaSec, snapshot);
+  applyCameraPose(spaceScene.camera, cameraDirector.pose);
   if (systemMapController.mode === 'system-map') {
     world.systemMap.update(deltaSec);
     telemetry.beginGpuTimer();
@@ -927,7 +967,7 @@ function renderFrame(nowMs: number): void {
       spaceScene.camera.fov * (Math.PI / 180),
       nowMs,
     );
-    lighting.setFocusPositionOffset(cameraController.focusPositionOffset);
+    lighting.setFocusPositionOffset(cameraDirector.focusPositionOffset);
     lighting.update();
     osculatingConic.update(snapshot, canvas.width, canvas.height);
     spaceScene.updateCameraRelative(cameraPositionKm);
@@ -1052,11 +1092,17 @@ async function prepareApplication(): Promise<void> {
     initialViewportWidthPx: Math.max(1, canvas.clientWidth),
     initialViewportHeightPx: Math.max(1, canvas.clientHeight),
     onProgress: publishStartupMilestone,
+    // The warm-up camera hangs off the chase arm, so it needs the attitude the
+    // session actually starts at rather than an identity guess — that is what
+    // puts the shader warm-up at the same viewpoint as the first real frame.
+    initialShipAttitudeQuaternion: session.simulation.snapshot.attitudeQuaternion,
   });
   runtimeResources.epochWorldCreations += 1;
   runtimeResources.shipVisualCreations += 1;
+  runtimeResources.cameraDirectors += 1;
   const shipVisual = world.shipVisual;
-  const shipCameraController = world.cameraController;
+  const cameraDirector = world.cameraDirector;
+  cameraDirector.applyCameraSettings(session.settings.camera);
   const shipRuntimeDiagnostics = Object.freeze(
     Object.setPrototypeOf(
       {
@@ -1082,13 +1128,67 @@ async function prepareApplication(): Promise<void> {
           return shipVisual.noseNodeAlignment;
         },
         get focused() {
-          return shipCameraController.focusId === SHIP_ASSET_ID;
+          return cameraDirector.focusId === SHIP_ASSET_ID;
         },
       },
       null,
     ),
   ) as ShipRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerShip', { value: shipRuntimeDiagnostics });
+  const shipPositionsKm = world.positionsKm;
+  const shipPositionOffset = world.shipPositionOffset;
+  const cameraRuntimeDiagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get mode() {
+          return cameraDirector.mode;
+        },
+        get transitioning() {
+          return cameraDirector.isTransitioning;
+        },
+        get focusId() {
+          return cameraDirector.focusId;
+        },
+        get distanceShipLengths() {
+          return cameraDirector.chaseDistanceShipLengths;
+        },
+        get armDistanceKm() {
+          return cameraDirector.chaseArmDistanceKm;
+        },
+        get fovDeg() {
+          return cameraDirector.pose.fovDeg;
+        },
+        get fovOffsetDeg() {
+          return cameraDirector.chaseFovOffsetDeg;
+        },
+        get shakeAmplitudeDeg() {
+          return cameraDirector.chaseShakeAmplitudeDeg;
+        },
+        get fovWideningEnabled() {
+          return cameraDirector.chaseFovWideningEnabled;
+        },
+        get shakeEnabled() {
+          return cameraDirector.chaseShakeEnabled;
+        },
+        /**
+         * Distance from the published camera pose to the ship.
+         *
+         * The one number that proves "the camera follows the ship" from outside
+         * the process: it stays at the arm length while chasing and grows to
+         * astronomical values in observatory mode.
+         */
+        get shipDistanceKm() {
+          return Math.hypot(
+            (shipPositionsKm[shipPositionOffset] as number) - cameraDirector.pose.positionKm.x,
+            (shipPositionsKm[shipPositionOffset + 1] as number) - cameraDirector.pose.positionKm.y,
+            (shipPositionsKm[shipPositionOffset + 2] as number) - cameraDirector.pose.positionKm.z,
+          );
+        },
+      },
+      null,
+    ),
+  ) as CameraRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerCamera', { value: cameraRuntimeDiagnostics });
   world.systemMap.focusBody(systemMapController.focusId);
   systemMapRuntimeDiagnostics = {
     scene: world.systemMap.diagnostics,
@@ -1182,7 +1282,7 @@ async function prepareApplication(): Promise<void> {
   world.systemMap.update(0);
   world.trajectoryOverlay.prepareCompilationPass(
     world.cameraPositionKm,
-    world.cameraController.lookDirection,
+    world.cameraDirector.pose.lookDirection,
   );
   world.systemMap.trajectoryOverlay.prepareCompilationPass(
     world.systemMap.cameraPositionKm,
@@ -1253,7 +1353,7 @@ async function activateSpacePhaseRuntime(): Promise<void> {
   runtimeResources.keyboardCommandMappers += 1;
   const catalogBodyIds = session.simulation.snapshot.bodyIds;
   const spaceCameraControls = new SharedCameraControls(
-    activeWorld.cameraController,
+    activeWorld.cameraDirector,
     systemMapController,
     sessionCommands,
     catalogBodyIds,
