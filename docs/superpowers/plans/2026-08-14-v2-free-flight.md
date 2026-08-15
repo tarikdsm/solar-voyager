@@ -88,6 +88,7 @@ src/
 │   ├── restorePoints.ts                    # NEW  10 s autosave ring (T0111)
 │   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
 ├── render/
+│   ├── cameraRig.ts                        # LANDED CameraPose -> PerspectiveCamera adapter (T0110)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
 │   ├── plumeVisual.ts                      # NEW  photon-beam plume (T0122)
 │   ├── rcsVisual.ts                        # NEW  RCS puff sprites (T0122)
