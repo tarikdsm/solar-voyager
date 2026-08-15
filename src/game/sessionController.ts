@@ -34,6 +34,15 @@ export interface GameSessionControllerOptions {
   readonly settingsRepository: SettingsRepository;
   readonly createNewSimulation: () => SimulationCore;
   readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
+  /**
+   * ADR-036 — builds the respawn document for a body index. Injected rather than
+   * imported so the controller keeps knowing nothing about the body catalog.
+   */
+  readonly createRespawnState?: (
+    source: SimulationPersistentState,
+    shipPositionKm: Float64Array,
+    bodyIndex: number,
+  ) => SimulationPersistentState;
   readonly onSimulationReplaced?: (simulation: SimulationCore) => void;
   readonly onSettingsChanged?: (settings: GameSettingsV2, origin: SettingsChangeOrigin) => void;
 }
@@ -47,6 +56,14 @@ export class GameSessionController {
   private readonly settingsRepository: SettingsRepository;
   private readonly createNewSimulation: () => SimulationCore;
   private readonly createSimulation: (state: SimulationPersistentState) => SimulationCore;
+  private readonly createRespawnState:
+    | ((
+        source: SimulationPersistentState,
+        shipPositionKm: Float64Array,
+        bodyIndex: number,
+      ) => SimulationPersistentState)
+    | null;
+
   private readonly onSimulationReplaced: ((simulation: SimulationCore) => void) | null;
   private readonly onSettingsChanged:
     ((settings: GameSettingsV2, origin: SettingsChangeOrigin) => void) | null;
@@ -57,6 +74,7 @@ export class GameSessionController {
     this.settingsRepository = options.settingsRepository;
     this.createNewSimulation = options.createNewSimulation;
     this.createSimulation = options.createSimulation;
+    this.createRespawnState = options.createRespawnState ?? null;
     this.onSimulationReplaced = options.onSimulationReplaced ?? null;
     this.onSettingsChanged = options.onSettingsChanged ?? null;
     const settingsResult = this.settingsRepository.load();
@@ -89,6 +107,55 @@ export class GameSessionController {
     }
     this.replaceSimulation(candidateSimulation);
     return { ok: true, message: 'New game started' };
+  }
+
+  /**
+   * ADR-036 — replaces the frozen core with a captured restore point.
+   *
+   * Routed through the same `createSimulation` the save loader uses, so a
+   * restore point is validated by exactly the rules a loaded save must satisfy;
+   * a slot that fails validation leaves the freeze in place rather than
+   * producing a half-restored session.
+   */
+  restoreFromState(state: SimulationPersistentState): SessionActionResult {
+    let candidateSimulation: SimulationCore;
+    try {
+      candidateSimulation = this.createSimulation(state);
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to restore', detail: describeError(error) };
+    }
+    this.replaceSimulation(candidateSimulation);
+    return { ok: true, message: 'Restored' };
+  }
+
+  /**
+   * ADR-036 — relocates the ship to a circular orbit two body radii up.
+   *
+   * Defaults to the body that was hit; falls back to the dominant body so the
+   * action still works if it is ever offered outside a freeze.
+   */
+  respawnInOrbit(bodyIndex?: number): SessionActionResult {
+    if (this.createRespawnState === null) {
+      return { ok: false, message: 'Unable to respawn', detail: 'no respawn builder configured' };
+    }
+    const snapshot = this.currentSimulation.snapshot;
+    const selectedBodyIndex =
+      bodyIndex ??
+      (snapshot.impactBodyIndex >= 0 ? snapshot.impactBodyIndex : snapshot.dominantBodyIndex);
+    if (selectedBodyIndex < 0) {
+      return { ok: false, message: 'Unable to respawn', detail: 'no body to orbit' };
+    }
+    let candidateSimulation: SimulationCore;
+    try {
+      const source = this.currentSimulation.exportPersistentState();
+      candidateSimulation = this.createSimulation(
+        this.createRespawnState(source, snapshot.shipState, selectedBodyIndex),
+      );
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to respawn', detail: describeError(error) };
+    }
+    this.replaceSimulation(candidateSimulation);
+    return { ok: true, message: 'Respawned in orbit' };
   }
 
   hasValidLocalSave(): boolean {
