@@ -6,6 +6,8 @@ import {
   DEFAULT_GAME_SETTINGS,
   parseProfileSettings,
   rebindInput,
+  updateAudioExteriorMusic,
+  updateAudioLevel,
   updateCameraFovWidening,
   updateCameraShake,
   updateGamepadAxisInvert,
@@ -14,8 +16,9 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  type AudioBus,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV6,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -28,7 +31,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV5 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV6 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -66,6 +69,24 @@ class FakeSession implements SessionSettingsPort {
 
   saveLocal(): SessionActionResult {
     return this.saveResult;
+  }
+
+  setAudioLevel(bus: AudioBus, level: number): SessionActionResult {
+    try {
+      this.settings = updateAudioLevel(this.settings, bus, level);
+      return { ok: true, message: 'Audio level updated' };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update audio level',
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  setAudioExteriorMusic(exteriorMusic: boolean): SessionActionResult {
+    this.settings = updateAudioExteriorMusic(this.settings, exteriorMusic);
+    return { ok: true, message: 'Exterior music updated' };
   }
 
   setCameraFovWidening(fovWidening: boolean): SessionActionResult {
@@ -305,6 +326,53 @@ describe('session settings panel model', () => {
     );
     expect(session.settings).toBe(before);
     expect(model.selectQuality('ultra')).toMatchObject({ ok: false });
+  });
+
+  describe('audio mixer controls (T0144)', () => {
+    it('parses each bus slider as a number', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.selectAudioLevel('master', '0.35')).toMatchObject({
+        ok: true,
+        message: 'Audio level updated',
+      });
+      expect(session.settings.audio.master).toBe(0.35);
+      expect(model.selectAudioLevel('sfx', '0')).toMatchObject({ ok: true });
+      expect(session.settings.audio.sfx).toBe(0);
+      // The other buses are untouched: one slider is one bus.
+      expect(session.settings.audio.music).toBe(DEFAULT_GAME_SETTINGS.audio.music);
+    });
+
+    it('rejects an empty or non-numeric slider value without touching settings', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+      const before = session.settings;
+
+      expect(model.selectAudioLevel('master', '')).toMatchObject({ ok: false });
+      expect(model.selectAudioLevel('music', 'loud')).toMatchObject({ ok: false });
+      expect(session.settings).toBe(before);
+    });
+
+    it('surfaces the underlying range validation as a failed result', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.selectAudioLevel('ui', '2')).toMatchObject({ ok: false });
+      expect(model.selectAudioLevel('ui', '-1')).toMatchObject({ ok: false });
+    });
+
+    it('toggles the Kubrick-mode music policy', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(session.settings.audio.exteriorMusic).toBe(true);
+      expect(model.setAudioExteriorMusic(false)).toMatchObject({
+        ok: true,
+        message: 'Exterior music updated',
+      });
+      expect(session.settings.audio.exteriorMusic).toBe(false);
+    });
   });
 
   describe('gamepad settings controls (T0106)', () => {

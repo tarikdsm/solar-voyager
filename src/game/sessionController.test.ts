@@ -230,6 +230,35 @@ describe('GameSessionController', () => {
     expect(controller.settings).toBe(before);
   });
 
+  it('persists mixer levels only after validation succeeds (T0144)', () => {
+    const storage = new MemoryStorage();
+    const controller = createController(storage);
+
+    expect(controller.setAudioLevel('master', 0.35)).toMatchObject({
+      ok: true,
+      message: 'Audio level updated',
+    });
+    expect(controller.setAudioLevel('sfx', 0)).toMatchObject({ ok: true });
+    expect(controller.setAudioExteriorMusic(false)).toMatchObject({
+      ok: true,
+      message: 'Exterior music updated',
+    });
+    expect(controller.settings.audio).toEqual({
+      ...DEFAULT_GAME_SETTINGS.audio,
+      master: 0.35,
+      sfx: 0,
+      exteriorMusic: false,
+    });
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '{}').audio).toEqual(
+      controller.settings.audio,
+    );
+
+    const before = controller.settings;
+    expect(controller.setAudioLevel('music', 1.5)).toMatchObject({ ok: false });
+    expect(controller.setAudioLevel('ui', Number.NaN)).toMatchObject({ ok: false });
+    expect(controller.settings).toBe(before);
+  });
+
   it('owns functional tutorial transitions without publishing preferences', () => {
     const storage = new MemoryStorage();
     const published: string[] = [];

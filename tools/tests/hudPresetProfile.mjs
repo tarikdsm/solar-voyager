@@ -15,12 +15,12 @@
  * update this literal — the parse is strict and will say so loudly.
  */
 
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
 
 const DEFAULT_GAMEPAD_AXIS = { invert: false, sensitivity: 1 };
 
 const ENGINEER_PROFILE = JSON.stringify({
-  version: 5,
+  version: 6,
   qualityLock: 'auto',
   inputBindings: {
     throttleIncrease: 'KeyR',
@@ -63,6 +63,10 @@ const ENGINEER_PROFILE = JSON.stringify({
   // Labels off: they are DOM nodes over the canvas and several gates compare
   // screenshots. The preset ring itself is covered by `test:hud-presets`.
   hud: { preset: 'engineer', bodyLabels: false },
+  // T0144 mixer levels at the shipped defaults. These gates never produce a
+  // gesture-driven unlock they care about, so the levels are only here to satisfy
+  // the strict v6 parse; `test:audio` owns the audio behaviour.
+  audio: { master: 0.7, music: 0.5, sfx: 0.7, ui: 0.5, exteriorMusic: true },
 });
 
 /** Plants an Engineer-preset profile before the app boots, on every navigation. */
