@@ -1773,7 +1773,7 @@
       "core/time.ts MAX_THRUST_WARP updated; warp clamp reasons and UI unchanged; energy-ledger warp invariance still 1e-12",
       "If 1000x remains the answer, ADR-038 documents why and the burn-coast-burn fallback becomes the pacing mechanism"
     ],
-    "handoff_notes": "Evidence-first task. Cross-platform nondeterminism (ADR-017) applies; run the bench on CI ubuntu as well as the dev machine.\n"
+    "handoff_notes": "DEPRIORITIZED, WITH EVIDENCE. T0116's CI cruise gate flies LEO to Jupiter unattended in 187.9 s of\nwall clock against a 300 s budget, arriving at e = 0.00061 and altitude within 0.18 percent of the\npreset, at the CURRENT 1000x thrust-warp ceiling. Release criterion 1 (each leg in 5 wall minutes or\nless) is therefore already met without this task, so raising the ceiling is pacing polish rather\nthan critical path.\nThat does not make the task worthless: the outer-system legs are the ones the current ceiling\nstrains, and T0120's goldens want a settled ceiling underneath them. But whoever claims it should\nbenchmark against a concrete question — which legs miss the 5-minute bar at 1000x — rather than\nraising the number on principle. Evidence-first was always this task's rule; T0116 just supplied the\nfirst evidence.\nCross-platform nondeterminism (ADR-017) still applies: run the bench on CI ubuntu as well as the dev\nmachine.\n"
   },
   {
     "id": "T0116",
@@ -1974,7 +1974,7 @@
   {
     "id": "T0126",
     "title": "Milky Way panorama and zodiacal light",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0126-milky-way",
     "depends_on": [
