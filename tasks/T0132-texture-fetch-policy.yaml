@@ -1,6 +1,6 @@
 id: T0132
 title: Checksummed on-demand source fetching; stop committing 8K sources
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0132-texture-fetch-policy
 depends_on:
@@ -18,4 +18,30 @@ acceptance:
   - ADR-039 lands, asset-pipeline.md is updated and the repo-budget check documents the policy
   - Python tests cover a checksum mismatch failing and a cache hit skipping the download
 handoff_notes: |
-  Do not delete existing textures-src content in this task; the policy applies to NEW bodies. All 34 upcoming bodies depend on this.
+  Adding a source is one TextureRecipe in RECIPES; the field-by-field template lives in
+  agents/skills/add-celestial-body.md under "Source manifest entries". Commit SOURCES.md, never the
+  imagery: if git status shows a new body's jpg or png as untracked-but-not-ignored, the gitignore
+  policy is broken and that is the bug to fix.
+  Use python -X utf8 for direct invocations on Windows (a repo hook blocks bare python script.py);
+  the tool also reconfigures stdio to UTF-8 itself because NASA and CC credit strings carry accents
+  that would raise UnicodeEncodeError on CP1252.
+  Set SOLAR_VOYAGER_TEXTURE_CACHE to a shared path when several V2M4 worktrees run at once, or each
+  one re-downloads every 8K source. To get a checksum, fetch once with a deliberately wrong sha256
+  and read the measured digest out of the error, then REVIEW the file before pinning it.
+  Three additions beyond the literal task text, all justified in ADR-039: kind="file" for verified
+  byte-copy of non-image sources (T0131 pins PDS shape models through this mechanism and Sharp
+  cannot open .tab or .obj), per-source max_bytes replacing the global 64 MiB cap, and --source now
+  installing into the cache instead of bypassing it so the offline recovery path and the normal path
+  converge.
+  KNOWN, NOT FIXED HERE. assets/textures-src/earth/SOURCES.md is stale against its own generator
+  (committed text says "normalized to 8192x4096", the generator emits "resized to 8192x4096"), so any
+  regenerated SOURCES.md will show that diff — expected, not a regression. build/ is gitignored but
+  NOT excluded from the repo-budget walk in assetBudgets.mjs (dist, coverage and output are), which
+  is why the verified cache lives at .texture-cache/ and not under build/.
+  THE OTHER HALF OF THE 300 MiB PROBLEM is assets/models/ at 64 MiB of committed authored
+  deliverables; ADR-039 is scoped to sources and deliberately does not touch them. Whoever hits the
+  repo budget during the V2M4 asset lane should read ADR-039's "What this ADR does not solve".
+  Verification: test:tools 60 -> 76 tests, lint, typecheck, format, build, check:budgets (repo 177.68
+  of 300 MiB), check:licenses, smoke. Offline re-run reproduced earth_albedo.png byte-identical to the
+  committed artifact, which is the real proof the rewrite is output-compatible. No budget or golden
+  moved.
