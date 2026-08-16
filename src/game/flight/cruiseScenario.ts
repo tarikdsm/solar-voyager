@@ -12,6 +12,7 @@ import { STATE_TAU } from '../../sim/ship/relativity.js';
 import { DEFAULT_VESSEL, type VesselConfig } from '../../sim/ship/vessel.js';
 import type { SimSnapshot } from '../../sim/simulationSnapshot.js';
 import { compileCanonicalCatalog, createNewGameSimulation } from '../createNewGameSimulation.js';
+import { TargetSelectionController } from '../targetSelection.js';
 
 import { osculatingEccentricity } from './cruiseInsertion.js';
 import { CruiseDirector, type CruisePhase } from './cruiseDirector.js';
@@ -129,7 +130,13 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
     vessel,
   };
   const controller = new FlightController(ports);
-  const director = new CruiseDirector({ ...ports, catalog, controller });
+  // The real write point (T0117), over the same `Commands` the session uses, so
+  // the scenario exercises the path the game does.
+  const targetSelection = new TargetSelectionController({
+    commands: simulation.commands,
+    bodyIds: simulation.snapshot.bodyIds,
+  });
+  const director = new CruiseDirector({ ...ports, catalog, controller, targetSelection });
   const targetIndex = catalog.bodyIds.indexOf(options.targetBodyId);
   const relPosition = new Float64Array(3);
   const relVelocity = new Float64Array(3);

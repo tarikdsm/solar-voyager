@@ -63,6 +63,24 @@ frame is 1.6 s of sim time and 24° of slew, which would limit-cycle around a 0.
 `FlightController.setRotationAxes`: full deflection at 100× is 0.006 rad/s of sim time, and a flip
 would take 524 s of sim time instead of 12.
 
+### 1.1a The one `Commands` method the director may **not** call
+
+`setTarget`. T0117 made `game/targetSelection.ts` the single navigation-target write point, and
+`tests/architecture/targetWritePoint.test.ts` enforces it by source scan. The reason is behavioural,
+not stylistic: the composition-root `Commands` facade that `TargetSelectionController` writes into
+also re-aims the observatory camera, moves the system-map focus and invalidates the trajectory
+prediction. `engage()` calling `commands.setTarget` directly set the simulation target while leaving
+the map focus and a stale predicted trajectory behind — visible to a player. The director therefore
+takes a `TargetSelectionPort` and calls `selectTarget(bodyId, 'api')`.
+
+Two consequences worth naming. The selection is **not idempotent** by T0117's deliberate design, so
+re-engaging a cruise on the body already targeted still re-aims and re-invalidates — which is what
+re-engaging should do. And the selection is committed **before any director state moves**, because it
+is the last thing in `engage()` that can refuse: a `false` return means the session catalog and the
+guidance catalog disagree about the body, so nothing is engaged at all rather than a cruise flying at
+a target the rest of the game cannot see. `engage()` can be called while a cruise is already running,
+so a late refusal would otherwise leave the director half-re-engaged.
+
 ### 1.2 Arbitration with `FlightController`
 
 Both write `rotate()` and `setThrottle()`, so exactly one of them may run per frame. The frame loop

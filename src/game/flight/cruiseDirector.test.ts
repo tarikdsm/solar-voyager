@@ -4,6 +4,7 @@ import { MANUAL_ATTITUDE_MAX_WARP, MAX_THRUST_WARP } from '../../core/time.js';
 import { DEFAULT_VESSEL } from '../../sim/ship/vessel.js';
 import type { SimulationCore } from '../../sim/simulation.js';
 import { compileCanonicalCatalog, createNewGameSimulation } from '../createNewGameSimulation.js';
+import { TargetSelectionController } from '../targetSelection.js';
 
 import { orbitArrivalRadiusKm } from './arrivalStandoff.js';
 import { CruiseDirector, type CruisePhase } from './cruiseDirector.js';
@@ -16,6 +17,7 @@ interface Rig {
   readonly simulation: SimulationCore;
   readonly director: CruiseDirector;
   readonly controller: FlightController;
+  readonly targetSelection: TargetSelectionController;
   /** One frame of `bootstrap/frameLoop.ts`'s arbitration. */
   step(frames?: number): void;
   /** Runs until `predicate` or `limit` frames; returns the frames consumed. */
@@ -31,7 +33,11 @@ function rig(): Rig {
     vessel: DEFAULT_VESSEL,
   };
   const controller = new FlightController(ports);
-  const director = new CruiseDirector({ ...ports, catalog, controller });
+  const targetSelection = new TargetSelectionController({
+    commands: simulation.commands,
+    bodyIds: simulation.snapshot.bodyIds,
+  });
+  const director = new CruiseDirector({ ...ports, catalog, controller, targetSelection });
   function step(frames = 1): void {
     for (let index = 0; index < frames; index += 1) {
       director.update(FRAME_SEC);
@@ -43,6 +49,7 @@ function rig(): Rig {
     simulation,
     director,
     controller,
+    targetSelection,
     step,
     runUntil(predicate, limit): number {
       for (let index = 0; index < limit; index += 1) {
@@ -74,6 +81,40 @@ describe('CruiseDirector engage', () => {
     expect(r.simulation.snapshot.targetBodyId).toBe('moon');
     expect(r.controller.thrustRegime).toBe('cruise');
     expect(r.director.guidanceMode).toBe('profile');
+  });
+
+  it('writes the target through the single write point, not Commands (T0117)', () => {
+    const r = rig();
+    expect(r.director.engage('moon', 'orbit')).toBe(true);
+    expect(r.targetSelection.selectedBodyId).toBe('moon');
+    expect(r.targetSelection.selectionSource).toBe('api');
+    expect(r.targetSelection.selectionCount).toBe(1);
+    // Non-idempotent by design: re-engaging the current target must re-aim the
+    // observatory camera and re-invalidate the prediction, so it writes again.
+    expect(r.director.engage('moon', 'orbit')).toBe(true);
+    expect(r.targetSelection.selectionCount).toBe(2);
+  });
+
+  it('refuses to engage — and changes nothing — when the write point refuses', () => {
+    const simulation = createNewGameSimulation(DEFAULT_VESSEL);
+    const catalog = compileCanonicalCatalog();
+    const ports = {
+      commands: simulation.commands,
+      snapshot: () => simulation.snapshot,
+      vessel: DEFAULT_VESSEL,
+    };
+    const controller = new FlightController(ports);
+    const director = new CruiseDirector({
+      ...ports,
+      catalog,
+      controller,
+      targetSelection: { selectTarget: () => false, selectedBodyId: null },
+    });
+    expect(director.engage('moon', 'orbit')).toBe(false);
+    expect(director.phase).toBe('idle');
+    expect(director.active).toBe(false);
+    expect(director.targetBodyId).toBe(null);
+    expect(controller.thrustRegime).toBe('manual');
   });
 
   it('applies the ring-aware stand-off table rather than the solver default', () => {

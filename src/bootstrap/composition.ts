@@ -1305,6 +1305,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       vessel: session.simulation.vessel,
       catalog: compileCanonicalCatalog(),
       controller: flightController,
+      targetSelection,
     });
     runtime.cruiseDirector = cruiseDirector;
     const flightInputRouter = new FlightInputRouter(flightController, {

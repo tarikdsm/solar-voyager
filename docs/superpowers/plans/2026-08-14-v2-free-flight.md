@@ -217,7 +217,8 @@ export class FlightInputRouter {
 export type CruisePhase = 'idle'|'align'|'boost'|'flip'|'brake'|'insert'|'done'|'aborted';
 export class CruiseDirector {
   constructor(ports: { commands: Commands; snapshot(): SimSnapshot; vessel: VesselConfig;
-    catalog: CompiledRailsCatalog; controller: FlightController });
+    catalog: CompiledRailsCatalog; controller: FlightController;
+    targetSelection: TargetSelectionPort });   // T0117's single write point, never Commands.setTarget
   engage(targetBodyId: string, arrival: 'orbit'|'flyby', arrivalAltitudeKm?: number): boolean;
   abort(): void;                                             // ≤1 s wall to ≤100× warp
   readonly phase: CruisePhase;

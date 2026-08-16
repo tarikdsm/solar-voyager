@@ -25,6 +25,7 @@ import { writeForwardFromQuaternionInto } from '../../sim/ship/attitude.js';
 import type { VesselConfig } from '../../sim/ship/vessel.js';
 import { validateVesselConfig } from '../../sim/ship/vessel.js';
 import { WarningFlag, type Commands, type SimSnapshot } from '../../sim/simulationSnapshot.js';
+import type { TargetSelectionPort } from '../targetSelection.js';
 
 import { orbitArrivalAltitudeKm } from './arrivalStandoff.js';
 import {
@@ -154,6 +155,16 @@ export interface CruiseDirectorPorts {
   readonly vessel: VesselConfig;
   /** The compiled catalog the simulation runs on; guidance gets its own scratch. */
   readonly catalog: CompiledRailsCatalog;
+  /**
+   * The single navigation-target write point (T0117).
+   *
+   * Not `commands.setTarget`: the composition facade the controller writes into
+   * also re-aims the observatory camera, moves the system-map focus and
+   * invalidates the trajectory prediction. Writing the simulation target
+   * directly would engage a cruise while leaving the map looking somewhere else
+   * and a stale predicted trajectory on screen.
+   */
+  readonly targetSelection: TargetSelectionPort;
   /** Released back to the player on abort/arrival (design §1.2). */
   readonly controller: FlightController;
 }
@@ -368,6 +379,13 @@ export class CruiseDirector {
 
     const snapshot = this.ports.snapshot();
     if (snapshot.impactOccurred === 1) return false;
+    // Committed before any director state moves, and it is the last thing that
+    // can refuse. `selectTarget` is deliberately non-idempotent (T0117), which
+    // is what re-engaging on the current target wants: the camera re-aims and
+    // the prediction is invalidated again. A `false` here means the session's
+    // catalog and the guidance catalog disagree about this body, so nothing is
+    // engaged rather than flying at a target the rest of the game cannot see.
+    if (!this.ports.targetSelection.selectTarget(targetBodyId, 'api')) return false;
     this.targetIndex = index;
     this.targetIdState = targetBodyId;
     this.arrivalIntent = arrival;
@@ -382,7 +400,6 @@ export class CruiseDirector {
     this.engageSimSec = snapshot.simTimeSec;
     this.decompressPending = false;
     this.slewing = true;
-    this.ports.commands.setTarget(targetBodyId);
     this.ports.controller.setThrustRegime('cruise');
     this.warpPilot.engage(snapshot);
     this.modeState = this.solve(snapshot) ? 'profile' : 'pursuit';
