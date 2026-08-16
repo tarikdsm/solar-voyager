@@ -1799,7 +1799,7 @@
   {
     "id": "T0117",
     "title": "Select cruise and nav target by clicking bodies in world and in map",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0117-click-to-target",
     "depends_on": [
@@ -1994,7 +1994,7 @@
   {
     "id": "T0127",
     "title": "Pass-insertion API and adaptive exposure controller",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0127-adaptive-exposure",
     "depends_on": [
@@ -2008,12 +2008,12 @@
       "visualTier magnitude tests are untouched and green because exposure is display-only",
       "Settings expose auto and fixed exposure modes and the governor can pin fixed on a low tier"
     ],
-    "handoff_notes": "This task creates the API that T0142 and future passes use. The AdaptiveSmaa and Bloom private-field casts live here; contain them behind the API and add a three.js version canary test.\n"
+    "handoff_notes": "T0142 IS THE FIRST EXTERNAL CONSUMER. Use insertPass(pass, 'relativistic') for god rays (after\naberration so the screen-space sun position matches the shifted image, before bloom so the rays\nbloom) and insertPass(pass, 'bloom') for the flare. The pipeline TAKES OWNERSHIP: it sizes your\npass through the composer, calls setRenderScale if you implement AdaptivePostPassPort,\nforce-enables it for the warm-up render so precompile happens there, and disposes in reverse\ninsertion order. Never call composer.insertPass directly and never call insertPass from the frame\nloop. POST_PASS_ANCHORS is exported for tests.\nEXPOSURE IS NOT A POST PASS. Implementing plan section 3.5 literally appends a seventh entry to\ncomposer.passes by default, which the frozen passNames gate forbids. The pipeline implements a\none-method ExposureSinkPort instead and stays the only module touching renderer.toneMappingExposure\n— do not add a second writer. Adaptation is a first-order lag in LOG exposure, so tau means the\nsame thing across the 7-stop range.\nTHREE.JS CANARY: VALIDATED_THREE_REVISION = '185' in lightingPostPipeline.ts. A version bump fails\nlightingPostPipeline.canary.test.ts immediately; re-validate SMAA_INTERNAL_FIELDS,\nBLOOM_INTERNAL_FIELDS and the vUv rewrite before moving the constant. The canary builds the real\npasses in Node with a five-line Image stub, no GPU needed.\nTWO PRE-EXISTING RADIOMETRIC BUGS BOUND THE EXPOSURE WINDOW, neither fixed here.\n(a) SUN_EMISSIVE_INTENSITY = 4 in bodyVisualSystem.ts is distance-independent, so the solar disc\ngets DIMMER as you approach; it alone sets E_min = 1/8. T0141 should retune E_min together with the\nSun's radiance. (b) AMBIENT_LIGHT_INTENSITY = 0.02 in solarLighting.ts is never rescaled by\nSolarLighting.update(), which only touches the directional light. At Neptune the ambient term is\nabout 5.8x the sunlight, so the terminator is washed out AT ANY EXPOSURE — exposure is a gain and\ncannot restore contrast. That caps E_max at 16 and belongs to T0123 or T0140.\nExposureController.reset(camera, dominantBodyIndex) snaps with no fade — call it after any camera\ndiscontinuity (restore teleport, cruise insertion, respawn). update() takes the WALL delta.\nDiagnostics went from seven canvas objects to eight (solarVoyagerExposure). Settings gained\nrender.exposureMode; any harness seeding a profile must include it, the parser is strict.\nVerification: 1300 Vitest passed / 3 skipped; lighting-post, visual-tiers, procedural-sun,\nrelativistic-visuals, perf-governor, session-settings, hud-presets, tutorial, startup, main-menu,\nsmoke all green. Draw calls 49 and triangles 70,452 identical; heap LOWER than baseline; bundle\n+2,026 B gzip. No golden or budget moved. The raw bench pairing showed a 2x p75 \"regression\" that\ndid not survive scrutiny — the harness's own variance gate failed the feature build against ITSELF\nunder parallel-lane load; docs/bench/T0127-summary.md records the analysis instead of the number.\n"
   },
   {
     "id": "T0128",
     "title": "Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0128-body-rotation",
     "depends_on": [
@@ -2313,7 +2313,7 @@
   {
     "id": "T0144",
     "title": "Web Audio engine, AudioDirector, mixer settings, Kubrick mode",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0144-audio-engine",
     "depends_on": [
