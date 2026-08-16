@@ -1,5 +1,6 @@
 import { useComputed, type ReadonlySignal } from '@preact/signals';
 
+import { CruiseTargetControl, type CruiseTargetControlProps } from './CruiseTargetControl.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
 
 /**
@@ -79,15 +80,28 @@ export function ThrottleSpeedStrip({
  * three tasks later is a layout regression waiting to happen, and the honest
  * placeholder is also the honest answer: there is no cruise system yet.
  */
-export function CruiseStatus({ show }: { readonly show: ReadonlySignal<boolean> | boolean }) {
+export function CruiseStatus({
+  show,
+  cruiseTarget = null,
+}: {
+  readonly show: ReadonlySignal<boolean> | boolean;
+  /**
+   * T0117's "set as cruise target" affordance for the space view. Optional so
+   * component harnesses can mount the status line alone.
+   */
+  readonly cruiseTarget?: CruiseTargetControlProps | null;
+}) {
   const hidden = useComputed(() => (typeof show === 'boolean' ? !show : !show.value));
   return (
     <section id="cruise-status" class="cruise-status" aria-label="Cruise status" hidden={hidden}>
-      <span class="hud-kicker">Cruise</span>
-      <strong id="cruise-status-phase">Standby</strong>
-      <span id="cruise-status-detail" class="cruise-status-detail">
-        Guidance arrives with the cruise system
-      </span>
+      <div class="cruise-status-line">
+        <span class="hud-kicker">Cruise</span>
+        <strong id="cruise-status-phase">Standby</strong>
+        <span id="cruise-status-detail" class="cruise-status-detail">
+          Guidance arrives with the cruise system
+        </span>
+      </div>
+      {cruiseTarget === null ? null : <CruiseTargetControl {...cruiseTarget} />}
     </section>
   );
 }

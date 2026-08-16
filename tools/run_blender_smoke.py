@@ -16,6 +16,13 @@ BUILD_ROOT = REPOSITORY_ROOT / "build" / "blender-smoke"
 AUTHORED_ROOT = BUILD_ROOT / "assets" / "models"
 AUTHORED_REPEAT_ROOT = BUILD_ROOT / "assets-repeat" / "models"
 PUBLISHED_ROOT = BUILD_ROOT / "public" / "assets"
+SMALL_BODY_CASE = REPOSITORY_ROOT / "tools" / "tests" / "blender_small_body_case.py"
+SMALL_BODY_VALIDATOR = REPOSITORY_ROOT / "tools" / "tests" / "validateAuthoredAsset.mjs"
+SMALL_BODY_ASSETS = (
+    ("asteroids", "vesta", ("vesta.glb", "vesta_albedo.png", "SOURCES.md")),
+    ("comets", "67p", ("67p.glb", "67p_albedo.png", "SOURCES.md")),
+)
+COMET_ANCHOR_NAMES = ("coma_anchor", "tail_anchor")
 KNOWN_WINDOWS_BLENDER = pathlib.Path(
     r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
 )
@@ -161,6 +168,72 @@ def sha256(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
+def run_small_body_case(blender, run_root):
+    return run_checked(
+        (
+            blender,
+            "--background",
+            "--python",
+            SMALL_BODY_CASE,
+            "--",
+            "--output-root",
+            run_root / "models",
+            "--shape-root",
+            run_root / "shape-src",
+        )
+    )
+
+
+def validate_small_body_contract(models_root):
+    """The comet anchor nodes are API for T0139: assert their exported shape."""
+    comet_glb = models_root / "comets" / "67p" / "67p.glb"
+    document = read_glb_json(comet_glb)
+    nodes = {node.get("name"): node for node in document.get("nodes", ())}
+    if [node.get("name") for node in document.get("nodes", ()) if "mesh" in node] != ["67p"]:
+        raise RuntimeError("Comet GLB must contain exactly the nucleus mesh node")
+    for name in COMET_ANCHOR_NAMES:
+        node = nodes.get(name)
+        if node is None:
+            raise RuntimeError(f'Comet GLB is missing the required "{name}" node')
+        if "mesh" in node:
+            raise RuntimeError(f'Comet anchor "{name}" must stay mesh-less')
+        if any(abs(value) > 1e-6 for value in node.get("translation", (0.0, 0.0, 0.0))):
+            raise RuntimeError(f'Comet anchor "{name}" must sit at the nucleus origin')
+        scale = node.get("scale")
+        if scale is None or len(set(scale)) != 1 or scale[0] <= 1.0:
+            raise RuntimeError(f'Comet anchor "{name}" must carry a uniform scale above 1.0')
+
+    for category, body_id, _ in SMALL_BODY_ASSETS:
+        run_checked(
+            (
+                "node",
+                SMALL_BODY_VALIDATOR,
+                models_root / category / body_id,
+                body_id,
+                category,
+            )
+        )
+
+
+def verify_small_bodies(blender):
+    first_root = BUILD_ROOT / "small-bodies"
+    second_root = BUILD_ROOT / "small-bodies-repeat"
+    for run_root in (first_root, second_root):
+        output = run_small_body_case(blender, run_root)
+        if output.count("=== ASSET MANIFEST ===") != len(SMALL_BODY_ASSETS):
+            raise RuntimeError("Small-body case did not print a manifest per asset")
+    validate_small_body_contract(first_root / "models")
+    for category, body_id, filenames in SMALL_BODY_ASSETS:
+        for filename in filenames:
+            relative = pathlib.Path("models") / category / body_id / filename
+            if sha256(first_root / relative) != sha256(second_root / relative):
+                raise RuntimeError(f"Two identical small-body builds disagree on {relative}")
+    print(
+        "Small-body builders deterministic: "
+        + ", ".join(f"{body_id} ({category})" for category, body_id, _ in SMALL_BODY_ASSETS)
+    )
+
+
 def main():
     reset_build_root()
     blender = find_blender()
@@ -204,6 +277,7 @@ def main():
         raise RuntimeError("Ingested GLB does not require Draco compression")
     print(f"Blender smoke accepted: {authored_glb.relative_to(REPOSITORY_ROOT)}")
     print(f"Runtime ingest accepted: {runtime_glb.relative_to(REPOSITORY_ROOT)}")
+    verify_small_bodies(blender)
 
 
 if __name__ == "__main__":

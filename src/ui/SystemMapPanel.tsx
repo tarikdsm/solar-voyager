@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'preact/hooks';
 
 import { isEditableTarget } from '../game/input/bindings.js';
 import type { SystemMapController } from '../game/systemMapController.js';
-import type { Commands } from '../sim/simulationSnapshot.js';
+import type { TargetSelectionPort, TargetSelectionSource } from '../game/targetSelection.js';
+import { CruiseTargetControl } from './CruiseTargetControl.js';
 import type { TrajectoryPredictionDisplaySignals } from './trajectoryPredictionSignals.js';
 import { formatSystemMapBodyLabel, type SystemMapSignalStore } from './systemMapSignals.js';
 
@@ -29,16 +30,20 @@ export interface SystemMapKeyboardTarget {
 
 export class SystemMapPanelModel {
   private readonly bodyIds: readonly string[];
-  private readonly commands: Commands;
+  private readonly selection: TargetSelectionPort;
   private readonly controller: SystemMapController;
   private toggleElement: FocusableElement | null = null;
   private suspended = false;
   private bodySelectElement: FocusableElement | null = null;
   private panelElement: HideableElement | null = null;
 
-  constructor(bodyIds: readonly string[], commands: Commands, controller: SystemMapController) {
+  constructor(
+    bodyIds: readonly string[],
+    selection: TargetSelectionPort,
+    controller: SystemMapController,
+  ) {
     this.bodyIds = [...bodyIds];
-    this.commands = commands;
+    this.selection = selection;
     this.controller = controller;
   }
 
@@ -80,11 +85,19 @@ export class SystemMapPanelModel {
     return true;
   };
 
-  readonly selectBody = (bodyId: string): boolean => {
+  /**
+   * The map's one selection entry point: the `<select>`, the icon click routed
+   * from the composition root, and the cruise-target button all land here, and
+   * all of them move focus *and* target together (acceptance: "system map click
+   * selects focus and target").
+   *
+   * `source` distinguishes a click on an icon from a pull of the dropdown for
+   * T0150's intro steps; the write itself is identical.
+   */
+  readonly selectBody = (bodyId: string, source: TargetSelectionSource = 'map'): boolean => {
     if (!this.hasBody(bodyId)) return false;
     this.controller.focusBody(bodyId);
-    this.commands.setTarget(bodyId);
-    return true;
+    return this.selection.selectTarget(bodyId, source);
   };
 
   readonly handleKeyDown = (event: SystemMapKeyboardEvent): void => {
@@ -218,7 +231,16 @@ export function SystemMapPanelView({
         >
           {trajectoryPrediction.impactMessage}
         </p>
-        <p class="system-map-instructions">Drag to orbit · Scroll to zoom · Esc to return</p>
+        <CruiseTargetControl
+          view="map"
+          selectedBodyId={map.signals.focusBodyId}
+          showCurrentTarget
+          targetLabel={targetBody}
+          onSetCruiseTarget={(bodyId) => model.selectBody(bodyId, 'map')}
+        />
+        <p class="system-map-instructions">
+          Click a body · Drag to orbit · Scroll to zoom · Esc to return
+        </p>
       </aside>
     </>
   );
@@ -226,12 +248,12 @@ export function SystemMapPanelView({
 
 export interface SystemMapPanelProps {
   readonly bodyIds: readonly string[];
-  readonly commands: Commands;
   readonly controller: SystemMapController;
   readonly map: SystemMapSignalStore;
   /** True while the pause dialog owns the keyboard (T0112). */
   readonly suspended?: boolean;
   readonly targetBody: ReadonlySignal<string>;
+  readonly targetSelection: TargetSelectionPort;
   readonly trajectoryPrediction: TrajectoryPredictionDisplaySignals;
 }
 
@@ -240,7 +262,11 @@ export function SystemMapPanel(props: SystemMapPanelProps) {
   const modelRef = useRef<SystemMapPanelModel | null>(null);
   const bindingRef = useRef<SystemMapKeyboardBinding | null>(null);
   if (modelRef.current === null) {
-    modelRef.current = createSystemMapPanelModel(props.bodyIds, props.commands, props.controller);
+    modelRef.current = createSystemMapPanelModel(
+      props.bodyIds,
+      props.targetSelection,
+      props.controller,
+    );
     bindingRef.current = new SystemMapKeyboardBinding(modelRef.current);
   }
   const model = modelRef.current;
@@ -266,8 +292,8 @@ export function SystemMapPanel(props: SystemMapPanelProps) {
 /** Creates the panel's setup-owned interaction model. */
 export function createSystemMapPanelModel(
   bodyIds: readonly string[],
-  commands: Commands,
+  selection: TargetSelectionPort,
   controller: SystemMapController,
 ): SystemMapPanelModel {
-  return new SystemMapPanelModel(bodyIds, commands, controller);
+  return new SystemMapPanelModel(bodyIds, selection, controller);
 }

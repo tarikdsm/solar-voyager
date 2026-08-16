@@ -8,6 +8,8 @@ import {
   type OrbitalElements,
 } from '../sim/bodies/orbitalElements.js';
 import { type PredictorSuccessMessage } from '../workers/predictorProtocol.js';
+import { SYSTEM_MAP_CAMERA_FOV_DEG } from '../game/hud/bodyPicking.js';
+import { SPACE_CAMERA_FOV_DEG } from './spaceScene.js';
 import {
   SYSTEM_MAP_ORBIT_SEGMENTS,
   SystemMapScene,
@@ -240,5 +242,19 @@ describe('SystemMapScene', () => {
     expect(map.orbitLines.parent).toBeNull();
     expect(map.trajectoryOverlay.line.parent).toBeNull();
     expect(map.trajectoryOverlay.markers.parent).toBeNull();
+  });
+});
+
+/**
+ * The map camera's field of view is a render-layer fact that `game/` needs in
+ * order to pick icons, and `game/` may not import `render/`. The number is
+ * therefore stated twice; this is the assertion that keeps the two honest.
+ * Without it a field-of-view change would silently move every rendered icon away
+ * from the pixel the picker tests. Same pattern as
+ * `game/hud/markerCameraAgreement.test.ts`.
+ */
+describe('system-map picking agrees with the rendered camera - T0117', () => {
+  it('shares one field of view between the scene camera and the picker', () => {
+    expect(SYSTEM_MAP_CAMERA_FOV_DEG).toBe(SPACE_CAMERA_FOV_DEG);
   });
 });

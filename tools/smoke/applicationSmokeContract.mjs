@@ -7,9 +7,10 @@ import { preview } from 'vite';
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installEngineerHudPreset } from '../tests/hudPresetProfile.mjs';
 import { disableUnrelatedTrajectoryPrediction } from '../tests/trajectoryPredictionTestIsolation.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4175;
+const PORT = resolveHarnessPort(4175);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const RUNTIME_ERROR_MARKER = 'SOLAR_VOYAGER_INJECTED_SMOKE_RUNTIME_ERROR';
 const RUNTIME_ERROR_FIXTURE = fileURLToPath(

@@ -1,5 +1,5 @@
 import type { SystemMapController } from '../game/systemMapController.js';
-import type { Commands } from '../sim/simulationSnapshot.js';
+import type { TargetSelectionPort } from '../game/targetSelection.js';
 import type { CameraControlPort } from './cameraInputController.js';
 
 /**
@@ -28,17 +28,17 @@ export interface SharedCameraTarget {
  * rest of the composition root's split is T0113's.
  */
 export class SharedCameraControls implements CameraControlPort {
+  /**
+   * The camera focus ring contains the ship (T0109), which is not a catalog
+   * body: the system map has no icon for it and `SimulationCore.setTarget`
+   * throws on an id the simulation does not know. T0117 moved that gate into
+   * `TargetSelectionController`, which rejects an unknown id and returns false,
+   * so this class no longer carries its own copy of the catalog.
+   */
   constructor(
     private readonly camera: SharedCameraTarget,
     private readonly map: SystemMapController,
-    private readonly commands: Commands,
-    /**
-     * The camera focus ring contains the ship (T0109), which is not a catalog
-     * body: the system map has no icon for it and `Commands.setTarget` throws on
-     * an id the simulation does not know. Everything routed at the simulation is
-     * gated on this list.
-     */
-    private readonly catalogBodyIds: readonly string[],
+    private readonly selection: TargetSelectionPort,
   ) {}
 
   /**
@@ -70,15 +70,14 @@ export class SharedCameraControls implements CameraControlPort {
   focusBody(id: string): boolean {
     const cameraChanged = this.camera.focusBody(id);
     const mapChanged = this.map.focusBody(id);
-    if (id === this.map.focusId) this.commands.setTarget(id);
+    if (id === this.map.focusId) this.selection.selectTarget(id, 'camera');
     return cameraChanged || mapChanged;
   }
 
   cycleFocus(step: number): string {
     const id = this.camera.cycleFocus(step);
-    if (!this.catalogBodyIds.includes(id)) return id;
+    if (!this.selection.selectTarget(id, 'camera')) return id;
     this.map.focusBody(id);
-    this.commands.setTarget(id);
     return id;
   }
 
