@@ -15,14 +15,14 @@ import {
   isUnboundInputCode,
   type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV7,
+  type GameSettingsV8,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV7;
+  readonly settings: GameSettingsV8;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;

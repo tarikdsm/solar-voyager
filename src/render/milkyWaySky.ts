@@ -14,6 +14,14 @@ import {
 
 import { ECLIPTIC_J2000_TO_GALACTIC_ROW_MAJOR } from '../core/galacticFrame.js';
 import type { ReadonlyVec3 } from '../core/vec3.js';
+import {
+  createEffectBindingDegradeState,
+  degradeEffectBinding,
+  restoreEffectBinding,
+  type EffectBindingDegradeState,
+  type EffectBindingTelemetry,
+  type EffectBindingWarner,
+} from './effectBindingGuard.js';
 import type { SkyboxQualityTier } from './perfGovernor.js';
 import type { RelativisticVisualState } from './relativisticVisualState.js';
 import {
@@ -52,6 +60,12 @@ export interface MilkyWaySkyOptions {
   readonly sunPositionOffset: number;
   readonly loader?: SkyPanoramaLoader;
   readonly lazyLoadingEnabled?: boolean;
+  /**
+   * The scene's T0129 effect-binding telemetry, so a degraded sky is visible in
+   * the same counters as a degraded plume or marker. Omit only in unit tests.
+   */
+  readonly effectBindingTelemetry?: EffectBindingTelemetry;
+  readonly onEffectBindingWarning?: EffectBindingWarner;
 }
 
 export interface MilkyWaySkyDiagnostics {
@@ -63,6 +77,8 @@ export interface MilkyWaySkyDiagnostics {
   readonly skyboxTier: SkyboxQualityTier;
   readonly visible: boolean;
   readonly heliocentricDistanceKm: number;
+  /** T0129 degrade path: true while the solar direction cannot be derived. */
+  readonly observerDegraded: boolean;
 }
 
 const vertexShader = /* glsl */ `
@@ -151,6 +167,9 @@ export class MilkyWaySky {
   private zodiacalLightEnabled = true;
   private skyboxTier: SkyboxQualityTier = 'full';
   private heliocentricDistanceKm = 0;
+  private readonly effectBindingTelemetry: EffectBindingTelemetry | null;
+  private readonly observerDegradeState: EffectBindingDegradeState;
+  private readonly warnEffectBinding: EffectBindingWarner;
 
   constructor(options: MilkyWaySkyOptions) {
     assertPositionOffset(options.positionsKm, options.sunPositionOffset);
@@ -158,6 +177,13 @@ export class MilkyWaySky {
     this.sunPositionOffset = options.sunPositionOffset;
     this.loader = options.loader ?? null;
     this.lazyLoadingEnabled = options.lazyLoadingEnabled ?? false;
+    this.effectBindingTelemetry = options.effectBindingTelemetry ?? null;
+    this.observerDegradeState = createEffectBindingDegradeState('milkyWaySky:solarDirection');
+    this.warnEffectBinding =
+      options.onEffectBindingWarning ??
+      ((message: string): void => {
+        console.warn(message);
+      });
 
     const galacticFromEcliptic = new Matrix3();
     const matrix = ECLIPTIC_J2000_TO_GALACTIC_ROW_MAJOR;
@@ -234,17 +260,39 @@ export class MilkyWaySky {
     writeSkyAberrationUniforms(this.mesh.material.uniforms, state);
   }
 
-  /** Per-frame observer update. Allocation-free. */
+  /**
+   * Per-frame observer update. Allocation-free.
+   *
+   * The solar direction and heliocentric distance are *derived* quantities, so
+   * they follow T0129's effect-binding policy rather than the hard throw ship and
+   * body positions get: a non-finite source holds the last good direction, warns
+   * once, and raises the scene's effect-binding telemetry. A NaN here would
+   * otherwise paint the entire background with NaN fragments.
+   */
   update(cameraPositionKm: ReadonlyVec3): void {
     const sunX = (this.positionsKm[this.sunPositionOffset] as number) - cameraPositionKm.x;
     const sunY = (this.positionsKm[this.sunPositionOffset + 1] as number) - cameraPositionKm.y;
     const sunZ = (this.positionsKm[this.sunPositionOffset + 2] as number) - cameraPositionKm.z;
     const distanceKm = Math.sqrt(sunX * sunX + sunY * sunY + sunZ * sunZ);
-    this.heliocentricDistanceKm = distanceKm;
 
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+      if (this.effectBindingTelemetry !== null) {
+        degradeEffectBinding(
+          this.effectBindingTelemetry,
+          this.observerDegradeState,
+          this.warnEffectBinding,
+        );
+      }
+      return;
+    }
+    if (this.effectBindingTelemetry !== null) {
+      restoreEffectBinding(this.effectBindingTelemetry, this.observerDegradeState);
+    }
+
+    this.heliocentricDistanceKm = distanceKm;
     const uniforms = this.mesh.material.uniforms;
     const sunDirection = uniforms.uSunDirection?.value as Vector3 | undefined;
-    if (sunDirection !== undefined && distanceKm > 0) {
+    if (sunDirection !== undefined) {
       const inverseDistance = 1 / distanceKm;
       sunDirection.set(sunX * inverseDistance, sunY * inverseDistance, sunZ * inverseDistance);
     }
@@ -264,6 +312,7 @@ export class MilkyWaySky {
       skyboxTier: this.skyboxTier,
       visible: this.mesh.visible,
       heliocentricDistanceKm: this.heliocentricDistanceKm,
+      observerDegraded: this.observerDegradeState.degraded,
     };
   }
 

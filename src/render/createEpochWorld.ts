@@ -170,6 +170,7 @@ export async function createEpochWorld(
       id: body.id,
       category: runtimeCategory(body.kind),
       axialTiltRad: body.axialTiltRad,
+      siderealRotationPeriodSec: body.siderealRotationPeriodSec,
       meanRadiusKm: body.meanRadiusKm,
       muKm3S2: body.muKm3S2,
       polarRadiusRatio: body.polarRadiusRatio,
@@ -320,6 +321,7 @@ export async function createEpochWorld(
   const milkyWaySky = new MilkyWaySky({
     positionsKm,
     sunPositionOffset: sunIndex * 3,
+    effectBindingTelemetry: spaceScene.effectBindingTelemetry,
     loader: {
       loadSkyPanorama: async (tier) =>
         (await assetLoader.loadSkyPanorama?.('milkyway', tier)) ?? null,

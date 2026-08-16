@@ -11,8 +11,9 @@ import {
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import bodiesDocument from '../../data/bodies.json';
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
 import {
   createRelativisticVisualState,
@@ -23,6 +24,27 @@ import { CameraRelativeSpaceScene, SPACE_FAR_KM, SPACE_NEAR_KM } from './spaceSc
 const AU_KM = 149_597_870.7;
 const EARTH_RADIUS_KM = 6_371.0084;
 
+/** Greatest heliocentric distance any catalog body reaches, apoapsis-chained. */
+function maximumCatalogDistanceKm(): { readonly bodyId: string; readonly distanceKm: number } {
+  const byId = new Map<string, number>();
+  let bodyId = '';
+  let distanceKm = 0;
+  for (const body of bodiesDocument.bodies) {
+    const elements = body.elements;
+    const ownApoapsisKm =
+      elements === null ? 0 : elements.semiMajorAxisKm * (1 + elements.eccentricity);
+    const parentKm = body.parentId === null ? 0 : byId.get(body.parentId);
+    if (parentKm === undefined) throw new Error(`Catalog parent "${body.parentId}" precedes.`);
+    const totalKm = ownApoapsisKm + parentKm;
+    byId.set(body.id, totalKm);
+    if (totalKm > distanceKm) {
+      distanceKm = totalKm;
+      bodyId = body.id;
+    }
+  }
+  return { bodyId, distanceKm };
+}
+
 describe('CameraRelativeSpaceScene', () => {
   it('locks the camera to the origin with the solar-system frustum', () => {
     const spaceScene = new CameraRelativeSpaceScene();
@@ -31,8 +53,23 @@ describe('CameraRelativeSpaceScene', () => {
     expect(spaceScene.camera.near).toBe(SPACE_NEAR_KM);
     expect(spaceScene.camera.far).toBe(SPACE_FAR_KM);
     expect(SPACE_NEAR_KM).toBe(0.001);
-    expect(SPACE_FAR_KM).toBe(1e10);
+    expect(SPACE_FAR_KM).toBe(2.5e10);
     expect(spaceScene.camera.matrixAutoUpdate).toBe(false);
+  });
+
+  /**
+   * T0129 — the constant is tied to the catalog, not to a remembered number.
+   *
+   * `SPACE_FAR_KM` was 1e10 while Eris reaches 1.4617e10 km at aphelion, so the
+   * outermost dwarf was clipped on every frame. Adding a body further out than
+   * the far plane must fail here rather than in a screenshot nobody takes.
+   */
+  it('covers every catalog body at apoapsis from the inner system', () => {
+    const furthest = maximumCatalogDistanceKm();
+
+    expect(furthest.bodyId).toBe('eris');
+    expect(furthest.distanceKm).toBeGreaterThan(1e10);
+    expect(SPACE_FAR_KM).toBeGreaterThan(furthest.distanceKm);
   });
 
   it('allows a map-specific far plane without changing the space-scene default', () => {
@@ -375,6 +412,112 @@ describe('CameraRelativeSpaceScene', () => {
     expect(lineBuffer.array).toBe(originalLineArray);
     expect(pointGeometry.boundingSphere?.radius).toBeGreaterThan(0);
     expect(lineGeometry.boundingSphere?.radius).toBeGreaterThan(0);
+  });
+
+  /**
+   * T0129 guard-policy split, loud half: a NaN in a ship or body position is a
+   * physics bug and must still take the frame down.
+   */
+  it('keeps the hard throw for ship and body position bindings', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const body = new Object3D();
+    const bodySource = { x: 1, y: 2, z: 3 };
+    const shipPositionsKm = new Float64Array([4, 5, 6]);
+    const ship = new Object3D();
+    spaceScene.bindVisual(body, bodySource);
+    spaceScene.bindPackedVisual(ship, shipPositionsKm, 0);
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+
+    bodySource.y = Number.NaN;
+    expect(() => spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 })).toThrow(RangeError);
+    bodySource.y = 2;
+    shipPositionsKm[2] = Number.POSITIVE_INFINITY;
+    expect(() => spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 })).toThrow(RangeError);
+  });
+
+  /**
+   * T0129 guard-policy split, quiet half: an effect visual skips its bind,
+   * warns once and raises the telemetry flag instead of ending the session.
+   */
+  it('degrades an effect visual on an injected NaN without stopping the frame', () => {
+    const onEffectBindingWarning = vi.fn();
+    const spaceScene = new CameraRelativeSpaceScene({ onEffectBindingWarning });
+    const body = new Object3D();
+    const bodySource = { x: 100, y: 0, z: 0 };
+    const plume = new Object3D();
+    const plumeSource = { x: 10, y: 20, z: 30 };
+    spaceScene.bindVisual(body, bodySource);
+    spaceScene.bindEffectVisual(plume, plumeSource, 'plume');
+
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(plume.position.toArray()).toEqual([10, 20, 30]);
+    expect(spaceScene.effectBindingTelemetry.nonFiniteObserved).toBe(false);
+
+    plumeSource.y = Number.NaN;
+    bodySource.x = 200;
+    expect(() => spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 })).not.toThrow();
+    expect(() => spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 })).not.toThrow();
+
+    // The bind is skipped: the effect holds its last good position, and the
+    // body binding sharing the frame still advanced.
+    expect(plume.position.toArray()).toEqual([10, 20, 30]);
+    expect(body.position.x).toBe(200);
+    expect(onEffectBindingWarning).toHaveBeenCalledTimes(1);
+    expect(onEffectBindingWarning.mock.calls[0]?.[0]).toContain('plume');
+    expect(spaceScene.effectBindingTelemetry).toEqual({
+      degradedBindingCount: 1,
+      lastDegradedLabel: 'plume',
+      nonFiniteObserved: true,
+      skippedBindCount: 2,
+    });
+
+    plumeSource.y = 21;
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(plume.position.toArray()).toEqual([10, 21, 30]);
+    expect(spaceScene.effectBindingTelemetry.degradedBindingCount).toBe(0);
+    expect(spaceScene.effectBindingTelemetry.nonFiniteObserved).toBe(true);
+  });
+
+  it('degrades a packed effect visual and releases its count on unbind', () => {
+    const onEffectBindingWarning = vi.fn();
+    const spaceScene = new CameraRelativeSpaceScene({ onEffectBindingWarning });
+    const marker = new Object3D();
+    const positionsKm = new Float64Array([1, 2, 3, 4, 5, 6]);
+    spaceScene.bindPackedEffectVisual(marker, positionsKm, 3, 'target-marker');
+
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(marker.position.toArray()).toEqual([4, 5, 6]);
+
+    positionsKm[4] = Number.NaN;
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(marker.position.toArray()).toEqual([4, 5, 6]);
+    expect(spaceScene.effectBindingTelemetry.degradedBindingCount).toBe(1);
+
+    expect(spaceScene.unbindVisual(marker)).toBe(true);
+    expect(spaceScene.effectBindingTelemetry.degradedBindingCount).toBe(0);
+    expect(spaceScene.effectBindingTelemetry.nonFiniteObserved).toBe(true);
+    positionsKm[3] = 99;
+    spaceScene.updateCameraRelative({ x: 0, y: 0, z: 0 });
+    expect(marker.position.x).toBe(4);
+  });
+
+  it('rejects structurally invalid effect bindings instead of degrading them', () => {
+    const spaceScene = new CameraRelativeSpaceScene();
+    const visual = new Object3D();
+    const positionsKm = new Float64Array([1, 2, 3]);
+
+    expect(() => spaceScene.bindEffectVisual(visual, { x: 0, y: 0, z: 0 }, '')).toThrow(RangeError);
+    expect(() => spaceScene.bindPackedEffectVisual(visual, positionsKm, 1, 'marker')).toThrow(
+      RangeError,
+    );
+    expect(() => spaceScene.bindPackedEffectVisual(visual, positionsKm, 3, 'marker')).toThrow(
+      RangeError,
+    );
+
+    spaceScene.bindEffectVisual(visual, { x: 0, y: 0, z: 0 }, 'marker');
+    expect(() => spaceScene.bindEffectVisual(visual, { x: 0, y: 0, z: 0 }, 'marker')).toThrow(
+      'already bound',
+    );
   });
 
   it('keeps the previous exact float32 bridge when aberration activation is zero', () => {

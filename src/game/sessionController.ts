@@ -27,7 +27,7 @@ import {
   updateTutorialSettings,
   type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV7,
+  type GameSettingsV8,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -74,13 +74,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV7, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV8, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV7;
+  private currentSettings: GameSettingsV8;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -97,7 +97,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV7, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV8, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -117,7 +117,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV7 {
+  get settings(): GameSettingsV8 {
     return this.currentSettings;
   }
 
@@ -500,7 +500,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV7,
+    settings: GameSettingsV8,
     successMessage: string,
     publish = true,
   ): SessionActionResult {

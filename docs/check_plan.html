@@ -1799,7 +1799,7 @@
   {
     "id": "T0117",
     "title": "Select cruise and nav target by clicking bodies in world and in map",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0117-click-to-target",
     "depends_on": [
@@ -1813,7 +1813,7 @@
       "The target panel select remains as a fallback and all three paths converge on Commands.setTarget",
       "Zero allocation per click frame; picking math unit-tested from a known camera pose to an expected body"
     ],
-    "handoff_notes": "Pick in the game layer from f64 positions plus the camera pose. No three.js Raycaster against meshes: bodies are points and spheres at wild scales, and angular-disc math is exact and cheap.\n"
+    "handoff_notes": "THE SELECTION API — T0119 and T0150 must use this, not internals.\nsrc/game/targetSelection.ts, TargetSelectionController:\nselectTarget(bodyId, source: 'world'|'map'|'panel'|'camera'|'api') is the ONLY write point; returns\nfalse for an unknown id (the camera ring contains 'ship', which is not a catalog body). It is\ndeliberately NOT idempotent: re-selecting the same body writes again, because the composition facade's\nsetTarget also re-aims the observatory camera and invalidates the prediction, and a tutorial must see\na repeat click. Read side: selectedBodyId, selectionSource, selectionCount.\nsubscribe((bodyId, source) => ...) returns an unsubscribe — T0150's intro step 3 is exactly\nbodyId === 'moon' && source === 'world'; wire it in composition.ts beside handleTutorialSaveSucceeded.\nadoptTarget(bodyId) records a restored target without writing or notifying; already wired into\nonSimulationReplaced. tests/architecture/targetWritePoint.test.ts scans src/ and asserts exactly two\nfiles match .setTarget( — keep it that way.\nT0119: read selectedBodyId (it equals the map focus, because a map click sets both) and pass the\nEngage cruise button as CruiseTargetControl's children. Do NOT read SystemMapController.focusId — that\nalso moves for camera-only focus changes the controller rejected as targets. The space-view instance is\n#hud-set-cruise-target inside #cruise-status, which T0119 replaces wholesale; inherit the mount point.\nLANDMINE — THE CRUISE ROW MUST STAY ONE LINE HIGH. #cruise-status sits directly above the navball in a\nbottom-anchored stack that grows UPWARD. A second line moved the whole HUD cluster 11 px toward the\nviewport middle and made the T0112 pick gate miss Earth's disc (cluster top 227 px on main, 216 broken,\n223 fixed). If the strip grows vertically, re-run test:hud-presets — it is the only gate that catches\nthis AND IT CATCHES IT AS A PICKING FAILURE, which reads like a picking bug.\nT0112 OVER-DELIVERED: bodyPicking.ts, the 8 px floor, nearest-along-ray, the pointer gesture and a\nbrowser assertion were already on main. This task added the map counterpart, the single write point and\nthe affordances. Map picking uses a FLAT 8 px radius, not an apparent one, because the map draws a\nconstant-size icon batch.\nClicking a focused Jupiter in the map picks a Galilean moon: at that framing all four icons sit inside\nJupiter's 8 px radius and nearest-along-ray correctly returns the nearest. Correct behaviour; the gate\nuses Mercury for its deterministic assertion.\n.github/workflows/ci.yml is prettier-ignored and MUST stay LF — a Windows text rewrite made it CRLF and\nbroke tools/checks/ciWorkflow.test.mjs. format:check cannot catch this.\nevent.offsetX/offsetY are now load-bearing for picking; they are correct only because the listener\ntarget is the canvas with no padding or border. Add a wrapper or padding to #space-canvas and picking\nsilently shifts.\nVerification: 1282 Vitest passed / 3 skipped / 0 failed; new test:click-to-target gate plus hud-presets,\nsystem-map, system-map-panel, hud-signals, smoke, camera-controls all green; perf-gates 33 draw calls\nand 82,429 triangles, exactly the golden. No budget or golden moved.\n"
   },
   {
     "id": "T0118",
@@ -1877,7 +1877,7 @@
   {
     "id": "T0121",
     "title": "Remodel the ship for close-up beauty (build_ship.py v2)",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0121-ship-remodel",
     "depends_on": [
@@ -1955,9 +1955,9 @@
   {
     "id": "T0125",
     "title": "Cinematic free camera and photo capture",
-    "status": "TODO",
-    "agent": "",
-    "branch": "",
+    "status": "IN_PROGRESS",
+    "agent": "claude",
+    "branch": "task/T0125-cinematic-photo-mode",
     "depends_on": [
       "T0110"
     ],
@@ -2013,7 +2013,7 @@
   {
     "id": "T0128",
     "title": "Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0128-body-rotation",
     "depends_on": [
@@ -2028,12 +2028,12 @@
       "Earth clouds move on sim time so pause freezes them",
       "Tier browser gate cases are extended with zero new allocation"
     ],
-    "handoff_notes": "bodySpin.ts computes per-body quaternions into the packed attitude path once per frame, 43 preallocated quats. Rotation phase at epoch is UNCALIBRATED because the catalog has no W0: document phase-accurate rate with arbitrary epoch phase honestly in the release notes. Earth may be hand-anchored to the J2026 sub-solar point.\n"
+    "handoff_notes": "A REAL ORIENTATION BUG EXISTED AND IS NOW FIXED. The render frame IS the physics frame (ecliptic\nJ2000, +Z north) but assets are Y-up, so every unrotated body had its pole lying IN the ecliptic\nplane; ringSystem.ts then tilted that already-wrong axis inside that plane, standing Saturn's rings\nperpendicular to the ecliptic. No gate caught it because ringSystemsPage.ts and ringFlythroughPage.ts\nbuilt their camera and Sun vectors with the SAME wrong rotation — the fixtures agreed with the bug.\nBoth now rotate through bodySpin's frame. IF YOU ADD A RING OR ORIENTATION FIXTURE, use\nwriteBodyAttitudeInto / writeEquatorFrameVectorInto, never a hand-rolled rotation.\nWHAT THIS DOES NOT CLAIM. Rotation PHASE is uncalibrated for 42 of 43 bodies: the catalog has no W0,\nso phase-accurate RATE with arbitrary epoch phase. Earth is anchored to GMST at J2026 (IAU-1982),\nignoring precession, nutation and UT1-TDB — good to a few tenths of a degree near epoch, drifting\nabout 0.014 deg/yr. Pole AZIMUTH is also a convention: obliquity alone does not fix a pole and the\ncatalog has no IAU (alpha0, delta0), so each equator's ascending node is placed at ecliptic longitude\n0 — exact for Earth, arbitrary elsewhere. The obliquity, hence the equator and ring PLANE, is real.\nFixing azimuth needs pole vectors in bodies.json, which is a schema change and therefore an ADR.\nBoth statements are in docs/rendering-spec.md section 3.2.\nDATA DEFECT, filed as T0156 rather than fixed here: bodies.json double-counts retrograde rotation for\nvenus, uranus and pluto, so they render PROGRADE. triton, bennu and ryugu are correct.\nNO SHADER FLAG FOR OBLATENESS, deliberately: three.js already uploads\nnormalMatrix = transpose(inverse(modelView3x3)) per object per draw, which is the exact normal\ntransform for an object-space non-uniform scale and yields the true ellipsoid normal on an icosphere.\nAsserted numerically against the analytic normal to 1e-10.\nT0130 SPECIFICALLY: tier-2 spheres are now non-uniformly scaled, scale.set(Req, Req*ratio, Req).\nRaising icosahedron detail 2 to 4 must KEEP the scale, not bake flattening into geometry, or tier 2\nand tier 3 diverge again. Read surface for tests: getEquatorialRadiusKm, getPolarRadiusKm,\nreadAttitudeInto, getSpinAngleRad. If you collapse the fallback plus textured double mesh into one,\napplyAttitude must still reach every surviving mesh. UNVERIFIED and yours to measure: whether the\ntier-2 icosphere UV origin coincides with the Blender UV sphere's — a constant offset would show as a\nlongitude ghost during the 2-to-3 cross-fade.\nTier-2 ringed bodies now scale by referenceRadiusKm instead of meanRadiusKm, matching tier 3 and\nclosing a pre-existing 3.5 percent radius pop. Tier selection and apparent magnitude still use\nmeanRadiusKm. The ring annulus rotates with its planet and the particle field is counter-spun back\ninto the non-spinning equatorial frame so Keplerian streaming stays exact — without that it ran 1.84x\ntoo fast at Saturn's B ring. Ring shadow geometry now lives in the spinning body frame and\nuRingSunDirection is the spinning-frame Sun; T0141 should reuse writeBodyFrameVectorInto rather than\nadding a second frame convention.\nCloud drift was re-derived, not just re-clocked: reinterpreting the old 6 h WALL period as sim time\nwould have been a 460 m/s zonal wind lapping the planet four times a day at warp. It is now 46.4 d\nrelative, from 10 m/s eastward over the equatorial circumference.\nVerification: 1279 Vitest passed / 3 skipped on a quiet run; visual-tiers, ring-systems,\nring-flythrough, surface-detail, gas-giants, lighting-post, smoke all green. Draw calls 49 and\ntriangles 70,452 unchanged; allocation probe 7,276 B over 20,000 updates against 65,536 B. The flight\nbench tripped its own variance gate on BOTH sets under parallel-lane load, so the cost was measured in\nisolation: 13.92 microseconds/frame for all 129 quaternion writes. No golden or budget moved; the\nlighting-post dark fraction went 0.723 to 0.853 against an UNCHANGED 0.75 threshold by making the\nfixture's pose explicit.\n"
   },
   {
     "id": "T0129",
     "title": "Extend depth coverage to the full catalog and raise camera range",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0129-far-plane-strategy",
     "depends_on": [
@@ -2047,7 +2047,7 @@
       "Starfield far-pinning stays correct under both depth strategies",
       "Guard policy split: ship and body position bindings keep the hard throw while new effect-visual bindings degrade with a skipped bind, a one-time console warning and a telemetry flag, unit-tested with an injected NaN"
     ],
-    "handoff_notes": "Small but subtle. Touch spaceScene.ts constants and the depth tests together, and do NOT touch the Math.fround boundary contract.\n"
+    "handoff_notes": "THE TELEMETRY FLAG IS NOT YET A BROWSER DIAGNOSTIC. spaceScene.effectBindingTelemetry is scene-owned\nbecause no production code binds an effect visual yet, and publishing a canvas.solarVoyager* field\nwith no producer would be contract surface for nothing. T0122 (plume/RCS), T0117-era world markers\nand T0126 (skybox) SHOULD use bindEffectVisual / bindPackedEffectVisual and surface\nnonFiniteObserved and degradedBindingCount when they land.\nGUARD POLICY: the five existing binding families keep the hard RangeError — a NaN in a ship or body\nposition is a real bug and must stay loud. Effect bindings skip the write, hold the last good\nposition, warn once per binding and raise telemetry. Do not blur the two.\nRESIDUAL, DELIBERATE: the 2.5e10 km far plane does NOT cover an observatory camera parked at the new\n2e10 km maximum on the far side of the Sun from Eris (3.46e10 km). Covering it costs another 1.4\npercent of logarithmic depth resolution everywhere. Strictly better than before, where 1e10 clipped\nthe same geometry at 2.46e10.\nReversed depth assumes a FLOAT depth buffer. With unorm24 it degrades to eps*L^2/n and cannot resolve\nthe existing 1 km LEO case, so a bad driver fails the OLDEST case first, loudly. Deliberately not\nprobed in code.\nA Vitest case derives every catalog body's apoapsis from data/bodies.json and asserts SPACE_FAR_KM\nclears it (max = Eris at 1.4617e10 km), so a future outer body fails there rather than silently\nvanishing. Keep that test when the constant moves.\nBENCH FINDING FOR THIS HOST: T0127's bimodal frame pacing reproduces, but the slow run is NOT always\nrun0 — the baseline was slow-then-fast, both feature reports fast-then-slow. Read stability.findings,\ntake the settled run, and take a third report before believing a surviving delta.\nVerification: 1350 Vitest passed / 3 skipped; render-depth (new eris-1.43e10-km case: was\nfront=0 rear=0 background=65536, now front=11896 rear=9264 stable under both strategies, with LEO and\n1 AU byte-identical), starfield far-occlusion 0 px, camera-controls, visual-tiers, trajectory-overlay,\nlighting-post, system-map, ship-visual, relativistic-visuals, main-menu, startup, smoke all exit 0.\nperf-gates 33 draw calls, 82,429 triangles, heap 27,384 B. Fuzz covered all 1,806 ordered catalog\npairs at maximum range (171,570 frames) plus 600 randomized runs. Math.fround boundary untouched.\nNo golden or budget moved.\n"
   },
   {
     "id": "T0130",
@@ -2563,6 +2563,40 @@
       "A schema-level test rejects a future entry that encodes retrograde twice, so the class of defect cannot return"
     ],
     "handoff_notes": "This is a data and bake change, not a render change: bodySpin.ts already implements the documented\nconvention correctly. Decide in the PR whether the catalog rule should be restated in the schema\ndocs so the next transcription cannot repeat it.\n"
+  },
+  {
+    "id": "T0157",
+    "title": "Give the I/O-heavy Vitest suites a timeout that survives load",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [],
+    "milestone": "V2M6",
+    "spec": "A handful of suites do real filesystem and image work inside Vitest's 5000 ms default timeout:\ntools/assets/ingest.test.mjs, tools/textures/preparePlutoMap.test.mjs,\ntools/checks/releaseReadiness.test.mjs, tests/render/float32Boundary.test.ts and\ntests/workers/predictorAccuracy.test.ts. They pass in isolation in well under a second and time out\nunder load, and the set that fails differs run to run.\nFour v2 lanes independently reported this as a suspected regression and each had to prove it\npre-existing on a clean tree before continuing. That is the real cost: it is not a flaky test so\nmuch as a flaky verification signal, and it trains agents to discount red.\nThis is not a gate to weaken. The assertions are correct and must not change; only the time budget\nfor I/O-bound work should, and only for the suites that actually do I/O.\n",
+    "acceptance": [
+      "The I/O-bound suites carry an explicit per-suite timeout justified in a comment, rather than the global default",
+      "The full suite passes with the machine deliberately loaded, repeated enough times to mean something",
+      "No assertion, fixture or gate is weakened or skipped, and the global default is unchanged for everything else",
+      "The ENOTEMPTY and EBUSY staging-directory races observed on Windows are fixed or explained"
+    ],
+    "handoff_notes": "Observed failure modes: \"Test timed out in 5000ms\" on any of the listed suites, plus\nENOTEMPTY rmdir and EBUSY unlink on assets.ingest-staging-* directories on Windows, which suggests\nthe staging cleanup races its own writes rather than merely being slow. Fixing the race may remove\nmost of the timeouts on its own; measure before reaching for a larger number.\n"
+  },
+  {
+    "id": "T0158",
+    "title": "Stop gates from rewriting committed capture records",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [],
+    "milestone": "V2M6",
+    "spec": "docs/bench/T0112-clean-preset.png is a committed record, and two gates regenerate it in place:\nnpm run test:hud-presets and npm run test:perf-gates. Every task that runs either one leaves a\nmodified binary in the working tree, so it conflicts on every parallel branch and it silently\nchanges whenever an unrelated gate runs. Two v2 lanes hit it; one staged a regenerated capture by\naccident with git add -A and had to restore it.\nA capture that documents what the HUD looked like at one moment should not be an output of a gate\nthat asserts something else. Either the gates write to an ignored path and the record is refreshed\ndeliberately, or the record is a real golden with a real comparison — but not both.\n",
+    "acceptance": [
+      "No gate rewrites a committed file as a side effect; a clean tree stays clean after any gate run",
+      "Capture records are refreshed by an explicit command, or promoted to compared goldens with a documented tolerance",
+      "The policy is written down where an agent running gates will read it",
+      "Existing committed captures keep their history; no bulk churn"
+    ],
+    "handoff_notes": "Check for other files in the same shape before fixing only this one — anything under docs/bench that\na gate writes rather than a human commits. The heap-gate and bench JSON outputs are the obvious\nnext candidates.\n"
   }
 ];
     /* TASK_DATA_END */

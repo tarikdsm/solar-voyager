@@ -15,12 +15,12 @@
  * update this literal — the parse is strict and will say so loudly.
  */
 
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
 
 const DEFAULT_GAMEPAD_AXIS = { invert: false, sensitivity: 1 };
 
 const ENGINEER_PROFILE = JSON.stringify({
-  version: 7,
+  version: 8,
   qualityLock: 'auto',
   inputBindings: {
     throttleIncrease: 'KeyR',

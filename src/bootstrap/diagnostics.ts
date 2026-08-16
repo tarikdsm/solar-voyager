@@ -90,6 +90,10 @@ export interface SkyRuntimeDiagnostics {
   readonly constellationsEnabled: boolean;
   readonly constellationSegments: number;
   readonly constellationLoadState: string;
+  /** T0129 effect-binding degrade path, as seen by the sky (T0126). */
+  readonly observerDegraded: boolean;
+  readonly nonFiniteObserved: boolean;
+  readonly degradedBindingCount: number;
 }
 
 export interface ExposureRuntimeDiagnostics {
@@ -448,7 +452,7 @@ export function createExposureRuntimeDiagnostics(
 
 export function createSkyRuntimeDiagnostics(
   canvas: HTMLCanvasElement,
-  world: Pick<EpochWorld, 'milkyWaySky' | 'constellationLines'>,
+  world: Pick<EpochWorld, 'milkyWaySky' | 'constellationLines' | 'spaceScene'>,
 ): SkyRuntimeDiagnostics {
   const diagnostics = Object.freeze(
     Object.setPrototypeOf(
@@ -485,6 +489,15 @@ export function createSkyRuntimeDiagnostics(
         },
         get constellationLoadState() {
           return world.constellationLines.state;
+        },
+        get observerDegraded() {
+          return world.milkyWaySky.diagnostics.observerDegraded;
+        },
+        get nonFiniteObserved() {
+          return world.spaceScene.effectBindingTelemetry.nonFiniteObserved;
+        },
+        get degradedBindingCount() {
+          return world.spaceScene.effectBindingTelemetry.degradedBindingCount;
         },
       },
       null,

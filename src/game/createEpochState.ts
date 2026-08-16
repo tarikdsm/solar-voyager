@@ -12,6 +12,8 @@ const LEO_ALTITUDE_KM = 400;
 
 export interface EpochBodyDefinition {
   readonly axialTiltRad: number;
+  /** Signed catalog value; negative is retrograde about the declared pole. */
+  readonly siderealRotationPeriodSec: number;
   readonly id: string;
   readonly kind: string;
   readonly meanRadiusKm: number;
@@ -50,6 +52,7 @@ export function createEpochState(): EpochState {
     if (body === undefined) throw new Error('Body catalog array is sparse.');
     bodies.push({
       axialTiltRad: body.axialTiltRad,
+      siderealRotationPeriodSec: body.siderealRotationPeriodSec,
       id: body.id,
       kind: body.kind,
       meanRadiusKm: body.meanRadiusKm,

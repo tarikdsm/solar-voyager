@@ -20,7 +20,7 @@ import {
   updateSkyZodiacalLight,
   type GamepadAxisId,
   type ExposureMode,
-  type GameSettingsV7,
+  type GameSettingsV8,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -33,7 +33,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV7 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV8 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;

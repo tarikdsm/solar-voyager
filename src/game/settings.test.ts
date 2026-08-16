@@ -302,7 +302,7 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 7,
+      version: 8,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
@@ -476,7 +476,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(7);
+      expect(result.settings.version).toBe(8);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
@@ -509,7 +509,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 7/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 8/u);
     });
 
     it('fails closed when writing a migrated legacy profile fails', () => {
@@ -599,7 +599,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(7);
+      expect(result.settings.version).toBe(8);
       expect(result.settings.qualityLock).toBe('high');
       expect(result.settings.tutorial).toEqual({
         status: 'completed',
@@ -665,7 +665,7 @@ describe('HUD settings (T0112)', () => {
   it('defaults to the Clean preset with world labels on', () => {
     expect(DEFAULT_HUD_SETTINGS).toEqual({ preset: 'clean', bodyLabels: true });
     expect(DEFAULT_GAME_SETTINGS.hud).toBe(DEFAULT_HUD_SETTINGS);
-    expect(DEFAULT_GAME_SETTINGS.version).toBe(7);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(8);
   });
 
   it('updates each preference independently and keeps the document valid', () => {
@@ -712,7 +712,7 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(7);
+    expect(result.settings.version).toBe(8);
     expect(result.settings.qualityLock).toBe('low');
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: true });
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
@@ -750,7 +750,7 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(7);
+    expect(result.settings.version).toBe(8);
     expect(result.settings.qualityLock).toBe('high');
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
     expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
@@ -859,7 +859,7 @@ describe('render settings (T0127)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(7);
+    expect(result.settings.version).toBe(8);
     expect(result.settings.qualityLock).toBe('medium');
     expect(result.settings.hud).toEqual({ preset: 'pilot', bodyLabels: false });
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: false });
@@ -925,7 +925,7 @@ describe('sky settings (T0126)', () => {
       constellations: false,
     });
     expect(DEFAULT_GAME_SETTINGS.sky).toBe(DEFAULT_SKY_SETTINGS);
-    expect(DEFAULT_GAME_SETTINGS.version).toBe(7);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(8);
   });
 
   it('toggles each layer independently and keeps the document valid', () => {
@@ -1006,7 +1006,7 @@ describe('sky settings (T0126)', () => {
     expect(() => parseProfileSettings(withoutSky)).toThrow(/field is missing: sky/u);
   });
 
-  it('migrates a stored v6 profile to v7 and writes it forward to the current key', () => {
+  it('migrates a stored v6 profile to v8 and writes it forward to the current key', () => {
     const storage = new MemoryStorage();
     const document = profileV6Document();
     storage.values.set(LEGACY_V6_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -1014,7 +1014,7 @@ describe('sky settings (T0126)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(7);
+    expect(result.settings.version).toBe(8);
     expect(result.settings.qualityLock).toBe('medium');
     // Everything the v6 document did carry survives untouched — T0127's
     // exposure mode included …

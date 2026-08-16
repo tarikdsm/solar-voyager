@@ -72,3 +72,18 @@ load-bearing evidence; median, p75, draw calls, triangles and heap are.
 tier 3 and switches the sky draw off entirely at tier 1, where it is the single
 cheapest full-screen thing left to cut. Measured by `npm run test:milky-way`:
 tier `'off'` reports 0 draw calls.
+
+## Post-merge note (origin/main at `ca31804`)
+
+The numbers above were measured before merging T0117, T0128 and T0129, so the
+absolute baseline has since moved (T0128 added body spin, T0129 raised the far
+plane to 2.5e10 km and added a sixth binding loop). **The sky's own delta is
+structural and unchanged by any of it**: one `SphereGeometry(1, 64, 32)` drawn
+once, plus one `LineSegments` that is `visible = false` by default. The sphere
+sits at 1e9 km and is forced to the far plane in clip space, so the new far plane
+does not touch it.
+
+The workload golden is still 33 draw calls / 82,429 triangles at ±10% on this
+merge; T0121's re-baseline to 27 / 100,471 is in review and had not landed. If
+T0121 merges first, the sky's +1 draw call and +3,968 triangles apply to that
+baseline instead — still inside its band.

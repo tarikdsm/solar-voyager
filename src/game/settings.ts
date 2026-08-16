@@ -196,9 +196,9 @@ export interface RenderSettings {
 }
 
 /**
- * Independent profile settings document, superseded by {@link GameSettingsV7}.
+ * Independent profile settings document, superseded by {@link GameSettingsV8}.
  *
- * Kept only as the strict parse target for the one-time v6->v7 migration
+ * Kept only as the strict parse target for the one-time v6->v8 migration
  * (`parseProfileSettingsV6`), exactly as V5 is kept for v5->v6.
  */
 export interface GameSettingsV6 {
@@ -229,8 +229,8 @@ export interface SkySettings {
 }
 
 /** Independent profile settings document stored outside save slots. */
-export interface GameSettingsV7 {
-  readonly version: 7;
+export interface GameSettingsV8 {
+  readonly version: 8;
   readonly qualityLock: QualityLock;
   readonly inputBindings: InputBindings;
   readonly tutorial: TutorialProgress;
@@ -249,12 +249,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV7;
+      readonly settings: GameSettingsV8;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV7;
+      readonly settings: GameSettingsV8;
       readonly error: string;
     };
 
@@ -281,8 +281,14 @@ export type SettingsSaveResult =
  * older build never touches it, so the newer document simply waits
  * untouched until a v3-aware build reads it again.
  */
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
 /** The v6 profile key (T0127's era, pre-deep-sky) — read-and-migrate-forward only. */
+/**
+ * Generation 7 is T0144's audio document. The constant exists so the storage
+ * ladder has a named, reserved slot; the tier that reads it arrives with T0144.
+ */
+export const LEGACY_V7_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+
 export const LEGACY_V6_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
 /** The v5 profile key (T0112's era, pre-exposure-mode) — read-and-migrate-forward only. */
 export const LEGACY_V5_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
@@ -577,7 +583,7 @@ function freezeSkySettings(
 /** Scenery on, overlay off — the deep sky as it looks, without the figure lines. */
 export const DEFAULT_SKY_SETTINGS = freezeSkySettings(true, true, false);
 
-function freezeV7Settings(
+function freezeV8Settings(
   qualityLock: QualityLock,
   inputBindings: Record<InputAction, string>,
   tutorial: TutorialProgress,
@@ -586,9 +592,9 @@ function freezeV7Settings(
   hud: HudSettings,
   render: RenderSettings,
   sky: SkySettings,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return Object.freeze({
-    version: 7 as const,
+    version: 8 as const,
     qualityLock,
     inputBindings: Object.freeze(inputBindings),
     tutorial: Object.isFrozen(tutorial)
@@ -612,7 +618,7 @@ function freezeV7Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV7Settings(
+export const DEFAULT_GAME_SETTINGS = freezeV8Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
@@ -951,7 +957,7 @@ function parseRenderSettings(value: unknown): RenderSettings {
 /**
  * Strictly parses the superseded version-6 profile settings document.
  *
- * Not exported: the only remaining caller is the v6->v7 migration inside
+ * Not exported: the only remaining caller is the v6->v8 migration inside
  * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
  * `parseProfileSettings` used to do before `sky` existed.
  */
@@ -996,7 +1002,7 @@ function parseSkySettings(value: unknown): SkySettings {
 }
 
 /** Strictly parses the independent version-7 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV7 {
+export function parseProfileSettings(value: unknown): GameSettingsV8 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -1013,11 +1019,11 @@ export function parseProfileSettings(value: unknown): GameSettingsV7 {
     ],
     'unknown profile settings field',
   );
-  if (value.version !== 7) throw new RangeError('profile settings version must be 7');
+  if (value.version !== 8) throw new RangeError('profile settings version must be 8');
   if (!isQualityLock(value.qualityLock)) {
     throw new RangeError('profile settings quality lock is not supported');
   }
-  return freezeV7Settings(
+  return freezeV8Settings(
     value.qualityLock,
     parseInputBindings(value.inputBindings),
     parseTutorial(value.tutorial),
@@ -1106,7 +1112,15 @@ function migrateProfileV5ToV6(settings: GameSettingsV5): GameSettingsV6 {
 }
 
 /**
- * Lifts a superseded v6 profile to v7 by attaching default deep-sky toggles.
+ * Lifts a superseded v6 profile to v8 by attaching default deep-sky toggles.
+ *
+ * **Generation 7 belongs to T0144 (audio) and is not in this tree.** It lands
+ * ahead of this branch, so the chain is
+ * `v6 exposure -> v7 audio -> v8 sky`. When T0144 merges, split this into
+ * `migrateProfileV6ToV7` (attach audio) followed by a `migrateProfileV7ToV8`
+ * that keeps this body, and give the v7 storage tier below its strict parser.
+ * Until then a v7 document cannot be strictly parsed here and falls through to
+ * defaults, which is the one thing the merge must fix.
  *
  * Same shape as `migrateProfileV5ToV6` one version up: `sky` is a brand-new
  * required object with no prior partial state anywhere in a v6 document to
@@ -1115,8 +1129,8 @@ function migrateProfileV5ToV6(settings: GameSettingsV5): GameSettingsV6 {
  * — the scenery the feature exists to show — with the constellation overlay off,
  * exactly as a fresh profile does.
  */
-function migrateProfileV6ToV7(settings: GameSettingsV6): GameSettingsV7 {
-  return freezeV7Settings(
+function migrateProfileV6ToV8(settings: GameSettingsV6): GameSettingsV8 {
+  return freezeV8Settings(
     settings.qualityLock,
     { ...settings.inputBindings },
     settings.tutorial,
@@ -1129,7 +1143,7 @@ function migrateProfileV6ToV7(settings: GameSettingsV6): GameSettingsV7 {
 }
 
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV7): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV8): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
@@ -1143,12 +1157,12 @@ export function projectGameSettingsV1(settings: GameSettingsV7): GameSettingsV1 
  * actually carries are taken from the import.
  */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV7,
+  profile: GameSettingsV8,
   preferences: GameSettingsV1,
-): GameSettingsV7 {
+): GameSettingsV8 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV7Settings(
+  return freezeV8Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
@@ -1162,22 +1176,22 @@ export function mergeGameSettingsPreferences(
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   tutorial: TutorialProgress,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, tutorial });
 }
 
 /** Returns a validated frozen profile with the chase field-of-view widening toggled. */
 export function updateCameraFovWidening(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   fovWidening: boolean,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, fovWidening } });
 }
 
 /** Returns a validated frozen profile with the chase camera shake toggled. */
-export function updateCameraShake(settings: GameSettingsV7, shake: boolean): GameSettingsV7 {
+export function updateCameraShake(settings: GameSettingsV8, shake: boolean): GameSettingsV8 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
 }
 
@@ -1192,81 +1206,81 @@ export function updateCameraShake(settings: GameSettingsV7, shake: boolean): Gam
  * persists it, so the toggle silently does nothing.
  */
 export function updateHudSettings(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   preset: HudPreset,
   bodyLabels: boolean,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, hud: { preset, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with a new HUD preset. */
-export function updateHudPreset(settings: GameSettingsV7, preset: HudPreset): GameSettingsV7 {
+export function updateHudPreset(settings: GameSettingsV8, preset: HudPreset): GameSettingsV8 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, preset } });
 }
 
 /** Returns a validated frozen profile with the world body labels toggled. */
-export function updateHudBodyLabels(settings: GameSettingsV7, bodyLabels: boolean): GameSettingsV7 {
+export function updateHudBodyLabels(settings: GameSettingsV8, bodyLabels: boolean): GameSettingsV8 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with a new exposure mode (T0127). */
 export function updateRenderExposureMode(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   exposureMode: ExposureMode,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, render: { ...settings.render, exposureMode } });
 }
 
 /** Returns a validated frozen profile with the Milky Way panorama toggled. */
-export function updateSkyPanorama(settings: GameSettingsV7, panorama: boolean): GameSettingsV7 {
+export function updateSkyPanorama(settings: GameSettingsV8, panorama: boolean): GameSettingsV8 {
   return parseProfileSettings({ ...settings, sky: { ...settings.sky, panorama } });
 }
 
 /** Returns a validated frozen profile with the zodiacal-light gradient toggled. */
 export function updateSkyZodiacalLight(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   zodiacalLight: boolean,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, sky: { ...settings.sky, zodiacalLight } });
 }
 
 /** Returns a validated frozen profile with the constellation-line figures toggled. */
 export function updateSkyConstellations(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   constellations: boolean,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, sky: { ...settings.sky, constellations } });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   action: InputAction,
   code: string,
-): GameSettingsV7 {
+): GameSettingsV8 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
 }
 
 /** Returns a validated frozen profile with the global gamepad deadzone updated. */
-export function updateGamepadDeadzone(settings: GameSettingsV7, deadzone: number): GameSettingsV7 {
+export function updateGamepadDeadzone(settings: GameSettingsV8, deadzone: number): GameSettingsV8 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
 }
 
 /** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
 export function updateGamepadCurveExponent(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   curveExponent: number,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
 }
 
 /** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
 export function updateGamepadAxisInvert(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   axis: GamepadAxisId,
   invert: boolean,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -1278,10 +1292,10 @@ export function updateGamepadAxisInvert(
 
 /** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
 export function updateGamepadAxisSensitivity(
-  settings: GameSettingsV7,
+  settings: GameSettingsV8,
   axis: GamepadAxisId,
   sensitivity: number,
-): GameSettingsV7 {
+): GameSettingsV8 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -1355,7 +1369,7 @@ export class SettingsRepository {
     }
     if (legacyV6Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV6ToV7(parseProfileSettingsV6(JSON.parse(legacyV6Text as string) as unknown)),
+        migrateProfileV6ToV8(parseProfileSettingsV6(JSON.parse(legacyV6Text as string) as unknown)),
       );
     }
 
@@ -1373,7 +1387,7 @@ export class SettingsRepository {
     }
     if (legacyV5Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV6ToV7(
+        migrateProfileV6ToV8(
           migrateProfileV5ToV6(
             parseProfileSettingsV5(JSON.parse(legacyV5Text as string) as unknown),
           ),
@@ -1395,7 +1409,7 @@ export class SettingsRepository {
     }
     if (legacyV4Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV6ToV7(
+        migrateProfileV6ToV8(
           migrateProfileV5ToV6(
             migrateProfileV4ToV5(
               parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown),
@@ -1419,7 +1433,7 @@ export class SettingsRepository {
     }
     if (legacyV3Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV6ToV7(
+        migrateProfileV6ToV8(
           migrateProfileV5ToV6(
             migrateProfileV4ToV5(
               migrateProfileV3ToV4(
@@ -1445,7 +1459,7 @@ export class SettingsRepository {
     }
     if (legacyV2Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV6ToV7(
+        migrateProfileV6ToV8(
           migrateProfileV5ToV6(
             migrateProfileV4ToV5(
               migrateProfileV3ToV4(
@@ -1477,7 +1491,7 @@ export class SettingsRepository {
 
     return this.migrateForward(
       () =>
-        migrateProfileV6ToV7(
+        migrateProfileV6ToV8(
           migrateProfileV5ToV6(
             migrateProfileV4ToV5(
               migrateProfileV3ToV4(
@@ -1503,8 +1517,8 @@ export class SettingsRepository {
    * tier was the first to cash that in; T0127's v6 tier was the second, and
    * T0126's v7 tier the third.)
    */
-  private migrateForward(migrate: () => GameSettingsV7, label = 'settings'): SettingsLoadResult {
-    let migrated: GameSettingsV7;
+  private migrateForward(migrate: () => GameSettingsV8, label = 'settings'): SettingsLoadResult {
+    let migrated: GameSettingsV8;
     try {
       migrated = migrate();
     } catch (error: unknown) {
@@ -1526,7 +1540,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV7): SettingsSaveResult {
+  save(settings: GameSettingsV8): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

@@ -19,7 +19,7 @@ import { resolveHarnessPort } from '../harnessPort.mjs';
 const HOST = '127.0.0.1';
 const PORT = resolveHarnessPort(4207);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
 const SCREENSHOT_DIRECTORY = path.resolve('docs/bench');
 
 /** Engineer-only panels: present exactly when the preset says so. */
@@ -83,7 +83,7 @@ async function readHudState(page) {
       navball: globalThis.document.querySelectorAll('.navball').length,
       simTimeSec: canvas?.solarVoyagerSystemMap?.simulationTimeSec ?? null,
       storedPreset: (() => {
-        const raw = globalThis.localStorage.getItem('solar-voyager.settings.v7');
+        const raw = globalThis.localStorage.getItem('solar-voyager.settings.v8');
         if (raw === null) return null;
         try {
           return JSON.parse(raw).hud.preset;
