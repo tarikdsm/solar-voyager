@@ -1,0 +1,23 @@
+id: T0115
+title: Benchmark and raise MAX_THRUST_WARP (amends ADR-026)
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0114
+milestone: V2M2
+spec: |
+  Evidence-first retune of the thrust-warp ceiling so cruise legs finish in the pacing the spec promises. The number comes from a reproducible benchmark, not from a wish.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0115.
+acceptance:
+  - Reproducible benchmark under tools/bench measures golden-scenario error and step budget at
+    thrust-warp 1000, 3000, 5000 and 10000 under alpha of 2g and 10g
+  - Chosen ceiling is the highest tier inside existing golden tolerances with p95 frame sim cost at
+    or under 2 ms, recorded in ADR-038 with tables
+  - core/time.ts MAX_THRUST_WARP updated; warp clamp reasons and UI unchanged; energy-ledger warp
+    invariance still 1e-12
+  - If 1000x remains the answer, ADR-038 documents why and the burn-coast-burn fallback becomes the
+    pacing mechanism
+handoff_notes: |
+  Evidence-first task. Cross-platform nondeterminism (ADR-017) applies; run the bench on CI ubuntu as well as the dev machine.

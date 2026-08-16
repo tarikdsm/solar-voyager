@@ -1,0 +1,23 @@
+id: T0125
+title: Cinematic free camera and photo capture
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0110
+milestone: V2M3
+spec: |
+  A camera for looking rather than flying, plus the capture path that the photo album later consumes.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 5 and 8.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0125.
+acceptance:
+  - Cinematic mode orbits the ship using the existing orbit controller with roll on Q and E, FOV
+    from 20 to 90 degrees, HUD hidden and a slow idle drift
+  - Capture renders the canvas to a PNG blob without preserveDrawingBuffer and writes it through a
+    CaptureSink interface, shipping a download sink here
+  - Capture stamps a metadata object carrying simTimeSec, tauSec, positionKm, dominantBodyId and
+    gammaMax
+  - No steady-state allocation; capture may allocate transiently with the excluded window documented
+    for the heap gate
+handoff_notes: |
+  The CaptureSink interface is consumed by T0147. Keep the signature capture(blob, meta) returning a promise.

@@ -1,0 +1,25 @@
+id: T0146
+title: "Exploration diary: milestone engine and panel"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0116
+milestone: V2M5
+spec: |
+  The progression layer: fifty-odd declarative predicates over the snapshot that turn a sandbox into a record of where you have been.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 8.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0146.
+acceptance:
+  - At least 50 milestone definitions ship in the plan section 2 shape, covering first orbits by
+    body class, close approaches inside 2 radii, ring-plane crossings, solar polar overflight, the
+    0.1c to 0.99c ladder, gamma 2 and 10, the twin-paradox return, a witnessed eclipse, the grand
+    tour and the first petawatt-hour
+  - The engine evaluates at 10 Hz allocation-free and edge-triggered with per-milestone hysteresis,
+    persisting into the profile settings store rather than the save envelope, with export and import
+  - The diary panel lists achievements with mission timestamp and stats, shows hint silhouettes for
+    undiscovered entries and raises a toast on unlock with an audio chime hook
+  - ADR-042 covers storage and export, and unit tests fire each predicate on a synthetic snapshot
+    fixture and prove it does not fire on near misses
+handoff_notes: |
+  Design doc first. Predicates read ONLY SimSnapshot plus DiaryContext, never the sim. Orbit detection rule: eccentricity below 0.3 and radius inside the SOI for at least one osculating period. Record the rule in the design doc.

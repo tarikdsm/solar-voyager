@@ -1,0 +1,22 @@
+id: T0145
+title: Adaptive music layers and ship SFX asset intake
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0144
+milestone: V2M5
+spec: |
+  The asset half of audio, with licensing enforced by the check rather than by good intentions.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 9.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0145.
+acceptance:
+  - data/audio-manifest.json lists tracks and loops with license fields restricted to CC0 and CC-BY,
+    auto-listed into credits.md by a build step
+  - Four music contexts covering deep space, giant approach, near sun and warning ship as loopable
+    OGG stems with a 4 s crossfade, at most 12 MB total, lazy-loaded and never in the initial path
+  - The SFX set covers RCS tick, cruise engage and disengage, warp shift, impact, milestone chime
+    and UI clicks
+  - check:licenses is extended to audio and the startup gate is unchanged
+handoff_notes: |
+  Every file records provenance in the manifest and the license check must fail on a missing entry, proven with a fixture.

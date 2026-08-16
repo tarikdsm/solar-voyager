@@ -1735,6 +1735,798 @@
       "Frame-loop instrumentation seams (sim, render and UI millisecond splits) are preserved exactly"
     ],
     "handoff_notes": "main.ts 1,656 -> 53 lines. The modules landed in src/bootstrap/, NOT src/game/bootstrap/ as the plan\nsaid: ESLint's import/no-restricted-paths forbids game/ importing render/ and ui/, which a\ncomposition root must do. The implementer verified this with a probe before choosing the layout\nrather than discovering it late; architecture.md and the plan are corrected in the same PR under the\nplan's own naming rule. composition.ts is 1,257 lines and wants a fourth module before V2M2 adds\nmore wiring.\nThe contract test (tests/architecture/diagnosticsContract.test.ts) was written and committed FIRST,\npassing against the unsplit main.ts, then left unchanged across the move. Roughly 25 browser gates\nread those diagnostics and only mainMenuRegression pinned their shape, so this test is the safety\nnet the refactor rested on.\nnpm run bench was ALREADY BROKEN ON MAIN before this task: T0112 made Clean the default HUD and\nvalidateFlightRoute waits on the Engineer-only #orbit-title, and bench is not a CI step so nothing\ncaught it. The implementer reproduced the identical failure on the pre-split tree first, proving it\nwas inherited, then repaired the harness in its own commit — this task cannot produce its mandated\nframe-loop evidence otherwise.\nVerification: 38 checks green run one at a time — lint, typecheck, format, 1,267 Vitest, build, all\n29 browser gates, the Python tool suite and every check:* script. Bench: frame and work median and\np75 identical, draw calls and triangles bit-identical, heap +3,004 B against the 196,608 B ceiling,\nentry gzip -270 B. No golden or budget re-baselined.\nV2M1 EXIT ASSESSMENT — 3 of 5 met, 2 require a human and are recorded honestly rather than asserted:\nall v1 sim goldens green (met); crash and restore covered at sim, game and UI level (met, though no\ngate crashes the production page end to end); the ship is visible and flies with a chase camera\n(met). NOT verified: hand-flying Earth to Moon with mouse-look — automated proxies pass but nothing\ncovers whether a real mouse gesture acquires Pointer Lock, which cameraControlsRegression's own\nheader already records as a gap. NOT verified: 60 fps on the performance-spec reference machine at\ngameplay resolution — every V2M1 task shipped the same bench-machine evidence instead.\nUnrelated observations left unfixed, per the behaviour-preserving rule: burnLogPanelRegression.mjs is\norphaned (no script, no CI); test:system-map-panel, ring-systems and ring-flythrough exist in\npackage.json but not in CI; .prettierignore does not cover .claude/.\n"
+  },
+  {
+    "id": "T0114",
+    "title": "Constant-acceleration relativistic intercept solver (physics-spec section 8)",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0104"
+    ],
+    "milestone": "V2M2",
+    "spec": "Pure sim guidance module: boost-flip-brake intercept to a rails target under constant proper acceleration, relativistically exact in the 1D profile and vector-corrected by iteration, plus the relativistic braking envelope the assists and cruise brake phase both need.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3; plan section 3.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0114.\n",
+    "acceptance": [
+      "physics-spec.md gains section 8 with the full derivation, symbols matching relativity.ts; ADR-037 in the same PR",
+      "solveInterceptInto and relativisticStopDistanceKm match the plan section 2 signatures, pure and allocation-free",
+      "Earth to Moon, Mars, Jupiter and Neptune plus a LEO to Sun-polar flyby all converge ok=true in 12 iterations or fewer, arrival miss under 0.1 percent of trip distance under a test integrator",
+      "The 1D profile matches closed-form hyperbolic motion to 1e-9 relative; stop distance matches the exact form",
+      "Degenerate cases return ok=false cleanly, covering same-body targets, non-positive alpha and non-convergence"
+    ],
+    "handoff_notes": "Design doc first. Pure sim module consuming CompiledRails read-only. The fallback pursuit rule (plan section 3.3.6) is specified here but implemented in T0116.\n"
+  },
+  {
+    "id": "T0115",
+    "title": "Benchmark and raise MAX_THRUST_WARP (amends ADR-026)",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0114"
+    ],
+    "milestone": "V2M2",
+    "spec": "Evidence-first retune of the thrust-warp ceiling so cruise legs finish in the pacing the spec promises. The number comes from a reproducible benchmark, not from a wish.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0115.\n",
+    "acceptance": [
+      "Reproducible benchmark under tools/bench measures golden-scenario error and step budget at thrust-warp 1000, 3000, 5000 and 10000 under alpha of 2g and 10g",
+      "Chosen ceiling is the highest tier inside existing golden tolerances with p95 frame sim cost at or under 2 ms, recorded in ADR-038 with tables",
+      "core/time.ts MAX_THRUST_WARP updated; warp clamp reasons and UI unchanged; energy-ledger warp invariance still 1e-12",
+      "If 1000x remains the answer, ADR-038 documents why and the burn-coast-burn fallback becomes the pacing mechanism"
+    ],
+    "handoff_notes": "Evidence-first task. Cross-platform nondeterminism (ADR-017) applies; run the bench on CI ubuntu as well as the dev machine.\n"
+  },
+  {
+    "id": "T0116",
+    "title": "CruiseDirector: engage and abort, phase machine, warp piloting, insertion",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0114",
+      "T0108"
+    ],
+    "milestone": "V2M2",
+    "spec": "The point-and-fly loop: pick a body, engage, and arrive in a stable orbit unattended. Game layer only, driving the existing Commands surface, with the phase machine, mid-course re-solve, warp piloting and arrival insertion.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3; plan sections 2 and 3.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0116.\n",
+    "acceptance": [
+      "Phases idle, align, boost, flip, brake, insert, done and aborted per plan section 2; flip uses hold-mode slew; mid-course re-solve per plan section 3.3.4",
+      "Warp piloting requests ladder tiers respecting every existing clamp and decompresses to 100x or below within 1 s wall on any player input, abort, SOI change or collision warning",
+      "LEO to Jupiter orbit arrival reaches e below 0.05 and altitude within 10 percent of the preset in 5 wall minutes or less, unattended, proven by a CI browser run",
+      "Abort at any phase leaves a valid controllable state, fuzzed over 200 random abort times on the Mars route",
+      "Ledger honesty preserved: cruise energy equals the integrator ledger and matches the analytic 2(gamma_peak-1)mc^2 bound within 2 percent"
+    ],
+    "handoff_notes": "Design doc first. Game layer only. Insertion brakes to rails-relative rest at the arrival radius then circularizes with two hold-mode burns computed from osculating elements. Fallback pursuit implemented here per plan section 3.3.6.\n"
+  },
+  {
+    "id": "T0117",
+    "title": "Select cruise and nav target by clicking bodies in world and in map",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0112"
+    ],
+    "milestone": "V2M2",
+    "spec": "Targeting becomes pointing. Screen-ray picking against body angular discs in the space view and click selection in the system map, both converging on the existing Commands.setTarget.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0117.\n",
+    "acceptance": [
+      "Screen-ray picking against body angular discs with an 8 px minimum pick radius in the space view; nearest along ray wins; the ship is excluded",
+      "System map click selects focus and target, with a set-as-cruise-target affordance in both views",
+      "The target panel select remains as a fallback and all three paths converge on Commands.setTarget",
+      "Zero allocation per click frame; picking math unit-tested from a known camera pose to an expected body"
+    ],
+    "handoff_notes": "Pick in the game layer from f64 positions plus the camera pose. No three.js Raycaster against meshes: bodies are points and spheres at wild scales, and angular-disc math is exact and cheap.\n"
+  },
+  {
+    "id": "T0118",
+    "title": "Bind all holds; approach-brake and manual flip assists; per-assist toggles",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0116"
+    ],
+    "milestone": "V2M2",
+    "spec": "Completes the assist surface a free-flight sandbox needs: every attitude hold bound, an approach brake driven by the relativistic stop distance, and a one-key flip and burn.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.2.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0118.\n",
+    "acceptance": [
+      "All 8 attitude modes bound with defaults documented in controls.md; target hold points at the nav target",
+      "Approach brake warns below 1.5x stop distance, auto-engages retrograde plus throttle at 1.2x when enabled, and disengages below 1 m/s relative speed",
+      "Manual flip-and-burn executes a 180 degree slew and throttle restore from a single key",
+      "Per-assist enable and disable persisted in settings; the HUD shows an active assist chip"
+    ],
+    "handoff_notes": "Assists live in game/flight/assists.ts consuming the snapshot plus brakingEnvelope. No sim changes.\n"
+  },
+  {
+    "id": "T0119",
+    "title": "Cruise status strip, ETA dual clocks, compression indicator, map engage",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0116",
+      "T0112"
+    ],
+    "milestone": "V2M2",
+    "spec": "The HUD surface that makes a relativistic cruise legible and dramatic: phase, target, both clocks, current compression and the peak-beta forecast, present in every preset.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3 and 7.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0119.\n",
+    "acceptance": [
+      "The strip shows phase, target, ETA in coordinate and proper time, current compression, peak beta forecast and the abort hint, with gamma highlighted above 1.001",
+      "Present in all HUD presets including Clean, driven by the 10 Hz signals pattern with zero frame allocation",
+      "The system map gains engage-cruise on the selected body, wiring T0117",
+      "A browser gate asserts the strip renders during a scripted cruise and that the clocks visibly diverge on a 0.3c leg"
+    ],
+    "handoff_notes": "Reuse formatUnits SI prefixes and the dual-clock copy pattern from the DualClock component.\n"
+  },
+  {
+    "id": "T0120",
+    "title": "Golden cruise scenarios and CI accuracy gates",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0116",
+      "T0115"
+    ],
+    "milestone": "V2M2",
+    "spec": "Locks the guidance and cruise stack behind committed goldens so later visual and audio work cannot silently move the physics.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2 and 15.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0120.\n",
+    "acceptance": [
+      "Four committed goldens covering LEO to Moon, Mars, Jupiter and a Sun north-pole flyby in the daily-sample format of ADR-017",
+      "Tolerances: position 1e-3 km per daily sample against regeneration, ledger energy within 2 percent of the analytic bound, tau over t ratio within 1e-6 of closed form",
+      "The gate runs inside npm test rather than in a browser; the regeneration flag and golden commit discipline are documented",
+      "The V2M2 exit checklist appears in the PR description, including the click-Jupiter-arrive proof from T0116 and the abort fuzz result"
+    ],
+    "handoff_notes": "Extends the tests/golden comparison harness. The scenario driver may reuse flightBenchmarkRoute-style synthesis.\n"
+  },
+  {
+    "id": "T0121",
+    "title": "Remodel the ship for close-up beauty (build_ship.py v2)",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0109"
+    ],
+    "milestone": "V2M3",
+    "spec": "The ship is on screen at all times in v2, so it must survive a close-up. Rebuild it in Blender with paneling, canopy, RCS pods, a nozzle assembly and light housings, plus authored PBR textures.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0121.\n",
+    "acceptance": [
+      "build_ship.py v2 produces hull paneling, canopy, 4 RCS pod clusters, a nozzle assembly and light housings at 18000 to 28000 tris against a 30000 budget",
+      "Contracts preserved: +X nose and thrust per ADR-025, nodes hull_tip and engine_nozzle plus new rcs_pod_1 to rcs_pod_4 and light_nav_l, light_nav_r and light_beacon; meters scale; byte-identical double rebuild",
+      "Authored PBR textures at 2048x1024 covering albedo, normal, metallic-rough and emissive through the textures-src workflow with SOURCES.md; ingest green; all three tier variants built",
+      "Ship budget total at or under 8 MB; the Blender smoke test is green; visual check renders committed under docs/bench"
+    ],
+    "handoff_notes": "Read agents/skills/blender-asset-authoring.md. Determinism rules: analytic normals, texcoord rounding, canonical triangle order (see common/export.py). The new node names are consumed by T0122 and are therefore API.\n"
+  },
+  {
+    "id": "T0122",
+    "title": "Photon-beam plume, RCS puffs, ship lights",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0121"
+    ],
+    "milestone": "V2M3",
+    "spec": "The ship reads as a working machine: a collimated photon beam that answers the throttle, RCS puffs on rotation commands, and running lights driven by sim time.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3; plan section 3.6.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0122.\n",
+    "acceptance": [
+      "The beam follows plan section 3.6, anchored at engine_nozzle, with intensity and length responding to throttle within one frame and nothing when coasting",
+      "Far field: the ship point sprite gains a plume luminance term so a full burn is visible from 1 AU or more, with the apparent-magnitude math documented",
+      "RCS puffs at rcs_pod_* fire on rotation commands from a preallocated sprite pool capped at 16 live",
+      "Nav lights and beacon blink on sim time; every effect is governed, with the governor rung reducing pool size and beam segments",
+      "A ship VFX browser gate ships; the draw-call golden is re-baselined by at most 4 in its own commit; heap gate green with bench evidence"
+    ],
+    "handoff_notes": "Use the onBeforeCompile hook pattern plus the prepareCompilationPass warm-up so there is no first-burn shader stall. Additive transparency: the beam renders after bodies with depthTest true and depthWrite false.\n"
+  },
+  {
+    "id": "T0123",
+    "title": "Planetshine secondary light and sun specular on hull",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0122"
+    ],
+    "milestone": "V2M3",
+    "spec": "One extra directional light turns the night side of a close body from black into earthshine, which is what makes low passes read as real.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0123.\n",
+    "acceptance": [
+      "A second directional light takes its direction from the dominant body with colour and intensity from albedo colour times phase times solid angle, capped at 8 percent of solar, so the LEO night side is clearly lit",
+      "An optional camera-fill accessibility light exists in settings, default off and labelled artistic",
+      "No per-frame allocation; the light updates from the snapshot inside the existing lighting update path",
+      "The lighting browser gate is extended and bench evidence is committed"
+    ],
+    "handoff_notes": "One extra DirectionalLight in total, not one per body. Solar specular already comes from MeshStandardMaterial plus the sun light; verify the T0121 metallic-rough map reads well and record reference screenshots.\n"
+  },
+  {
+    "id": "T0124",
+    "title": "Cockpit-lite first-person camera with glass HUD variant",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0110",
+      "T0121"
+    ],
+    "milestone": "V2M3",
+    "spec": "A first-person seat at the canopy with a small look-around cone and a glass HUD skin, where the relativistic post pass is exactly coherent because the observer is the ship.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 5.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0124.\n",
+    "acceptance": [
+      "The camera sits at the canopy node, attitude-locked, with a look-around cone of plus or minus 30 degrees on mouse hold",
+      "The canopy frame silhouette renders from the ship model interior-facing shell, with no full interior",
+      "A glass HUD skin exists for the Clean preset in cockpit, restyling reticle and strip from the same signals",
+      "The relativistic post pass is verified coherent in cockpit with an aberration and Doppler gate case added"
+    ],
+    "handoff_notes": "CameraDirector gains cockpit. If the T0121 canopy occludes badly, coordinate a build_ship.py patch with an interior shell flag rather than hacking render-side.\n"
+  },
+  {
+    "id": "T0125",
+    "title": "Cinematic free camera and photo capture",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0110"
+    ],
+    "milestone": "V2M3",
+    "spec": "A camera for looking rather than flying, plus the capture path that the photo album later consumes.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 5 and 8.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0125.\n",
+    "acceptance": [
+      "Cinematic mode orbits the ship using the existing orbit controller with roll on Q and E, FOV from 20 to 90 degrees, HUD hidden and a slow idle drift",
+      "Capture renders the canvas to a PNG blob without preserveDrawingBuffer and writes it through a CaptureSink interface, shipping a download sink here",
+      "Capture stamps a metadata object carrying simTimeSec, tauSec, positionKm, dominantBodyId and gammaMax",
+      "No steady-state allocation; capture may allocate transiently with the excluded window documented for the heap gate"
+    ],
+    "handoff_notes": "The CaptureSink interface is consumed by T0147. Keep the signature capture(blob, meta) returning a promise.\n"
+  },
+  {
+    "id": "T0126",
+    "title": "Milky Way panorama and zodiacal light",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M3",
+    "spec": "The sky stops being black with dots. A correctly oriented galactic panorama behind the star Points, plus the zodiacal band and an optional constellation overlay.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.4.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0126.\n",
+    "acceptance": [
+      "A CC-licensed ESO or Gaia-derived panorama ships as a KTX2 equirect sphere behind the star Points with correct galactic orientation against J2000, verified against three bright-star positions in a test, and attribution in credits and SOURCES.md",
+      "Lazy-loaded after activation and never in initial-path.json, leaving the startup gate unchanged",
+      "Zodiacal light renders as a faint ecliptic-plane additive gradient, at most 2 nits equivalent, toggleable",
+      "An optional constellation-lines overlay covers the 88 IAU constellations as a single LineSegments batch, off by default",
+      "A governor rung controls skybox resolution tier and the aberration shader applies to the panorama exactly as to stars; a Milky Way browser gate ships and the asset budget check stays green"
+    ],
+    "handoff_notes": "The panorama must pass through the SAME observer-aberration path as the starfield or high-beta views will shear the sky inconsistently. Extend the existing vertex-shader approach.\n"
+  },
+  {
+    "id": "T0127",
+    "title": "Pass-insertion API and adaptive exposure controller",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M3",
+    "spec": "Gives the post pipeline a public way to insert passes, then uses it for a single-owner adaptive exposure controller so Neptune daylight reads and the near-Sun photosphere does not clip.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.2; plan section 3.5.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0127.\n",
+    "acceptance": [
+      "lightingPostPipeline gains insertPass with an ordering contract and tests, leaving the default pass order unchanged and every render browser gate green",
+      "Exposure follows plan section 3.5 with the correct trend proven at Mercury, Earth, Neptune and near-Sun test poses and adaptation constants of 2 s and 6 s within 10 percent",
+      "visualTier magnitude tests are untouched and green because exposure is display-only",
+      "Settings expose auto and fixed exposure modes and the governor can pin fixed on a low tier"
+    ],
+    "handoff_notes": "This task creates the API that T0142 and future passes use. The AdaptiveSmaa and Bloom private-field casts live here; contain them behind the API and add a three.js version canary test.\n"
+  },
+  {
+    "id": "T0128",
+    "title": "Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M3",
+    "spec": "Every body currently hangs motionless. Give the catalog its real rotation rate, axial tilt and polar flattening, and move Earth cloud drift off the wall clock.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0128.\n",
+    "acceptance": [
+      "All bodies rotate as 2 pi times simTimeSec over the sidereal period about the tilted axis, verified for Earth against a known epoch sub-solar longitude within 1 degree",
+      "The ringed-body double tilt is fixed with a single tilt owner",
+      "polarRadiusRatio is applied to tier-2 spheres by scale with a normal-correct shader flag and no pop across the tier 2 to 3 boundary",
+      "Earth clouds move on sim time so pause freezes them",
+      "Tier browser gate cases are extended with zero new allocation"
+    ],
+    "handoff_notes": "bodySpin.ts computes per-body quaternions into the packed attitude path once per frame, 43 preallocated quats. Rotation phase at epoch is UNCALIBRATED because the catalog has no W0: document phase-accurate rate with arbitrary epoch phase honestly in the release notes. Earth may be hand-anchored to the J2026 sub-solar point.\n"
+  },
+  {
+    "id": "T0129",
+    "title": "Extend depth coverage to the full catalog and raise camera range",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M3",
+    "spec": "Eris is outside the far plane and simply does not render. Extend depth coverage and orbit-camera range to the whole catalog, and split the non-finite guard policy so a NaN in an effect cannot kill the frame loop.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 12.3.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0129.\n",
+    "acceptance": [
+      "Eris renders in the space view with SPACE_FAR_KM raised to 2.5e10 and reversed or log depth validated, adding a far-body case to the depth gate while LEO z-fighting spot checks stay unchanged",
+      "Orbit camera max distance rises to 2e10 km to frame the full system with focus transitions still stable and no NaN at extreme spans, proven by a fuzz test",
+      "Starfield far-pinning stays correct under both depth strategies",
+      "Guard policy split: ship and body position bindings keep the hard throw while new effect-visual bindings degrade with a skipped bind, a one-time console warning and a telemetry flag, unit-tested with an injected NaN"
+    ],
+    "handoff_notes": "Small but subtle. Touch spaceScene.ts constants and the depth tests together, and do NOT touch the Math.fround boundary contract.\n"
+  },
+  {
+    "id": "T0130",
+    "title": "Higher tier-2 tessellation and consolidated crossfade draw cost",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0128"
+    ],
+    "milestone": "V2M3",
+    "spec": "Removes the faceted silhouette at mid distance and pays for it by collapsing the tier-2 double mesh into a single shader-side crossfade.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1 and 13.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0130.\n",
+    "acceptance": [
+      "Tier-2 spheres move from icosahedron detail 2 to 4, from 320 to 5120 tris, with a governor rung stepping back to 2, and silhouette faceting is gone at 240 px verified by a screenshot diff",
+      "The tier-2 fallback plus textured double mesh becomes a single mesh with a shader-side texture crossfade, halving tier-2 draw calls to one per body",
+      "Full-catalog worst-case draw calls are measured and recorded, the golden is re-baselined in a dedicated commit and triangles stay inside the 500k budget at the reference pose"
+    ],
+    "handoff_notes": "The crossfade uniform rides the existing hook pattern. Keep the 250 ms curve and the 1 in 15 point-seed trick documented in bodyVisualSystem.\n"
+  },
+  {
+    "id": "T0131",
+    "title": "build_asteroid.py and build_comet.py with shape-model ingest",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M4",
+    "spec": "The tooling half of the small-body lane: real decimated shape models where a mission flew, deterministic procedural fallbacks where none did, and the anchor nodes comet visuals will hang from.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0131.\n",
+    "acceptance": [
+      "build_asteroid.py handles real shape models for Eros, Bennu and Ryugu decimated to 5000 tris or fewer plus a procedural displaced-icosphere fallback seeded by proceduralSeed",
+      "build_comet.py builds a nucleus from a decimated 67P shape model with a procedural Halley, exposing coma_anchor and tail_anchor nodes for T0139",
+      "Double builds are byte-identical and unit tests land in the Python tool suite with SOURCES.md per body",
+      "Asteroid and comet category budget of 5000 tris each is enforced in config.mjs"
+    ],
+    "handoff_notes": "Shape model sources are NASA PDS SBN and public domain. Pin URLs and SHA-256 through the T0132 fetch mechanism; T0132 may land first or in the same week.\n"
+  },
+  {
+    "id": "T0132",
+    "title": "Checksummed on-demand source fetching; stop committing 8K sources",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M4",
+    "spec": "Thirty-four bodies of 8K source imagery cannot enter the repository. Make sources fetched, checksummed and cached instead of committed, without rewriting any history.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 12.4.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0132.\n",
+    "acceptance": [
+      "fetch_textures.py carries a manifest of url, sha256, license and dest per source with fetch, verify and cache plus offline-friendly error copy",
+      "The new-body workflow docs say sources are fetched and never committed, while existing committed sources stay in place",
+      "ADR-039 lands, asset-pipeline.md is updated and the repo-budget check documents the policy",
+      "Python tests cover a checksum mismatch failing and a cache hit skipping the download"
+    ],
+    "handoff_notes": "Do not delete existing textures-src content in this task; the policy applies to NEW bodies. All 34 upcoming bodies depend on this.\n"
+  },
+  {
+    "id": "T0133",
+    "title": "Mercury and Mars hero assets",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0131",
+      "T0132"
+    ],
+    "milestone": "V2M4",
+    "spec": "The first two bodies through the new pipeline, and the checklist every later asset task copies.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0133.\n",
+    "acceptance": [
+      "Per body: a build_planet.py config on USGS and NASA sources, 8k albedo plus 4k normal plus a 1k detail pair, SOURCES.md and a green ingest",
+      "Hero budget of 20 MB for Mars and 12 MB for Mercury; rails class regression untouched; tier thresholds verified in a fly-in gate case",
+      "Draw and triangle budgets green and credits.md updated"
+    ],
+    "handoff_notes": "Read agents/skills/add-celestial-body.md and follow the earth and moon config pattern in build_planet.py and planet_config.py. Every remaining asset task uses this same checklist.\n"
+  },
+  {
+    "id": "T0134",
+    "title": "Venus and Titan hero assets with cloud-deck surfaces",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0133"
+    ],
+    "milestone": "V2M4",
+    "spec": "The two haze worlds, where the visible surface is the cloud deck and the collision radius must agree with it.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0134.\n",
+    "acceptance": [
+      "Venus uses a Magellan-derived or Akatsuki composite cloud albedo with subtle band animation reusing the gas-giant shader family; Titan uses Cassini ISS haze tones",
+      "Cloud-deck atmosphereTopKm values are coordinated with the T0111 collision data",
+      "The T0133 pipeline checklist is followed for both bodies, covering fetch, SOURCES.md, ingest, budgets, fly-in case and credits",
+      "Each body stays at or under 12 MB"
+    ],
+    "handoff_notes": "These two are surface-equals-cloud-deck worlds. Record the scattering parameters T0140 will need in the per-task design doc.\n"
+  },
+  {
+    "id": "T0135",
+    "title": "Galilean moon assets",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0133"
+    ],
+    "milestone": "V2M4",
+    "spec": "Io, Europa, Ganymede and Callisto from USGS Voyager and Galileo mosaics.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0135.\n",
+    "acceptance": [
+      "Four bodies built from USGS mosaics with 4k albedo plus 2k normal each inside a 6 MB standard budget",
+      "The full pipeline checklist is followed per body using build_moon.py parameterization",
+      "A fly-in gate case covers Io, the eclipse-relevant body for the T0141 exit shot"
+    ],
+    "handoff_notes": "Follow the moon_config.py parameterization pattern. Displacement is optional and a hero-ish Io is fine inside budget.\n"
+  },
+  {
+    "id": "T0136",
+    "title": "Outer major moons batch plus Phobos and Deimos",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0135"
+    ],
+    "milestone": "V2M4",
+    "spec": "Thirteen bodies in one lane: the Saturnian and Uranian majors, Triton, and the two Martian moons.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0136.\n",
+    "acceptance": [
+      "Thirteen bodies ship, covering Mimas, Enceladus, Tethys, Dione, Rhea, Iapetus, Miranda, Ariel, Umbriel, Titania, Oberon, Triton, Phobos and Deimos, using real Cassini and Voyager mosaics where available and procedural displacement otherwise, at 4 MB or less each",
+      "The Iapetus two-tone and the Triton cantaloupe terrain are validated visually with reference renders committed",
+      "The full pipeline checklist is followed per body and the assets total is reported against the 150 MB budget"
+    ],
+    "handoff_notes": "Batch task. Split into two PRs if review size demands it and note the split here.\n"
+  },
+  {
+    "id": "T0137",
+    "title": "Dwarf planets batch: Ceres, Eris, Makemake, Haumea, Charon",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0133"
+    ],
+    "milestone": "V2M4",
+    "spec": "The dwarf lane, including the first genuinely triaxial body the geometry helper has had to build.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0137.\n",
+    "acceptance": [
+      "Ceres uses the Dawn mosaic and Charon the New Horizons mosaic, Eris and Makemake are procedural, and Haumea is procedural with a true triaxial shape driven by polarRadiusRatio and a custom builder scale",
+      "Each body stays at or under 4 MB with the full pipeline checklist per body",
+      "The Eris render is verified, which depends on the T0129 far-plane fix at runtime rather than build time"
+    ],
+    "handoff_notes": "Haumea needs a triaxial ellipsoid builder flag with a != b != c, a small common/geometry.py extension with its own python test.\n"
+  },
+  {
+    "id": "T0138",
+    "title": "Asteroid assets: Vesta, Pallas, Hygiea, Eros, Bennu, Ryugu",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0131",
+      "T0132"
+    ],
+    "milestone": "V2M4",
+    "spec": "The first use of build_asteroid.py at scale.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0138.\n",
+    "acceptance": [
+      "Eros, Bennu and Ryugu use real shape models, Vesta uses the Dawn mosaic on a displaced sphere, and Pallas and Hygiea are procedural, all at 5000 tris and 2 MB or less each",
+      "The full pipeline checklist is followed per body",
+      "Point-cloud tier magnitudes stay correct with albedo values verified against the catalog"
+    ],
+    "handoff_notes": "First consumer of build_asteroid.py at scale. File issues against the T0131 patterns here if friction appears.\n"
+  },
+  {
+    "id": "T0139",
+    "title": "1P/Halley and 67P assets with perihelion coma and tail",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0131"
+    ],
+    "milestone": "V2M4",
+    "spec": "Comets that only become comets near the Sun: a coma sprite and two additive tail ribbons that switch on inside 3 AU.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0139.\n",
+    "acceptance": [
+      "Nuclei come from T0131, and a coma sprite plus ion and dust tail ribbons activate below 3 AU heliocentric with intensity ramping as one over r squared",
+      "Everything is deterministic from sim time and governed, and rendering-spec.md gains a comet-visuals section",
+      "A browser gate shows 67P near perihelion with the tail pointing anti-sunward within 5 degrees in screen space"
+    ],
+    "handoff_notes": "Tail direction is the normalized sun-to-comet vector blended 15 percent with negative orbital velocity for dust lag. Record the exact blend in rendering-spec.md.\n"
+  },
+  {
+    "id": "T0140",
+    "title": "Analytic atmosphere scattering for Earth, Venus, Mars, Titan and the giants",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0127"
+    ],
+    "milestone": "V2M4",
+    "spec": "The single biggest visual lever in v2: a single-scatter analytic shell that replaces the rim hack with a blue limb, a red terminator and honest haze.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0140.\n",
+    "acceptance": [
+      "data/atmospheres.json plus its schema and ADR-040 carry per-body rayleighRGB, mieCoeff, scaleHeightKm and deckRadiusKm",
+      "A single-scatter analytic shell shader with per-pixel sun angle and a limb integration approximation replaces the earthSurfaceLayers rim hack and covers the Earth blue limb, Venus and Titan haze, Mars dust and giant limb glow",
+      "Correctness proxies are tested as monotonic limb brightness against sun angle plus screenshot diffs for four poses per hero body",
+      "Governed with shader steps 8, 4 and off, zero allocation, bench evidence, and aerial perspective applied to close-range detail on atmosphere bodies"
+    ],
+    "handoff_notes": "Keep it a hook on the existing material pattern, a shell mesh like earthSurfaceLayers but carrying the scattering integral. Parameters live in data, not code.\n"
+  },
+  {
+    "id": "T0141",
+    "title": "Analytic eclipse shadows and corona, prominence and granulation v2",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0127"
+    ],
+    "milestone": "V2M4",
+    "spec": "Moons cast real shadows on their parents, and the Sun stops being three hardcoded arcs.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1 and 6.2.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0141.\n",
+    "acceptance": [
+      "A generalized analytic occluder test covering up to 4 nearest occluders per lit body derives umbra and penumbra from angular radii in the lighting hook, giving moon shadows on parents and the reverse, with existing ring shadows unchanged",
+      "The Sun corona is rebuilt as layered noise streamers, limb prominences come from seeded arcs and granulation contrast rises 30 percent with governor octave control",
+      "Browser gates show the Io-eclipse pose putting the umbra on Jupiter within 2 percent of the analytic centre and a solar-eclipse-from-LEO pose putting the Moon umbra on Earth",
+      "Bench evidence committed and draw calls unchanged because the work is shader-only"
+    ],
+    "handoff_notes": "Occluder selection per lit body is precomputed per frame in the game layer as nearest-4 by angular size in packed uniforms, keeping the shader branchless-ish. The Sun upgrade must keep customProgramCacheKey stability.\n"
+  },
+  {
+    "id": "T0142",
+    "title": "Screen-space god rays and physical lens flare",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0127"
+    ],
+    "milestone": "V2M4",
+    "spec": "The first external consumer of the pass-insertion API, and the last big sun-facing polish.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.2.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0142.\n",
+    "acceptance": [
+      "A radial-blur god-rays pass is inserted through insertPass, driven by the sun screen position and occlusion-aware via a depth sample, governed in strength and off at the lowest tier",
+      "Lens flare is a restrained 3-element ghost plus halo driven by sun angle, subtle by default and switchable off in settings",
+      "No pass allocation per frame, SMAA and FXAA ordering verified, every render browser gate green and bench evidence committed"
+    ],
+    "handoff_notes": "The screen-space sun position must come from the f64 game-layer projection, the same path as world markers, and never from a three.js Object3D.\n"
+  },
+  {
+    "id": "T0143",
+    "title": "Flyby detail boost and radar-altitude HUD",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0128",
+      "T0112"
+    ],
+    "milestone": "V2M4",
+    "spec": "Tuning task with objective anchors: close passes must look great at twice the body radius, and the pilot must be able to read altitude.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.4 and 6.1.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0143.\n",
+    "acceptance": [
+      "Detail-shader strengths are retuned, albedo from 0.12 to 0.25 and normal from 0.08 to 0.18 baseline with per-body overrides in manifest extras, with before and after captures at 2x radius for six bodies",
+      "Reference captures for Moon, Mars and Io are committed and linked in the PR as the looks-great-at-2x-radius bar",
+      "A radar altitude readout appears in the Pilot preset below 2 radii showing altitude above mean radius or deck plus vertical speed on the 10 Hz signals path",
+      "The detail octaves governor rung is preserved and bench evidence is committed"
+    ],
+    "handoff_notes": "The captures ARE the acceptance. Do not touch tier thresholds here.\n"
+  },
+  {
+    "id": "T0144",
+    "title": "Web Audio engine, AudioDirector, mixer settings, Kubrick mode",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0103"
+    ],
+    "milestone": "V2M5",
+    "spec": "Sound arrives with a correct AudioContext lifecycle, a pure decision layer mapping snapshot facts to audio state, and a synthesized engine hum so the milestone ships before any asset does.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 9.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0144.\n",
+    "acceptance": [
+      "AudioContext lifecycle is correct with user-gesture unlock, suspend on hidden tab and no autoplay warnings, over a graph of music, sfx and ui buses into master",
+      "AudioDirector maps throttle, warp tier, gamma, dominant body class, impact warning and camera mode to layer states as a pure decision module unit-tested without an AudioContext",
+      "The engine hum is synthesized from two detuned saws plus filtered noise keyed to throttle so the feature ships dependency-free before T0145",
+      "Kubrick mode silences the sfx bus on exterior cameras with music per setting, the mixer UI lands in settings and all levels persist",
+      "Zero allocation in the frame path with audio param updates only; ADR-041 lands"
+    ],
+    "handoff_notes": "Design doc first. No library. Cockpit and chase are the interior mix; cinematic and observatory are exterior. Decide and record whether the game ships muted until the first volume interaction.\n"
+  },
+  {
+    "id": "T0145",
+    "title": "Adaptive music layers and ship SFX asset intake",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0144"
+    ],
+    "milestone": "V2M5",
+    "spec": "The asset half of audio, with licensing enforced by the check rather than by good intentions.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 9.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0145.\n",
+    "acceptance": [
+      "data/audio-manifest.json lists tracks and loops with license fields restricted to CC0 and CC-BY, auto-listed into credits.md by a build step",
+      "Four music contexts covering deep space, giant approach, near sun and warning ship as loopable OGG stems with a 4 s crossfade, at most 12 MB total, lazy-loaded and never in the initial path",
+      "The SFX set covers RCS tick, cruise engage and disengage, warp shift, impact, milestone chime and UI clicks",
+      "check:licenses is extended to audio and the startup gate is unchanged"
+    ],
+    "handoff_notes": "Every file records provenance in the manifest and the license check must fail on a missing entry, proven with a fixture.\n"
+  },
+  {
+    "id": "T0146",
+    "title": "Exploration diary: milestone engine and panel",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0116"
+    ],
+    "milestone": "V2M5",
+    "spec": "The progression layer: fifty-odd declarative predicates over the snapshot that turn a sandbox into a record of where you have been.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 8.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0146.\n",
+    "acceptance": [
+      "At least 50 milestone definitions ship in the plan section 2 shape, covering first orbits by body class, close approaches inside 2 radii, ring-plane crossings, solar polar overflight, the 0.1c to 0.99c ladder, gamma 2 and 10, the twin-paradox return, a witnessed eclipse, the grand tour and the first petawatt-hour",
+      "The engine evaluates at 10 Hz allocation-free and edge-triggered with per-milestone hysteresis, persisting into the profile settings store rather than the save envelope, with export and import",
+      "The diary panel lists achievements with mission timestamp and stats, shows hint silhouettes for undiscovered entries and raises a toast on unlock with an audio chime hook",
+      "ADR-042 covers storage and export, and unit tests fire each predicate on a synthetic snapshot fixture and prove it does not fire on near misses"
+    ],
+    "handoff_notes": "Design doc first. Predicates read ONLY SimSnapshot plus DiaryContext, never the sim. Orbit detection rule: eccentricity below 0.3 and radius inside the SOI for at least one osculating period. Record the rule in the design doc.\n"
+  },
+  {
+    "id": "T0147",
+    "title": "IndexedDB photo album with quota policy and export",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0125",
+      "T0146"
+    ],
+    "milestone": "V2M5",
+    "spec": "Photographs become a persistent local album, with the quota and privacy questions answered explicitly.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 8.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0147.\n",
+    "acceptance": [
+      "The T0125 CaptureSink is backed by IndexedDB storing blob, capture metadata and a 256 px thumbnail, with an album grid UI offering view, delete and download",
+      "Quota is a soft cap of 200 MB or half the storage estimate, oldest-eviction only after user consent, with private mode degrading to a download-only fallback and a notice",
+      "Export writes album metadata JSON plus per-photo download, with import out of scope and documented in privacy.md",
+      "Storage code is fully unit-tested with fake-indexeddb and a browser gate captures and lists a photo"
+    ],
+    "handoff_notes": "privacy.md must be updated in this PR because this adds a local storage surface. No cloud, no telemetry.\n"
+  },
+  {
+    "id": "T0148",
+    "title": "Main menu over a live LEO scene with the ship",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0110",
+      "T0122"
+    ],
+    "milestone": "V2M5",
+    "spec": "First impression: the menu sits over the real scene with the ship drifting in LEO.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0148.\n",
+    "acceptance": [
+      "The menu backdrop is the live scene with the ship in LEO and a slow cinematic drift reusing the cinematic idle, with no second renderer or world so RuntimeResourceCounts is unchanged",
+      "Entries cover New Game, Continue, Diary and Settings while the measured startup pipeline and the autostart query parameter are preserved and the startup gate stays under 5 s",
+      "The menu adds at most 3 draw calls in the menu state and respects the frame budget"
+    ],
+    "handoff_notes": "The v1 menu already mounts over the built scene, so this is art direction and a camera path, not architecture. Keep the semantic-shell accessibility structure.\n"
+  },
+  {
+    "id": "T0149",
+    "title": "Consolidated settings, HUD preset editor and migration wrap-up",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0118",
+      "T0144",
+      "T0112"
+    ],
+    "milestone": "V2M5",
+    "spec": "Closes the settings and CSS debt opened across V2M1 to V2M5 behind one surface reachable from both menus.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0149.\n",
+    "acceptance": [
+      "A single settings surface reachable from the pause menu and the main menu carries sections for flight assists, camera, HUD preset and per-panel visibility, audio, video and controls including gamepad",
+      "The profile schema migration chain is tested end to end from a committed v1-era fixture while the save-envelope embedded DTO stays GameSettingsV1",
+      "Remaining absolute-positioned panels in app.css migrate to the grid and token system, reducing app.css by at least 60 percent of its lines with the number reported",
+      "The keyboard-only traversal audit is green"
+    ],
+    "handoff_notes": "No new features beyond the preset editor.\n"
+  },
+  {
+    "id": "T0150",
+    "title": "First-flight intro: five skippable prompts",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0116",
+      "T0112"
+    ],
+    "milestone": "V2M5",
+    "spec": "Replaces the twelve-step v1 tutorial with five prompts driven by facts the simulation already knows.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 10.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0150.\n",
+    "acceptance": [
+      "Five steps run on the existing tutorial machine: look around past 30 degrees, throttle to 50 percent, click the Moon, engage cruise, arrive, each one line of copy, skippable and never re-offered after completion or skip",
+      "The v1 twelve-step tutorial content is retired, the controller machine is reused and progress lives in the profile store",
+      "Median completion is at or under 120 s across three scripted browser runs with the headless timing tolerance documented"
+    ],
+    "handoff_notes": "Copy tone is imperative with zero physics lecturing: push R to burn, not thrust produces acceleration.\n"
+  },
+  {
+    "id": "T0151",
+    "title": "v2 performance audit, governor rungs and budget goldens",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0140",
+      "T0141",
+      "T0142",
+      "T0130",
+      "T0122",
+      "T0126"
+    ],
+    "milestone": "V2M6",
+    "spec": "The gate-keeper task before release: every new visual system gets a governor rung and a measured budget.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 13.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0151.\n",
+    "acceptance": [
+      "The governor ladder is re-authored to cover scattering steps, plume and RCS pools, skybox tier, god rays, exposure mode, detail octaves and tier-2 tessellation across 15 or more rungs with descent and ascent behaviour tested",
+      "performance-golden.json is re-baselined at three canonical poses recording draw calls, triangles and heap window, with 60 fps p75 on reference hardware evidenced in a bench summary",
+      "Bundle total gzip stays at or under 1,000,000 B with a per-chunk headroom report and entry at or under 400,000 B, with the initial path unchanged",
+      "bench:sim is wired into CI so the 2 ms sim step budget is finally enforced"
+    ],
+    "handoff_notes": "Any budget still violated becomes a fix-task filed from here rather than a relaxed gate.\n"
+  },
+  {
+    "id": "T0152",
+    "title": "v2 accessibility: focus, reduced motion, audio cues, contrast",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0151"
+    ],
+    "milestone": "V2M6",
+    "spec": "An audit-and-fix pass over everything v2 added to the interface.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0152.\n",
+    "acceptance": [
+      "Full keyboard traversal of pause, diary, album, settings and the cruise strip with visible focus and no key traps",
+      "prefers-reduced-motion disables camera shake, FOV pulse and menu drift automatically, proven by a test",
+      "Audio alerts have visual alternatives and HUD text contrast is at least 4.5 to 1 in every preset, checked per token",
+      "accessibility.md is updated and existing accessibility gate cases are extended"
+    ],
+    "handoff_notes": "Audit-and-fix task with a checklist PR description.\n"
+  },
+  {
+    "id": "T0153",
+    "title": "v2 documentation and marketing surface",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0151"
+    ],
+    "milestone": "V2M6",
+    "spec": "The docs catch up with the game that actually shipped.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0153.\n",
+    "acceptance": [
+      "README is rewritten around free flight with a hero image from the committed captures, controls.md is regenerated from the bindings registry, game-design.md matches v2 reality and release-notes.md gains a v2.0.0 section",
+      "credits.md is complete for every new source across textures, shape models, panorama and audio, cross-checked against SOURCES.md and the audio manifest by the license check",
+      "architecture.md gets a final pass so the module map matches the shipped tree"
+    ],
+    "handoff_notes": "Docs task. Screenshots come from committed bench captures. Keep the README play-in-30-seconds structure.\n"
+  },
+  {
+    "id": "T0154",
+    "title": "Final v2.0.0 audit, tag and deploy verification",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0152",
+      "T0153"
+    ],
+    "milestone": "V2M6",
+    "spec": "Mirrors the T0101 discipline exactly, one release criterion at a time, with evidence.\nSpec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 15.\nFull task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0154.\n",
+    "acceptance": [
+      "All 10 spec section 15 release criteria are verified and evidenced one by one in the PR, with the sub-5-minute legs run scripted",
+      "releaseReadiness in final mode for the v2 scope passes with every v2 task DONE, package version at 2.0.0 and the dashboard equal",
+      "Two full production builds are byte-identical by SHA-256 across dist, the Pages deploy is verified by a cache-disabled live audit and the annotated tag peels to the deployed commit",
+      "The roadmap gains v3 backlog stubs covering landing, launch phase, a WebGPU ADR and ship interior"
+    ],
+    "handoff_notes": "Do not relax any gate to pass. File fix-tasks instead.\n"
   }
 ];
     /* TASK_DATA_END */

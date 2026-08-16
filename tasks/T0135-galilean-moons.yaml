@@ -1,0 +1,19 @@
+id: T0135
+title: Galilean moon assets
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0133
+milestone: V2M4
+spec: |
+  Io, Europa, Ganymede and Callisto from USGS Voyager and Galileo mosaics.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0135.
+acceptance:
+  - Four bodies built from USGS mosaics with 4k albedo plus 2k normal each inside a 6 MB standard
+    budget
+  - The full pipeline checklist is followed per body using build_moon.py parameterization
+  - A fly-in gate case covers Io, the eclipse-relevant body for the T0141 exit shot
+handoff_notes: |
+  Follow the moon_config.py parameterization pattern. Displacement is optional and a hero-ish Io is fine inside budget.

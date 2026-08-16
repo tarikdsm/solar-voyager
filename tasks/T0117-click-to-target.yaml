@@ -1,0 +1,21 @@
+id: T0117
+title: Select cruise and nav target by clicking bodies in world and in map
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0112
+milestone: V2M2
+spec: |
+  Targeting becomes pointing. Screen-ray picking against body angular discs in the space view and click selection in the system map, both converging on the existing Commands.setTarget.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0117.
+acceptance:
+  - Screen-ray picking against body angular discs with an 8 px minimum pick radius in the space
+    view; nearest along ray wins; the ship is excluded
+  - System map click selects focus and target, with a set-as-cruise-target affordance in both views
+  - The target panel select remains as a fallback and all three paths converge on Commands.setTarget
+  - Zero allocation per click frame; picking math unit-tested from a known camera pose to an
+    expected body
+handoff_notes: |
+  Pick in the game layer from f64 positions plus the camera pose. No three.js Raycaster against meshes: bodies are points and spheres at wild scales, and angular-disc math is exact and cheap.

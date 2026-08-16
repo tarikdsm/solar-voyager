@@ -1,0 +1,21 @@
+id: T0127
+title: Pass-insertion API and adaptive exposure controller
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M3
+spec: |
+  Gives the post pipeline a public way to insert passes, then uses it for a single-owner adaptive exposure controller so Neptune daylight reads and the near-Sun photosphere does not clip.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.2; plan section 3.5.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0127.
+acceptance:
+  - lightingPostPipeline gains insertPass with an ordering contract and tests, leaving the default
+    pass order unchanged and every render browser gate green
+  - Exposure follows plan section 3.5 with the correct trend proven at Mercury, Earth, Neptune and
+    near-Sun test poses and adaptation constants of 2 s and 6 s within 10 percent
+  - visualTier magnitude tests are untouched and green because exposure is display-only
+  - Settings expose auto and fixed exposure modes and the governor can pin fixed on a low tier
+handoff_notes: |
+  This task creates the API that T0142 and future passes use. The AdaptiveSmaa and Bloom private-field casts live here; contain them behind the API and add a three.js version canary test.

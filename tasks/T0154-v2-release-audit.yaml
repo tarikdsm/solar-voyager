@@ -1,0 +1,23 @@
+id: T0154
+title: Final v2.0.0 audit, tag and deploy verification
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0152
+  - T0153
+milestone: V2M6
+spec: |
+  Mirrors the T0101 discipline exactly, one release criterion at a time, with evidence.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 15.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0154.
+acceptance:
+  - All 10 spec section 15 release criteria are verified and evidenced one by one in the PR, with
+    the sub-5-minute legs run scripted
+  - releaseReadiness in final mode for the v2 scope passes with every v2 task DONE, package version
+    at 2.0.0 and the dashboard equal
+  - Two full production builds are byte-identical by SHA-256 across dist, the Pages deploy is
+    verified by a cache-disabled live audit and the annotated tag peels to the deployed commit
+  - The roadmap gains v3 backlog stubs covering landing, launch phase, a WebGPU ADR and ship interior
+handoff_notes: |
+  Do not relax any gate to pass. File fix-tasks instead.

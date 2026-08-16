@@ -1,0 +1,21 @@
+id: T0153
+title: v2 documentation and marketing surface
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0151
+milestone: V2M6
+spec: |
+  The docs catch up with the game that actually shipped.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0153.
+acceptance:
+  - README is rewritten around free flight with a hero image from the committed captures,
+    controls.md is regenerated from the bindings registry, game-design.md matches v2 reality and
+    release-notes.md gains a v2.0.0 section
+  - credits.md is complete for every new source across textures, shape models, panorama and audio,
+    cross-checked against SOURCES.md and the audio manifest by the license check
+  - architecture.md gets a final pass so the module map matches the shipped tree
+handoff_notes: |
+  Docs task. Screenshots come from committed bench captures. Keep the README play-in-30-seconds structure.

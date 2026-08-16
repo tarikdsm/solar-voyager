@@ -1,0 +1,20 @@
+id: T0138
+title: "Asteroid assets: Vesta, Pallas, Hygiea, Eros, Bennu, Ryugu"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0131
+  - T0132
+milestone: V2M4
+spec: |
+  The first use of build_asteroid.py at scale.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0138.
+acceptance:
+  - Eros, Bennu and Ryugu use real shape models, Vesta uses the Dawn mosaic on a displaced sphere,
+    and Pallas and Hygiea are procedural, all at 5000 tris and 2 MB or less each
+  - The full pipeline checklist is followed per body
+  - Point-cloud tier magnitudes stay correct with albedo values verified against the catalog
+handoff_notes: |
+  First consumer of build_asteroid.py at scale. File issues against the T0131 patterns here if friction appears.

@@ -1,0 +1,21 @@
+id: T0148
+title: Main menu over a live LEO scene with the ship
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0110
+  - T0122
+milestone: V2M5
+spec: |
+  First impression: the menu sits over the real scene with the ship drifting in LEO.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0148.
+acceptance:
+  - The menu backdrop is the live scene with the ship in LEO and a slow cinematic drift reusing the
+    cinematic idle, with no second renderer or world so RuntimeResourceCounts is unchanged
+  - Entries cover New Game, Continue, Diary and Settings while the measured startup pipeline and the
+    autostart query parameter are preserved and the startup gate stays under 5 s
+  - The menu adds at most 3 draw calls in the menu state and respects the frame budget
+handoff_notes: |
+  The v1 menu already mounts over the built scene, so this is art direction and a camera path, not architecture. Keep the semantic-shell accessibility structure.

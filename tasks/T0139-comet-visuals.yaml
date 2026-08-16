@@ -1,0 +1,21 @@
+id: T0139
+title: 1P/Halley and 67P assets with perihelion coma and tail
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0131
+milestone: V2M4
+spec: |
+  Comets that only become comets near the Sun: a coma sprite and two additive tail ribbons that switch on inside 3 AU.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0139.
+acceptance:
+  - Nuclei come from T0131, and a coma sprite plus ion and dust tail ribbons activate below 3 AU
+    heliocentric with intensity ramping as one over r squared
+  - Everything is deterministic from sim time and governed, and rendering-spec.md gains a
+    comet-visuals section
+  - A browser gate shows 67P near perihelion with the tail pointing anti-sunward within 5 degrees in
+    screen space
+handoff_notes: |
+  Tail direction is the normalized sun-to-comet vector blended 15 percent with negative orbital velocity for dust lag. Record the exact blend in rendering-spec.md.

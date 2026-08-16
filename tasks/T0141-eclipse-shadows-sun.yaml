@@ -1,0 +1,23 @@
+id: T0141
+title: Analytic eclipse shadows and corona, prominence and granulation v2
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0127
+milestone: V2M4
+spec: |
+  Moons cast real shadows on their parents, and the Sun stops being three hardcoded arcs.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1 and 6.2.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0141.
+acceptance:
+  - A generalized analytic occluder test covering up to 4 nearest occluders per lit body derives
+    umbra and penumbra from angular radii in the lighting hook, giving moon shadows on parents and
+    the reverse, with existing ring shadows unchanged
+  - The Sun corona is rebuilt as layered noise streamers, limb prominences come from seeded arcs and
+    granulation contrast rises 30 percent with governor octave control
+  - Browser gates show the Io-eclipse pose putting the umbra on Jupiter within 2 percent of the
+    analytic centre and a solar-eclipse-from-LEO pose putting the Moon umbra on Earth
+  - Bench evidence committed and draw calls unchanged because the work is shader-only
+handoff_notes: |
+  Occluder selection per lit body is precomputed per frame in the game layer as nearest-4 by angular size in packed uniforms, keeping the shader branchless-ish. The Sun upgrade must keep customProgramCacheKey stability.

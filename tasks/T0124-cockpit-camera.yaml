@@ -1,0 +1,24 @@
+id: T0124
+title: Cockpit-lite first-person camera with glass HUD variant
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0110
+  - T0121
+milestone: V2M3
+spec: |
+  A first-person seat at the canopy with a small look-around cone and a glass HUD skin, where the relativistic post pass is exactly coherent because the observer is the ship.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 5.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0124.
+acceptance:
+  - The camera sits at the canopy node, attitude-locked, with a look-around cone of plus or minus 30
+    degrees on mouse hold
+  - The canopy frame silhouette renders from the ship model interior-facing shell, with no full
+    interior
+  - A glass HUD skin exists for the Clean preset in cockpit, restyling reticle and strip from the
+    same signals
+  - The relativistic post pass is verified coherent in cockpit with an aberration and Doppler gate
+    case added
+handoff_notes: |
+  CameraDirector gains cockpit. If the T0121 canopy occludes badly, coordinate a build_ship.py patch with an interior shell flag rather than hacking render-side.

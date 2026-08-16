@@ -1,0 +1,24 @@
+id: T0129
+title: Extend depth coverage to the full catalog and raise camera range
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M3
+spec: |
+  Eris is outside the far plane and simply does not render. Extend depth coverage and orbit-camera range to the whole catalog, and split the non-finite guard policy so a NaN in an effect cannot kill the frame loop.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 12.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0129.
+acceptance:
+  - Eris renders in the space view with SPACE_FAR_KM raised to 2.5e10 and reversed or log depth
+    validated, adding a far-body case to the depth gate while LEO z-fighting spot checks stay
+    unchanged
+  - Orbit camera max distance rises to 2e10 km to frame the full system with focus transitions still
+    stable and no NaN at extreme spans, proven by a fuzz test
+  - Starfield far-pinning stays correct under both depth strategies
+  - "Guard policy split: ship and body position bindings keep the hard throw while new effect-visual
+    bindings degrade with a skipped bind, a one-time console warning and a telemetry flag,
+    unit-tested with an injected NaN"
+handoff_notes: |
+  Small but subtle. Touch spaceScene.ts constants and the depth tests together, and do NOT touch the Math.fround boundary contract.

@@ -1,0 +1,22 @@
+id: T0128
+title: Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M3
+spec: |
+  Every body currently hangs motionless. Give the catalog its real rotation rate, axial tilt and polar flattening, and move Earth cloud drift off the wall clock.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0128.
+acceptance:
+  - All bodies rotate as 2 pi times simTimeSec over the sidereal period about the tilted axis,
+    verified for Earth against a known epoch sub-solar longitude within 1 degree
+  - The ringed-body double tilt is fixed with a single tilt owner
+  - polarRadiusRatio is applied to tier-2 spheres by scale with a normal-correct shader flag and no
+    pop across the tier 2 to 3 boundary
+  - Earth clouds move on sim time so pause freezes them
+  - Tier browser gate cases are extended with zero new allocation
+handoff_notes: |
+  bodySpin.ts computes per-body quaternions into the packed attitude path once per frame, 43 preallocated quats. Rotation phase at epoch is UNCALIBRATED because the catalog has no W0: document phase-accurate rate with arbitrary epoch phase honestly in the release notes. Earth may be hand-anchored to the J2026 sub-solar point.

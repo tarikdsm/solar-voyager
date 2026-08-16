@@ -1,0 +1,25 @@
+id: T0114
+title: Constant-acceleration relativistic intercept solver (physics-spec section 8)
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0104
+milestone: V2M2
+spec: |
+  Pure sim guidance module: boost-flip-brake intercept to a rails target under constant proper acceleration, relativistically exact in the 1D profile and vector-corrected by iteration, plus the relativistic braking envelope the assists and cruise brake phase both need.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3; plan section 3.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0114.
+acceptance:
+  - physics-spec.md gains section 8 with the full derivation, symbols matching relativity.ts;
+    ADR-037 in the same PR
+  - solveInterceptInto and relativisticStopDistanceKm match the plan section 2 signatures, pure and
+    allocation-free
+  - Earth to Moon, Mars, Jupiter and Neptune plus a LEO to Sun-polar flyby all converge ok=true in
+    12 iterations or fewer, arrival miss under 0.1 percent of trip distance under a test integrator
+  - The 1D profile matches closed-form hyperbolic motion to 1e-9 relative; stop distance matches the
+    exact form
+  - Degenerate cases return ok=false cleanly, covering same-body targets, non-positive alpha and
+    non-convergence
+handoff_notes: |
+  Design doc first. Pure sim module consuming CompiledRails read-only. The fallback pursuit rule (plan section 3.3.6) is specified here but implemented in T0116.

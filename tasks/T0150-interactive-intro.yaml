@@ -1,0 +1,23 @@
+id: T0150
+title: "First-flight intro: five skippable prompts"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0116
+  - T0112
+milestone: V2M5
+spec: |
+  Replaces the twelve-step v1 tutorial with five prompts driven by facts the simulation already knows.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 10.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0150.
+acceptance:
+  - "Five steps run on the existing tutorial machine: look around past 30 degrees, throttle to 50
+    percent, click the Moon, engage cruise, arrive, each one line of copy, skippable and never
+    re-offered after completion or skip"
+  - The v1 twelve-step tutorial content is retired, the controller machine is reused and progress
+    lives in the profile store
+  - Median completion is at or under 120 s across three scripted browser runs with the headless
+    timing tolerance documented
+handoff_notes: |
+  Copy tone is imperative with zero physics lecturing: push R to burn, not thrust produces acceleration.

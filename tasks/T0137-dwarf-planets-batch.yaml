@@ -1,0 +1,21 @@
+id: T0137
+title: "Dwarf planets batch: Ceres, Eris, Makemake, Haumea, Charon"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0133
+milestone: V2M4
+spec: |
+  The dwarf lane, including the first genuinely triaxial body the geometry helper has had to build.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0137.
+acceptance:
+  - Ceres uses the Dawn mosaic and Charon the New Horizons mosaic, Eris and Makemake are procedural,
+    and Haumea is procedural with a true triaxial shape driven by polarRadiusRatio and a custom
+    builder scale
+  - Each body stays at or under 4 MB with the full pipeline checklist per body
+  - The Eris render is verified, which depends on the T0129 far-plane fix at runtime rather than
+    build time
+handoff_notes: |
+  Haumea needs a triaxial ellipsoid builder flag with a != b != c, a small common/geometry.py extension with its own python test.

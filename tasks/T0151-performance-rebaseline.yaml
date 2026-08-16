@@ -1,0 +1,28 @@
+id: T0151
+title: v2 performance audit, governor rungs and budget goldens
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0140
+  - T0141
+  - T0142
+  - T0130
+  - T0122
+  - T0126
+milestone: V2M6
+spec: |
+  The gate-keeper task before release: every new visual system gets a governor rung and a measured budget.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 13.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0151.
+acceptance:
+  - The governor ladder is re-authored to cover scattering steps, plume and RCS pools, skybox tier,
+    god rays, exposure mode, detail octaves and tier-2 tessellation across 15 or more rungs with
+    descent and ascent behaviour tested
+  - performance-golden.json is re-baselined at three canonical poses recording draw calls, triangles
+    and heap window, with 60 fps p75 on reference hardware evidenced in a bench summary
+  - Bundle total gzip stays at or under 1,000,000 B with a per-chunk headroom report and entry at or
+    under 400,000 B, with the initial path unchanged
+  - bench:sim is wired into CI so the 2 ms sim step budget is finally enforced
+handoff_notes: |
+  Any budget still violated becomes a fix-task filed from here rather than a relaxed gate.

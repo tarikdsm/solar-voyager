@@ -1,0 +1,21 @@
+id: T0133
+title: Mercury and Mars hero assets
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0131
+  - T0132
+milestone: V2M4
+spec: |
+  The first two bodies through the new pipeline, and the checklist every later asset task copies.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0133.
+acceptance:
+  - "Per body: a build_planet.py config on USGS and NASA sources, 8k albedo plus 4k normal plus a 1k
+    detail pair, SOURCES.md and a green ingest"
+  - Hero budget of 20 MB for Mars and 12 MB for Mercury; rails class regression untouched; tier
+    thresholds verified in a fly-in gate case
+  - Draw and triangle budgets green and credits.md updated
+handoff_notes: |
+  Read agents/skills/add-celestial-body.md and follow the earth and moon config pattern in build_planet.py and planet_config.py. Every remaining asset task uses this same checklist.

@@ -1,0 +1,24 @@
+id: T0120
+title: Golden cruise scenarios and CI accuracy gates
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0116
+  - T0115
+milestone: V2M2
+spec: |
+  Locks the guidance and cruise stack behind committed goldens so later visual and audio work cannot silently move the physics.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2 and 15.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0120.
+acceptance:
+  - Four committed goldens covering LEO to Moon, Mars, Jupiter and a Sun north-pole flyby in the
+    daily-sample format of ADR-017
+  - "Tolerances: position 1e-3 km per daily sample against regeneration, ledger energy within 2
+    percent of the analytic bound, tau over t ratio within 1e-6 of closed form"
+  - The gate runs inside npm test rather than in a browser; the regeneration flag and golden commit
+    discipline are documented
+  - The V2M2 exit checklist appears in the PR description, including the click-Jupiter-arrive proof
+    from T0116 and the abort fuzz result
+handoff_notes: |
+  Extends the tests/golden comparison harness. The scenario driver may reuse flightBenchmarkRoute-style synthesis.

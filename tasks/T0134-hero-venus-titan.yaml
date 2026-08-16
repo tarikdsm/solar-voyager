@@ -1,0 +1,21 @@
+id: T0134
+title: Venus and Titan hero assets with cloud-deck surfaces
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0133
+milestone: V2M4
+spec: |
+  The two haze worlds, where the visible surface is the cloud deck and the collision radius must agree with it.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0134.
+acceptance:
+  - Venus uses a Magellan-derived or Akatsuki composite cloud albedo with subtle band animation
+    reusing the gas-giant shader family; Titan uses Cassini ISS haze tones
+  - Cloud-deck atmosphereTopKm values are coordinated with the T0111 collision data
+  - The T0133 pipeline checklist is followed for both bodies, covering fetch, SOURCES.md, ingest,
+    budgets, fly-in case and credits
+  - Each body stays at or under 12 MB
+handoff_notes: |
+  These two are surface-equals-cloud-deck worlds. Record the scattering parameters T0140 will need in the per-task design doc.

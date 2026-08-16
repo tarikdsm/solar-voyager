@@ -1,0 +1,21 @@
+id: T0142
+title: Screen-space god rays and physical lens flare
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0127
+milestone: V2M4
+spec: |
+  The first external consumer of the pass-insertion API, and the last big sun-facing polish.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.2.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0142.
+acceptance:
+  - A radial-blur god-rays pass is inserted through insertPass, driven by the sun screen position
+    and occlusion-aware via a depth sample, governed in strength and off at the lowest tier
+  - Lens flare is a restrained 3-element ghost plus halo driven by sun angle, subtle by default and
+    switchable off in settings
+  - No pass allocation per frame, SMAA and FXAA ordering verified, every render browser gate green
+    and bench evidence committed
+handoff_notes: |
+  The screen-space sun position must come from the f64 game-layer projection, the same path as world markers, and never from a three.js Object3D.

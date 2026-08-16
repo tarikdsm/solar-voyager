@@ -1,0 +1,25 @@
+id: T0149
+title: Consolidated settings, HUD preset editor and migration wrap-up
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0118
+  - T0144
+  - T0112
+milestone: V2M5
+spec: |
+  Closes the settings and CSS debt opened across V2M1 to V2M5 behind one surface reachable from both menus.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0149.
+acceptance:
+  - A single settings surface reachable from the pause menu and the main menu carries sections for
+    flight assists, camera, HUD preset and per-panel visibility, audio, video and controls including
+    gamepad
+  - The profile schema migration chain is tested end to end from a committed v1-era fixture while
+    the save-envelope embedded DTO stays GameSettingsV1
+  - Remaining absolute-positioned panels in app.css migrate to the grid and token system, reducing
+    app.css by at least 60 percent of its lines with the number reported
+  - The keyboard-only traversal audit is green
+handoff_notes: |
+  No new features beyond the preset editor.

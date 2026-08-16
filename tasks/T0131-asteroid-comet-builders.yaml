@@ -1,0 +1,22 @@
+id: T0131
+title: build_asteroid.py and build_comet.py with shape-model ingest
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M4
+spec: |
+  The tooling half of the small-body lane: real decimated shape models where a mission flew, deterministic procedural fallbacks where none did, and the anchor nodes comet visuals will hang from.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0131.
+acceptance:
+  - build_asteroid.py handles real shape models for Eros, Bennu and Ryugu decimated to 5000 tris or
+    fewer plus a procedural displaced-icosphere fallback seeded by proceduralSeed
+  - build_comet.py builds a nucleus from a decimated 67P shape model with a procedural Halley,
+    exposing coma_anchor and tail_anchor nodes for T0139
+  - Double builds are byte-identical and unit tests land in the Python tool suite with SOURCES.md
+    per body
+  - Asteroid and comet category budget of 5000 tris each is enforced in config.mjs
+handoff_notes: |
+  Shape model sources are NASA PDS SBN and public domain. Pin URLs and SHA-256 through the T0132 fetch mechanism; T0132 may land first or in the same week.

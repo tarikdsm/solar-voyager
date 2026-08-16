@@ -1,0 +1,26 @@
+id: T0126
+title: Milky Way panorama and zodiacal light
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M3
+spec: |
+  The sky stops being black with dots. A correctly oriented galactic panorama behind the star Points, plus the zodiacal band and an optional constellation overlay.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.4.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0126.
+acceptance:
+  - A CC-licensed ESO or Gaia-derived panorama ships as a KTX2 equirect sphere behind the star
+    Points with correct galactic orientation against J2000, verified against three bright-star
+    positions in a test, and attribution in credits and SOURCES.md
+  - Lazy-loaded after activation and never in initial-path.json, leaving the startup gate unchanged
+  - Zodiacal light renders as a faint ecliptic-plane additive gradient, at most 2 nits equivalent,
+    toggleable
+  - An optional constellation-lines overlay covers the 88 IAU constellations as a single
+    LineSegments batch, off by default
+  - A governor rung controls skybox resolution tier and the aberration shader applies to the
+    panorama exactly as to stars; a Milky Way browser gate ships and the asset budget check stays
+    green
+handoff_notes: |
+  The panorama must pass through the SAME observer-aberration path as the starfield or high-beta views will shear the sky inconsistently. Extend the existing vertex-shader approach.

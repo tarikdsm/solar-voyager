@@ -1,0 +1,22 @@
+id: T0136
+title: Outer major moons batch plus Phobos and Deimos
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0135
+milestone: V2M4
+spec: |
+  Thirteen bodies in one lane: the Saturnian and Uranian majors, Triton, and the two Martian moons.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0136.
+acceptance:
+  - Thirteen bodies ship, covering Mimas, Enceladus, Tethys, Dione, Rhea, Iapetus, Miranda, Ariel,
+    Umbriel, Titania, Oberon, Triton, Phobos and Deimos, using real Cassini and Voyager mosaics
+    where available and procedural displacement otherwise, at 4 MB or less each
+  - The Iapetus two-tone and the Triton cantaloupe terrain are validated visually with reference
+    renders committed
+  - The full pipeline checklist is followed per body and the assets total is reported against the
+    150 MB budget
+handoff_notes: |
+  Batch task. Split into two PRs if review size demands it and note the split here.

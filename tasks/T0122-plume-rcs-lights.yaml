@@ -1,0 +1,25 @@
+id: T0122
+title: Photon-beam plume, RCS puffs, ship lights
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0121
+milestone: V2M3
+spec: |
+  The ship reads as a working machine: a collimated photon beam that answers the throttle, RCS puffs on rotation commands, and running lights driven by sim time.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3; plan section 3.6.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0122.
+acceptance:
+  - The beam follows plan section 3.6, anchored at engine_nozzle, with intensity and length
+    responding to throttle within one frame and nothing when coasting
+  - "Far field: the ship point sprite gains a plume luminance term so a full burn is visible from 1
+    AU or more, with the apparent-magnitude math documented"
+  - RCS puffs at rcs_pod_* fire on rotation commands from a preallocated sprite pool capped at 16
+    live
+  - Nav lights and beacon blink on sim time; every effect is governed, with the governor rung
+    reducing pool size and beam segments
+  - A ship VFX browser gate ships; the draw-call golden is re-baselined by at most 4 in its own
+    commit; heap gate green with bench evidence
+handoff_notes: |
+  Use the onBeforeCompile hook pattern plus the prepareCompilationPass warm-up so there is no first-burn shader stall. Additive transparency: the beam renders after bodies with depthTest true and depthWrite false.

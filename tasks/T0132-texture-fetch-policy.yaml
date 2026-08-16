@@ -1,0 +1,21 @@
+id: T0132
+title: Checksummed on-demand source fetching; stop committing 8K sources
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M4
+spec: |
+  Thirty-four bodies of 8K source imagery cannot enter the repository. Make sources fetched, checksummed and cached instead of committed, without rewriting any history.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 12.4.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0132.
+acceptance:
+  - fetch_textures.py carries a manifest of url, sha256, license and dest per source with fetch,
+    verify and cache plus offline-friendly error copy
+  - The new-body workflow docs say sources are fetched and never committed, while existing committed
+    sources stay in place
+  - ADR-039 lands, asset-pipeline.md is updated and the repo-budget check documents the policy
+  - Python tests cover a checksum mismatch failing and a cache hit skipping the download
+handoff_notes: |
+  Do not delete existing textures-src content in this task; the policy applies to NEW bodies. All 34 upcoming bodies depend on this.

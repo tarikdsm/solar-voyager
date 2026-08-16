@@ -1,0 +1,24 @@
+id: T0121
+title: Remodel the ship for close-up beauty (build_ship.py v2)
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0109
+milestone: V2M3
+spec: |
+  The ship is on screen at all times in v2, so it must survive a close-up. Rebuild it in Blender with paneling, canopy, RCS pods, a nozzle assembly and light housings, plus authored PBR textures.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0121.
+acceptance:
+  - build_ship.py v2 produces hull paneling, canopy, 4 RCS pod clusters, a nozzle assembly and light
+    housings at 18000 to 28000 tris against a 30000 budget
+  - "Contracts preserved: +X nose and thrust per ADR-025, nodes hull_tip and engine_nozzle plus new
+    rcs_pod_1 to rcs_pod_4 and light_nav_l, light_nav_r and light_beacon; meters scale;
+    byte-identical double rebuild"
+  - Authored PBR textures at 2048x1024 covering albedo, normal, metallic-rough and emissive through
+    the textures-src workflow with SOURCES.md; ingest green; all three tier variants built
+  - Ship budget total at or under 8 MB; the Blender smoke test is green; visual check renders
+    committed under docs/bench
+handoff_notes: |
+  Read agents/skills/blender-asset-authoring.md. Determinism rules: analytic normals, texcoord rounding, canonical triangle order (see common/export.py). The new node names are consumed by T0122 and are therefore API.

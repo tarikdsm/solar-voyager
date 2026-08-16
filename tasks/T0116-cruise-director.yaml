@@ -1,0 +1,26 @@
+id: T0116
+title: "CruiseDirector: engage and abort, phase machine, warp piloting, insertion"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0114
+  - T0108
+milestone: V2M2
+spec: |
+  The point-and-fly loop: pick a body, engage, and arrive in a stable orbit unattended. Game layer only, driving the existing Commands surface, with the phase machine, mid-course re-solve, warp piloting and arrival insertion.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3; plan sections 2 and 3.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0116.
+acceptance:
+  - Phases idle, align, boost, flip, brake, insert, done and aborted per plan section 2; flip uses
+    hold-mode slew; mid-course re-solve per plan section 3.3.4
+  - Warp piloting requests ladder tiers respecting every existing clamp and decompresses to 100x or
+    below within 1 s wall on any player input, abort, SOI change or collision warning
+  - LEO to Jupiter orbit arrival reaches e below 0.05 and altitude within 10 percent of the preset
+    in 5 wall minutes or less, unattended, proven by a CI browser run
+  - Abort at any phase leaves a valid controllable state, fuzzed over 200 random abort times on the
+    Mars route
+  - "Ledger honesty preserved: cruise energy equals the integrator ledger and matches the analytic
+    2(gamma_peak-1)mc^2 bound within 2 percent"
+handoff_notes: |
+  Design doc first. Game layer only. Insertion brakes to rails-relative rest at the arrival radius then circularizes with two hold-mode burns computed from osculating elements. Fallback pursuit implemented here per plan section 3.3.6.

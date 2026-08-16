@@ -1,0 +1,23 @@
+id: T0119
+title: Cruise status strip, ETA dual clocks, compression indicator, map engage
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0116
+  - T0112
+milestone: V2M2
+spec: |
+  The HUD surface that makes a relativistic cruise legible and dramatic: phase, target, both clocks, current compression and the peak-beta forecast, present in every preset.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.3 and 7.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0119.
+acceptance:
+  - The strip shows phase, target, ETA in coordinate and proper time, current compression, peak beta
+    forecast and the abort hint, with gamma highlighted above 1.001
+  - Present in all HUD presets including Clean, driven by the 10 Hz signals pattern with zero frame
+    allocation
+  - The system map gains engage-cruise on the selected body, wiring T0117
+  - A browser gate asserts the strip renders during a scripted cruise and that the clocks visibly
+    diverge on a 0.3c leg
+handoff_notes: |
+  Reuse formatUnits SI prefixes and the dual-clock copy pattern from the DualClock component.

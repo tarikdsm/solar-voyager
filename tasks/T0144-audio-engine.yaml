@@ -1,0 +1,24 @@
+id: T0144
+title: Web Audio engine, AudioDirector, mixer settings, Kubrick mode
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0103
+milestone: V2M5
+spec: |
+  Sound arrives with a correct AudioContext lifecycle, a pure decision layer mapping snapshot facts to audio state, and a synthesized engine hum so the milestone ships before any asset does.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 9.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0144.
+acceptance:
+  - AudioContext lifecycle is correct with user-gesture unlock, suspend on hidden tab and no
+    autoplay warnings, over a graph of music, sfx and ui buses into master
+  - AudioDirector maps throttle, warp tier, gamma, dominant body class, impact warning and camera
+    mode to layer states as a pure decision module unit-tested without an AudioContext
+  - The engine hum is synthesized from two detuned saws plus filtered noise keyed to throttle so the
+    feature ships dependency-free before T0145
+  - Kubrick mode silences the sfx bus on exterior cameras with music per setting, the mixer UI lands
+    in settings and all levels persist
+  - Zero allocation in the frame path with audio param updates only; ADR-041 lands
+handoff_notes: |
+  Design doc first. No library. Cockpit and chase are the interior mix; cinematic and observatory are exterior. Decide and record whether the game ships muted until the first volume interaction.

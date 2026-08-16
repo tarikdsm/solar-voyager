@@ -1,0 +1,22 @@
+id: T0152
+title: "v2 accessibility: focus, reduced motion, audio cues, contrast"
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0151
+milestone: V2M6
+spec: |
+  An audit-and-fix pass over everything v2 added to the interface.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 14.2.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0152.
+acceptance:
+  - Full keyboard traversal of pause, diary, album, settings and the cruise strip with visible focus
+    and no key traps
+  - prefers-reduced-motion disables camera shake, FOV pulse and menu drift automatically, proven by
+    a test
+  - Audio alerts have visual alternatives and HUD text contrast is at least 4.5 to 1 in every
+    preset, checked per token
+  - accessibility.md is updated and existing accessibility gate cases are extended
+handoff_notes: |
+  Audit-and-fix task with a checklist PR description.

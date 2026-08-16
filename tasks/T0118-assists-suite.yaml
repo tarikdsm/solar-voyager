@@ -1,0 +1,21 @@
+id: T0118
+title: Bind all holds; approach-brake and manual flip assists; per-assist toggles
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0116
+milestone: V2M2
+spec: |
+  Completes the assist surface a free-flight sandbox needs: every attitude hold bound, an approach brake driven by the relativistic stop distance, and a one-key flip and burn.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.2.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0118.
+acceptance:
+  - All 8 attitude modes bound with defaults documented in controls.md; target hold points at the
+    nav target
+  - Approach brake warns below 1.5x stop distance, auto-engages retrograde plus throttle at 1.2x
+    when enabled, and disengages below 1 m/s relative speed
+  - Manual flip-and-burn executes a 180 degree slew and throttle restore from a single key
+  - Per-assist enable and disable persisted in settings; the HUD shows an active assist chip
+handoff_notes: |
+  Assists live in game/flight/assists.ts consuming the snapshot plus brakingEnvelope. No sim changes.

@@ -1,0 +1,21 @@
+id: T0130
+title: Higher tier-2 tessellation and consolidated crossfade draw cost
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0128
+milestone: V2M3
+spec: |
+  Removes the faceted silhouette at mid distance and pays for it by collapsing the tier-2 double mesh into a single shader-side crossfade.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.1 and 13.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0130.
+acceptance:
+  - Tier-2 spheres move from icosahedron detail 2 to 4, from 320 to 5120 tris, with a governor rung
+    stepping back to 2, and silhouette faceting is gone at 240 px verified by a screenshot diff
+  - The tier-2 fallback plus textured double mesh becomes a single mesh with a shader-side texture
+    crossfade, halving tier-2 draw calls to one per body
+  - Full-catalog worst-case draw calls are measured and recorded, the golden is re-baselined in a
+    dedicated commit and triangles stay inside the 500k budget at the reference pose
+handoff_notes: |
+  The crossfade uniform rides the existing hook pattern. Keep the 250 ms curve and the 1 in 15 point-seed trick documented in bodyVisualSystem.

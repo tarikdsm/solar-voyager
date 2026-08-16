@@ -1,0 +1,24 @@
+id: T0147
+title: IndexedDB photo album with quota policy and export
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0125
+  - T0146
+milestone: V2M5
+spec: |
+  Photographs become a persistent local album, with the quota and privacy questions answered explicitly.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 8.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0147.
+acceptance:
+  - The T0125 CaptureSink is backed by IndexedDB storing blob, capture metadata and a 256 px
+    thumbnail, with an album grid UI offering view, delete and download
+  - Quota is a soft cap of 200 MB or half the storage estimate, oldest-eviction only after user
+    consent, with private mode degrading to a download-only fallback and a notice
+  - Export writes album metadata JSON plus per-photo download, with import out of scope and
+    documented in privacy.md
+  - Storage code is fully unit-tested with fake-indexeddb and a browser gate captures and lists a
+    photo
+handoff_notes: |
+  privacy.md must be updated in this PR because this adds a local storage surface. No cloud, no telemetry.

@@ -1,0 +1,22 @@
+id: T0123
+title: Planetshine secondary light and sun specular on hull
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0122
+milestone: V2M3
+spec: |
+  One extra directional light turns the night side of a close body from black into earthshine, which is what makes low passes read as real.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 6.3.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0123.
+acceptance:
+  - A second directional light takes its direction from the dominant body with colour and intensity
+    from albedo colour times phase times solid angle, capped at 8 percent of solar, so the LEO night
+    side is clearly lit
+  - An optional camera-fill accessibility light exists in settings, default off and labelled artistic
+  - No per-frame allocation; the light updates from the snapshot inside the existing lighting update
+    path
+  - The lighting browser gate is extended and bench evidence is committed
+handoff_notes: |
+  One extra DirectionalLight in total, not one per body. Solar specular already comes from MeshStandardMaterial plus the sun light; verify the T0121 metallic-rough map reads well and record reference screenshots.

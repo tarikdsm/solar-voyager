@@ -1,0 +1,24 @@
+id: T0143
+title: Flyby detail boost and radar-altitude HUD
+status: TODO
+agent: ""
+branch: ""
+depends_on:
+  - T0128
+  - T0112
+milestone: V2M4
+spec: |
+  Tuning task with objective anchors: close passes must look great at twice the body radius, and the pilot must be able to read altitude.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 4.4 and 6.1.
+  Full task definition (files, interfaces, tests, landmines) in docs/superpowers/plans/2026-08-14-v2-free-flight.md, section 5, task T0143.
+acceptance:
+  - Detail-shader strengths are retuned, albedo from 0.12 to 0.25 and normal from 0.08 to 0.18
+    baseline with per-body overrides in manifest extras, with before and after captures at 2x radius
+    for six bodies
+  - Reference captures for Moon, Mars and Io are committed and linked in the PR as the
+    looks-great-at-2x-radius bar
+  - A radar altitude readout appears in the Pilot preset below 2 radii showing altitude above mean
+    radius or deck plus vertical speed on the 10 Hz signals path
+  - The detail octaves governor rung is preserved and bench evidence is committed
+handoff_notes: |
+  The captures ARE the acceptance. Do not touch tier thresholds here.
