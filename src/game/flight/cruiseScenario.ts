@@ -74,6 +74,19 @@ export interface CruiseScenarioResult {
   readonly finalWarp: number;
   readonly finalThrottle: number;
   readonly finalAttitudeMode: string;
+  /**
+   * State a settling window after `abort()`, which is what "abort leaves a valid
+   * controllable state" means. Deliberately *not* the state at the end of the
+   * run: an abandoned ship 400 km over Earth in the middle of a 10 g departure
+   * burn is on a suborbital arc, and it hitting the planet a few minutes later
+   * is ADR-036 working, not the director failing to release the ship.
+   */
+  readonly releasedWarp: number;
+  readonly releasedThrottle: number;
+  readonly releasedAttitudeMode: string;
+  readonly releasedControllable: boolean;
+  /** Whether the unpiloted ship hit something after the release. Informational. */
+  readonly impactAfterAbort: boolean;
   /** Wall seconds between `abort()` and the first frame at or below 100x. */
   readonly decompressionWallSec: number;
   /** Ship still integrable and finite after the run. */
@@ -137,6 +150,12 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
   let abortFrame = -1;
   let decompressedFrame = -1;
   let thrustCoordSec = 0;
+  let releasedWarp = Number.NaN;
+  let releasedThrottle = Number.NaN;
+  let releasedAttitudeMode = '';
+  let releasedControllable = false;
+  // Long enough to cover the <= 1 s decompression bound and settle behind it.
+  const releaseSettleFrames = Math.ceil(1.5 / frameDtSec);
   let profileEnergySpentJ = Number.NaN;
   let previousSimTimeSec = simulation.snapshot.simTimeSec;
   let snapshot = simulation.snapshot;
@@ -171,6 +190,19 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
     if (snapshot.effectiveWarp > maxWarp) maxWarp = snapshot.effectiveWarp;
     if (abortFrame >= 0 && decompressedFrame < 0 && snapshot.requestedWarp <= 100) {
       decompressedFrame = frames;
+    }
+    if (
+      abortFrame >= 0 &&
+      releasedAttitudeMode === '' &&
+      frames - abortFrame >= releaseSettleFrames
+    ) {
+      releasedWarp = snapshot.requestedWarp;
+      releasedThrottle = snapshot.throttle;
+      releasedAttitudeMode = snapshot.attitudeMode;
+      releasedControllable =
+        Number.isFinite(snapshot.shipState[0] as number) &&
+        Number.isFinite(snapshot.shipCoordinateVelocityKmS[0] as number) &&
+        snapshot.impactOccurred === 0;
     }
     if (snapshot.impactOccurred === 1) break;
   }
@@ -230,6 +262,12 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
     finalWarp: snapshot.requestedWarp,
     finalThrottle: snapshot.throttle,
     finalAttitudeMode: snapshot.attitudeMode,
+    releasedWarp: Number.isFinite(releasedWarp) ? releasedWarp : snapshot.requestedWarp,
+    releasedThrottle: Number.isFinite(releasedThrottle) ? releasedThrottle : snapshot.throttle,
+    releasedAttitudeMode:
+      releasedAttitudeMode === '' ? snapshot.attitudeMode : releasedAttitudeMode,
+    releasedControllable: releasedAttitudeMode === '' ? controllable : releasedControllable,
+    impactAfterAbort: abortFrame >= 0 && snapshot.impactOccurred === 1,
     decompressionWallSec:
       decompressedFrame >= 0 ? (decompressedFrame - abortFrame) * frameDtSec : 0,
     controllable,

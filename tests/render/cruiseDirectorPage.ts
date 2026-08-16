@@ -68,49 +68,35 @@ function createSampler(seed: number): () => number {
   };
 }
 
-function runFuzz(): FuzzSummary {
-  // One clean Mars run first, to learn how long the route is in fuzz frames.
-  const reference = runCruiseScenario({
+let fuzzReferenceFrames = 0;
+const sample = createSampler(0x5_0116);
+const fuzzPhases = new Set<string>();
+
+function runFuzzSample(): void {
+  const summary = harness.fuzz as FuzzSummary;
+  const abortAtFrame = Math.max(1, Math.floor(sample() * fuzzReferenceFrames));
+  const result = runCruiseScenario({
     targetBodyId: 'mars',
     frameDtSec: FUZZ_FRAME_DT_SEC,
     maxFrames: 40_000,
+    abortAtFrame,
+    framesAfterAbort: 120,
   });
-  const sample = createSampler(0x5_0116);
-  const summary: FuzzSummary = {
-    runs: 0,
-    phasesSeen: [],
-    maxDecompressionWallSec: 0,
-    failures: [],
-  };
-  const phases = new Set<string>();
-  for (let index = 0; index < FUZZ_RUNS; index += 1) {
-    const abortAtFrame = Math.max(1, Math.floor(sample() * reference.frames));
-    const result = runCruiseScenario({
-      targetBodyId: 'mars',
-      frameDtSec: FUZZ_FRAME_DT_SEC,
-      maxFrames: 40_000,
-      abortAtFrame,
-      framesAfterAbort: 120,
-    });
-    summary.runs += 1;
-    phases.add(result.phase);
-    summary.maxDecompressionWallSec = Math.max(
-      summary.maxDecompressionWallSec,
-      result.decompressionWallSec,
-    );
-    const reasons: string[] = [];
-    if (result.phase !== 'aborted') reasons.push(`phase=${result.phase}`);
-    if (!result.controllable) reasons.push('not controllable');
-    if (result.finalThrottle !== 0) reasons.push(`throttle=${result.finalThrottle}`);
-    if (result.finalAttitudeMode !== 'manual') reasons.push(`mode=${result.finalAttitudeMode}`);
-    if (result.finalWarp > 100) reasons.push(`warp=${result.finalWarp}`);
-    if (result.decompressionWallSec > 1) {
-      reasons.push(`decompression=${result.decompressionWallSec}`);
-    }
-    if (reasons.length > 0) summary.failures.push({ abortAtFrame, reason: reasons.join(', ') });
-  }
-  summary.phasesSeen = [...phases].sort();
-  return summary;
+  summary.runs += 1;
+  fuzzPhases.add(result.phase);
+  summary.phasesSeen = [...fuzzPhases].sort();
+  summary.maxDecompressionWallSec = Math.max(
+    summary.maxDecompressionWallSec,
+    result.decompressionWallSec,
+  );
+  const reasons: string[] = [];
+  if (result.phase !== 'aborted') reasons.push(`phase=${result.phase}`);
+  if (!result.releasedControllable) reasons.push('not controllable');
+  if (result.releasedThrottle !== 0) reasons.push(`throttle=${result.releasedThrottle}`);
+  if (result.releasedAttitudeMode !== 'manual') reasons.push(`mode=${result.releasedAttitudeMode}`);
+  if (result.releasedWarp > 100) reasons.push(`warp=${result.releasedWarp}`);
+  if (result.decompressionWallSec > 1) reasons.push(`decompression=${result.decompressionWallSec}`);
+  if (reasons.length > 0) summary.failures.push({ abortAtFrame, reason: reasons.join(', ') });
 }
 
 const queue: Array<() => void> = [
@@ -121,9 +107,17 @@ const queue: Array<() => void> = [
     harness.moon = runCruiseScenario({ targetBodyId: 'moon', maxFrames: 20_000 });
   },
   () => {
-    harness.fuzz = runFuzz();
+    // One clean Mars run first, to learn how long the route is in fuzz frames.
+    const reference = runCruiseScenario({
+      targetBodyId: 'mars',
+      frameDtSec: FUZZ_FRAME_DT_SEC,
+      maxFrames: 40_000,
+    });
+    fuzzReferenceFrames = reference.frames;
+    harness.fuzz = { runs: 0, phasesSeen: [], maxDecompressionWallSec: 0, failures: [] };
   },
 ];
+for (let index = 0; index < FUZZ_RUNS; index += 1) queue.push(runFuzzSample);
 
 function pump(): void {
   const task = queue.shift();
@@ -140,10 +134,14 @@ function pump(): void {
     document.body.dataset.cruiseStatus = 'failed';
     return;
   }
-  // Yield between scenarios so the browser stays responsive and Playwright can
-  // observe progress rather than a single multi-minute blocking script.
+  document.body.dataset.cruiseRemaining = String(queue.length);
+  // One scenario per task, yielding in between. The whole gate is minutes of
+  // blocking arithmetic; without the yields the page never repaints, and
+  // Playwright's rAF-polled waits never get a frame to evaluate in.
   setTimeout(pump, 0);
 }
 
 document.body.dataset.cruiseStatus = 'running';
-setTimeout(pump, 0);
+// Late enough that the harness object is observable before the first scenario
+// takes the main thread for tens of seconds.
+setTimeout(pump, 250);

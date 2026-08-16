@@ -201,10 +201,10 @@ describe('CruiseDirector abort', () => {
         maxFrames: 6_000,
       });
       phases.push(result.phase);
-      expect(result.controllable).toBe(true);
-      expect(result.finalThrottle).toBe(0);
-      expect(result.finalAttitudeMode).toBe('manual');
-      expect(result.finalWarp).toBeLessThanOrEqual(100);
+      expect(result.releasedControllable).toBe(true);
+      expect(result.releasedThrottle).toBe(0);
+      expect(result.releasedAttitudeMode).toBe('manual');
+      expect(result.releasedWarp).toBeLessThanOrEqual(100);
       expect(result.decompressionWallSec).toBeLessThanOrEqual(1);
     }
     expect(new Set(phases)).toEqual(new Set(['aborted']));

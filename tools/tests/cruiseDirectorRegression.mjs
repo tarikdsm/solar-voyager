@@ -29,7 +29,15 @@ try {
   });
 
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => globalThis.__cruiseDirectorHarness !== undefined);
+  try {
+    await page.waitForFunction(() => globalThis.__cruiseDirectorHarness !== undefined, null, {
+      timeout: 120_000,
+    });
+  } catch (error) {
+    throw new Error(
+      `cruise harness never published: ${error.message}; pageErrors=${JSON.stringify(pageErrors)}; consoleErrors=${JSON.stringify(consoleErrors)}`,
+    );
+  }
   await page.waitForFunction(() => globalThis.__cruiseDirectorHarness.status !== 'running', null, {
     timeout: HARNESS_TIMEOUT_MS,
   });
