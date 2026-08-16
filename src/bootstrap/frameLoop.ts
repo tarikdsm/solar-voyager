@@ -1,3 +1,4 @@
+import type { AudioSystem } from '../game/audio/audioSystem.js';
 import type { FlightController } from '../game/flight/flightController.js';
 import type { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import type { HudInputRouter } from '../game/hud/hudInputRouter.js';
@@ -43,6 +44,8 @@ import type { SystemMapRuntimeDiagnostics } from './diagnostics.js';
  * fields) stays local to `composition.ts`.
  */
 export interface FrameLoopRuntime {
+  /** T0144 — decide from the snapshot, then move the graph. Silent until unlocked. */
+  readonly audio: AudioSystem;
   readonly burnLogStore: BurnLogSignalStore;
   readonly canvas: HTMLCanvasElement;
   readonly hudPresetStore: HudPresetStore;
@@ -89,6 +92,7 @@ export interface FrameLoopRuntime {
  */
 export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => void {
   const {
+    audio,
     burnLogStore,
     canvas,
     hudPresetStore,
@@ -192,6 +196,12 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       runtime.tutorialFrameObserver?.(snapshot);
     }
     stateVectorStore.publish(snapshot, nowMs);
+    // T0144 — a snapshot consumer, so it belongs in the UI window rather than the
+    // render one. `deltaSec`, never `simDeltaSec`: a paused game must still finish
+    // its music crossfade and its Kubrick ramp instead of freezing mid-blend for
+    // the length of a menu visit. Camera *mode* cannot change inside a frame, so
+    // reading it before `cameraDirector.update` below is the same value.
+    audio.update(snapshot, cameraDirector.mode, halted, deltaSec);
     const hudEndMs = performance.now();
     const renderStartMs = performance.now();
     // T0110 — the director runs both cameras and publishes one pose; the rig is

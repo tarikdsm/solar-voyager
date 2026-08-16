@@ -1,5 +1,7 @@
 import { h, render } from 'preact';
 
+import { createAudioBodyClasses } from '../game/audio/audioBodyClasses.js';
+import { AudioSystem } from '../game/audio/audioSystem.js';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,
@@ -68,6 +70,7 @@ import { createTrajectoryPredictionSignalStore } from '../ui/trajectoryPredictio
 
 import {
   copyDiagnosticEntry,
+  createAudioRuntimeDiagnostics,
   createBurnLogRuntimeDiagnostics,
   createCameraRuntimeDiagnostics,
   createRuntimeResourceCounts,
@@ -158,6 +161,36 @@ function createBrowserGamepadHost(): GamepadHost {
       window.removeEventListener(type, listener);
     },
   };
+}
+
+/**
+ * One-shot user-gesture port for the audio engine (T0144, ADR-041).
+ *
+ * `pointerdown` and `keydown` in the capture phase, both `once`, both removed as
+ * soon as either fires: the engine constructs its `AudioContext` inside this
+ * callback and never before, which is what keeps the autoplay warning off the
+ * console on the six harnesses that reach gameplay through `?autostart=1` with
+ * no human present.
+ *
+ * Passive and non-preventing — it observes a gesture the player made for another
+ * reason (starting the game, steering the ship) rather than asking for one.
+ */
+function observeFirstUserGesture(target: Window, onGesture: () => void): () => void {
+  const options: AddEventListenerOptions = { capture: true, passive: true };
+  let disposed = false;
+  const handle = (): void => {
+    dispose();
+    onGesture();
+  };
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    target.removeEventListener('pointerdown', handle, options);
+    target.removeEventListener('keydown', handle, options);
+  };
+  target.addEventListener('pointerdown', handle, options);
+  target.addEventListener('keydown', handle, options);
+  return dispose;
 }
 
 function writeCameraFocusLabel(bodyId: string): void {
@@ -386,11 +419,30 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       if (origin === 'restore') runtime.flightController?.resetAxes();
       else runtime.flightController?.releaseAxes();
       runtime.world?.cameraDirector.applyCameraSettings(settings.camera);
+      audio.setLevels(settings.audio);
       hudPresetStore.setPreset(settings.hud.preset);
       hudPresetStore.setBodyLabels(settings.hud.bodyLabels);
       runtime.perfGovernor?.setLock(settings.qualityLock, performance.now());
     },
   });
+  // T0144 — built here because it needs the loaded profile, and before the frame
+  // loop because the loop holds it as a readonly field. Constructing this object
+  // creates no AudioContext: `observeFirstUserGesture` below is the only thing
+  // that can, and only from a real gesture.
+  const audio = new AudioSystem({
+    bodyClasses: createAudioBodyClasses(),
+    levels: session.settings.audio,
+    createContext: () => new AudioContext(),
+  });
+  createAudioRuntimeDiagnostics(canvas, audio);
+  const disposeAudioGestureObserver = observeFirstUserGesture(window, () => {
+    audio.unlock();
+  });
+  const handleVisibilityChange = (): void => {
+    audio.setPageHidden(document.hidden);
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  audio.setPageHidden(document.hidden);
   startupTracker.advance('context');
   updateStartupLoadingView(startupLoadingElements, startupTracker);
   canvas.dataset.startupStage = startupTracker.stage;
@@ -506,6 +558,9 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     disposeStateVectorLayoutObservation?.();
     runtime.world?.systemMap.dispose();
     runtime.postPipeline?.dispose();
+    disposeAudioGestureObserver();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    audio.dispose();
   }
 
   function currentInputSnapshot() {
@@ -784,6 +839,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
    * *call* one of the hoisted functions that read it.
    */
   const runtime: FrameLoopRuntime = {
+    audio,
     burnLogStore,
     canvas,
     hudPresetStore,
