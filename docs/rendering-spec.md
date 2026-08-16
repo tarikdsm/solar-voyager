@@ -131,8 +131,8 @@ because it has no fallback sphere worth drawing:
   albedo `0.45` and a bounding radius of `0.01306 km` (half the 26.12 m authored
   length). A 26 m hull is therefore magnitude ≈ −1.5 at 1,000 km and ≈ 24 at
   1 AU: **correctly invisible** across interplanetary distance. The photon-drive
-  plume (spec §6.3) is what later makes a *burning* ship readable at range, by
-  adding its luminance into this same point.
+  plume (§3.4, T0122) is what makes a *burning* ship readable at range, by adding
+  its flux into this same point — 16 magnitudes of it at 1 AU.
 - Position and attitude come from `SimSnapshot`: the ship occupies one extra
   triple at the end of the packed float64 position array, so the camera-relative
   boundary, the camera focus targets and the solar-lighting focus all address it
@@ -152,6 +152,70 @@ because it has no fallback sphere worth drawing:
   light as well, so its dielectrics receive ambient irradiance twice (0.04 rather
   than 0.02) — 1.3 % of the direct solar term at 1 AU, deliberately not chased.
   Real planetshine from the dominant body is Front C work.
+
+### 3.4 Engine VFX: plume, RCS, running lights (T0122)
+
+Everything here is deterministic from `SimSnapshot` (throttle, power, attitude,
+simulation time), allocates nothing per frame, and hangs off a single `Object3D`
+bound through `spaceScene.bindPackedEffectVisual` — T0129's degrading policy,
+because an effect transform is a derived quantity and a NaN in one must not end
+the session the way a NaN in a ship position rightly does. Anchors are
+transcribed from `tools/blender/ship_config.py` into `render/shipEffectAnchors.ts`
+so the effects can be precompiled before `ship.glb` is fetched, and verified
+against the loaded asset once it arrives (`solarVoyagerShipEffects.anchorErrorM`).
+
+**Beam.** One additive lathe anchored at the `engine_nozzle` **throat**
+(model `x = −11.5`, not the bell mouth at `−13.0`), emitting aft. Length is
+`4 × 26.12 m × throttle^0.7`, brightness `√throttle`, both delivered as uniforms
+so the throttle reaches the screen in the frame it is read; zero throttle hides
+the object outright. The bell is a closed shell, so `depthTest: true` is what
+makes the beam appear to emerge from the mouth. `forceSinglePass: true` — three
+otherwise renders a transparent double-sided material in two passes, and additive
+blending is order-independent, so the second pass is a wasted draw call.
+
+**Far field — the artificial star.** The drive is a photon rocket, so
+`P = m·α·c` (physics-spec §5) leaves as light and `SimSnapshot.powerDrawW` is
+already that number. Its radiant intensity is a normalized beam pattern
+
+```
+I(θ) = P · [ f_iso/(4π) + (1 − f_iso)(n+1)·max(0, cos θ)^n / (2π) ]   [W/sr]
+```
+
+with `f_iso = 0.02` (bell spill and thermal re-radiation), `n = 64` (half-power
+half-angle 8.42°) and `θ` measured from the exhaust axis. Both terms integrate to
+their share of `P`, so the pattern redistributes power and never invents any.
+Against the same solar zero point §3 already uses,
+
+```
+m_plume = −26.74 − 2.5·log10( I(θ)/d² · 4π(1 AU)² / L☉ ),   L☉ = 3.828e26 W
+```
+
+and the plume is added to the reflected hull **in flux**,
+`m = −2.5·log10(10^(−0.4·m_refl) + 10^(−0.4·m_plume))`, inside the ship's existing
+`BodyPointCloud` slot — no second object and no second brightness ladder. For the
+default 10 t / 10 g vessel (`P = 2.940e14 W = 7.68e−13 L☉`) at 1 AU: hull alone
++24.4 (invisible), plume broadside +7.8, plume down the beam **−1.7**. A burning
+ship is 16 magnitudes brighter than a coasting one, which is the "artificial
+star" of spec §6.3 arriving from `P = mαc` rather than from a tuning constant.
+
+**RCS.** Four pods × four bells = sixteen thrusters, which is the preallocated
+pool and its live cap. One `Points` object, static positions, one draw call. Bell
+`i` fires with weight `max(0, τ̂ᵢ · ω̂) · saturate(|ω| / 0.12)` where
+`τᵢ = rᵢ × (−uᵢ)`, so the couples are solved rather than scripted. `ω` is
+differentiated from consecutive snapshot attitudes, not read from
+`CommandState.rotationRatesRadS`, because that is zero during a hold-mode slew
+(ADR-035) — when the ship is turning hardest. Steps above 1 rad per frame
+(warp ≳ 700) alias in the axis–angle extraction and are dropped and counted.
+
+**Lights.** `mat_light_beacon` / `mat_light_nav_l` / `mat_light_nav_r` carry the
+authored emission (T0121); this multiplies it by a waveform of **simulation**
+time — nav lights ±6 % over 4 s, beacon a double flash of two 90 ms pulses 220 ms
+apart every 1.6 s over a 0.25 floor. Sim time is why pause freezes them.
+
+**Cost.** Three objects, hidden unless active: beam, nozzle glow, puff pool — at
+most +3 draw calls, and zero in a coasting frame. The governor derives
+`plumeBeamSegments` (24/12/6, three index ranges over one vertex buffer) and
+`rcsPuffCap` (16/8/0) from the rung's tier.
 
 ## 3.6 Camera (T0110)
 
@@ -445,4 +509,4 @@ unchanged.
 
 ## 12. Quality settings — adaptive governor (ADR-008)
 
-Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins), an exposure mode (`auto`/`fixed`, §4), and shows the governor's current tier. The tier-1 rungs additionally pin `fixed` exposure, and `fixed` from either the player or the governor wins. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.
+Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins), an exposure mode (`auto`/`fixed`, §4), and shows the governor's current tier. The tier-1 rungs additionally pin `fixed` exposure, and `fixed` from either the player or the governor wins. Two further knobs are derived from the rung's tier rather than listed per rung, so the ladder cannot drift out of step with it: the photon beam's radial tessellation `plumeBeamSegments` (24 at tier ≥ 5, 12 at tiers 2–4, 6 at tier 1) and the RCS live-puff cap `rcsPuffCap` (16 at tier ≥ 3, 8 at tier 2, 0 at tier 1). Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.
