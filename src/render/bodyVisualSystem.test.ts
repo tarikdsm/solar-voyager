@@ -8,6 +8,7 @@ import {
   MeshStandardMaterial,
   RGBAFormat,
   Texture,
+  Vector3,
   type Material,
   type Object3D,
 } from 'three';
@@ -32,6 +33,7 @@ function definitions(): BodyVisualDefinition[] {
       meanRadiusKm: 10,
       muKm3S2: 1_000,
       axialTiltRad: 0,
+      siderealRotationPeriodSec: 2_164_320,
       polarRadiusRatio: 1,
       geometricAlbedo: 1,
       albedoColor: 0xffdd88,
@@ -43,6 +45,7 @@ function definitions(): BodyVisualDefinition[] {
       meanRadiusKm: 1,
       muKm3S2: 10,
       axialTiltRad: 0.409,
+      siderealRotationPeriodSec: 86_164.100_352,
       polarRadiusRatio: 0.996,
       geometricAlbedo: 0.434,
       albedoColor: 0x4488ff,
@@ -314,10 +317,12 @@ describe('BodyVisualSystem structure', () => {
     const tilt = 0.4665265090580843;
     const saturnX = 10 * AU_KM;
     const ringRadiusKm = (66_900 + 140_612) / 2;
+    // In the ring plane, on the local +Z radius, so the camera position only
+    // lands inside the annulus if the new tilted equatorial frame is applied.
     const ringCamera = {
-      x: saturnX + Math.cos(tilt) * ringRadiusKm,
-      y: Math.sin(tilt) * ringRadiusKm,
-      z: 0,
+      x: saturnX,
+      y: -Math.cos(tilt) * ringRadiusKm,
+      z: Math.sin(tilt) * ringRadiusKm,
     };
     const ringDefinitions: BodyVisualDefinition[] = [
       definitions()[0] as BodyVisualDefinition,
@@ -325,6 +330,7 @@ describe('BodyVisualSystem structure', () => {
         id: 'saturn',
         category: 'planet',
         axialTiltRad: tilt,
+        siderealRotationPeriodSec: 38_362.464,
         meanRadiusKm: 58_232,
         muKm3S2: 37_931_207.8,
         polarRadiusRatio: 0.9020375655405853,
@@ -350,7 +356,12 @@ describe('BodyVisualSystem structure', () => {
     const spaceScene = new CameraRelativeSpaceScene();
     const compileModel = vi.fn(async () => {
       expect(root.parent).toBe(spaceScene.scene);
-      expect(root.rotation.z).toBeCloseTo(tilt);
+      // The tilt reaches the root through bodySpin's attitude, never twice.
+      expect(root.rotation.z).not.toBeCloseTo(tilt);
+      expect(new Vector3(0, 1, 0).applyQuaternion(root.quaternion).z).toBeCloseTo(
+        Math.cos(tilt),
+        12,
+      );
       expect(root.getObjectByName('saturn_ring_particles')).toBeDefined();
       const cacheKey = surface.customProgramCacheKey();
       expect(cacheKey).toContain('solar-voyager-gas-giant-v1');
@@ -396,6 +407,7 @@ describe('BodyVisualSystem structure', () => {
       id: 'saturn',
       category: 'planet',
       axialTiltRad: 0.4665,
+      siderealRotationPeriodSec: 38_362.464,
       meanRadiusKm: 58_232,
       muKm3S2: 37_931_207.8,
       polarRadiusRatio: 0.902,
@@ -529,6 +541,7 @@ describe('BodyVisualSystem transitions', () => {
           id: 'pluto',
           category: 'dwarf',
           axialTiltRad: 0,
+          siderealRotationPeriodSec: -551_854.08,
           meanRadiusKm: 1,
           muKm3S2: 1,
           polarRadiusRatio: 1,

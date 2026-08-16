@@ -36,7 +36,75 @@ where `p` is geometric albedo and the Lambert phase function is
 are clamped to finite physical fallback distances so tier attributes never
 receive NaN or infinity.
 
-### 3.1 The ship (T0109)
+Tier 2 and tier 3 share one **equatorial render radius** — the ring catalog's
+reference radius for a ringed body, its `meanRadiusKm` otherwise — and both
+carry the catalog's `visual.polarRadiusRatio`: tier 3 bakes the flattening into
+the exported mesh (with canonicalised ellipsoid normals), tier 2 applies it as a
+non-uniform object scale `(R, R·ratio, R)` about the body's own pole. three.js'
+inverse-transpose normal matrix makes that scale normal-exact, so no shader
+variant is involved. The result is a continuous silhouette across the 2↔3
+boundary; the tier fly-in gate measures Saturn's projected axis ratio at both
+tiers from the same camera pose and holds them to 0.902 within 0.03.
+
+### 3.2 Rotation and axial tilt (T0128)
+
+The render frame is the physics frame — heliocentric ecliptic J2000, `+Z`
+ecliptic north — and every asset is glTF Y-up with model-local `+Y` as the north
+pole. `render/bodySpin.ts` is the **single owner** of the catalog's
+`axialTiltRad`; nothing else may turn a tilt into a transform. Once per frame it
+rewrites one preallocated quaternion per catalog body into a packed float64
+attitude path:
+
+```
+q_body(t) = R_x(π/2 − axialTiltRad) · R_y(θ(t))
+θ(t)      = W₀ + 2π · (t mod T) / T
+```
+
+`T` is the signed `siderealRotationPeriodSec` (negative = retrograde about the
+declared pole, per `data/bodies.schema.json`), and `t` is `simTimeSec`, so pause,
+time warp and deterministic replay share one clock. The modulo runs before the
+scale, so a multi-century session keeps full precision in the angle — the same
+bounded-modulo rule §11 states for the gas giants.
+
+**What this is honestly not.** Two things are conventions, not measurements, and
+both come from gaps in the catalog:
+
+- **Epoch phase is uncalibrated.** `bodies.json` carries no `W₀`
+  (prime-meridian angle at epoch), so `W₀ = 0` for every body except Earth. What
+  ships is a **phase-accurate rotation rate with an arbitrary epoch phase**: Io
+  really does turn once per 42.46 h, but which face is sunlit at `t = 0` is not
+  a claim, and neither is any longitude read off a rendered body.
+- **Pole azimuth is a convention.** Obliquity alone does not fix a pole
+  direction; that needs IAU `(α₀, δ₀)`, which the catalog also lacks. The chosen
+  convention puts the ascending node of each body's equator on the ecliptic at
+  ecliptic longitude 0, i.e. the pole leans toward ecliptic longitude 90°. The
+  obliquity — hence the *plane* of the equator and of any ring system — is real;
+  the orientation of that plane about the ecliptic pole is not.
+
+**Earth is anchored, and only Earth.** With the frame above, Earth's spin angle
+is exactly Greenwich sidereal time, so `W₀` is set to GMST at the J2026 TDB
+epoch (JD 2461041.5), `1.756863409 rad = 100.660859°` (IAU-1982). The pole
+direction `(0, sin ε, cos ε)` is likewise exact for Earth, because its equator's
+ascending node on the ecliptic *is* the vernal equinox. The anchor ignores
+precession of the equinox (≈0.33° accumulated since J2000), nutation and
+UT1−TDB, so the rendered sub-solar point is good to a few tenths of a degree
+near the epoch and drifts by ≈0.014°/yr. The unit test holds it to 1° of the
+published position for 2026-01-01T00:00 UT and reproduces both solstice
+sub-solar latitudes.
+
+Ringed bodies take the same attitude on their model root, so the annulus rides
+its planet and the ring/surface shadow pair is evaluated in that spinning frame.
+Neptune's Adams arcs therefore circulate at Neptune's 16.11 h rotation rather
+than their true ≈10.5 h Keplerian period — previously they were frozen. Saturn's
+close-plane particle field is the exception: it is counter-spun back into the
+body's non-spinning equatorial frame and addressed by a camera expressed there,
+because its shader advances particles at their own Keplerian rate and a rotating
+frame would add the parent's angular velocity on top of it.
+
+Design and the full decision record:
+`docs/superpowers/specs/2026-08-16-body-rotation-design.md`.
+
+### 3.3 The ship (T0109)
 
 The player vessel uses the **same ladder primitives** with only two rungs,
 because it has no fallback sphere worth drawing:

@@ -82,15 +82,24 @@ describe('Earth surface layers', () => {
     expect(atmosphere instanceof Mesh ? atmosphere.material : null).toBe(atmosphereMaterial);
   });
 
-  it('bounds cloud rotation across long-running sessions', () => {
+  it('drifts on simulation time and stays bounded across long-running sessions', () => {
     const fixture = earthFixture();
     const prepared = prepareEarthSurfaceLayers(fixture.root, fixture.materials);
     if (prepared === null) throw new Error('Earth layers were not prepared.');
-    const rotationPeriodMs = 6 * 60 * 60 * 1_000;
+    // 10 m/s eastward at the equator: 40 074.784 km / 0.010 km/s.
+    const relativePeriodSec = 4_007_478;
 
-    prepared.update(rotationPeriodMs * 10_001);
+    prepared.update(relativePeriodSec / 4);
+    expect(fixture.clouds.rotation.y).toBeCloseTo(Math.PI / 2, 10);
 
+    prepared.update(relativePeriodSec * 10_001);
     expect(fixture.clouds.rotation.y).toBeCloseTo(0, 10);
+
+    // Sim time, not the wall clock: a repeated instant must not move the shell.
+    prepared.update(1_234.5);
+    const frozen = fixture.clouds.rotation.y;
+    prepared.update(1_234.5);
+    expect(fixture.clouds.rotation.y).toBe(frozen);
   });
 
   it('returns null without a cloud shell and disposes only its owned atmosphere', () => {

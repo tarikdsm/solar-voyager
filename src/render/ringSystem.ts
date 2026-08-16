@@ -8,6 +8,7 @@ import {
   type ShaderMaterial,
 } from 'three';
 
+import { writeBodyFrameVectorInto, writeEquatorFrameVectorInto } from './bodySpin.js';
 import type { RingDefinition } from './ringCatalog.js';
 import { prepareRingMaterials, type PreparedRingMaterials } from './ringMaterial.js';
 import { RingParticleField } from './ringParticleField.js';
@@ -22,6 +23,16 @@ export interface RingBodyDefinition {
 export interface PreparedRingSystem {
   readonly blend: number;
   readonly particleMesh: InstancedMesh<IcosahedronGeometry, ShaderMaterial> | null;
+  /**
+   * Publishes one frame of camera/Sun geometry.
+   *
+   * `spinAngleRad` is the parent body's rotation about its pole for this frame
+   * (`bodySpin.ts`). The annulus is a child of the spinning model root, so the
+   * Sun is transformed into that *spinning* frame; the particle field is
+   * counter-spun back into the body's non-spinning equatorial frame, because its
+   * shader advances particles at their own Keplerian rate and a rotating frame
+   * would add the parent's angular velocity on top of it.
+   */
   update(
     cameraBodyXKm: number,
     cameraBodyYKm: number,
@@ -30,6 +41,7 @@ export interface PreparedRingSystem {
     sunBodyYKm: number,
     sunBodyZKm: number,
     simTimeSec: number,
+    spinAngleRad: number,
   ): void;
   setParticleCount(count: number): void;
   dispose(): void;
@@ -81,20 +93,16 @@ function assertBody(body: RingBodyDefinition): void {
 }
 
 class PreparedRingSystemImpl implements PreparedRingSystem {
-  private readonly tiltCos: number;
-  private readonly tiltSin: number;
+  private readonly frameScratch = new Float64Array(3);
   private disposed = false;
 
   constructor(
     private readonly root: Object3D,
     private readonly referenceRadiusKm: number,
-    axialTiltRad: number,
+    private readonly axialTiltRad: number,
     private readonly materials: PreparedRingMaterials,
     private readonly particles: RingParticleField | null,
-  ) {
-    this.tiltCos = Math.cos(axialTiltRad);
-    this.tiltSin = Math.sin(axialTiltRad);
-  }
+  ) {}
 
   get blend(): number {
     return this.particles?.blend ?? 0;
@@ -112,6 +120,7 @@ class PreparedRingSystemImpl implements PreparedRingSystem {
     sunBodyYKm: number,
     sunBodyZKm: number,
     simTimeSec: number,
+    spinAngleRad: number,
   ): void {
     if (
       !Number.isFinite(cameraBodyXKm) ||
@@ -120,26 +129,47 @@ class PreparedRingSystemImpl implements PreparedRingSystem {
       !Number.isFinite(sunBodyXKm) ||
       !Number.isFinite(sunBodyYKm) ||
       !Number.isFinite(sunBodyZKm) ||
-      !Number.isFinite(simTimeSec)
+      !Number.isFinite(simTimeSec) ||
+      !Number.isFinite(spinAngleRad)
     ) {
       throw new RangeError('Ring-system camera, Sun, and simulation values must be finite.');
     }
 
-    const localSunX = this.tiltCos * sunBodyXKm + this.tiltSin * sunBodyYKm;
-    const localSunY = -this.tiltSin * sunBodyXKm + this.tiltCos * sunBodyYKm;
-    this.materials.updateSunDirection(localSunX, localSunY, sunBodyZKm);
+    // The annulus and the planet surface both ride the spinning model root, so
+    // their shared shadow geometry is evaluated in the spinning body frame.
+    writeBodyFrameVectorInto(
+      this.frameScratch,
+      sunBodyXKm,
+      sunBodyYKm,
+      sunBodyZKm,
+      this.axialTiltRad,
+      spinAngleRad,
+    );
+    this.materials.updateSunDirection(
+      this.frameScratch[0] as number,
+      this.frameScratch[1] as number,
+      this.frameScratch[2] as number,
+    );
 
     let blend = 0;
     if (this.particles !== null) {
+      // Counter-spin the field back into the non-spinning equatorial frame and
+      // address it with a camera expressed in that same frame.
+      const halfSpin = spinAngleRad * 0.5;
+      this.particles.mesh.quaternion.set(0, -Math.sin(halfSpin), 0, Math.cos(halfSpin));
+      this.particles.mesh.updateMatrix();
       const inverseRadius = 1 / this.referenceRadiusKm;
-      const localCameraX =
-        (this.tiltCos * cameraBodyXKm + this.tiltSin * cameraBodyYKm) * inverseRadius;
-      const localCameraY =
-        (-this.tiltSin * cameraBodyXKm + this.tiltCos * cameraBodyYKm) * inverseRadius;
+      writeEquatorFrameVectorInto(
+        this.frameScratch,
+        cameraBodyXKm,
+        cameraBodyYKm,
+        cameraBodyZKm,
+        this.axialTiltRad,
+      );
       blend = this.particles.update(
-        localCameraX,
-        localCameraY,
-        cameraBodyZKm * inverseRadius,
+        (this.frameScratch[0] as number) * inverseRadius,
+        (this.frameScratch[1] as number) * inverseRadius,
+        (this.frameScratch[2] as number) * inverseRadius,
         simTimeSec,
       );
     }
@@ -192,7 +222,9 @@ export function prepareRingSystem(
     throw new Error(`Ring asset "${definition.bodyId}" is incomplete: paired meshes are required.`);
   }
 
-  root.rotation.z = body.axialTiltRad;
+  // No tilt is applied here on purpose: `bodySpin.ts` is the single owner of the
+  // catalog's axial tilt and writes the model root's attitude every frame. This
+  // function only *reads* the tilt, to express camera and Sun in ring frames.
   const preparedMaterials = prepareRingMaterials(surface, rings, definition, body.polarRadiusRatio);
   let particles: RingParticleField | null = null;
   try {
