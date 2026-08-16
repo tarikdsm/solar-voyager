@@ -1,6 +1,6 @@
 id: T0144
 title: Web Audio engine, AudioDirector, mixer settings, Kubrick mode
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0144-audio-engine
 depends_on:
@@ -21,4 +21,43 @@ acceptance:
     in settings and all levels persist
   - Zero allocation in the frame path with audio param updates only; ADR-041 lands
 handoff_notes: |
-  Design doc first. No library. Cockpit and chase are the interior mix; cinematic and observatory are exterior. Decide and record whether the game ships muted until the first volume interaction.
+  THE GAME SHIPS AUDIBLE, NOT MUTED. Defaults master 0.70, music 0.50, sfx 0.70, ui 0.50. Argued in the
+  design doc section 2 and ADR-041 section 3: page load, tab restore and ?autostart=1 are silent BY
+  LIFECYCLE, not by mute, so muting only costs the feature its audience. The game stays fully playable
+  muted, which is release criterion 9.
+  THE AUTOPLAY CRITERION WAS UNVERIFIABLE BEFORE THIS TASK. Every harness filters
+  message.type() === 'error'; Chrome emits the autoplay block at WARNING level via CDP Log.entryAdded.
+  audioEngineRegression.mjs is the only gate collecting warnings. IF YOU ADD AN AUDIO GATE, COLLECT
+  WARNINGS or the criterion silently stops being tested. And never construct the AudioContext eagerly:
+  six harnesses use ?autostart=1 and never produce a gesture.
+  THE SETTLE ASSERTION IS FRAME-COUNTED, NOT WALL-CLOCKED, AND THIS MATTERS. The first CI run failed
+  with "the audio mix never settled: still writing after 60 samples" while passing on Windows. It was an
+  over-tight probe, not a defect: the 4 s crossfade advances by the telemetry-clamped 0.1 s delta, so it
+  needs 40 RENDERED frames whatever the frame rate, and 60 wall samples (24 s) bets the host sustains
+  1.67 fps — the SwiftShader runner does not. A second bug surfaced while fixing it: comparing decision
+  state by exact equality also never settles, because gammaStress derives from orbital speed and dithers
+  about 1e-11 per frame forever, which the engine correctly refuses to write. The assertion is now
+  "an unchanged decision costs zero param writes", with unchanged measured at the engine's own epsilons
+  (1e-4 gain, 0.5 Hz, 0.05 cents), bounded in rendered frames. Proven still sharp by temporarily setting
+  GAIN_EPSILON to 0: it failed with "an unchanged decision cost 81 param writes across 8 rendered
+  frames". SV_AUDIO_THROTTLE is kept and documented for reproducing a slow host via CDP CPU throttling.
+  T0145 ATTACHMENT POINTS: engine.musicLayerInput(i) for the four stems (the 4 s equal-power crossfade
+  already drives their gains), engine.sfxBus and engine.uiBus for one-shots. Licensing intake rules are
+  ADR-041 section 10 — CC0/CC-BY only, per-file provenance, and check:licenses must be PROVEN to fail on
+  a missing entry.
+  T0124/T0125: cockpit and cinematic are already mapped in the director as interior and exterior. Do not
+  re-derive; adding them to IMPLEMENTED_CAMERA_MODES is enough.
+  Audio takes the WALL delta, never simDeltaSec — a paused game must finish its crossfade.
+  RuntimeResourceCounts was deliberately NOT extended: mainMenuRegression pins it twice with deepEqual
+  and an audio-context count is gesture-dependent, so extending it would couple an unrelated gate's
+  fixture to gesture ordering. The frozen canvas diagnostics did grow, to solarVoyagerAudio alongside
+  T0127's solarVoyagerExposure.
+  MISTAKE WORTH REPEATING BACK: staging with git add -A after a perf-gate run committed a regenerated
+  docs/bench/T0112-clean-preset.png over T0112's record — the exact trap this task's own handoff had
+  flagged. Filed as T0158. Check git status after running test:perf-gates or test:hud-presets.
+  tools/perf/browserSettings.mjs deliberately stays on v2 so every perf run exercises the whole
+  migration chain.
+  Verification: 1420 Vitest passed / 3 skipped; test:audio passes unthrottled (62 frames to settle) and
+  at 12x CPU throttle (55 frames), paramWrites 0 both times; session-settings, lighting-post,
+  hud-presets, tutorial, main-menu, smoke, perf-gates all green. Bundle +3,260 B entry gzip for the whole
+  audio subsystem. No golden or budget moved.
