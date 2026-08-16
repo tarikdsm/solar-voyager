@@ -13,15 +13,49 @@ import {
 import type { Line2 } from 'three/addons/lines/Line2.js';
 
 import {
+  createEffectBindingDegradeState,
+  createEffectBindingTelemetry,
+  degradeEffectBinding,
+  restoreEffectBinding,
+  type EffectBindingDegradeState,
+  type EffectBindingTelemetry,
+  type EffectBindingWarner,
+} from './effectBindingGuard.js';
+import {
   writeAberratedPositionInto,
   type RelativisticVisualState,
 } from './relativisticVisualState.js';
 
 export const SPACE_NEAR_KM = 0.001;
-export const SPACE_FAR_KM = 1e10;
+/**
+ * Far plane, kilometres — the whole catalog, not the inner system.
+ *
+ * Eris reaches 1.4617e10 km at aphelion, so the previous 1e10 km plane clipped
+ * the outermost dwarf on every frame (T0129). 2.5e10 km clears it with 71 %
+ * headroom. The raise is affordable because it costs `ln(2.5e10)/ln(1e10)` —
+ * 4.0 % — of logarithmic depth resolution and essentially nothing under
+ * reversed depth, whose precision is `2^-24 * L * (1 - L/far)` and therefore
+ * far-plane-independent at any range worth rendering. Derivation, measured
+ * floors and the rejected alternatives:
+ * `docs/superpowers/specs/2026-08-16-far-plane-strategy-design.md` §1.
+ * `src/render/spaceScene.test.ts` re-derives the catalog bound from
+ * `data/bodies.json`, so a new outer body fails there rather than in a
+ * screenshot nobody takes.
+ */
+export const SPACE_FAR_KM = 2.5e10;
 
 export interface CameraRelativeSpaceSceneOptions {
   readonly farKm?: number;
+  /**
+   * Sink for the one-time effect-binding degrade warning; defaults to
+   * `console.warn`. Injectable so a unit test can observe the warning without
+   * reaching into the console.
+   */
+  readonly onEffectBindingWarning?: EffectBindingWarner;
+}
+
+function defaultEffectBindingWarning(message: string): void {
+  console.warn(message);
 }
 
 function assertFinitePosition(label: string, positionKm: ReadonlyVec3): void {
@@ -34,15 +68,45 @@ function assertFinitePosition(label: string, positionKm: ReadonlyVec3): void {
   }
 }
 
-function assertPackedPositions(positionsKm: Float64Array): void {
+/** Shape only: triple alignment, which is a programming error either way. */
+function assertPackedPositionShape(positionsKm: Float64Array): void {
   if (positionsKm.length === 0 || positionsKm.length % 3 !== 0) {
     throw new RangeError('Packed positions must contain one or more xyz triples.');
   }
+}
+
+function assertPackedTripleOffset(positionsKm: Float64Array, componentOffset: number): void {
+  if (
+    !Number.isInteger(componentOffset) ||
+    componentOffset < 0 ||
+    componentOffset % 3 !== 0 ||
+    componentOffset + 2 >= positionsKm.length
+  ) {
+    throw new RangeError('Packed visual offset must address one complete xyz triple.');
+  }
+}
+
+function assertPackedPositions(positionsKm: Float64Array): void {
+  assertPackedPositionShape(positionsKm);
   for (let index = 0; index < positionsKm.length; index += 1) {
     if (!Number.isFinite(positionsKm[index])) {
       throw new RangeError('Packed positions must contain finite kilometre coordinates.');
     }
   }
+}
+
+/**
+ * One effect-only binding: the quiet half of the T0129 guard-policy split.
+ *
+ * Exactly one of `positionKm` / `packedPositionsKm` is set, so the update loop
+ * reads both source shapes without a second pass over the scene.
+ */
+interface EffectVisualBinding {
+  readonly visual: Object3D;
+  readonly positionKm: ReadonlyVec3 | null;
+  readonly packedPositionsKm: Float64Array | null;
+  readonly componentOffset: number;
+  readonly degradeState: EffectBindingDegradeState;
 }
 
 export interface PackedPolylineBinding {
@@ -118,15 +182,26 @@ export class CameraRelativeSpaceScene {
   private readonly packedPointPositionsKm: Float64Array[] = [];
   private readonly packedPointAttributes: BufferAttribute[] = [];
   private readonly packedPolylines: CameraRelativePackedPolylineBinding[] = [];
+  private readonly effectVisuals: EffectVisualBinding[] = [];
   private readonly boundVisuals = new Set<Object3D>();
   private readonly aberratedPosition = new Float64Array(3);
+  private readonly warnEffectBinding: EffectBindingWarner;
   private relativisticObserver: Readonly<RelativisticVisualState> | null = null;
+
+  /**
+   * The T0129 telemetry flag: one object, allocated here, mutated in place.
+   *
+   * Read `nonFiniteObserved` to answer "did any effect visual ever go NaN in
+   * this session"; `degradedBindingCount` for what is degraded right now.
+   */
+  readonly effectBindingTelemetry: EffectBindingTelemetry = createEffectBindingTelemetry();
 
   constructor(options: CameraRelativeSpaceSceneOptions = {}) {
     const farKm = options.farKm ?? SPACE_FAR_KM;
     if (!Number.isFinite(farKm) || farKm <= SPACE_NEAR_KM) {
       throw new RangeError('Camera-relative far plane must exceed the finite near plane.');
     }
+    this.warnEffectBinding = options.onEffectBindingWarning ?? defaultEffectBindingWarning;
     this.camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, farKm);
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
@@ -148,19 +223,58 @@ export class CameraRelativeSpaceScene {
   /** Binds one visual root to an xyz triple in a caller-owned packed array. */
   bindPackedVisual(visual: Object3D, positionsKm: Float64Array, componentOffset: number): void {
     assertPackedPositions(positionsKm);
-    if (
-      !Number.isInteger(componentOffset) ||
-      componentOffset < 0 ||
-      componentOffset % 3 !== 0 ||
-      componentOffset + 2 >= positionsKm.length
-    ) {
-      throw new RangeError('Packed visual offset must address one complete xyz triple.');
-    }
+    assertPackedTripleOffset(positionsKm, componentOffset);
 
     this.claimVisual(visual);
     this.packedVisuals.push(visual);
     this.packedVisualPositionsKm.push(positionsKm);
     this.packedVisualOffsets.push(componentOffset);
+  }
+
+  /**
+   * Binds an effect-only visual, which degrades instead of throwing (T0129).
+   *
+   * Use this for plume, RCS, in-world markers and sky panorama roots — anything
+   * whose position is a *derived* quantity. A non-finite source skips this
+   * binding's write for the frame (the visual holds its last good position),
+   * warns once, and raises {@link effectBindingTelemetry}. Ship and body
+   * positions must keep using {@link bindVisual}/{@link bindPackedVisual},
+   * which still throw: a NaN there is a physics bug.
+   *
+   * Source values are not checked at bind time — the first
+   * {@link updateCameraRelative} routes them through the same degrade path, so
+   * there is exactly one policy and a binding that starts bad can recover.
+   */
+  bindEffectVisual(visual: Object3D, positionKm: ReadonlyVec3, label: string): void {
+    const degradeState = createEffectBindingDegradeState(label);
+    this.claimVisual(visual);
+    this.effectVisuals.push({
+      visual,
+      positionKm,
+      packedPositionsKm: null,
+      componentOffset: 0,
+      degradeState,
+    });
+  }
+
+  /** {@link bindEffectVisual} against one xyz triple of a packed array. */
+  bindPackedEffectVisual(
+    visual: Object3D,
+    positionsKm: Float64Array,
+    componentOffset: number,
+    label: string,
+  ): void {
+    assertPackedPositionShape(positionsKm);
+    assertPackedTripleOffset(positionsKm, componentOffset);
+    const degradeState = createEffectBindingDegradeState(label);
+    this.claimVisual(visual);
+    this.effectVisuals.push({
+      visual,
+      positionKm: null,
+      packedPositionsKm: positionsKm,
+      componentOffset,
+      degradeState,
+    });
   }
 
   /** Binds a geometry position attribute to all xyz triples in one packed array. */
@@ -250,6 +364,15 @@ export class CameraRelativeSpaceScene {
       (binding) => binding.line === visual,
     );
     if (packedPolylineIndex >= 0) this.packedPolylines.splice(packedPolylineIndex, 1);
+    const effectIndex = this.effectVisuals.findIndex((binding) => binding.visual === visual);
+    if (effectIndex >= 0) {
+      const binding = this.effectVisuals[effectIndex];
+      // A degraded effect that is removed is no longer degraded; the monotonic
+      // evidence (`nonFiniteObserved`, `skippedBindCount`) survives on purpose.
+      if (binding !== undefined)
+        restoreEffectBinding(this.effectBindingTelemetry, binding.degradeState);
+      this.effectVisuals.splice(effectIndex, 1);
+    }
     this.scene.remove(visual);
     return true;
   }
@@ -326,6 +449,65 @@ export class CameraRelativeSpaceScene {
         visual.position.set(Math.fround(relativeX), Math.fround(relativeY), Math.fround(relativeZ));
       }
       visual.updateMatrix();
+    }
+
+    // T0129 — effect-only visuals. Same float64 subtraction and the same single
+    // `Math.fround` bridge as every other binding; the only difference is what
+    // happens on a non-finite value. The output is checked as well as the input,
+    // because an aberration transform is exactly where a finite source can still
+    // produce a NaN, and skipping the write is the whole point of this path.
+    for (let index = 0; index < this.effectVisuals.length; index += 1) {
+      const binding = this.effectVisuals[index];
+      if (binding === undefined) throw new Error('Effect visual bindings are sparse.');
+      const packedPositionsKm = binding.packedPositionsKm;
+      let sourceX: number;
+      let sourceY: number;
+      let sourceZ: number;
+      if (packedPositionsKm === null) {
+        const positionKm = binding.positionKm;
+        if (positionKm === null) throw new Error('Effect visual binding has no position source.');
+        sourceX = positionKm.x;
+        sourceY = positionKm.y;
+        sourceZ = positionKm.z;
+      } else {
+        const offset = binding.componentOffset;
+        sourceX = packedPositionsKm[offset] ?? Number.NaN;
+        sourceY = packedPositionsKm[offset + 1] ?? Number.NaN;
+        sourceZ = packedPositionsKm[offset + 2] ?? Number.NaN;
+      }
+      const relativeX = sourceX - cameraPositionKm.x;
+      const relativeY = sourceY - cameraPositionKm.y;
+      const relativeZ = sourceZ - cameraPositionKm.z;
+      let renderX: number;
+      let renderY: number;
+      let renderZ: number;
+      if (aberrationActive) {
+        writeAberratedPositionInto(
+          this.aberratedPosition,
+          relativeX,
+          relativeY,
+          relativeZ,
+          observer,
+        );
+        renderX = Math.fround(this.aberratedPosition[0] as number);
+        renderY = Math.fround(this.aberratedPosition[1] as number);
+        renderZ = Math.fround(this.aberratedPosition[2] as number);
+      } else {
+        renderX = Math.fround(relativeX);
+        renderY = Math.fround(relativeY);
+        renderZ = Math.fround(relativeZ);
+      }
+      if (!Number.isFinite(renderX) || !Number.isFinite(renderY) || !Number.isFinite(renderZ)) {
+        degradeEffectBinding(
+          this.effectBindingTelemetry,
+          binding.degradeState,
+          this.warnEffectBinding,
+        );
+        continue;
+      }
+      restoreEffectBinding(this.effectBindingTelemetry, binding.degradeState);
+      binding.visual.position.set(renderX, renderY, renderZ);
+      binding.visual.updateMatrix();
     }
 
     for (
