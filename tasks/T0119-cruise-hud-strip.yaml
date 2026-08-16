@@ -20,4 +20,19 @@ acceptance:
   - A browser gate asserts the strip renders during a scripted cruise and that the clocks visibly
     diverge on a 0.3c leg
 handoff_notes: |
-  Reuse formatUnits SI prefixes and the dual-clock copy pattern from the DualClock component.
+  PAUSED MID-TASK 2026-08-16 with an agent working in .worktrees/T0119 on branch
+  task/T0119-cruise-hud-strip. Check git log and git status there before restarting; the lane was told
+  to commit as it goes. Nothing is pushed and no PR exists.
+  THE LANDMINE THAT WILL COST A RUN: #cruise-status sits directly above the navball in a
+  bottom-anchored stack that GROWS UPWARD, and this task replaces it wholesale. T0117's first draft
+  added a second line, moved the whole HUD cluster 11 px toward the viewport middle and made the pick
+  gate miss Earth's disc (cluster top 227 px on main, 216 broken, 223 fixed). test:hud-presets is the
+  only gate that catches it AND IT CATCHES IT AS A PICKING FAILURE, which reads like a bug in code
+  this task never touched.
+  Read TargetSelectionController.selectedBodyId, NOT SystemMapController.focusId — the latter also
+  moves for camera-only focus changes the controller rejected as targets. Pass the engage button as
+  CruiseTargetControl's children; the space-view mount point is #hud-set-cruise-target.
+  CruiseDirector.engage() returns false when the catalogs disagree about the body; surface it.
+  The "clocks visibly diverge" assertion must be bounded in RENDERED FRAMES or on the divergence
+  itself, never in seconds: three lanes have now shipped a wall-clock budget that passed here and
+  failed on the SwiftShader runner.

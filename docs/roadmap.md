@@ -70,6 +70,33 @@ to M6, it does not wait for V2M2/V2M3 to finish first. **M4 (the 2D Alcântara
 launch phase, `T0060`–`T0062`) remains deferred and `BLOCKED`** — v2.0 does not
 revisit it.
 
+#### Progress at 2026-08-16
+
+`tasks/` is the authority; this is the shape, not the tally. `T0102`–`T0113`
+(V2M1) shipped earlier. Since then, in dependency order rather than milestone
+order — the lanes ran in parallel across milestones by design:
+
+| Landed on `main` | |
+|---|---|
+| V2M2 | `T0114` intercept solver + physics-spec §8, `T0116` CruiseDirector, `T0117` click-to-target |
+| V2M3 | `T0121` ship remodel, `T0125` cinematic camera + photo capture, `T0127` pass-insertion API + adaptive exposure, `T0128` body rotation/tilt/oblateness, `T0129` far-plane + guard split |
+| V2M4 | `T0131` asteroid/comet builders, `T0132` checksummed source fetch (ADR-039) |
+| V2M5 | `T0144` audio engine (ADR-041) |
+| tooling | `T0155` per-worktree harness ports |
+
+**V2M2's exit criterion is met and measured**: the CI cruise gate flies LEO to
+Jupiter unattended in 187.9 s of wall clock against a 300 s budget, arriving at
+`e = 0.00061`, with a 200-sample abort fuzz at zero failures. `T0115`
+(warp-ceiling retune) is therefore no longer on the critical path — its task
+file records the evidence and the narrower question a future claimer should
+benchmark instead.
+
+Three defects were filed from work rather than fixed silently inside it:
+`T0156` (the catalog double-counts retrograde rotation for Venus, Uranus and
+Pluto, so they render prograde), `T0157` (I/O-heavy Vitest suites time out
+under load, which makes the verification signal unreliable), and `T0158` (two
+gates rewrite a committed capture as a side effect).
+
 ### V2M1 — "The ship exists."
 
 Input rewrite (pointer lock, wall-time authority, gamepad), ship rendered +

@@ -18,4 +18,18 @@ acceptance:
   - Manual flip-and-burn executes a 180 degree slew and throttle restore from a single key
   - Per-assist enable and disable persisted in settings; the HUD shows an active assist chip
 handoff_notes: |
-  Assists live in game/flight/assists.ts consuming the snapshot plus brakingEnvelope. No sim changes.
+  PAUSED MID-TASK 2026-08-16 with an agent working in .worktrees/T0118 on branch
+  task/T0118-assists-suite. Check git log and git status there before restarting: the lane was told to
+  commit as it goes, so its progress is on the branch, not lost. Nothing is pushed and no PR exists.
+  Inherited constraints, all learned the hard way by earlier lanes:
+  A MODE-SCOPED BINDING MUST SCOPE THE CLAIM, NOT JUST THE EFFECT (T0125).
+  InputEngine.handleKeyDown calls preventDefault() for any resolved binding before camera mode exists,
+  so binding a key swallows it in every mode. Use InputEngineOptions.isActionActive. Binding eight
+  holds plus a flip key is exactly where this bites.
+  Target writes go through TargetSelectionController.selectTarget(id, source), never Commands.setTarget
+  — tests/architecture/targetWritePoint.test.ts enforces it by source scan.
+  CommandState.rotationRatesRadS is ZERO during a hold-mode slew (ADR-035), so it cannot be used to
+  detect that the ship is turning; differentiate the snapshot attitude instead (T0122 hit this).
+  Settings are on generation v8; a new tier needs a round-trip test with a negative control.
+  Gates that budget in WALL-CLOCK time pass here and fail on the ubuntu runner, which renders through
+  SwiftShader. Bound anything time-dependent in rendered frames or on the quantity changing.

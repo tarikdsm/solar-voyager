@@ -1832,7 +1832,7 @@
       "Manual flip-and-burn executes a 180 degree slew and throttle restore from a single key",
       "Per-assist enable and disable persisted in settings; the HUD shows an active assist chip"
     ],
-    "handoff_notes": "Assists live in game/flight/assists.ts consuming the snapshot plus brakingEnvelope. No sim changes.\n"
+    "handoff_notes": "PAUSED MID-TASK 2026-08-16 with an agent working in .worktrees/T0118 on branch\ntask/T0118-assists-suite. Check git log and git status there before restarting: the lane was told to\ncommit as it goes, so its progress is on the branch, not lost. Nothing is pushed and no PR exists.\nInherited constraints, all learned the hard way by earlier lanes:\nA MODE-SCOPED BINDING MUST SCOPE THE CLAIM, NOT JUST THE EFFECT (T0125).\nInputEngine.handleKeyDown calls preventDefault() for any resolved binding before camera mode exists,\nso binding a key swallows it in every mode. Use InputEngineOptions.isActionActive. Binding eight\nholds plus a flip key is exactly where this bites.\nTarget writes go through TargetSelectionController.selectTarget(id, source), never Commands.setTarget\n— tests/architecture/targetWritePoint.test.ts enforces it by source scan.\nCommandState.rotationRatesRadS is ZERO during a hold-mode slew (ADR-035), so it cannot be used to\ndetect that the ship is turning; differentiate the snapshot attitude instead (T0122 hit this).\nSettings are on generation v8; a new tier needs a round-trip test with a negative control.\nGates that budget in WALL-CLOCK time pass here and fail on the ubuntu runner, which renders through\nSwiftShader. Bound anything time-dependent in rendered frames or on the quantity changing.\n"
   },
   {
     "id": "T0119",
@@ -1852,7 +1852,7 @@
       "The system map gains engage-cruise on the selected body, wiring T0117",
       "A browser gate asserts the strip renders during a scripted cruise and that the clocks visibly diverge on a 0.3c leg"
     ],
-    "handoff_notes": "Reuse formatUnits SI prefixes and the dual-clock copy pattern from the DualClock component.\n"
+    "handoff_notes": "PAUSED MID-TASK 2026-08-16 with an agent working in .worktrees/T0119 on branch\ntask/T0119-cruise-hud-strip. Check git log and git status there before restarting; the lane was told\nto commit as it goes. Nothing is pushed and no PR exists.\nTHE LANDMINE THAT WILL COST A RUN: #cruise-status sits directly above the navball in a\nbottom-anchored stack that GROWS UPWARD, and this task replaces it wholesale. T0117's first draft\nadded a second line, moved the whole HUD cluster 11 px toward the viewport middle and made the pick\ngate miss Earth's disc (cluster top 227 px on main, 216 broken, 223 fixed). test:hud-presets is the\nonly gate that catches it AND IT CATCHES IT AS A PICKING FAILURE, which reads like a bug in code\nthis task never touched.\nRead TargetSelectionController.selectedBodyId, NOT SystemMapController.focusId — the latter also\nmoves for camera-only focus changes the controller rejected as targets. Pass the engage button as\nCruiseTargetControl's children; the space-view mount point is #hud-set-cruise-target.\nCruiseDirector.engage() returns false when the catalogs disagree about the body; surface it.\nThe \"clocks visibly diverge\" assertion must be bounded in RENDERED FRAMES or on the divergence\nitself, never in seconds: three lanes have now shipped a wall-clock budget that passed here and\nfailed on the SwiftShader runner.\n"
   },
   {
     "id": "T0120",

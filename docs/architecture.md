@@ -58,7 +58,8 @@ The v2.0 free-flight redesign (`docs/superpowers/plans/2026-08-14-v2-free-flight
 parentheses); this map is updated in the same PR (per `docs/coding-standards.md`'s
 doc-update-in-the-same-PR rule). `NEW` files do not exist yet. `MOD` files exist
 today (e.g. `sim/simulation.ts`, the "Single source of truth" below) and gain
-their v2 behavior from the named task — none of that v2 behavior has landed yet.
+their v2 behavior from the named task. `LANDED` is on `main`; `REVIEW` is in an
+open PR; `NEW` and `MOD` have not landed.
 
 ```
 src/
@@ -74,7 +75,7 @@ src/
 ├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
 ├── game/
 │   ├── input/                              # LANDED engine+bindings (T0105) + gamepad (T0106)
-│   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
+│   ├── flight/                             # LANDED flightController (T0108) + cruiseDirector (T0116); assists (T0118)
 │   ├── cameraDirector.ts                   # LANDED chase/observatory (T0110) + cinematic (T0125); cockpit (T0124)
 │   ├── chaseCameraController.ts            # LANDED spring-arm f64 controller (T0110)
 │   ├── cinematicCameraController.ts        # LANDED roll/FOV/idle drift over the orbit camera (T0125)
@@ -90,9 +91,11 @@ src/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
 │   ├── frameCapture.ts                     # LANDED canvas to PNG, no preserveDrawingBuffer (T0125)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
-│   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
+│   ├── plumeVisual.ts, rcsVisual.ts        # REVIEW photon-beam plume + RCS puffs (T0122)
 │   ├── exposureController.ts               # LANDED single toneMappingExposure owner (T0127)
-│   ├── planetshine.ts, milkyWay.ts, bodySpin.ts  # NEW (T0123/26/28)
+│   ├── bodySpin.ts                         # LANDED sidereal rotation, tilt, oblateness (T0128)
+│   ├── milkyWay.ts                         # REVIEW panorama, zodiacal band, constellations (T0126)
+│   ├── planetshine.ts                      # NEW  secondary fill light (T0123)
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
 │   ├── lightingPostPipeline.ts             # LANDED pass-insertion API + exposure sink (T0127)
@@ -105,9 +108,10 @@ data/
 ├── atmospheres.json (+ .schema.json)       # NEW  per-body scattering params (T0140)
 ├── audio-manifest.json                     # NEW  layer/SFX manifest (T0145)
 tools/
-├── blender/build_ship.py                   # MOD  ship remodel (T0121)
-├── blender/build_asteroid.py, build_comet.py  # NEW (T0131)
-└── fetch_textures.py                       # MOD  checksummed source fetch (T0132)
+├── blender/build_ship.py                   # LANDED remodel v2 + ship_config/ship_geometry (T0121)
+├── blender/build_asteroid.py, build_comet.py  # LANDED shape-model ingest + procedural fallback (T0131)
+├── fetch_textures.py                       # LANDED checksummed source fetch, ADR-039 (T0132)
+└── harnessPort.mjs                         # LANDED per-worktree harness ports (T0155)
 ```
 
 Full per-task interfaces (`VesselConfig`, `FlightController`, `CruiseDirector`,
