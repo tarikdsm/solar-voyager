@@ -73,13 +73,28 @@ cannot: **held-key continuous roll** (a keydown ladder rolls in visible steps) a
 its default, or with an `unbound.` placeholder if a player already bound that code — so five new
 actions need no profile version bump.
 
-**Landmine this creates and fixes:** `KeyE` is the cinematic roll-right key *and*
-`ui/cameraInputController.ts`'s hardcoded "focus Earth" shortcut, which listens on `window` and
-would fire simultaneously — rolling the shot and throwing the player into observatory in one
-keystroke. `CameraDirector.directFocusEnabled` is false in cinematic, `SharedCameraControls`
-forwards it, and the controller skips `[`, `]`, `e` and `j` while it is false. The rule is coherent
-rather than a patch: in cinematic every direct-focus key would *leave* the mode, so the mode key
-(`O`) is the only way out.
+**The `E` collision, and the two halves it takes to resolve.** `KeyE` is the cinematic roll-right
+key *and* `ui/cameraInputController.ts`'s hardcoded "focus Earth" shortcut, which listens on
+`window`. Both halves have to be scoped, and the first draft of this task scoped only one:
+
+1. *Inside* cinematic, `E` must roll and must **not** jump to Earth.
+   `CameraDirector.directFocusEnabled` is false in cinematic, `SharedCameraControls` forwards it, and
+   the controller skips `[`, `]`, `e` and `j` while it is false. Coherent rather than a patch: in
+   cinematic every direct-focus key would *leave* the mode, so `O` is the way out.
+2. *Outside* cinematic, `E` must still focus Earth. This is the half that was missing, and the
+   failure was not subtle: `InputEngine.handleKeyDown` calls `preventDefault()` for **any** bound
+   action, the shared focus policy (`blocksGameKey`) reads `defaultPrevented` as "a control already
+   consumed this", and `CameraInputController` therefore returned before its own `case 'e'` — in
+   every camera mode, for every player. Scoping `CameraDirector.rollCameraBy` scoped the *effect*
+   while the *claim on the key* stayed global. `tools/tests/systemMapRegression.mjs` caught it.
+   The fix is `InputEngineOptions.isActionActive`: the engine consults it before claiming a bound
+   key, so a suppressed action produces no `preventDefault`, no edge and no held state, and the key
+   falls through untouched. `CINEMATIC_ONLY_ACTIONS` (roll ×2, field of view ×2) is the set;
+   `photoCapture` is deliberately not in it, because a photo is worth taking from any camera.
+
+The general rule this leaves behind: **a mode-scoped binding must scope the claim, not just the
+effect.** Any later task that binds a key already spoken for by the `ui/` camera keys (`[`, `]`,
+`E`, `J`, `O`) inherits the same requirement.
 
 Flight control is **not** suppressed in cinematic. The ship keeps flying, which is what makes
 filming a burn possible, and `Z`/`C` (ship roll) never collided with `Q`/`E` anyway.

@@ -2,7 +2,34 @@ import {
   CINEMATIC_FOV_RATE_DEG_PER_SEC,
   CINEMATIC_ROLL_RATE_RAD_PER_SEC,
 } from './cinematicCameraController.js';
+import type { InputAction } from './input/bindings.js';
 import type { InputFrame } from './input/inputEngine.js';
+
+/**
+ * Actions that exist only while the cinematic camera is running.
+ *
+ * `InputEngine` consults this through its `isActionActive` port, so outside
+ * cinematic these keys are not merely inert — they are **not claimed at all**,
+ * and `E` goes on reaching `ui/cameraInputController.ts` as the Earth shortcut it
+ * has always been. Scoping the effect without scoping the claim is what broke
+ * focus cycling in every camera mode (design doc section 2.4).
+ *
+ * `photoCapture` is deliberately absent: a photo is worth taking from any camera.
+ */
+export const CINEMATIC_ONLY_ACTIONS: readonly InputAction[] = Object.freeze([
+  'cameraRollLeft',
+  'cameraRollRight',
+  'cameraFovNarrow',
+  'cameraFovWiden',
+]);
+
+/** Allocation-free membership test for the `isActionActive` port. */
+export function isCinematicOnlyAction(action: InputAction): boolean {
+  for (let index = 0; index < CINEMATIC_ONLY_ACTIONS.length; index += 1) {
+    if (CINEMATIC_ONLY_ACTIONS[index] === action) return true;
+  }
+  return false;
+}
 
 /**
  * What one polled frame can ask of the camera and the photo path (T0125).

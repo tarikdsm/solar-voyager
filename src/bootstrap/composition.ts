@@ -7,7 +7,7 @@ import {
   createNewGameSimulation,
   createRespawnPersistentState,
 } from '../game/createNewGameSimulation.js';
-import { CameraInputRouter } from '../game/cameraInputRouter.js';
+import { CameraInputRouter, isCinematicOnlyAction } from '../game/cameraInputRouter.js';
 import { FlightController } from '../game/flight/flightController.js';
 import { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import { createBodyRadiiKm } from '../game/hud/bodyMarkerCatalog.js';
@@ -1336,6 +1336,10 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       // A gamepad has no per-event target to gate on the way keyboard does;
       // this is the one shared UI-focus predicate every input source uses.
       isTextEntryActive: () => isEditableTarget(document.activeElement),
+      // T0125 — the camera's mode-scoped keys are claimed only while that mode
+      // is running, so `E` keeps focusing Earth everywhere else.
+      isActionActive: (action) =>
+        !isCinematicOnlyAction(action) || activeWorld.cameraDirector.mode === 'cinematic',
     });
     runtime.inputEngine = inputEngine;
     const flightController = new FlightController({

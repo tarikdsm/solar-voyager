@@ -94,11 +94,15 @@ The game starts behind your ship. The **chase** camera hangs on a spring arm a
 few ship lengths back and slightly above, follows your attitude with a short
 deliberate lag, and rolls when you roll — so a roll reads as the world turning
 around you rather than the ship turning inside a fixed frame. The **observatory**
-camera is v1's: it orbits a celestial body and ignores the ship entirely.
+camera is v1's: it orbits a celestial body and ignores the ship entirely. The
+**cinematic** camera is for looking rather than flying: it orbits your own ship,
+hides the HUD, adds roll and a field of view you can set, and drifts slowly on its
+own if you leave it alone.
 
-`O` switches between them, always as an animated move, never a cut. Focusing a
-body (`[`, `]`, `E`, `J`) also switches to the observatory camera, and stepping
-the focus ring back onto the ship returns you to chase.
+`O` steps through them — chase, cinematic, observatory — always as an animated
+move, never a cut. Focusing a body (`[`, `]`, `E`, `J`) also switches to the
+observatory camera, and stepping the focus ring back onto the ship returns you to
+chase.
 
 Choosing a **navigation target** is not a camera command: it re-aims the
 observatory camera for when you next switch to it and leaves you in the chase
@@ -117,11 +121,31 @@ looking at, which is not necessarily your target.
 | Previous / next focus body | `[` / `]`                         |
 | Focus Earth                | `E`                               |
 | Focus Jupiter              | `J`                               |
+| Take a photo               | `P`                               |
 
 In chase, dragging swings the arm around your own ship and the wheel sets its
 length between 2 and 50 ship lengths; both keep working through any manoeuvre
 because the offsets live in the ship's frame. In observatory, the same gestures
 orbit and zoom the focused body exactly as they did in v1.
+
+### Cinematic (photo) mode
+
+`Q` and `E` roll the camera and `,` / `.` set its field of view between 20° and
+90°, **only while the cinematic camera is running**. Outside it those keys mean
+what they always meant: `E` focuses Earth, and `Q`, `,` and `.` do nothing. The
+same key is deliberately two things in two modes, and nothing else changes
+meaning: in cinematic the focus keys (`[`, `]`, `E`, `J`) stand down, because
+every one of them would throw you out of the shot you are composing — `O` is the
+way out. Dragging and the wheel still orbit and zoom around the ship, and roll,
+field of view and the focus keys are all rebindable in **Session & settings →
+Keyboard**.
+
+`P` takes a photo in any camera mode. The picture is exactly what is on screen —
+the HUD is drawn over the canvas, so it is never in the shot — and it is written
+to your browser's downloads as
+`solar-voyager-<mission UTC>-<body>-<number>.png`. Mission time, not wall-clock
+time, so the files sort into flight order; the number keeps two shots of the same
+paused instant apart. Nothing is uploaded anywhere.
 
 The chase camera also opens its field of view slightly as you advance the
 throttle, and vibrates very slightly under heavy acceleration (0.15° at 5 g).

@@ -143,6 +143,20 @@ export interface InputEngineOptions {
    * callers that never wire a gamepad are unaffected.
    */
   readonly isTextEntryActive?: () => boolean;
+  /**
+   * Whether an action is live right now. Defaults to "always".
+   *
+   * The engine claims a bound key: it calls `preventDefault()`, which the shared
+   * focus policy (`blocksGameKey`) then reads as "a control already consumed
+   * this", so every other keyboard consumer stands down. That is correct for an
+   * action that is always available and wrong for a **mode-scoped** one — T0125
+   * binds camera roll to `Q`/`E`, and `E` is also the camera controller's
+   * hardcoded Earth shortcut. Scoping only the *effect* leaves the engine
+   * swallowing the key in every mode; scoping the *claim* is what actually makes
+   * two meanings coexist. An inactive action produces no edge, no held state and
+   * no `preventDefault`, so the key falls through untouched.
+   */
+  readonly isActionActive?: (action: InputAction) => boolean;
 }
 
 /**
@@ -171,6 +185,7 @@ export class InputEngine {
   private readonly pointerLock: PointerLockSurface | null;
   private readonly gamepad: GamepadSource | null;
   private readonly isTextEntryActive: () => boolean;
+  private readonly isActionActive: (action: InputAction) => boolean;
   private readonly onPauseRequested: (() => void) | null;
   private readonly lookRadPerPixel: number;
   private pendingLookYawRad = 0;
@@ -192,6 +207,9 @@ export class InputEngine {
     }
     const action = this.bindingTable.resolve(event.code);
     if (action === undefined) return;
+    // Before the claim, not after: a suppressed action must leave the key for
+    // whoever else is listening (see `isActionActive`).
+    if (!this.isActionActive(action)) return;
     const index = actionIndex(action);
     if (index < 0) return;
     event.preventDefault();
@@ -241,6 +259,7 @@ export class InputEngine {
     this.pointerLock = options.pointerLock ?? null;
     this.gamepad = options.gamepad ?? null;
     this.isTextEntryActive = options.isTextEntryActive ?? (() => false);
+    this.isActionActive = options.isActionActive ?? (() => true);
     this.onPauseRequested = options.onPauseRequested ?? null;
     this.lookRadPerPixel = options.lookRadPerPixel ?? DEFAULT_LOOK_RAD_PER_PIXEL;
     this.keyboardTarget.addEventListener('keydown', this.handleKeyDown);
