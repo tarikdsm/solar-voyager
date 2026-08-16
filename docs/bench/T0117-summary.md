@@ -15,15 +15,15 @@ work. The run is here because the release brief requires bench evidence from any
 
 ## Numbers
 
-| Metric | Before | After |
-|---|---|---|
-| max draw calls | 49 | 49 |
-| max triangles | 70,452 | 70,452 |
-| frame median | 6.2 ms | 6.1 ms |
-| frame p99 | 42.6 ms | 30.3 ms |
-| work median | 4.6 ms | 2.2 ms |
+| Metric                            | Before     | After     |
+| --------------------------------- | ---------- | --------- |
+| max draw calls                    | 49         | 49        |
+| max triangles                     | 70,452     | 70,452    |
+| frame median                      | 6.2 ms     | 6.1 ms    |
+| frame p99                         | 42.6 ms    | 30.3 ms   |
+| work median                       | 4.6 ms     | 2.2 ms    |
 | steady heap delta over the window | +104,544 B | +93,224 B |
-| stability findings | none | none |
+| stability findings                | none       | none      |
 
 The frame-time differences are run-to-run noise on a SwiftShader software rasteriser — the after run
 happened to land a quieter machine — not an effect of this change. The two figures that would move
