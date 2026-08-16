@@ -17,6 +17,8 @@ const JUPITER_RADIUS_KM = 69_911;
 const AU_KM = 149_597_870.7;
 const BASE_FOV_DEG = 75;
 const FRAME_SEC = 1 / 60;
+/** `DEFAULT_TRANSFER_DURATION_SEC`: the cross-fade and the orbit transfer share it. */
+const TRANSITION_SEC = 1.5;
 /** earth, jupiter, ship — the ship is last, exactly as `createEpochWorld` builds it. */
 const SHIP_POSITION_OFFSET = 6;
 
@@ -108,9 +110,15 @@ describe('CameraDirector', () => {
       expect(harness.director.focusPositionOffset).toBe(SHIP_POSITION_OFFSET);
     });
 
-    it('cycles chase and observatory', () => {
+    it('cycles chase, cinematic and observatory', () => {
       const harness = createHarness();
-      expect([...IMPLEMENTED_CAMERA_MODES]).toEqual(['chase', 'observatory']);
+      expect([...IMPLEMENTED_CAMERA_MODES]).toEqual(['chase', 'cinematic', 'observatory']);
+      harness.director.cycle();
+      expect(harness.director.mode).toBe('cinematic');
+      // Photo mode orbits the ship: the ring stays parked on it (T0125).
+      expect(harness.orbit.focusId).toBe('ship');
+      expect(harness.director.focusId).toBe('ship');
+      expect(harness.director.focusPositionOffset).toBe(SHIP_POSITION_OFFSET);
       harness.director.cycle();
       expect(harness.director.mode).toBe('observatory');
       // ...and back to a body rather than a 39 m view of the player's own hull.
@@ -122,7 +130,6 @@ describe('CameraDirector', () => {
     it('names the owning task for a mode this build does not implement', () => {
       const harness = createHarness();
       expect(() => harness.director.setMode('cockpit')).toThrow(/T0124/u);
-      expect(() => harness.director.setMode('cinematic')).toThrow(/T0125/u);
       // Silently no-opping would leave the caller believing the camera moved.
       expect(harness.director.mode).toBe('chase');
     });
@@ -130,6 +137,105 @@ describe('CameraDirector', () => {
     it('is idempotent for the mode it is already in', () => {
       const harness = createHarness();
       harness.director.setMode('chase');
+      expect(harness.director.isTransitioning).toBe(false);
+    });
+  });
+
+  describe('cinematic mode (T0125)', () => {
+    it('publishes the orbit pose with a rollable up vector and its own field of view', () => {
+      const harness = createHarness();
+      harness.director.setMode('cinematic');
+      harness.step();
+      harness.step(TRANSITION_SEC);
+
+      const pose = harness.director.pose;
+      expect(pose.positionKm.x).toBeCloseTo(harness.orbit.cameraPositionKm.x, 9);
+      expect(pose.positionKm.y).toBeCloseTo(harness.orbit.cameraPositionKm.y, 9);
+      expect(pose.positionKm.z).toBeCloseTo(harness.orbit.cameraPositionKm.z, 9);
+      expect(pose.fovDeg).toBe(BASE_FOV_DEG);
+      // Not observatory's literal +Y hint: an orthonormal frame you can roll.
+      const upLength = Math.hypot(pose.upDirection.x, pose.upDirection.y, pose.upDirection.z);
+      expect(upLength).toBeCloseTo(1, 9);
+
+      expect(harness.director.rollCameraBy(Math.PI / 3)).toBe(true);
+      expect(harness.director.cinematicRollRad).toBeCloseTo(Math.PI / 3, 12);
+      harness.step();
+      expect(
+        pose.upDirection.x * harness.orbit.lookDirection.x +
+          pose.upDirection.y * harness.orbit.lookDirection.y +
+          pose.upDirection.z * harness.orbit.lookDirection.z,
+      ).toBeCloseTo(0, 9);
+
+      expect(harness.director.adjustCameraFovBy(-500)).toBe(true);
+      harness.step();
+      expect(harness.director.pose.fovDeg).toBe(20);
+      expect(harness.director.adjustCameraFovBy(500)).toBe(true);
+      harness.step();
+      expect(harness.director.pose.fovDeg).toBe(90);
+    });
+
+    it('ignores roll and field-of-view input in every other mode', () => {
+      const harness = createHarness();
+      expect(harness.director.mode).toBe('chase');
+      expect(harness.director.rollCameraBy(1)).toBe(false);
+      expect(harness.director.adjustCameraFovBy(-10)).toBe(false);
+      expect(harness.director.cinematicRollRad).toBe(0);
+      expect(harness.director.cinematicFovDeg).toBe(BASE_FOV_DEG);
+      expect(harness.director.directFocusEnabled).toBe(true);
+
+      harness.director.setMode('cinematic');
+      // E is the roll-right binding here, so the Earth shortcut must stand down.
+      expect(harness.director.directFocusEnabled).toBe(false);
+      harness.director.setMode('observatory');
+      expect(harness.director.directFocusEnabled).toBe(true);
+      expect(harness.director.rollCameraBy(1)).toBe(false);
+    });
+
+    it('drifts only while cinematic is the mode actually driving the frame', () => {
+      const harness = createHarness();
+      harness.step(10);
+      expect(harness.director.cinematicDrifting).toBe(false);
+
+      harness.director.setMode('cinematic');
+      harness.step(TRANSITION_SEC + 4);
+      expect(harness.director.cinematicDrifting).toBe(true);
+
+      harness.director.setMode('observatory');
+      harness.step();
+      expect(harness.director.cinematicDrifting).toBe(false);
+    });
+
+    it('never cuts on the way in or out of cinematic', () => {
+      const harness = createHarness();
+      // Let the construction-time transfer of the orbit ring onto the ship
+      // finish first, or its 6,771 km flight would be measured as the step.
+      for (let frame = 0; frame < Math.round(TRANSITION_SEC / FRAME_SEC) + 30; frame += 1) {
+        harness.step();
+      }
+      harness.director.setMode('cinematic');
+      let maximumStepKm = 0;
+      let previousX = harness.director.pose.positionKm.x;
+      let previousY = harness.director.pose.positionKm.y;
+      let previousZ = harness.director.pose.positionKm.z;
+      const frames = Math.round(TRANSITION_SEC / FRAME_SEC) + 30;
+      for (let frame = 0; frame < frames; frame += 1) {
+        harness.step();
+        const pose = harness.director.pose;
+        maximumStepKm = Math.max(
+          maximumStepKm,
+          Math.hypot(
+            pose.positionKm.x - previousX,
+            pose.positionKm.y - previousY,
+            pose.positionKm.z - previousZ,
+          ),
+        );
+        previousX = pose.positionKm.x;
+        previousY = pose.positionKm.y;
+        previousZ = pose.positionKm.z;
+      }
+      // Chase sits 0.166 km from the ship and cinematic settles near 0.039 km;
+      // a cut would show up as a step comparable to that whole gap.
+      expect(maximumStepKm).toBeLessThan(0.02);
       expect(harness.director.isTransitioning).toBe(false);
     });
   });
@@ -159,7 +265,8 @@ describe('CameraDirector', () => {
       expect(harness.director.mode).toBe('chase');
       expect(harness.director.focusId).toBe('ship');
 
-      // ...and the choice is remembered, so leaving chase lands on it.
+      // ...and the choice is remembered, so leaving the ship lands on it.
+      harness.director.cycle();
       harness.director.cycle();
       expect(harness.director.mode).toBe('observatory');
       expect(harness.director.focusId).toBe('jupiter');
