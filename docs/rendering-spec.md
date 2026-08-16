@@ -129,11 +129,47 @@ never pull the player out of the chase view.
   intensity is `π × (AU_KM / max(dKm, solarRadiusKm))²`; therefore a normal-facing
   Lambertian surface reproduces its base colour at 1 AU and the Sun-focused
   case remains finite at the photosphere.
-- The one HDR chain is `RenderPass → UnrealBloomPass → OutputPass` over
-  half-float composer buffers. The renderer uses **ACES filmic tone mapping**
-  at exposure 1.0; `OutputPass` performs tone mapping and output conversion
-  once, at the end. Bloom uses threshold 1.0, strength 0.15, radius 0.35, and
-  the official half-resolution bright target.
+- The one HDR chain is
+  `RenderPass → RelativisticPostPass → bloom → SMAA → FXAA → OutputPass` over
+  half-float composer buffers. The renderer uses **ACES filmic tone mapping**;
+  `OutputPass` performs tone mapping and output conversion once, at the end.
+  Bloom uses threshold 1.0, strength 0.15, radius 0.35, and the official
+  half-resolution bright target. Only one of SMAA/FXAA is enabled at a time
+  (§12); the disabled AA passes stay in the chain.
+- **Pass insertion (T0127).** `LightingPostPipeline.insertPass(pass, anchor)` is
+  the only supported way to extend the chain. Four anchors name the seams after
+  the pipeline-owned passes — `scene`, `relativistic`, `bloom`,
+  `anti-aliasing` — and a pass lands immediately after its anchor's pass and
+  after everything already inserted at the same anchor, so the total order is a
+  pure function of (anchor, insertion sequence) and never of import order.
+  Nothing may precede `RenderPass` or follow `OutputPass`. The pipeline owns
+  inserted passes: composer sizing, `setRenderScale` when implemented,
+  force-enabled warm-up compilation, and disposal in reverse insertion order.
+  Inserting nothing leaves the default six-pass order byte-identical. The
+  private-field reads the adaptive SMAA/bloom passes depend on are validated at
+  construction and pinned to a three.js revision by a canary unit test.
+- **Adaptive exposure (T0127, plan §3.5).** `render/exposureController.ts` is the
+  single owner of `toneMappingExposure` and writes it only through the pipeline.
+  The scene key is `E_target = clamp(K / L_scene, E_min, E_max)` with `K = 1` and
+  `L_scene` in units of the solar constant at 1 AU, so `E = 1` — v1's fixed
+  exposure — is reproduced exactly at 1 AU with nothing else in view. `L_scene`
+  is the sum of the solar term and the dominant body's reflected term, both
+  obtained by inverting §3's apparent magnitudes through
+  `10^(0.4 (M☉,1AU − m))`; the reflected term is skipped when the dominant body
+  is the Sun or absent. **Exposure is display-only:** the tier ladder keeps
+  consuming physical magnitudes and never sees it.
+  Adaptation is a first-order lag in *log* exposure — equal time buys equal
+  stops across the whole range — with `τ = 6 s` when the scene darkens and
+  exposure rises, and `τ = 2 s` when it brightens and exposure falls.
+  `E_min = 1/8` is set by the photosphere: `SUN_EMISSIVE_INTENSITY = 4` is
+  distance-independent, so at exposure 1 the solar disc reaches display channel
+  255 (clipped, granulation invisible) and at 1/8 it reaches 219 with the corona
+  still visible. `E_max = 16` is bounded by the constant 0.02 ambient floor,
+  which no exposure can add contrast to; +4 stops is the last power of two that
+  keeps night sides dark, and it lifts Neptune's disc from ≈2/255 to ≈53/255.
+  Measured keys: near-Sun (25 R☉) `L = 73.98`, Mercury `6.674`, Earth `1`,
+  Neptune `1.106e-3`. Settings expose `auto`/`fixed`; the quality governor pins
+  `fixed` on its tier-1 rungs, and `fixed` from either side wins.
 - Sun rendering is **procedural** (ADR-010, task T0084). Tier-2 Lambert and
   tier-3 Standard materials share a seeded, UV-free, object-space domain-warped
   fBm photosphere. The visible-limb profile is
@@ -153,7 +189,9 @@ never pull the player out of the chase view.
   Policy for procedural shading and governor rungs remains in ADR-010.
 - Night sides are genuinely dark; the global ambient floor is exactly 0.02 for
   playability. Earth keeps its authored night-light emissive map with minimum
-  intensity 4 at the fixed exposure so localized city lights remain visible.
+  intensity 4 so localized city lights remain visible; the adaptive controller
+  raises exposure on the night side of the outer system, never lowers it below
+  `E_min`, so that floor still holds.
   The RGB cloud texture also supplies its green channel as the cloud shell's
   alpha map and the transparent shell does not write depth, preserving the
   surface and night lights below it.
@@ -323,4 +361,4 @@ unchanged.
 
 ## 12. Quality settings — adaptive governor (ADR-008)
 
-Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins) and shows the governor's current tier. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.
+Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins), an exposure mode (`auto`/`fixed`, §4), and shows the governor's current tier. The tier-1 rungs additionally pin `fixed` exposure, and `fixed` from either the player or the governor wins. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.
