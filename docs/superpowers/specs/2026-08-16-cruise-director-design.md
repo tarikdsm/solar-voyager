@@ -90,11 +90,18 @@ a ninth phase would break the plan's contract for T0119's HUD, so instead the di
 | mode | when | boost means | brake means |
 |---|---|---|---|
 | `profile` | the §8.4 solve returned `ok` | fly `+n̂` open loop to `T/2` | fly `−n̂` open loop |
-| `pursuit` | §8.7: the solve failed, or cruise was resumed mid-flight | close: aim at the lead point, full α | kill `v_rel`: aim `−v̂_rel`, full α |
+| `pursuit` | §8.7: the solve failed, or cruise was resumed mid-flight | closing below `v_appr` | closing above `v_appr` |
 
-`d_rel > 1.2·D_stop` selects boost, otherwise brake — the §8.7 branch, and the same 1.2 margin the
-approach-brake assist (T0118) engages at. This is why the director never needs a phase the plan did
-not name, and why an abort at 80 % of a Neptune run can be re-engaged and still arrive.
+**§8.7 as written does not fly, and the corrected law is ADR-043.** The two-branch rule aims its
+closing leg with a *heliocentric* lead while §8.4 hands the endgame a ship co-moving with its target
+at up to 30 km/s — a 90 s lead points 2,700 km wide of a 200 km approach — and repairing that with
+§8.4's own drift term makes the aim reverse exactly at the brake switch (1,746 branch flips on the
+Mars route, 39 % of the endgame coasting in `align`, no arrival). The shipped law is one rendezvous
+vector, `Δv⃗ = v_appr·sign(d_rel)·LOŜ − v_rel`, whose direction is the aim and whose magnitude is the
+throttle; the spec's two branches are its limits and its 1.2 margin survives as the speed limit
+`v_appr`. Full reasoning, measurements and rejected repairs in ADR-043. The `boost`/`brake` labels
+are then just "closing below / above `v_appr`", which is why the director never needs a phase the
+plan did not name, and why an abort at 80 % of a Neptune run can be re-engaged and still arrive.
 
 **A mid-cruise `ok = false` is a routing decision, not an error.** The κ guard is ADR-037's whole
 point (T0114 handoff): re-solving from 75 % along a flown Neptune profile converges to a real
@@ -152,7 +159,9 @@ table is the director's:
 Numbers: Jupiter 324,000 (h = 252,508), Saturn 168,734.4 (h = 108,466.4), Uranus 127,440
 (h = 101,881), Neptune 75,528.6 (h = 50,764.6). Derived from `data/rings.json` at construction time,
 not hard-coded, so a ring-data change moves the stand-off with it. `flyby` keeps the caller's
-altitude and the solver's `R_col` floor.
+altitude and the solver's `R_col` floor. The class rule *replaces* the `3·R_col` default rather than
+flooring against it — Saturn's 168,734.4 km is 2.80 `R_col`, deliberately inside the 180,804 km the
+default would give, because the ring and not the body is what the stand-off is about.
 
 ### 4.2 The residual is the insert phase's whole job
 
@@ -166,9 +175,13 @@ and fly back, and the pursuit rule handles it because pursuit needs no time of f
 
 ### 4.3 Insertion, in three steps
 
-1. **`insert/kill`** — §8.7 pursuit against the target until `|v_rel| < 1e-3 km/s` and
-   `|r_rel| − R_arr` is inside 1 % of `R_arr`. This is where the 6.8–63.5 km/s goes. Rails-relative
-   rest, at the arrival radius, exactly as the task states.
+1. **`insert/kill`** — the ADR-043 pursuit against the target until the outstanding command is small
+   and `|r_rel| − R_arr` is inside 1 % of `R_arr`. This is where the residual goes. §8.7's absolute
+   `1e-3 km/s` settle is unreachable under warp — the target's gravity adds `g·Δt` every step, 0.02
+   km/s per frame at Jupiter's stand-off at 1000× — so "rest" means 2 % of the local circular speed,
+   which bounds the eccentricity it contributes at 0.02 and is removed by the trim burn regardless.
+   Measured residual on LEO→Mars: **535 km/s**, not the 63.5 km/s of a pure departure solve, because
+   κ ≤ 0.1 admits mid-course re-solves whose arrival is at rest in *their own* drift frame.
 2. **`insert/circularize`** — burn 1. From rest at radius `r`, a circular orbit needs
    `v_circ = √(μ/r)` perpendicular to `r̂` (physics-spec §2 two-body). The plane is
    `t̂ = unit(ẑ_ecliptic × r̂)`, falling back to `x̂` when `r̂ ∥ ẑ`: a prograde, near-equatorial orbit,
@@ -222,10 +235,24 @@ bound is what the ramp is sized against.
   snapshot contract but nothing sets it yet (T0111 left it declared); the dominant-body transition
   is the live detector, and the flag is honoured too so this keeps working when a later task emits
   it.
-- **Collision warning**: physics-spec §8.3's own guard, `altitude < 1.5 · D_stop(closing speed)`
-  against the dominant body — the form the spec says "fails *toward* warning". O(1) per frame, no
-  predictor round trip. Suppressed for the target body during `insert`, where closing on a
-  stand-off sphere at speed is the plan.
+- **Collision warning**: physics-spec §8.3's guard, `altitude < 1.5 · D_stop(closing speed)`, **and**
+  an impact parameter `|r × v|/|v|` inside the collision radius. The impact-parameter term is not
+  optional: without it the test degenerates into "cannot stop before the body", which for a torchship
+  is true of the *Sun* for most of an interplanetary cruise (`D_stop` at 5,900 km/s is 1.2 AU) and
+  pinned the warp at 100× for the whole flight. O(1) per frame, no predictor round trip. Suppressed
+  for the target body during `insert`, where closing on a stand-off sphere at speed is the plan.
+
+## 5.1 Departure clearance (found while flying, not while designing)
+
+§8.4 is thrust-only, and it is *body-blind* as well as gravity-blind: the straight line from a 400 km
+LEO to Mars at J2026 passes through the Earth, and the profile's own axis reaches the surface 96 s
+after engage at 10 g. The director therefore holds the aim at least 15° above the local horizon while
+inside 4 collision radii of a dominant body that is not the target. The bias is a rotation of the aim
+inside the plane it already occupies, so it costs exactly the kind of error the mid-course re-solve
+exists to absorb, and it is live precisely while that re-solve is still valid. It is applied *inside*
+the aim computation, not after the phase machine has run: the align-complete test compares the nose
+against the aim, so a clamp applied downstream would be an aim the ship is never allowed to reach and
+the director would sit in `align` for ever (it did).
 
 ## 6. Ledger honesty
 
@@ -234,6 +261,13 @@ own Δv accumulator, and never bypasses `Commands`. Cruise energy is therefore `
 by construction. The gate asserts it against the analytic bound of physics-spec §8.2,
 `E = 2(γ_peak − 1)mc²`, within 2 %; the residual is the flip coast, the align slew and the insertion
 burns, all of which are real thrust the ledger also counts.
+
+**The plan's analytic bound is the wrong one for this ledger.** ADR-007 / physics-spec §5 make the
+ledger the *photon-drive* cost `E = ∫ m α c dt`, not the kinetic `2(γ_peak−1)mc²` the acceptance text
+names; the two differ by `γβ/(γ−1) ≈ 2/β`, measured at 79.8× (Jupiter) and 4,484× (Moon). The
+statement the criterion is *making* — no side channel — is asserted against the identity the ledger
+actually satisfies, `E = m c α t_thrust`, measured at **0.9988 (Jupiter)** and **0.9983 (Moon)**,
+inside the 2 % tolerance. The kinetic bound is reported alongside for transparency.
 
 ## 7. Zero allocation
 
@@ -262,6 +296,16 @@ the sim's `RailsState` would "work".
   canonical Mars route (§4.2), and T0114 already tried and rejected it. Not implemented.
 - **Textbook two-burn circularization at apoapsis.** 10 wall-minutes of coast at Jupiter against a
   5-minute acceptance budget (§4.3). Replaced by an in-place trim.
+- **A Schmitt trigger on §8.7's brake test (engage 1.2, release 1.5).** Removes the branch chatter
+  but not the frame error; `D_stop` falls as `v²`, so any distance-based release reopens the closing
+  branch before the brake has finished. Stable limit cycle ±150 km around the stand-off, never stops.
+- **Chasing the pursuit aim every frame.** `Commands.rotate` is zeroed above 100×, so a command that
+  moves every frame pins the whole arrival at 100×. The aim is deadbanded at 0.57°, which
+  self-regulates: a higher tier moves the command faster and forces the next correction sooner.
+- **Ending the profile brake on its own clock.** The §8.4 schedule assumes an uninterrupted burn;
+  align, flip and the warp clamps cost it a few per cent of thrust time, which on Mars left 521 km/s
+  of closing speed at `arrivalSimSec` and the ship flew straight past. The handover is on state
+  (no longer over-speed for the distance still to run), and the clock only bounds the warp.
 - **A `CruiseDirector`-owned energy accumulator for the HUD.** A side channel by definition, and the
   acceptance criterion is explicitly that there is none (§6). The HUD reads `snapshot.energySpentJ`.
 
@@ -281,5 +325,13 @@ the sim's `RailsState` would "work".
    (`arrivalSimSec` is derived from a solve and is finite by construction, but a resumed profile is
    re-validated).
 5. `snapshot.osculatingElements` is dominant-body relative, not target relative (§4.4).
-6. Earth–Mars is **2.4 AU at J2026**, not the 0.52 AU plan §3.3 assumed, so the Mars route is 1.40 d
+6. A rejected solve **zeroes every field of the record it was handed**, including `aimUnit`. Reading
+   the thrust axis straight out of `InterceptSolution` therefore replaces the flown profile's axis
+   with `(0,0,0)` the first time a mid-cruise re-solve is refused — and a zero aim reads back as an
+   attitude error of exactly zero, i.e. "aligned", so the ship never flips and thrusts forward for
+   the entire trip. The director keeps its own copy and commits only on success.
+7. `snapshot.targetBodyId`, `throttle` and the rest only reflect a `Commands` call **after the next
+   `step()`**. Tests that assert on the snapshot immediately after `engage()` or `abort()` read the
+   previous frame.
+8. Earth–Mars is **2.4 AU at J2026**, not the 0.52 AU plan §3.3 assumed, so the Mars route is 1.40 d
    of sim time. The abort fuzz gate is sized against 1.40 d, not 1.0 d.
