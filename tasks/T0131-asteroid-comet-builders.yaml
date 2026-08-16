@@ -1,6 +1,6 @@
 id: T0131
 title: build_asteroid.py and build_comet.py with shape-model ingest
-status: IN_PROGRESS
+status: REVIEW
 agent: claude
 branch: task/T0131-asteroid-comet-builders
 depends_on:

@@ -33,5 +33,5 @@ npm run assets:ingest     # validate + Draco + KTX2 + budgets -> public/assets/
 
 ## Texture handling
 
-- Source textures per the credit table in `docs/asset-pipeline.md` (NASA/USGS public domain only). `tools/fetch_textures.py` documents URL + processing for each; raw downloads are not committed.
+- Source textures per the credit table in `docs/asset-pipeline.md` (NASA/USGS public domain only). `tools/fetch_textures.py` pins `{url, sha256, license, dest}` per source and fetches, verifies and caches it; source imagery is never committed (ADR-039), only the generated `SOURCES.md`.
 - Albedo/emissive → KTX2 ETC1S; normal maps → KTX2 UASTC. Resolution tier per the table (4k Earth/Moon/Mars, 2k giants, 1k small).

@@ -13,15 +13,16 @@ import {
   GAMEPAD_SENSITIVITY_MIN,
   INPUT_ACTIONS,
   isUnboundInputCode,
+  type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV6,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV5;
+  readonly settings: GameSettingsV6;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;
@@ -33,6 +34,7 @@ export interface SessionSettingsPort {
   setGamepadDeadzone(deadzone: number): SessionActionResult;
   setCameraFovWidening(fovWidening: boolean): SessionActionResult;
   setCameraShake(shake: boolean): SessionActionResult;
+  setExposureMode(exposureMode: ExposureMode): SessionActionResult;
   setHudPreset(preset: HudPreset): SessionActionResult;
   setHudBodyLabels(bodyLabels: boolean): SessionActionResult;
   updateQualityLock(qualityLock: QualityLock): SessionActionResult;
@@ -61,6 +63,7 @@ export interface SessionSettingsModel {
   selectGamepadAxisSensitivity(axis: GamepadAxisId, value: string): PanelActionResult;
   setCameraFovWidening(fovWidening: boolean): PanelActionResult;
   setCameraShake(shake: boolean): PanelActionResult;
+  selectExposureMode(value: string): PanelActionResult;
   selectHudPreset(value: string): PanelActionResult;
   setHudBodyLabels(bodyLabels: boolean): PanelActionResult;
 }
@@ -117,6 +120,10 @@ function simplify(result: SessionActionResult): PanelActionResult {
 
 function isHudPresetValue(value: string): value is HudPreset {
   return (HUD_PRESETS as readonly string[]).includes(value);
+}
+
+function isExposureMode(value: string): value is ExposureMode {
+  return value === 'auto' || value === 'fixed';
 }
 
 function isQualityLock(value: string): value is QualityLock {
@@ -194,6 +201,10 @@ export function createSessionSettingsModel(
     },
     setCameraFovWidening: (fovWidening) => simplify(session.setCameraFovWidening(fovWidening)),
     setCameraShake: (shake) => simplify(session.setCameraShake(shake)),
+    selectExposureMode: (value) =>
+      isExposureMode(value)
+        ? simplify(session.setExposureMode(value))
+        : { ok: false, message: 'Unsupported exposure mode' },
     selectHudPreset: (value) =>
       isHudPresetValue(value)
         ? simplify(session.setHudPreset(value))
@@ -328,6 +339,26 @@ export function SessionSettingsPanel({
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+            </select>
+          </label>
+        </section>
+
+        <section aria-labelledby="exposure-settings-title">
+          <h2 id="exposure-settings-title">Exposure</h2>
+          <p class="quality-lock-hint">
+            Adaptive exposure follows the light where you actually are, so Neptune reads as daylight
+            and the Sun stays unclipped up close. Fixed holds one exposure everywhere. The quality
+            governor pins Fixed on its lowest tier.
+          </p>
+          <label class="quality-lock-label" for="exposure-mode">
+            Mode
+            <select
+              id="exposure-mode"
+              value={settings.render.exposureMode}
+              onChange={(event) => publish(model.selectExposureMode(event.currentTarget.value))}
+            >
+              <option value="auto">Adaptive</option>
+              <option value="fixed">Fixed</option>
             </select>
           </label>
         </section>

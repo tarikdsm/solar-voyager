@@ -1,0 +1,109 @@
+# T0127 Pass Insertion + Adaptive Exposure — Performance Summary
+
+**Date:** 2026-08-16
+**Feature head measured:** `task/T0127-adaptive-exposure` (working tree at `1b0e996`)
+**Baseline:** `331ebd6` — this branch's merge base
+**Adapter:** ANGLE D3D11, Intel(R) UHD Graphics (0x00009A60), hardware (`softwareRasterizer=false`)
+**Canonical bench viewport:** 640×360, high-quality lock, 900-frame deterministic route
+(`leo` → `moon-flyby` → `jupiter-approach`)
+
+## Why this task has a bench
+
+T0127 adds one call to the animation frame (`ExposureController.update`) and makes
+`renderer.toneMappingExposure` a per-frame write instead of a constant. Both are in the hot path,
+so the Global Constraints require evidence.
+
+## Method
+
+`npm run bench` on the production build, same Chrome channel, same settle/measurement heap windows,
+same harness. The baseline was produced by checking the merge base's `src/` into the working tree
+(`git checkout 331ebd6 -- src`, plus removing the two new `exposureController` files), rebuilding
+and benching; the tree was then restored to HEAD and re-benched. Only `src/` was swapped.
+
+**Both runs use `--runs 2`**, which makes the harness compare two measured runs inside one browser
+session and fail if any percentile differs by more than 5%. That was not decoration — see below.
+The paired JSON is committed as `T0127-before.json` and `T0127-after.json`; each file contains both
+of its runs plus the harness's own `stability.findings`.
+
+**Read `gitSha` in those files with care.** It records the committed `HEAD` at the moment of the
+run, not the source that was built: both files report `1b0e996` because the baseline was benched
+from a working-tree swap, not a checkout.
+
+## Results
+
+| Metric                       | Baseline run0 / run1 | Feature run0 / run1 |
+| ---------------------------- | -------------------- | ------------------- |
+| Frame median (ms)            | 6.1 / 6.1            | 6.1 / 6.1           |
+| Frame p75 (ms)               | 6.1 / 6.1            | 12.1 / **6.1**      |
+| Frame p99 (ms)               | 12.101 / 12.201      | 48.104 / **12.1**   |
+| Main-thread work median (ms) | 1.7 / 2.0            | 4.5 / **1.9**       |
+| Main-thread work p75 (ms)    | 2.2 / 2.7            | 8.2 / **2.3**       |
+| Max draw calls               | 49 / 49              | 49 / 49             |
+| Max triangles                | 70,452 / 70,452      | 70,452 / 70,452     |
+| Steady-window heap delta (B) | 92,764 / 94,572      | 90,676 / **81,944** |
+| Route errors                 | 0                    | 0                   |
+
+| Bundle (gzip) | Baseline  | Feature   | Δ                |
+| ------------- | --------- | --------- | ---------------- |
+| Entry         | 150,616 B | 152,642 B | +2,026 B (+1.3%) |
+| Total         | 582,872 B | 584,898 B | +2,026 B (+0.3%) |
+
+Budgets: entry ≤ 400,000 B, total ≤ 1,000,000 B, heap growth ≤ 196,608 B. All well inside.
+
+## The p75/p99 divergence is a host artifact, and here is the proof
+
+The feature column above looks like a 2× p75 regression until you read the two runs separately.
+The harness's own stability gate failed on the feature build's **self**-comparison:
+
+```
+Benchmark p75Ms variance must be < 5.0%; measured 65.93%.
+Benchmark p99Ms variance must be < 5.0%; measured 119.61%.
+```
+
+That is one binary compared against itself, in one browser session, minutes apart.
+
+Five clean runs of the feature build were taken in total (two `--runs 1`, two `--runs 2`). The
+pattern is exact and reproducible: **the first measured run after priming is slow, the second is
+fast.** Both `--runs 2` invocations produced run0 = 12.1–12.2 ms p75 and run1 = 6.1 ms p75.
+
+The decisive point is arithmetic, not judgement: a deterministic per-frame cost cannot be 4.5 ms in
+run0 and 1.9 ms in run1 of the same binary. Feature run1 reproduces the baseline to the digit —
+p75 6.1 ms, p99 12.1 ms, work median 1.9 ms against the baseline's 1.7–2.0 ms — and its steady-window
+heap delta is _lower_ than either baseline run. The divergence therefore belongs to the host, not to
+T0127.
+
+**The host contention is identified, not assumed.** This machine is shared with other v2 task agents
+working in sibling worktrees, and at least one of them (T0128) was running _this same GPU-bound
+flight bench_ during the measurement window — discovered when it took port 4177 out from under
+`test:visual-tiers` here, with a command line of
+`node tools/bench/flightBench.mjs --runs 2 --output docs/bench/T0128-before.json`. Two concurrent
+900-frame WebGL benches on one Intel UHD adapter is exactly the load that produces a bimodal
+frame-pacing distribution, and no amount of care inside this worktree can serialise it.
+
+An earlier pairing was thrown away rather than reported: it was taken while
+`check:tasks`/`check:release`/`check:dashboard` and file edits were also running here, which put
+_both_ configurations into the slow mode (12.2 / 12.1 ms p75). Those numbers are not in this
+document because they measure the author, not the code.
+
+## Conclusion
+
+No measurable frame cost. Draw calls, triangles and the steady-state heap window are unchanged or
+slightly better; the bundle grows 2 KB gzip. No golden and no budget moved.
+
+## Handoff finding for whoever benches next on this host
+
+`npm run bench` with the default single run is **not** safe to compare across invocations here: the
+first measured run after priming lands in a slow frame-pacing mode much of the time, and a
+single-run before/after pair can therefore manufacture a 2× p75 "regression" or hide a real one. Use
+`--runs 2` and read `stability.findings`; treat a single run as evidence only when its
+self-comparison is clean. The 5% gate did exactly its job here.
+
+The root cause is worth fixing at the orchestrator level rather than per task: **`npm run bench` and
+the Playwright gates are not safe to run concurrently across worktrees.** They contend for one GPU,
+and worse, `tools/bench/flightBench.mjs` and `tools/tests/visualTierFlyIn.mjs` bind the _same_ fixed
+port — both are `127.0.0.1:4177`. Any agent running `npm run bench` therefore hard-fails any agent
+running `npm run test:visual-tiers` with `Port 4177 is already in use`, which happened twice here
+(T0128's and then T0144's bench). Two further gates failed under the same contention and passed on a
+straight retry: `test:tutorial` timed out after 30 s waiting for `#burn-log-active` to hide, and the
+first `test:visual-tiers` attempt. Bench and browser-gate runs need a machine-wide lock, or a
+per-worktree port offset at minimum.

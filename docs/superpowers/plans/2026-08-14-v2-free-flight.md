@@ -133,23 +133,45 @@ export interface VesselConfig {
 }
 export const DEFAULT_VESSEL: VesselConfig;
 
-// sim/guidance/constantAccelIntercept.ts (T0114) — pure, allocation-free via out-params
+// sim/guidance/constantAccelIntercept.ts (T0114 — as shipped) — pure, allocation-free
+// via out-params. `CompiledRails` did not exist and is DEFINED by T0114: the shared
+// read-only `CompiledRailsCatalog` bundled with the solver's own private evaluation
+// scratch (never SimulationCore's live RailsState — see ADR-037 §6).
+export interface CompiledRails {
+  readonly catalog: CompiledRailsCatalog;
+  readonly scratchState: RailsState;
+  readonly scratchWorkspace: RailsWorkspace;
+}
+export function createCompiledRails(catalog: CompiledRailsCatalog): CompiledRails;
+export type ArrivalIntent = 'orbit' | 'flyby';
 export interface InterceptSolution {
-  ok: boolean;                    // false ⇒ use pursuit fallback
+  ok: boolean;                    // false ⇒ use pursuit fallback; all numbers NaN
   totalCoordSec: number;          // boost+brake coordinate time
-  flipAtCoordSec: number;         // time from start to flip
+  flipAtCoordSec: number;         // time from start to flip; always totalCoordSec/2
   totalProperSec: number;         // ship τ for the trip
   peakBeta: number;               // max |v|/c on profile
   arrivalRadiusKm: number;        // insertion radius actually used
+  // Added by T0114 (this block updated per the naming rule below). Rationale in
+  // docs/decisions/ADR-037-constant-accel-intercept.md §6.
+  iterations: number;             // the quantity T0114's convergence acceptance is stated in
+  readonly aimUnit: Float64Array; // 3: boost thrust axis; brake leg is its negation
 }
+export function createInterceptSolution(): InterceptSolution;
 export function solveInterceptInto(out: InterceptSolution,
   shipState: Float64Array /*7: r,u,τ*/, rails: CompiledRails, targetIndex: number,
-  alphaMS2: number, arrival: 'orbit' | 'flyby', arrivalAltitudeKm: number,
+  alphaMS2: number, arrival: ArrivalIntent, arrivalAltitudeKm: number,
   startSimTimeSec: number): void;
+export function brachistochroneHalfCoordSec(distanceKm: number, alphaMS2: number): number;
+export const MAX_INTERCEPT_ITERATIONS = 25;      // plan §3.3.2
+export const INTERCEPT_CONVERGENCE_SEC = 0.5;    // plan §3.3.2
+export const MAX_INTERCEPT_CLOSING_RATIO = 0.1;  // ADR-037 §4 — spurious-root guard
+export const ORBIT_ARRIVAL_RADIUS_FACTOR = 3;    // plan §3.3.3
 
 // sim/guidance/brakingEnvelope.ts (T0114)
 export function relativisticStopDistanceKm(relSpeedKmS: number, alphaMS2: number): number;
 // = (c²/α)(γ_rel − 1), exact; used by approach-brake assist and cruise brake phase.
+export function relativisticStopCoordSec(relSpeedKmS: number, alphaMS2: number): number;
+// = u_rel/α, exact; the brake phase's own ETA. Both: α ≤ 0 or β ≥ 1 ⇒ +∞, non-finite ⇒ NaN.
 
 // game/flight/flightController.ts (T0108 — as shipped)
 export type ThrustRegime = 'manual' | 'cruise';
@@ -308,8 +330,8 @@ At 1× this yields a visible 15°/s slew. **Corrected by T0107 / ADR-035 — the
 Constant-proper-acceleration boost–flip–brake to a rails target, relativistically exact in the 1D profile, vector-corrected iteratively:
 
 1. Straight-line distance guess `d₀ = |r_t(t₀) − r₀|`, TOF guess from the relativistic brachistochrone: half-trip coordinate time `T_h` solves `d/2 = (c²/α)(√(1+(αT_h/c)²) − 1)`, so `T₀ = 2·T_h`.
-2. Iterate k = 0…24: evaluate target at `t₀+T_k` (rails), recompute `d_k` including initial relative velocity projection (`d_k = |r_t(t₀+T_k) − r₀ − v₀·T_k|` first-order), recompute `T_{k+1}`. Converged when `|T_{k+1}−T_k| < 0.5 s` (typical ≤ 8 iters; `ok=false` if not converged in 25).
-3. Profile: thrust vector = unit(line-of-sight to predicted intercept), boost for `flipAt = T/2` (adjusted for initial v∥), flip (attitude reversal via hold-mode slew), brake to relative rest at `arrivalRadiusKm = meanRadius·3` (planets/moons; ringed giants: outermost ring radius × 1.2; Sun: 25 R☉ for 'orbit', configurable for polar flyby), then `insert`: circularize using the analytic `v_circ = √(μ/r)` against the target's rails frame.
+2. Iterate k = 0…24: evaluate target at `t₀+T_k` (rails), recompute `d_k` including initial relative velocity projection (`d_k = |r_t(t₀+T_k) − r₀ − v₀·T_k|` first-order, minus the arrival radius), recompute `T_{k+1}`. Converged when `|T_{k+1}−T_k| < 0.5 s` (measured 2–3 iters on all five canonical routes; `ok=false` if not converged in 25). **T0114 adds one further `ok=false` condition (ADR-037 §4):** the contraction factor `κ = |v₀ − v_t(t₀+T)| / (αT/2)` must be `≤ 0.1` at convergence. Without it the iteration silently returns *spurious* roots in which the ship drifts past the target and boosts back — real solutions of the stated equation that "arrive" at thousands of km/s. Departure solves measure κ = 0.0019–0.036; mid-cruise re-solves measure 0.245–1.615. **The solver is a departure solver**; the endgame belongs to the step-6 pursuit rule.
+3. Profile: thrust vector = unit(line-of-sight to predicted intercept), boost for `flipAt = T/2`, flip (attitude reversal via hold-mode slew), brake to rest at `arrivalRadiusKm = meanRadius·3` (planets/moons; ringed giants: outermost ring radius × 1.2; Sun: 25 R☉ for 'orbit', configurable for polar flyby), then `insert`: circularize using the analytic `v_circ = √(μ/r)` against the target's rails frame. **Corrected by T0114 / ADR-037 — the original text here said `flipAt = T/2` "(adjusted for initial v∥)" and "brake to *relative* rest", and both are wrong under step 2's own distance definition.** Subtracting `v₀·T` inside `d_k` puts the solve in the frame drifting at the ship's initial velocity, where the ship starts at rest: the parallel component of `v₀` is *already* removed, so a second correction to the flip time would double-count it, and the flip is at exactly `T/2`. The profile therefore arrives at rest **in that drift frame, not relative to the target** — a single fixed thrust axis cannot match both an arrival position and an arrival velocity. The residual `v₀ − v_target(t_arrival)` (measured 6.8–63.5 km/s on the canonical routes) is the `insert` phase's to remove, sized with `relativisticStopDistanceKm`. Full derivation in physics-spec §8.4.
 4. Mid-course: re-solve every 300 s sim OR on phase change OR if lateral drift > 0.5% of remaining distance. CruiseDirector feeds α and attitude via existing `Commands` only.
 5. Proper time / γ for HUD from the same closed forms: `τ = (c/α)·asinh(αT_h/c)·2` per leg, `peakBeta = tanh(asinh(αT_h/c))`… (full derivation transcribed into physics-spec §8 by T0114, with symbols matching `relativity.ts`).
 6. **Fallback pursuit** (always available, also the abort-resume mode): point at target lead position; full α while `distance > 1.2 × relativisticStopDistanceKm(v_rel, α)`; else brake. No TOF solve needed.
