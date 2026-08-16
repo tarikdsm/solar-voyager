@@ -1,8 +1,8 @@
 id: T0122
 title: Photon-beam plume, RCS puffs, ship lights
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0122-plume-rcs-lights
 depends_on:
   - T0121
 milestone: V2M3

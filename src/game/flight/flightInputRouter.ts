@@ -1,6 +1,7 @@
 import { WARP_LADDER } from '../../core/time.js';
 import type { AttitudeMode, Commands, SimSnapshot } from '../../sim/simulationSnapshot.js';
 import type { InputAction, InputFrame } from '../input/inputEngine.js';
+import type { CruiseDirector } from './cruiseDirector.js';
 import type { FlightController } from './flightController.js';
 
 interface HoldBinding {
@@ -35,10 +36,23 @@ export interface FlightInputPorts {
  * directly, exactly as T0105's interim bridge did.
  */
 export class FlightInputRouter {
+  private cruiseDirector: CruiseDirector | null = null;
+  private lastThrottleAxis = 0;
+
   constructor(
     private readonly controller: FlightController,
     private ports: FlightInputPorts,
   ) {}
+
+  /**
+   * Binds the cruise autopilot (T0116). Additive setter rather than a third
+   * constructor argument so the plan §2 signature is unchanged; this is the only
+   * module that sees an `InputFrame`, so it is the only place that can tell the
+   * director that the player has touched something.
+   */
+  setCruiseDirector(director: CruiseDirector | null): void {
+    this.cruiseDirector = director;
+  }
 
   /** Pushes one polled frame into the controller. Allocation-free. */
   apply(frame: InputFrame): void {
@@ -47,6 +61,7 @@ export class FlightInputRouter {
     this.controller.setThrottleAxis(frame.axes.throttle);
     this.applyWarp(frame);
     this.applyAssists(frame);
+    this.applyCruise(frame);
   }
 
   /** Re-points the warp path at a replacement simulation. */
@@ -61,6 +76,49 @@ export class FlightInputRouter {
     const nextIndex = Math.min(WARP_LADDER.length - 1, Math.max(0, currentIndex + steps));
     const nextWarp = WARP_LADDER[nextIndex];
     if (nextWarp !== undefined) this.ports.commands.setWarp(nextWarp);
+  }
+
+  /**
+   * Cruise engage/abort, and the "any player input decompresses" rule.
+   *
+   * The throttle axis is a *lever position*, so it counts as input only when it
+   * moves; the two cruise actions are excluded from the input test, or engaging
+   * would immediately abort the cruise it just started.
+   */
+  private applyCruise(frame: InputFrame): void {
+    const director = this.cruiseDirector;
+    if (director === null) return;
+    if (frame.pressed('cruiseAbort')) director.abort();
+    const throttleAxis = frame.axes.throttle;
+    const throttleMoved = throttleAxis !== this.lastThrottleAxis;
+    this.lastThrottleAxis = throttleAxis;
+    if (
+      frame.lookYawRad !== 0 ||
+      frame.lookPitchRad !== 0 ||
+      frame.axes.pitch !== 0 ||
+      frame.axes.yaw !== 0 ||
+      frame.axes.roll !== 0 ||
+      throttleMoved ||
+      frame.pressCount('warpIncrease') > 0 ||
+      frame.pressCount('warpDecrease') > 0 ||
+      frame.pressed('killRotation') ||
+      frame.pressed('stabilityAssistToggle') ||
+      this.holdPressed(frame)
+    ) {
+      director.notifyPlayerInput();
+    }
+    if (frame.pressed('cruiseEngage')) {
+      const targetBodyId = this.ports.snapshot().targetBodyId;
+      if (targetBodyId !== null) director.engage(targetBodyId, 'orbit');
+    }
+  }
+
+  private holdPressed(frame: InputFrame): boolean {
+    for (let index = 0; index < HOLD_BINDINGS.length; index += 1) {
+      const binding = HOLD_BINDINGS[index];
+      if (binding !== undefined && frame.pressed(binding.action)) return true;
+    }
+    return false;
   }
 
   private applyAssists(frame: InputFrame): void {

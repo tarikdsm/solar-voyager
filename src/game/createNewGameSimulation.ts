@@ -19,6 +19,19 @@ function createCanonicalCatalog() {
   return compileRailsCatalog(bodiesDocument.bodies);
 }
 
+/**
+ * The committed J2026 catalog, compiled fresh.
+ *
+ * `SimulationCore` keeps its own copy private, so game-layer consumers that need
+ * to reason about the same bodies (T0116's guidance, the epoch state, the
+ * predictor worker) compile their own read-only copy rather than reaching into
+ * the simulation — the pattern `createEpochState` and `predictorWorkerRuntime`
+ * already use.
+ */
+export function compileCanonicalCatalog(): ReturnType<typeof createCanonicalCatalog> {
+  return createCanonicalCatalog();
+}
+
 function createCanonicalLeoState(catalog: ReturnType<typeof createCanonicalCatalog>): Float64Array {
   const earthIndex = catalog.bodyIds.indexOf('earth');
   const earth = bodiesDocument.bodies[earthIndex];

@@ -1,6 +1,6 @@
 id: T0126
 title: Milky Way panorama and zodiacal light
-status: IN_PROGRESS
+status: REVIEW
 agent: claude
 branch: task/T0126-milky-way
 depends_on:

@@ -1,3 +1,4 @@
+import type { CruiseDirector } from '../game/flight/cruiseDirector.js';
 import type { AudioSystem } from '../game/audio/audioSystem.js';
 import type { FlightController } from '../game/flight/flightController.js';
 import type { FlightInputRouter } from '../game/flight/flightInputRouter.js';
@@ -68,6 +69,7 @@ export interface FrameLoopRuntime {
   readonly trajectoryPredictionStore: TrajectoryPredictionSignalStore;
   readonly updateBurnLogRuntime: (view: BurnLogView) => void;
 
+  cruiseDirector: CruiseDirector | null;
   exposureController: ExposureController | null;
   flightController: FlightController | null;
   flightInputRouter: FlightInputRouter | null;
@@ -151,6 +153,7 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
     const inputEngine = runtime.inputEngine;
     const flightInputRouter = runtime.flightInputRouter;
     const flightController = runtime.flightController;
+    const cruiseDirector = runtime.cruiseDirector;
     const simulationStartMs = performance.now();
     if (
       !halted &&
@@ -161,7 +164,11 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       const inputFrame = inputEngine.poll(deltaSec);
       flightInputRouter.apply(inputFrame);
       runtime.hudInputRouter?.apply(inputFrame);
-      flightController.update(deltaSec);
+      // T0116 — exactly one owner of attitude and throttle per frame. The
+      // director's `update` runs unconditionally because an aborted cruise is
+      // still decompressing the warp; `active` is what arbitrates the ship.
+      cruiseDirector?.update(deltaSec);
+      if (cruiseDirector === null || !cruiseDirector.active) flightController.update(deltaSec);
     }
     const snapshot = halted ? session.simulation.snapshot : session.simulation.step(deltaSec);
     // ADR-036 — one capture per 10 s of wall time, skipped while frozen. The

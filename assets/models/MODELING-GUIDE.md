@@ -44,7 +44,17 @@ Orientation: **north pole along +Y** (after glTF's +Y-up export), prime meridian
 | Dwarfs, small moons | UV sphere 64×32 | ≤ 15k tris |
 | Asteroids/comets | Displaced geodesic icosphere, frequency 15 = 4,500 tris (seeded noise + craters) or decimated real shape model (Eros, Bennu, Ryugu, 67P have published meshes). Comets add the `coma_anchor`/`tail_anchor` nodes | ≤ 5k tris |
 | Rings | Flat annulus, 256 angular × 4 radial segments, **double-sided material**; radial structure belongs in texture U | ≤ 5k tris |
-| Ship | Hard-surface model, PBR, named nodes `hull_tip` (+X orientation marker) and `engine_nozzle` (renderer attaches the plume there) | ≤ 30k tris |
+| Ship | Hard-surface model, PBR, named nodes (see below) | 18k–28k tris, budget ≤ 30k |
+
+Ship node names are API — the renderer resolves them by string, so renaming one
+breaks a consumer rather than a preference: `hull_tip` (+X orientation marker,
+origin on the axis through the model origin), `engine_nozzle` (plume attachment,
+origin at the throat, bell left open), `rcs_pod_1`…`rcs_pod_4` (RCS puff
+emitters; 1 forward port, 2 forward starboard, 3 aft port, 4 aft starboard),
+`light_nav_l` / `light_nav_r` / `light_beacon` (running lights), `canopy` (glass
+shell) and `cockpit_eye` (meshless marker at the pilot eye point). The full table
+lives in `tools/blender/ship_config.py` and is regenerated into
+`assets/models/ship/SOURCES.md` on every build.
 
 Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (quad sphere solves this — check with a checker texture).
 

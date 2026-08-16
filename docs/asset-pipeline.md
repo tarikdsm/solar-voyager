@@ -220,7 +220,22 @@ and requires byte-identical GLB, PNG and SOURCES.md.
 
 ## The ship
 
-`build_ship.py`: original design, ~30k tris, PBR materials (albedo/metal-rough/normal/emissive for engine glow), local +X nose/drive axis (ADR-025), and separate `hull_tip` orientation plus `engine_nozzle` plume-attachment nodes. Modeled once, iterated via MCP sessions, always back-ported to script.
+`build_ship.py`: original design, 18k–28k tris against a 30k budget, PBR materials (albedo/metal-rough/normal at 2048×1024 for the hull, emissive for the engine glow), local +X nose/drive axis (ADR-025), one Blender unit per metre.
+
+Geometry, node names and material parameters live in `tools/blender/ship_config.py` and the primitives in `tools/blender/ship_geometry.py`; both are Blender-free and unit-tested by `npm run test:tools`, so the contracts below are gated in CI even though `npm run test:blender` needs a local Blender. `build_ship.py` is the adapter.
+
+**Node names are API — other code resolves them by string:**
+
+| Node | Consumer |
+| --- | --- |
+| `hull_tip` | `src/render/shipVisual.ts` nose-alignment check; origin must be on +X through the model origin |
+| `engine_nozzle` | plume attachment (T0122); origin at the throat, bell open aft |
+| `rcs_pod_1`…`rcs_pod_4` | RCS puffs (T0122): 1 forward port, 2 forward starboard, 3 aft port, 4 aft starboard |
+| `light_nav_l`, `light_nav_r`, `light_beacon` | running lights (T0122); port red, starboard green, dorsal beacon |
+| `cockpit_eye` | meshless marker at the pilot eye point for the T0124 cockpit camera |
+| `canopy` | glass shell, separate so the cockpit view can treat it as the frame silhouette |
+
+The hull maps are **authored, not fetched** (`npm run textures:ship`); their recipe is `assets/textures-src/ship/SOURCES.md`. `npm run test:blender` regenerates them, builds the ship twice, compares SHA-256 for the GLB and every PNG, checks the node contract and the +X axis on the exported bytes, and ingests all three tier variants.
 
 ## Budgets (CI-gated, `npm run check:budgets`)
 

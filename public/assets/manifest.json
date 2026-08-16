@@ -192,6 +192,7 @@
       "id": "ship",
       "category": "ship",
       "triangles": 5538,
+      "triangles": 23580,
       "files": [
         "models/ship_1k.glb",
         "models/ship_2k.glb",
