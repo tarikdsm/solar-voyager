@@ -350,9 +350,9 @@
   inset: 0;
   display: grid;
   grid-template-areas:
-    'top-left    top-center    top-right'
-    'left        center        right'
-    'bottom-left bottom-center bottom-right';
+    'left top-center    right'
+    'left center        right'
+    'left bottom-center right';
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--sv-gap);
@@ -360,26 +360,34 @@
   pointer-events: none;
 }
 
+/*
+ * Two full-height rails and a bottom-centre cluster.
+ *
+ * The first attempt split the sides into top/middle/bottom areas as well, which
+ * looked tidier and was wrong: the middle row is `minmax(0, 1fr)` and collapsed
+ * to nothing once the fixed-height panels above and below filled a 720 px
+ * viewport, so a panel placed there was squeezed from 124 px to 22 px and its
+ * buttons ended up outside their own clipped box — laid out, invisible, and not
+ * clickable. A rail that spans every row cannot collapse, and `flex: 0 0 auto`
+ * below means a panel keeps its declared height even when the rail runs out of
+ * room; the rail scrolls instead of crushing its contents.
+ */
 .hud-area {
   display: flex;
   flex-direction: column;
   gap: var(--sv-gap);
   min-width: 0;
   min-height: 0;
+  overflow-y: auto;
   pointer-events: none;
+  scrollbar-width: thin;
 }
 
 .hud-area > * {
+  /* Never shrink: `.hud-panel` carries `contain: strict`, so a squeezed panel
+     clips its own controls away rather than growing a scrollbar. */
+  flex: 0 0 auto;
   pointer-events: auto;
-}
-
-.hud-area-top-left {
-  grid-area: top-left;
-}
-
-.hud-area-top-right {
-  grid-area: top-right;
-  align-items: flex-end;
 }
 
 .hud-area-left {
@@ -391,24 +399,14 @@
   grid-area: right;
   align-items: flex-end;
   justify-content: flex-start;
-  overflow-y: auto;
-}
-
-.hud-area-bottom-left {
-  grid-area: bottom-left;
-  justify-content: flex-end;
 }
 
 .hud-area-bottom-center {
   grid-area: bottom-center;
   align-items: center;
   justify-content: flex-end;
-}
-
-.hud-area-bottom-right {
-  grid-area: bottom-right;
-  align-items: flex-end;
-  justify-content: flex-end;
+  /* The centre column must never scroll: it is over the reticle. */
+  overflow: visible;
 }
 
 .system-map-toggle {

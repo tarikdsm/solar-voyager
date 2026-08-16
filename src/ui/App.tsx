@@ -375,11 +375,20 @@ export function App({
   useEffect(() => {
     if (sceneManager === null) return undefined;
     return sceneManager.subscribe((state) => {
-      setPhase(state === 'main-menu' ? 'main-menu' : 'space');
       setPaused(state === 'paused');
-      if (state !== 'main-menu') enteredSpace.current = true;
+      if (state === 'main-menu') {
+        setPhase('main-menu');
+        return;
+      }
+      // Through `enterSpace`, never around it. Setting `enteredSpace` here
+      // directly would make this listener — which fires *inside*
+      // `SceneManager.startNewGame()`, before `MainMenu` gets its result — trip
+      // the guard that `enterSpace` uses to decide whether to activate the space
+      // phase at all, and the world would never start.
+      enterSpace();
+      setPhase('space');
     });
-  }, [sceneManager]);
+  }, [enterSpace, sceneManager]);
 
   useEffect(() => {
     setTutorialProgress(tutorial?.progress ?? null);
@@ -481,7 +490,14 @@ export function App({
           )}
           <h1 class="app-title">{scaffoldState.title}</h1>
           <Reticle show={shows('reticle')} />
-          <div class="hud-area hud-area-top-right" ref={settingsHostRef}>
+          <div class="hud-area hud-area-left">
+            {shows('orbitReadout') ? <OrbitReadout hud={hud} /> : null}
+            {shows('dualClock') ? <DualClock hud={hud} /> : null}
+            {shows('warpIndicator') ? (
+              <WarpControl commands={commands} hud={hud} hudState={hudState} />
+            ) : null}
+          </div>
+          <div class="hud-area hud-area-right" ref={settingsHostRef}>
             {session === null ? null : (
               <SessionSettingsPanel
                 key={tutorialProgress?.status}
@@ -493,17 +509,6 @@ export function App({
             {hudPreset === null ? null : (
               <HudPresetIndicator label={hudPreset.display.presetLabel} />
             )}
-          </div>
-          <div class="hud-area hud-area-top-left">
-            {shows('orbitReadout') ? <OrbitReadout hud={hud} /> : null}
-            {shows('dualClock') ? <DualClock hud={hud} /> : null}
-          </div>
-          <div class="hud-area hud-area-left">
-            {shows('warpIndicator') ? (
-              <WarpControl commands={commands} hud={hud} hudState={hudState} />
-            ) : null}
-          </div>
-          <div class="hud-area hud-area-right">
             {shows('energyPanel') ? <EnergyPanel hud={hud} /> : null}
             {burnLog === null || BurnLogPanelComponent === null || !shows('burnLog') ? null : (
               <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />
@@ -517,8 +522,6 @@ export function App({
                 trajectoryPrediction={trajectoryPrediction}
               />
             ) : null}
-          </div>
-          <div class="hud-area hud-area-bottom-right">
             {stateVectors === null ||
             stateVectorViewportRef === null ||
             !shows('stateVectors') ? null : (
@@ -533,15 +536,13 @@ export function App({
           <div class="hud-area hud-area-bottom-center">
             <FlightWarnings hud={hud} show={shows('warnings')} />
             <CruiseStatus show={shows('cruiseStatus')} />
+            {shows('navball') ? <Navball hud={hud} hudState={hudState} /> : null}
             <ThrottleSpeedStrip
               hud={hud}
               hudState={hudState}
               showAltitude={shows('radarAltitude')}
               showWarp={shows('warpIndicator')}
             />
-          </div>
-          <div class="hud-area hud-area-bottom-left">
-            {shows('navball') ? <Navball hud={hud} hudState={hudState} /> : null}
             {/*
               Always mounted, never conditionally: `main.ts` throws at space-phase
               activation if `#camera-focus-label` is missing, and three browser

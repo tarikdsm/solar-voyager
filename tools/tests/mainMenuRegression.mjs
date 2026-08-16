@@ -229,6 +229,10 @@ async function dismissHardwareWarningIfPresent(page) {
 async function runFreshAndContinueFlow(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
   const browserErrors = collectBrowserErrors(page);
   let workerRequestCount = 0;
   page.on('request', (request) => {
@@ -346,20 +350,12 @@ async function runFreshAndContinueFlow(browser) {
 async function runLegacyV2SaveFlow(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
   const browserErrors = collectBrowserErrors(page);
   await disableUnrelatedTrajectoryPrediction(page);
-  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
-  // reads `#target-selector` and the state-vector panel, all Engineer-preset
-  // surfaces since T0112.
-  await installEngineerHudPreset(page);
-  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
-  // reads `#target-selector` and the state-vector panel, all Engineer-preset
-  // surfaces since T0112.
-  await installEngineerHudPreset(page);
-  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
-  // reads `#target-selector` and the state-vector panel, all Engineer-preset
-  // surfaces since T0112.
-  await installEngineerHudPreset(page);
   await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
     key: SAVE_STORAGE_KEY,
     value: LEGACY_V2_SAVE_JSON,
@@ -407,6 +403,10 @@ async function runLegacyV2SaveFlow(browser) {
 async function runInvalidSaveFlow(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
   const browserErrors = collectBrowserErrors(page);
   await disableUnrelatedTrajectoryPrediction(page);
   await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
@@ -428,6 +428,10 @@ async function runResponsiveAndReducedMotionFlow(browser) {
     viewport: { width: 360, height: 480 },
   });
   const page = await context.newPage();
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
   const browserErrors = collectBrowserErrors(page);
   await disableUnrelatedTrajectoryPrediction(page);
   try {

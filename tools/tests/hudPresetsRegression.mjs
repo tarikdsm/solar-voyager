@@ -278,8 +278,28 @@ try {
   // causes is not exercising the real path.
   const canvasBox = await page.locator('#space-canvas').boundingBox();
   assert.ok(canvasBox !== null, 'the canvas has no layout box');
-  const centreX = canvasBox.x + canvasBox.width / 2;
-  const centreY = canvasBox.y + canvasBox.height / 2;
+  /*
+   * Ask the page for a point that actually lands on the canvas rather than
+   * hard-coding the viewport centre: Earth fills the whole frame from a 400 km
+   * orbit, so any uncovered pixel works, and the HUD cluster that occupies the
+   * middle of the screen is a legitimate layout choice this gate must not pin.
+   */
+  const point = await page.evaluate(
+    ({ x, y, width, height }) => {
+      for (const fraction of [0.3, 0.22, 0.38, 0.5, 0.62]) {
+        const px = x + width / 2;
+        const py = y + height * fraction;
+        if (globalThis.document.elementFromPoint(px, py)?.id === 'space-canvas') {
+          return { x: px, y: py };
+        }
+      }
+      return null;
+    },
+    canvasBox,
+  );
+  assert.ok(point !== null, 'the HUD covers every candidate pick point');
+  const centreX = point.x;
+  const centreY = point.y;
   await page.mouse.click(centreX, centreY);
   await page.waitForTimeout(150);
   const picked = await page.evaluate(
