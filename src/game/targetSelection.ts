@@ -50,8 +50,12 @@ export class TargetSelectionController implements TargetSelectionPort {
   private currentSource: TargetSelectionSource | null = null;
   private selections = 0;
 
+  /**
+   * An empty catalog is allowed and rejects every id: component harnesses mount
+   * the HUD with no bodies at all, and "nothing is selectable" is the honest
+   * answer there rather than a construction failure.
+   */
   constructor(ports: TargetSelectionPorts) {
-    if (ports.bodyIds.length === 0) throw new Error('Target selection body ids cannot be empty.');
     this.commands = ports.commands;
     this.bodyIds = [...ports.bodyIds];
   }

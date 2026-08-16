@@ -2032,13 +2032,65 @@
 
 .cruise-status {
   display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.25rem 0.75rem;
   border-radius: 0.5rem;
   background: rgb(2 6 23 / 48%);
   color: var(--sv-text-dim);
   font-size: 0.7rem;
+}
+
+.cruise-status-line {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+/*
+ * T0117 — the "set as cruise target" affordance, mounted in the space HUD and
+ * in the system map panel. T0119 drops its "Engage cruise" button in beside
+ * this one, so the row is a wrapping flex line rather than a two-column grid.
+ */
+.cruise-target-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.cruise-target-current {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+.cruise-target-button {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgb(148 163 184 / 38%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 72%);
+  color: var(--sv-text-strong);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.cruise-target-button:hover:not(:disabled),
+.cruise-target-button:focus-visible {
+  border-color: rgb(148 163 184 / 72%);
+  background: rgb(30 41 59 / 88%);
+}
+
+.cruise-target-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cruise-target-control[data-view='map'] {
+  margin-top: 0.35rem;
 }
 
 .cruise-status[hidden] {

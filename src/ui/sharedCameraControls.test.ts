@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { OrbitCameraController } from '../game/orbitCameraController.js';
 import { SystemMapController } from '../game/systemMapController.js';
+import { TargetSelectionController } from '../game/targetSelection.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import { SharedCameraControls, type SharedCameraTarget } from './sharedCameraControls.js';
 
@@ -43,8 +44,9 @@ function createRig() {
     setWarp: vi.fn(),
     setTarget,
   } as unknown as Commands;
-  const controls = new SharedCameraControls(camera, map, commands, [...BODY_IDS]);
-  return { camera, commands, controls, map, onFocusChange, setTarget };
+  const selection = new TargetSelectionController({ bodyIds: BODY_IDS, commands });
+  const controls = new SharedCameraControls(camera, map, selection);
+  return { camera, commands, controls, map, onFocusChange, selection, setTarget };
 }
 
 describe('SharedCameraControls', () => {
@@ -110,7 +112,7 @@ describe('SharedCameraControls', () => {
       cycleFocus: vi.fn(() => 'ship'),
       cycle,
     };
-    const controls = new SharedCameraControls(modal, rig.map, rig.commands, [...BODY_IDS]);
+    const controls = new SharedCameraControls(modal, rig.map, rig.selection);
 
     controls.cycleCameraMode();
 

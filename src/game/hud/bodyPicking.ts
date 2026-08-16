@@ -174,13 +174,5 @@ export function pickMapBodyIndexAtPixel(
   mapPoseScratch.lookDirection.x = lookDirection.x;
   mapPoseScratch.lookDirection.y = lookDirection.y;
   mapPoseScratch.lookDirection.z = lookDirection.z;
-  return pickNearestBodyIndex(
-    snapshot,
-    mapPoseScratch,
-    null,
-    widthPx,
-    heightPx,
-    pixelX,
-    pixelY,
-  );
+  return pickNearestBodyIndex(snapshot, mapPoseScratch, null, widthPx, heightPx, pixelX, pixelY);
 }

@@ -3,6 +3,7 @@ import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SystemMapController } from '../game/systemMapController.js';
+import { TargetSelectionController } from '../game/targetSelection.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import {
   createSystemMapPanelModel,
@@ -50,7 +51,8 @@ function createFixture() {
     onModeChange: (mode) => map.publishMode(mode),
     onFocusChange: (bodyId) => map.publishFocus(bodyId),
   });
-  return { commands, controller, map, targets };
+  const selection = new TargetSelectionController({ bodyIds: BODY_IDS, commands });
+  return { commands, controller, map, selection, targets };
 }
 
 function keyboardEvent(code: string, target: EventTarget | null = null) {
@@ -75,8 +77,8 @@ class FakeKeyboardTarget implements SystemMapKeyboardTarget {
 
 describe('SystemMapPanel', () => {
   it('toggles with M, exits with Escape, and restores focus deterministically', () => {
-    const { commands, controller } = createFixture();
-    const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
+    const { selection, controller } = createFixture();
+    const model = createSystemMapPanelModel(BODY_IDS, selection, controller);
     const toggleFocus = vi.fn();
     const selectFocus = vi.fn();
     const panel = { hidden: true };
@@ -103,8 +105,8 @@ describe('SystemMapPanel', () => {
   });
 
   it('ignores M from form and inherited contenteditable targets while keeping buttons operable', () => {
-    const { commands, controller } = createFixture();
-    const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
+    const { selection, controller } = createFixture();
+    const model = createSystemMapPanelModel(BODY_IDS, selection, controller);
     const formTarget = {
       matches: (selectors: string) => selectors.includes('input'),
     } as unknown as EventTarget;
@@ -136,8 +138,8 @@ describe('SystemMapPanel', () => {
   });
 
   it('shares every valid body selection with camera focus and navigation target', () => {
-    const { commands, controller, map, targets } = createFixture();
-    const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
+    const { controller, map, selection, targets } = createFixture();
+    const model = createSystemMapPanelModel(BODY_IDS, selection, controller);
 
     expect(model.selectBody('jupiter')).toBe(true);
     expect(controller.focusId).toBe('jupiter');
@@ -148,9 +150,9 @@ describe('SystemMapPanel', () => {
   });
 
   it('installs one keyboard listener across repeated attachment and removes it once', () => {
-    const { commands, controller } = createFixture();
+    const { selection, controller } = createFixture();
     const binding = new SystemMapKeyboardBinding(
-      createSystemMapPanelModel(BODY_IDS, commands, controller),
+      createSystemMapPanelModel(BODY_IDS, selection, controller),
     );
     const target = new FakeKeyboardTarget();
 
@@ -165,8 +167,8 @@ describe('SystemMapPanel', () => {
   });
 
   it('renders an always-mounted labeled selector, shared status, and prediction text', () => {
-    const { commands, controller, map } = createFixture();
-    const model = createSystemMapPanelModel(BODY_IDS, commands, controller);
+    const { controller, map, selection } = createFixture();
+    const model = createSystemMapPanelModel(BODY_IDS, selection, controller);
     const targetBodyId = signal('Earth');
     const view = SystemMapPanelView({
       bodyIds: BODY_IDS,

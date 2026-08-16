@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AttitudeMode, Commands } from '../sim/simulationSnapshot.js';
-import type { WarpFactor } from '../core/time.js';
+import type { Commands } from '../sim/simulationSnapshot.js';
 import { TargetSelectionController, type TargetSelectionSource } from './targetSelection.js';
 
 const BODY_IDS = Object.freeze(['sun', 'earth', 'moon', 'mars']);
@@ -10,12 +9,12 @@ function createHarness() {
   const writes: (string | null)[] = [];
   const commands: Commands = {
     rotate: () => undefined,
-    setAttitudeMode: (_mode: AttitudeMode) => undefined,
+    setAttitudeMode: () => undefined,
     setTarget: (bodyId) => {
       writes.push(bodyId);
     },
     setThrottle: () => undefined,
-    setWarp: (_warp: WarpFactor) => undefined,
+    setWarp: () => undefined,
   };
   const controller = new TargetSelectionController({ commands, bodyIds: BODY_IDS });
   return { controller, writes };
@@ -123,7 +122,7 @@ describe('target selection - T0117', () => {
     expect(controller.selectionCount).toBe(0);
   });
 
-  it('refuses an empty catalog', () => {
+  it('selects nothing when the catalog is empty', () => {
     const commands: Commands = {
       rotate: () => undefined,
       setAttitudeMode: () => undefined,
@@ -131,8 +130,8 @@ describe('target selection - T0117', () => {
       setThrottle: () => undefined,
       setWarp: () => undefined,
     };
-    expect(() => new TargetSelectionController({ commands, bodyIds: [] })).toThrow(
-      /body ids cannot be empty/u,
-    );
+    const controller = new TargetSelectionController({ commands, bodyIds: [] });
+    expect(controller.selectTarget('earth', 'panel')).toBe(false);
+    expect(controller.selectTarget(null, 'panel')).toBe(true);
   });
 });
