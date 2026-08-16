@@ -7,8 +7,8 @@ interpreter. Holds three things:
 * the authored procedural shape parameters (triaxial proportions, relief, crater
   budget) that `data/bodies.json` deliberately does not carry — adding them to the
   catalog would be a schema change and therefore an ADR;
-* the published shape-model registry, which is the seam against T0132's
-  checksummed fetch mechanism.
+* the published shape-model registry, which is the seam against
+  `tools/fetch_textures.py`'s checksummed manifest (ADR-039).
 """
 
 import json
@@ -21,7 +21,10 @@ from typing import NamedTuple, Optional, Tuple
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPOSITORY_ROOT / "data" / "bodies.json"
 MODELS_ROOT = REPOSITORY_ROOT / "assets" / "models"
-SHAPE_ROOT = REPOSITORY_ROOT / "assets" / "shape-src"
+# Where T0132's checksummed fetch manifest lands verified source bytes
+# (`TextureRecipe.dest` = `assets/textures-src/<body_id>/<output_name>`); the
+# directory is gitignored except for SOURCES.md, so shape models are never committed.
+SHAPE_ROOT = REPOSITORY_ROOT / "assets" / "textures-src"
 
 KIND_CATEGORIES = {"asteroid": "asteroids", "comet": "comets"}
 TRIANGLE_LIMIT = 5_000
@@ -56,11 +59,17 @@ class ComaParameters(NamedTuple):
 class ShapeModelSource(NamedTuple):
     """One published shape model.
 
-    Field-compatible with `tools/fetch_textures.py`'s `TextureRecipe` so T0132 can
-    adopt it as a `ShapeRecipe` without reshaping anything: `source_url` and
-    `sha256` are the only fields T0132 owns, and both stay `None` until it pins
-    them. `validate_shape_source` refuses an unpinned entry, so the real-model
-    path can never quietly degrade into the procedural one.
+    Field-compatible with `tools/fetch_textures.py`'s `TextureRecipe` (ADR-039),
+    which grew `kind="file"` for exactly this case: non-image sources copied
+    byte-for-byte after checksum verification. Every field here except `dataset`
+    and `model_format` maps one-to-one onto a `TextureRecipe` keyword, and the
+    fetched file lands at `TextureRecipe.dest`, which is what `resolve_shape_path`
+    reconstructs.
+
+    `source_url` and `sha256` are the two fields the fetch manifest owns, and both
+    stay `None` until a `RECIPES` entry pins them. `validate_shape_source` refuses
+    an unpinned entry, so the real-model path can never quietly degrade into the
+    procedural one.
     """
 
     id: str
@@ -125,7 +134,8 @@ def _shape_source(body_id, dataset, credit):
         id=f"{body_id}-shape",
         body_id=body_id,
         role="shape",
-        # Pinned by T0132's checksummed fetch manifest; see validate_shape_source.
+        # Copied from the matching kind="file" RECIPES entry in fetch_textures.py
+        # once it is pinned and reviewed; see validate_shape_source.
         source_url=None,
         product_url=_PDS_SBN,
         dataset=dataset,
@@ -171,12 +181,12 @@ def shape_model_source(body_id):
 
 
 def validate_shape_source(source):
-    """Refuse a shape-model entry T0132 has not pinned yet."""
+    """Refuse a shape-model entry the fetch manifest has not pinned yet."""
     if source.source_url is None or source.sha256 is None:
         raise ValueError(
-            f'Shape model "{source.id}" has no pinned download: T0132 must supply source_url and '
-            "sha256 in its checksummed fetch manifest before the real-model path can be used. "
-            "Build with --shape procedural until then."
+            f'Shape model "{source.id}" has no pinned download: add a kind="file" RECIPES entry in '
+            "tools/fetch_textures.py (T0132/ADR-039) and copy its source_url and sha256 here before "
+            "the real-model path can be used. Build with --shape procedural until then."
         )
     if not source.source_url.startswith("https://") or not source.product_url.startswith("https://"):
         raise ValueError(f'Shape model "{source.id}" download and product URLs must use HTTPS')

@@ -1,10 +1,10 @@
 """Blender-side small-body case for `tools/run_blender_smoke.py`.
 
 Builds one procedural asteroid and one comet whose nucleus comes from a shape
-model, so a single run exercises both `build_asteroid.py` paths, the comet anchor
-contract and the decimation code. The shape model is synthesised here and pinned
-by its own SHA-256: T0132 has not published the PDS download pin yet, and this
-case must not depend on the network.
+model, so a single run exercises both geometry paths, the comet anchor contract
+and the decimation code. The shape model is synthesised here and pinned by its own
+SHA-256: no PDS download is pinned in `tools/fetch_textures.py` yet, and this case
+must not depend on the network either way.
 
 Run headless:
   blender --background --python tools/tests/blender_small_body_case.py -- \

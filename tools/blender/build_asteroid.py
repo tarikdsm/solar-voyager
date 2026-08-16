@@ -4,7 +4,8 @@ Two geometry paths, one export contract:
 
 * **Real shape model** — Eros (NEAR), Bennu (OSIRIS-REx) and Ryugu (Hayabusa2)
   have public-domain plate models archived at the PDS Small Bodies Node. The
-  pinned OBJ is fetched and checksum-verified by T0132's manifest, then decimated
+  pinned OBJ is fetched and checksum-verified by `tools/fetch_textures.py`
+  (`kind="file"`, ADR-039) into `assets/textures-src/<body-id>/`, then decimated
   here to at most 5,000 triangles by deterministic vertex clustering.
 * **Procedural fallback** — a displaced geodesic icosphere (frequency 15, 4,500
   triangles) seeded entirely by the catalog's `visual.proceduralSeed`, for every

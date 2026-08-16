@@ -205,8 +205,8 @@ def _sources_text(config, builder, provenance, used_shape_model, triangles):
             f"- Product page: {source.product_url}",
             f"- Exact download: {source.source_url}",
             f"- Pinned source SHA-256: `{source.sha256}`",
-            f"- Fetched to: `assets/shape-src/{source.body_id}/{source.output_name}` "
-            "by the checksummed fetch manifest (T0132); never committed.",
+            f"- Fetched to: `assets/textures-src/{source.body_id}/{source.output_name}` "
+            'by `tools/fetch_textures.py` (kind="file", ADR-039); verified, cached, never committed.',
         )
     else:
         geometry = (
