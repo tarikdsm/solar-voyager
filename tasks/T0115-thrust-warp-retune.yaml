@@ -20,4 +20,15 @@ acceptance:
   - If 1000x remains the answer, ADR-038 documents why and the burn-coast-burn fallback becomes the
     pacing mechanism
 handoff_notes: |
-  Evidence-first task. Cross-platform nondeterminism (ADR-017) applies; run the bench on CI ubuntu as well as the dev machine.
+  DEPRIORITIZED, WITH EVIDENCE. T0116's CI cruise gate flies LEO to Jupiter unattended in 187.9 s of
+  wall clock against a 300 s budget, arriving at e = 0.00061 and altitude within 0.18 percent of the
+  preset, at the CURRENT 1000x thrust-warp ceiling. Release criterion 1 (each leg in 5 wall minutes or
+  less) is therefore already met without this task, so raising the ceiling is pacing polish rather
+  than critical path.
+  That does not make the task worthless: the outer-system legs are the ones the current ceiling
+  strains, and T0120's goldens want a settled ceiling underneath them. But whoever claims it should
+  benchmark against a concrete question — which legs miss the 5-minute bar at 1000x — rather than
+  raising the number on principle. Evidence-first was always this task's rule; T0116 just supplied the
+  first evidence.
+  Cross-platform nondeterminism (ADR-017) still applies: run the bench on CI ubuntu as well as the dev
+  machine.

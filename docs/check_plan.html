@@ -1773,12 +1773,12 @@
       "core/time.ts MAX_THRUST_WARP updated; warp clamp reasons and UI unchanged; energy-ledger warp invariance still 1e-12",
       "If 1000x remains the answer, ADR-038 documents why and the burn-coast-burn fallback becomes the pacing mechanism"
     ],
-    "handoff_notes": "Evidence-first task. Cross-platform nondeterminism (ADR-017) applies; run the bench on CI ubuntu as well as the dev machine.\n"
+    "handoff_notes": "DEPRIORITIZED, WITH EVIDENCE. T0116's CI cruise gate flies LEO to Jupiter unattended in 187.9 s of\nwall clock against a 300 s budget, arriving at e = 0.00061 and altitude within 0.18 percent of the\npreset, at the CURRENT 1000x thrust-warp ceiling. Release criterion 1 (each leg in 5 wall minutes or\nless) is therefore already met without this task, so raising the ceiling is pacing polish rather\nthan critical path.\nThat does not make the task worthless: the outer-system legs are the ones the current ceiling\nstrains, and T0120's goldens want a settled ceiling underneath them. But whoever claims it should\nbenchmark against a concrete question — which legs miss the 5-minute bar at 1000x — rather than\nraising the number on principle. Evidence-first was always this task's rule; T0116 just supplied the\nfirst evidence.\nCross-platform nondeterminism (ADR-017) still applies: run the bench on CI ubuntu as well as the dev\nmachine.\n"
   },
   {
     "id": "T0116",
     "title": "CruiseDirector: engage and abort, phase machine, warp piloting, insertion",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0116-cruise-director",
     "depends_on": [
@@ -1794,7 +1794,7 @@
       "Abort at any phase leaves a valid controllable state, fuzzed over 200 random abort times on the Mars route",
       "Ledger honesty preserved: cruise energy equals the integrator ledger and matches the analytic 2(gamma_peak-1)mc^2 bound within 2 percent"
     ],
-    "handoff_notes": "Design doc first. Game layer only. Insertion brakes to rails-relative rest at the arrival radius then circularizes with two hold-mode burns computed from osculating elements. Fallback pursuit implemented here per plan section 3.3.6.\n"
+    "handoff_notes": "MEASURED PACING: the CI cruise gate flies LEO to Jupiter unattended in 187.9 s wall against a 300 s\nbudget, arriving at e = 0.00061 with altitude within 0.18 percent of the preset, at the CURRENT\n1000x thrust-warp ceiling. Ledger identity 0.99878 / 0.99833. Abort fuzz: 200 runs, 0 failures, max\ndecompression 0.10 s. Release criterion 1 therefore already holds without T0115.\nTARGET WRITES GO THROUGH TargetSelectionController, NOT Commands. engage() calls\nselectTarget(id, 'api'); cruiseDirector.ts contains no .setTarget( at all, which the T0117 source\nscan enforces. This is not bookkeeping: the composition facade also re-aims the observatory camera,\nmoves the system-map focus and invalidates the trajectory prediction, so writing Commands directly\nengaged a cruise while leaving a stale prediction and the old map focus behind.\nTWO ORDERING DECISIONS IN engage(), both deliberate. The selection is committed BEFORE any director\nstate moves and it is the LAST thing that can refuse, because engage() is callable while a cruise is\nalready active (the documented abort-resume path) and a late refusal would leave the director\nhalf-re-engaged with a target it never got. A false return aborts the engagement entirely and leaves\nthe director exactly as it was; false can only mean the session catalog and the guidance catalog\ndisagree about the body, and flying at a target the rest of the game cannot see is worse than not\nflying. Non-idempotence is correct for this caller and is tested: re-engaging on the current target\nwrites again, so the camera re-aims and the prediction re-invalidates.\nTHE SOLVER IS A DEPARTURE SOLVER (T0114). Its kappa guard rejects spurious mid-cruise roots, so a\nmid-cruise ok=false is a ROUTING DECISION here, not an error: fall through to the physics-spec\nsection 8.7 pursuit endgame. Do not retry the solver harder and do not widen kappa. ADR-043 records\nthe rendezvous form of that endgame.\ncruiseScenario.ts and the unit rig each build a REAL TargetSelectionController over the simulation's\nown commands and body ids, so the scenario runner and the CI gate exercise the same path the game\ndoes rather than a mock.\nci.yml is prettier-ignored and MUST stay LF; a Windows text rewrite made it CRLF and broke\nciWorkflow.test.mjs. T0117 hit the same trap independently.\nAn abort-fuzz assertion was checking the ship's condition some time AFTER release rather than at the\nmoment of release — a different and weaker claim. Fixed in its own commit.\nVerification: 1533 Vitest passed / 3 skipped; lint, typecheck, format, build; test:cruise,\ntest:hud-presets, test:system-map green. Cruise numbers bit-identical before and after the\ntarget-write fix, which is the expected result: it moves WHO writes the target, not what guidance\ndoes with it. No golden or budget moved.\n"
   },
   {
     "id": "T0117",
@@ -1955,7 +1955,7 @@
   {
     "id": "T0125",
     "title": "Cinematic free camera and photo capture",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0125-cinematic-photo-mode",
     "depends_on": [
@@ -1969,12 +1969,12 @@
       "Capture stamps a metadata object carrying simTimeSec, tauSec, positionKm, dominantBodyId and gammaMax",
       "No steady-state allocation; capture may allocate transiently with the excluded window documented for the heap gate"
     ],
-    "handoff_notes": "The CaptureSink interface is consumed by T0147. Keep the signature capture(blob, meta) returning a promise.\n"
+    "handoff_notes": "A MODE-SCOPED BINDING MUST SCOPE THE CLAIM, NOT JUST THE EFFECT. This is the rule any later task\nbinding [, ], E, J or O inherits, and it is in the design doc section 2.4.\nThe defect that produced it: InputEngine.handleKeyDown calls preventDefault() for ANY resolved\nbinding before any notion of camera mode exists, blocksGameKey's first clause is\nevent.defaultPrevented, and the InputEngine listener registers before the camera controller's. So\nbinding KeyE to cinematic roll swallowed the keystroke in EVERY camera mode and broke focus-Earth\nfor every player — even though CameraDirector.rollCameraBy correctly returned false outside\ncinematic, i.e. the EFFECT was already scoped. test:system-map pressing 'e' in the space view was\ncatching a real product defect, not a flake. The mechanism was proven by disabling the new guard and\nwatching inputEngine.test.ts go red on exactly that assertion.\nThe fix enforces scoping where a key is CLAIMED: InputEngineOptions.isActionActive is consulted\nbefore the claim, so a suppressed action produces no preventDefault, no edge and no held state, and\nthe key falls through untouched. Composition wires it to CINEMATIC_ONLY_ACTIONS against\ncameraDirector.mode.\nBINDINGS: Q/E roll and , / . field of view mean that ONLY while the cinematic camera runs; outside\nit E focuses Earth and the others do nothing. P (photo) is deliberately NOT mode-scoped — a photo is\nworth taking from any camera. Inside cinematic, directFocusEnabled stands the focus keys down\nbecause every one of them would leave the shot; O is the way out. Both meanings are in\ndocs/controls.md.\nCaptureSink IS API FOR T0147: capture(blob, meta) returning a promise. This task ships the download\nsink; T0147 supplies the IndexedDB one. CaptureMeta carries simTimeSec, tauSec, positionKm,\ndominantBodyId and gammaMax. The filename scheme is documented in controls.md. The heap gate's\nexcluded window for the transient capture allocation is documented rather than left for the gate to\ndiscover.\nT0144's AudioDirector already maps cinematic as an EXTERIOR camera for Kubrick mode; that mapping\nwas inherited, not re-derived.\nMERGE LESSON, shared with T0126: bootstrap/diagnostics.ts factories share a skeleton, so git\ninterleaves their hunks and a line-wise resolution splices one function's getters into another's\nframe. A first attempt at exactly that silently dropped this task's four cinematic members from\nCameraRuntimeDiagnostics; diagnosticsContract.test.ts caught it. Take one side whole and graft the\nother's complete blocks on.\nVerification: 1526 Vitest passed / 3 skipped; lint, typecheck, format, build; test:system-map (the\noriginal failure) exit 0, camera-controls, hud-presets, and test:cinematic-photo green — rolled\n0.573 rad without jumping to Earth, FOV 31 to 90 clamped, drift running, captured a verified 48,922 B\nPNG. Two new regression tests lock the mechanism: an inactive action leaves its key entirely alone,\nand the default predicate claims everything so unwired callers are unaffected. No golden or budget\nmoved.\n"
   },
   {
     "id": "T0126",
     "title": "Milky Way panorama and zodiacal light",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0126-milky-way",
     "depends_on": [

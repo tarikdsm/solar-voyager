@@ -124,6 +124,10 @@ jobs:
         timeout-minutes: 8
         run: npm run test:ship-visual
 
+      - name: Cruise director regression (unattended LEO->Jupiter + abort fuzz)
+        timeout-minutes: 25
+        run: npm run test:cruise
+
       - name: Renderer policy regression
         run: npm run test:renderer-policy
 
