@@ -69,13 +69,21 @@ fast.** Both `--runs 2` invocations produced run0 = 12.1–12.2 ms p75 and run1 
 The decisive point is arithmetic, not judgement: a deterministic per-frame cost cannot be 4.5 ms in
 run0 and 1.9 ms in run1 of the same binary. Feature run1 reproduces the baseline to the digit —
 p75 6.1 ms, p99 12.1 ms, work median 1.9 ms against the baseline's 1.7–2.0 ms — and its steady-window
-heap delta is _lower_ than either baseline run. The divergence therefore belongs to the host
-(thermal/DVFS state on an Intel UHD laptop), not to T0127.
+heap delta is _lower_ than either baseline run. The divergence therefore belongs to the host, not to
+T0127.
 
-An earlier pairing on this host was thrown away rather than reported: the first before/after pair was
-taken while `check:tasks`/`check:release`/`check:dashboard` and file edits were running on the same
-machine, which put _both_ configurations into the slow mode (12.2 / 12.1 ms p75). Those numbers are
-not in this document because they measure the author, not the code.
+**The host contention is identified, not assumed.** This machine is shared with other v2 task agents
+working in sibling worktrees, and at least one of them (T0128) was running _this same GPU-bound
+flight bench_ during the measurement window — discovered when it took port 4177 out from under
+`test:visual-tiers` here, with a command line of
+`node tools/bench/flightBench.mjs --runs 2 --output docs/bench/T0128-before.json`. Two concurrent
+900-frame WebGL benches on one Intel UHD adapter is exactly the load that produces a bimodal
+frame-pacing distribution, and no amount of care inside this worktree can serialise it.
+
+An earlier pairing was thrown away rather than reported: it was taken while
+`check:tasks`/`check:release`/`check:dashboard` and file edits were also running here, which put
+_both_ configurations into the slow mode (12.2 / 12.1 ms p75). Those numbers are not in this
+document because they measure the author, not the code.
 
 ## Conclusion
 
@@ -85,8 +93,13 @@ slightly better; the bundle grows 2 KB gzip. No golden and no budget moved.
 ## Handoff finding for whoever benches next on this host
 
 `npm run bench` with the default single run is **not** safe to compare across invocations here: the
-first measured run after priming lands in a slow frame-pacing mode roughly two thirds of the time,
-and a single-run before/after pair can therefore manufacture a 2× p75 "regression" or hide a real
-one. Use `--runs 2` and read `stability.findings`; treat a single run as evidence only when its
-self-comparison is clean. This is a property of the reference laptop, not of the harness's logic —
-the 5% gate did exactly its job.
+first measured run after priming lands in a slow frame-pacing mode much of the time, and a
+single-run before/after pair can therefore manufacture a 2× p75 "regression" or hide a real one. Use
+`--runs 2` and read `stability.findings`; treat a single run as evidence only when its
+self-comparison is clean. The 5% gate did exactly its job here.
+
+The root cause is worth fixing at the orchestrator level rather than per task: **`npm run bench` and
+the Playwright gates are not safe to run concurrently across worktrees.** They contend for one GPU
+and they bind fixed ports (`test:visual-tiers` is 4177, the bench has its own), so a parallel agent
+both perturbs the numbers and hard-fails the gate with `Port 4177 is already in use`. Bench and
+browser-gate runs need a machine-wide lock, or a per-worktree port offset at minimum.
