@@ -1,3 +1,8 @@
+import { HUD_PRESETS, isHudPreset, type HudPreset } from './hud/hudPresets.js';
+
+export type { HudPreset };
+export { HUD_PRESETS };
+
 export const INPUT_ACTIONS = Object.freeze([
   'throttleIncrease',
   'throttleDecrease',
@@ -24,6 +29,11 @@ export const INPUT_ACTIONS = Object.freeze([
   // target; nothing reads these yet (see game/input/gamepad.ts).
   'cruiseEngage',
   'cruiseAbort',
+  // T0112 HUD controls. Rebindable like every other action so the preset key and
+  // the label toggle go through one focus policy (`blocksGameKey`) and one
+  // rebinding UI, rather than becoming two more hardcoded camera-style keys.
+  'hudPresetCycle',
+  'hudBodyLabelsToggle',
 ] as const);
 
 /** Per-axis gamepad calibration: pitch/yaw/roll are rate axes, throttle is the trigger pair. */
@@ -119,7 +129,12 @@ export interface CameraSettings {
   readonly shake: boolean;
 }
 
-/** Independent profile settings document stored outside save slots. */
+/**
+ * Independent profile settings document, superseded by {@link GameSettingsV5}.
+ *
+ * Kept only as the strict parse target for the one-time v4->v5 migration
+ * (`parseProfileSettingsV4`), exactly as V3 is kept for v3->v4.
+ */
 export interface GameSettingsV4 {
   readonly version: 4;
   readonly qualityLock: QualityLock;
@@ -127,6 +142,31 @@ export interface GameSettingsV4 {
   readonly tutorial: TutorialProgress;
   readonly gamepad: GamepadSettings;
   readonly camera: CameraSettings;
+}
+
+/**
+ * HUD preset and world-marker preferences (T0112).
+ *
+ * `preset` defaults to `clean` because that is the point of the task: v1 showed
+ * every instrument at once and the maintainer's complaint was that the
+ * instruments were the whole game. `bodyLabels` defaults on — a label with a
+ * distance is navigation, not instrumentation, and it is the only in-world cue
+ * for what you are looking at.
+ */
+export interface HudSettings {
+  readonly preset: HudPreset;
+  readonly bodyLabels: boolean;
+}
+
+/** Independent profile settings document stored outside save slots. */
+export interface GameSettingsV5 {
+  readonly version: 5;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
+  readonly camera: CameraSettings;
+  readonly hud: HudSettings;
 }
 
 export interface KeyValueStorage {
@@ -137,12 +177,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV4;
+      readonly settings: GameSettingsV5;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV4;
+      readonly settings: GameSettingsV5;
       readonly error: string;
     };
 
@@ -169,7 +209,9 @@ export type SettingsSaveResult =
  * older build never touches it, so the newer document simply waits
  * untouched until a v3-aware build reads it again.
  */
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
+/** The v4 profile key (T0110's era, pre-HUD-preset) — read-and-migrate-forward only. */
+export const LEGACY_V4_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
 /** The v3 profile key (T0106's era, pre-camera) — read-and-migrate-forward only. */
 export const LEGACY_V3_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v3';
 /** The v2 profile key (T0108's era) — read-and-migrate-forward only, never written by a v3+ build. */
@@ -203,6 +245,8 @@ const DEFAULT_INPUT_BINDINGS: Record<InputAction, string> = {
   stabilityAssistToggle: 'KeyT',
   cruiseEngage: 'KeyG',
   cruiseAbort: 'KeyV',
+  hudPresetCycle: 'KeyH',
+  hudBodyLabelsToggle: 'KeyL',
 };
 
 /** Gamepad shaping defaults and valid ranges (T0106 brief: deadzone 0.08, curve exponent 1.6). */
@@ -372,12 +416,49 @@ function freezeV4Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV4Settings(
+function freezeHudSettings(preset: HudPreset, bodyLabels: boolean): HudSettings {
+  return Object.freeze({ preset, bodyLabels });
+}
+
+/** Clean preset with world labels on — the v2 out-of-the-box HUD. */
+export const DEFAULT_HUD_SETTINGS = freezeHudSettings('clean', true);
+
+function freezeV5Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+  camera: CameraSettings,
+  hud: HudSettings,
+): GameSettingsV5 {
+  return Object.freeze({
+    version: 5 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+    camera: Object.isFrozen(camera)
+      ? camera
+      : freezeCameraSettings(camera.fovWidening, camera.shake),
+    hud: Object.isFrozen(hud) ? hud : freezeHudSettings(hud.preset, hud.bodyLabels),
+  });
+}
+
+export const DEFAULT_GAME_SETTINGS = freezeV5Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
   DEFAULT_GAMEPAD_SETTINGS,
   DEFAULT_CAMERA_SETTINGS,
+  DEFAULT_HUD_SETTINGS,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -625,8 +706,14 @@ function parseCameraSettings(value: unknown): CameraSettings {
   return freezeCameraSettings(value.fovWidening, value.shake);
 }
 
-/** Strictly parses the independent version-4 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV4 {
+/**
+ * Strictly parses the superseded version-4 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v4->v5 migration inside
+ * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
+ * `parseProfileSettings` used to do before `hud` existed.
+ */
+function parseProfileSettingsV4(value: unknown): GameSettingsV4 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -643,6 +730,39 @@ export function parseProfileSettings(value: unknown): GameSettingsV4 {
     parseTutorial(value.tutorial),
     parseGamepadSettings(value.gamepad),
     parseCameraSettings(value.camera),
+  );
+}
+
+/** Strictly parses HUD preferences. Every field is required. */
+function parseHudSettings(value: unknown): HudSettings {
+  if (!isRecord(value)) throw new RangeError('hud settings must be an object');
+  assertExactKeys(value, ['preset', 'bodyLabels'], 'unknown hud settings field');
+  if (!isHudPreset(value.preset)) throw new RangeError('hud preset is not supported');
+  if (typeof value.bodyLabels !== 'boolean') {
+    throw new RangeError('hud bodyLabels must be a boolean');
+  }
+  return freezeHudSettings(value.preset, value.bodyLabels);
+}
+
+/** Strictly parses the independent version-5 profile settings document. */
+export function parseProfileSettings(value: unknown): GameSettingsV5 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    ['version', 'qualityLock', 'inputBindings', 'tutorial', 'gamepad', 'camera', 'hud'],
+    'unknown profile settings field',
+  );
+  if (value.version !== 5) throw new RangeError('profile settings version must be 5');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV5Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+    parseCameraSettings(value.camera),
+    parseHudSettings(value.hud),
   );
 }
 
@@ -681,8 +801,29 @@ function migrateProfileV3ToV4(settings: GameSettingsV3): GameSettingsV4 {
   );
 }
 
+/**
+ * Lifts a superseded v4 profile to v5 by attaching default HUD preferences.
+ *
+ * Same shape as `migrateProfileV3ToV4` one version up: `hud` is a brand-new
+ * required object with no prior partial state anywhere in a v4 document to
+ * recover from, so this is a whole-document migration rather than a per-field
+ * backfill. A returning player therefore lands on Clean — which is the intended
+ * v2 default, not an accident of migration: their v1 panel set is one press of
+ * the preset key away and the choice then persists.
+ */
+function migrateProfileV4ToV5(settings: GameSettingsV4): GameSettingsV5 {
+  return freezeV5Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    settings.gamepad,
+    settings.camera,
+    DEFAULT_HUD_SETTINGS,
+  );
+}
+
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV4): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV5): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
@@ -690,75 +831,104 @@ export function projectGameSettingsV1(settings: GameSettingsV4): GameSettingsV1 
 /**
  * Merges imported save preferences while preserving profile-only state.
  *
- * Tutorial progress, gamepad calibration and camera toggles belong to the
- * player's profile, not to a mission someone emailed them, so only the two
+ * Tutorial progress, gamepad calibration, camera toggles and HUD preferences
+ * belong to the player's profile, not to a mission someone emailed them, so only the two
  * fields the save DTO actually carries are taken from the import.
  */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV4,
+  profile: GameSettingsV5,
   preferences: GameSettingsV1,
-): GameSettingsV4 {
+): GameSettingsV5 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV4Settings(
+  return freezeV5Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
     validatedProfile.gamepad,
     validatedProfile.camera,
+    validatedProfile.hud,
   );
 }
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   tutorial: TutorialProgress,
-): GameSettingsV4 {
+): GameSettingsV5 {
   return parseProfileSettings({ ...settings, tutorial });
 }
 
 /** Returns a validated frozen profile with the chase field-of-view widening toggled. */
 export function updateCameraFovWidening(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   fovWidening: boolean,
-): GameSettingsV4 {
+): GameSettingsV5 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, fovWidening } });
 }
 
 /** Returns a validated frozen profile with the chase camera shake toggled. */
-export function updateCameraShake(settings: GameSettingsV4, shake: boolean): GameSettingsV4 {
+export function updateCameraShake(settings: GameSettingsV5, shake: boolean): GameSettingsV5 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
+}
+
+/**
+ * Returns a validated frozen profile with both HUD preferences applied at once.
+ *
+ * One commit, not two. Applying them separately makes the first commit publish
+ * `onSettingsChanged` carrying the *old* value of the second field, and any
+ * listener that mirrors settings back into live state — `main.ts` does, so the
+ * settings panel and the HUD key agree — then overwrites the change that had
+ * not been committed yet. The second write reads the clobbered value back and
+ * persists it, so the toggle silently does nothing.
+ */
+export function updateHudSettings(
+  settings: GameSettingsV5,
+  preset: HudPreset,
+  bodyLabels: boolean,
+): GameSettingsV5 {
+  return parseProfileSettings({ ...settings, hud: { preset, bodyLabels } });
+}
+
+/** Returns a validated frozen profile with a new HUD preset. */
+export function updateHudPreset(settings: GameSettingsV5, preset: HudPreset): GameSettingsV5 {
+  return parseProfileSettings({ ...settings, hud: { ...settings.hud, preset } });
+}
+
+/** Returns a validated frozen profile with the world body labels toggled. */
+export function updateHudBodyLabels(settings: GameSettingsV5, bodyLabels: boolean): GameSettingsV5 {
+  return parseProfileSettings({ ...settings, hud: { ...settings.hud, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   action: InputAction,
   code: string,
-): GameSettingsV4 {
+): GameSettingsV5 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
 }
 
 /** Returns a validated frozen profile with the global gamepad deadzone updated. */
-export function updateGamepadDeadzone(settings: GameSettingsV4, deadzone: number): GameSettingsV4 {
+export function updateGamepadDeadzone(settings: GameSettingsV5, deadzone: number): GameSettingsV5 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
 }
 
 /** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
 export function updateGamepadCurveExponent(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   curveExponent: number,
-): GameSettingsV4 {
+): GameSettingsV5 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
 }
 
 /** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
 export function updateGamepadAxisInvert(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   axis: GamepadAxisId,
   invert: boolean,
-): GameSettingsV4 {
+): GameSettingsV5 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -770,10 +940,10 @@ export function updateGamepadAxisInvert(
 
 /** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
 export function updateGamepadAxisSensitivity(
-  settings: GameSettingsV4,
+  settings: GameSettingsV5,
   axis: GamepadAxisId,
   sensitivity: number,
-): GameSettingsV4 {
+): GameSettingsV5 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -833,7 +1003,25 @@ export class SettingsRepository {
       }
     }
 
-    // Tier 2: the v3 key (T0106's era, pre-camera). Migrate up one step and
+    // Tier 2: the v4 key (T0110's era, pre-HUD-preset). Migrate up one step and
+    // persist forward to the current key.
+    let legacyV4Text: string | null;
+    try {
+      legacyV4Text = this.storage.getItem(LEGACY_V4_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV4Text !== null) {
+      return this.migrateForward(() =>
+        migrateProfileV4ToV5(parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown)),
+      );
+    }
+
+    // Tier 3: the v3 key (T0106's era, pre-camera). Migrate up two steps and
     // persist forward to the current key.
     let legacyV3Text: string | null;
     try {
@@ -847,11 +1035,15 @@ export class SettingsRepository {
     }
     if (legacyV3Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV3ToV4(parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown)),
+        migrateProfileV4ToV5(
+          migrateProfileV3ToV4(
+            parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown),
+          ),
+        ),
       );
     }
 
-    // Tier 3: the v2 key (T0108's era, pre-gamepad). Migrate up two steps and
+    // Tier 4: the v2 key (T0108's era, pre-gamepad). Migrate up three steps and
     // persist forward to the current key.
     let legacyV2Text: string | null;
     try {
@@ -865,15 +1057,17 @@ export class SettingsRepository {
     }
     if (legacyV2Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV3ToV4(
-          migrateProfileV2ToV3(
-            parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+        migrateProfileV4ToV5(
+          migrateProfileV3ToV4(
+            migrateProfileV2ToV3(
+              parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+            ),
           ),
         ),
       );
     }
 
-    // Tier 4: the v1 key (pre-T0108, standalone-profile era). Migrate up three
+    // Tier 5: the v1 key (pre-T0108, standalone-profile era). Migrate up four
     // steps and persist forward to the current key.
     let legacyV1Text: string | null;
     try {
@@ -891,9 +1085,13 @@ export class SettingsRepository {
 
     return this.migrateForward(
       () =>
-        migrateProfileV3ToV4(
-          migrateProfileV2ToV3(
-            migrateLegacySettings(parseGameSettings(JSON.parse(legacyV1Text as string) as unknown)),
+        migrateProfileV4ToV5(
+          migrateProfileV3ToV4(
+            migrateProfileV2ToV3(
+              migrateLegacySettings(
+                parseGameSettings(JSON.parse(legacyV1Text as string) as unknown),
+              ),
+            ),
           ),
         ),
       'legacy settings',
@@ -904,11 +1102,12 @@ export class SettingsRepository {
    * Runs one migration tier: parse, then persist forward under the current key.
    *
    * Every tier does exactly this, and each added generation made the copy-paste
-   * version of it longer; sharing it means a future v5 adds one `if` block
-   * instead of another twenty lines of identical error plumbing.
+   * version of it longer; sharing it means a future v6 adds one `if` block
+   * instead of another twenty lines of identical error plumbing. (T0112's v5
+   * tier was the first to cash that in.)
    */
-  private migrateForward(migrate: () => GameSettingsV4, label = 'settings'): SettingsLoadResult {
-    let migrated: GameSettingsV4;
+  private migrateForward(migrate: () => GameSettingsV5, label = 'settings'): SettingsLoadResult {
+    let migrated: GameSettingsV5;
     try {
       migrated = migrate();
     } catch (error: unknown) {
@@ -930,7 +1129,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV4): SettingsSaveResult {
+  save(settings: GameSettingsV5): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

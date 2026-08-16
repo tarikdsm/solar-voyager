@@ -20,7 +20,7 @@ const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 // LEGACY_V3_SETTINGS_STORAGE_KEY and the "Storage key" reasoning in
 // docs/superpowers/specs/2026-08-15-gamepad-design.md for why each generation
 // gets its own key instead of one bumped in place.
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 
 function collectBrowserErrors(page) {
@@ -280,7 +280,28 @@ async function runGuidedCompletion(browser) {
     const terminalObservationCount = terminal.snapshotObservationCount;
     const terminalTransitionCount = terminal.transitionCount;
     await page.keyboard.press('KeyR');
-    await page.locator('#burn-log-active').waitFor({ state: 'visible' });
+    try {
+      await page.locator('#burn-log-active').waitFor({ state: 'visible', timeout: 15_000 });
+    } catch (cause) {
+      const state = await page.evaluate(() => {
+        const canvas = globalThis.document.querySelector('#space-canvas');
+        return {
+          activeElement: `${globalThis.document.activeElement?.tagName ?? '?'}#${globalThis.document.activeElement?.id ?? ''}`,
+          burnLogActiveAvailable: canvas?.solarVoyagerBurnLog?.activeAvailable ?? null,
+          panelExpanded:
+            globalThis.document.querySelector('#burn-log-toggle')?.getAttribute('aria-expanded') ??
+            null,
+          panelHidden: globalThis.document.querySelector('#burn-log-panel')?.hidden ?? null,
+          preset: globalThis.document.querySelector('.app-overlay')?.getAttribute('data-hud-preset'),
+          sceneState: canvas?.dataset.sceneState ?? null,
+          throttle:
+            globalThis.document.querySelector('#flight-strip-throttle-value')?.textContent ?? null,
+        };
+      });
+      throw new Error(`post-tutorial burn never became active: ${JSON.stringify(state)}`, {
+        cause,
+      });
+    }
     await page.keyboard.press('KeyF');
     await page.locator('#burn-log-active').waitFor({ state: 'hidden' });
     const selectedWarpBefore = await page

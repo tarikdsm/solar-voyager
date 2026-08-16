@@ -147,6 +147,107 @@ export function validateConfirmedHeapGrowth(primary, confirmation, maxRetainedGr
   );
 }
 
+/** Sampling period of the pre-measurement heap settling loop, in milliseconds. */
+export const HEAP_SETTLE_STEP_MS = 5_000;
+
+/**
+ * Growth a single settling step may show and still count as quiet.
+ *
+ * Scaled from the gate's own ceiling so the two can never drift apart: half of
+ * the ceiling's per-step share of the measurement window. With the shipped
+ * golden that is 16,384 B per 5 s step against 196,608 B / 30 s.
+ */
+export function heapSettleStepBudgetBytes(maxRetainedGrowthBytes, durationMs) {
+  if (!Number.isInteger(maxRetainedGrowthBytes) || maxRetainedGrowthBytes < 0) {
+    throw new RangeError('heap settle budget requires an integer ceiling');
+  }
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    throw new RangeError('heap settle budget requires a positive window duration');
+  }
+  return Math.floor((maxRetainedGrowthBytes * HEAP_SETTLE_STEP_MS) / durationMs / 2);
+}
+
+/**
+ * Consecutive quiet steps required before the window may be trusted.
+ *
+ * **At least as much quiet evidence as the window it is about to certify.** The
+ * first version of this loop asked for two quiet 5 s steps and then trusted a
+ * 30 s window — ten seconds of evidence for a thirty second claim. On CI it duly
+ * declared `settled` at 65 s and the very next window grew 277 kB, about 46 kB
+ * per step: the page was in a lull, not a steady state. Six steps means a burst
+ * with a period shorter than the window cannot hide inside the evidence.
+ */
+export function heapSettleRequiredSteps(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    throw new RangeError('heap settle step count requires a positive window duration');
+  }
+  return Math.ceil(durationMs / HEAP_SETTLE_STEP_MS);
+}
+
+/**
+ * Consecutive-quiet-step tracker, fed one heap sample at a time.
+ *
+ * Separated from the browser driver so the decision logic can be tested without
+ * a page: a synthetic constant-rate leak is instant and deterministic here,
+ * whereas the same probe as a browser fixture is confounded by the page's own
+ * warm-up (which measures ~111 s on this workload — longer than any cap short
+ * enough to be worth paying for on every CI run).
+ */
+export function createHeapSettleTracker(maxRetainedGrowthBytes, durationMs) {
+  const stepBudgetBytes = heapSettleStepBudgetBytes(maxRetainedGrowthBytes, durationMs);
+  const requiredSteps = heapSettleRequiredSteps(durationMs);
+  let previousBytes = null;
+  let stableSteps = 0;
+  let steps = 0;
+  let peakStepGrowthBytes = 0;
+  return {
+    /** Feeds one sample; returns whether the run is now settled. */
+    observe(bytes) {
+      if (previousBytes !== null) {
+        const growthBytes = bytes - previousBytes;
+        steps += 1;
+        if (growthBytes > peakStepGrowthBytes) peakStepGrowthBytes = growthBytes;
+        stableSteps = growthBytes <= stepBudgetBytes ? stableSteps + 1 : 0;
+      }
+      previousBytes = bytes;
+      return stableSteps >= requiredSteps;
+    },
+    get state() {
+      return {
+        peakStepGrowthBytes,
+        requiredSteps,
+        settled: stableSteps >= requiredSteps,
+        stableSteps,
+        stepBudgetBytes,
+        steps,
+      };
+    },
+  };
+}
+
+/**
+ * Turns a settling result into findings.
+ *
+ * A gate that passes silently when it could not measure is worse than the bug it
+ * was fixing: before this, `settled` was logged and never validated, so a page
+ * leaking steadily below the per-window ceiling sailed through green while the
+ * loop knew perfectly well it had never reached a steady state.
+ */
+export function validateHeapSettling(settling) {
+  if (settling === null || settling === undefined) {
+    return ['Retained heap settling was not measured.'];
+  }
+  if (settling.settled === true) return [];
+  return [
+    `Retained heap never settled: ${formatInteger(settling.stableSteps ?? 0)} of ` +
+      `${formatInteger(settling.requiredSteps ?? 0)} consecutive quiet steps after ` +
+      `${formatInteger(settling.elapsedMs ?? 0)} ms, peak step growth ` +
+      `${formatInteger(settling.peakStepGrowthBytes ?? 0)} bytes against a ` +
+      `${formatInteger(settling.stepBudgetBytes ?? 0)} byte budget. The measurement window ` +
+      'cannot be trusted, so it is reported as a failure rather than a pass.',
+  ];
+}
+
 export function validateBundleSizes(measured, golden) {
   const findings = [];
   if (

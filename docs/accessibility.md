@@ -20,6 +20,13 @@ claim of formal WCAG conformance.
   interrupt filling in a rebinding capture or an import/export box.
 - HUD values are text in definition lists or labeled panels rather than text painted only into the
   WebGL canvas. Important trajectory events pair color with labels and marker shapes.
+- The pause dialog is a real modal: `Escape` opens and closes it, focus moves to Resume on open and
+  is trapped inside while it is up, and the simulation is genuinely halted so nothing changes under
+  the player while they read it.
+- The HUD preset (Clean / Pilot / Engineer) is both a key and a control in Session & settings, so the
+  instrument density is adjustable without discovering a shortcut. In-world markers are decorative
+  duplicates of information the panels also carry as text, and are marked `aria-hidden`; body labels
+  remain readable text.
 - The interface honors `prefers-reduced-motion: reduce`; quality can be manually locked to reduce
   visual load. A detected software renderer produces a readable warning and conservative effects.
 - Desktop and compact layouts retain keyboard reachability, contrast, and a minimum practical control

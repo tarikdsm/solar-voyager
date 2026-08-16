@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { installEngineerHudPreset } from '../tests/hudPresetProfile.mjs';
 import { disableUnrelatedTrajectoryPrediction } from '../tests/trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
@@ -217,6 +218,9 @@ async function runProbe(browser, fixturePath = null, probeStateVector = false) {
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   page.on('crash', () => browserErrors.push('page crash'));
   await disableUnrelatedTrajectoryPrediction(page);
+  // The smoke contract asserts the state-vector readouts and `#orbit-readout`,
+  // which live in the Engineer preset from T0112 on.
+  await installEngineerHudPreset(page);
   if (probeStateVector) await page.addInitScript(installProductionSmokeRafFreeze);
   if (fixturePath !== null) await page.addInitScript({ path: fixturePath });
 
@@ -283,6 +287,9 @@ async function expectRuntimeFixtureFailure(browser, fixturePath, marker, trigger
   progress(`negative fixture start ${marker}`);
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   await disableUnrelatedTrajectoryPrediction(page);
+  // The smoke contract asserts the state-vector readouts and `#orbit-readout`,
+  // which live in the Engineer preset from T0112 on.
+  await installEngineerHudPreset(page);
   let timeout;
   const failure = new Promise((resolve, reject) => {
     timeout = setTimeout(

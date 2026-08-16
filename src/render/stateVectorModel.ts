@@ -1,6 +1,6 @@
 import { SPEED_OF_LIGHT_KM_S } from '../core/constants.js';
+import { DEFAULT_VESSEL } from '../sim/ship/vessel.js';
 
-const SHIP_MASS_KG = 10_000;
 const NEAR_LIGHT_GAMMA = 1 / Math.sqrt(1 - 0.99 * 0.99);
 const SI_PREFIXES = Object.freeze(['n', 'µ', 'm', '', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']);
 const SI_NUMBER_FORMAT = new Intl.NumberFormat('en-US', {
@@ -26,38 +26,63 @@ export interface StateVectorScale {
   readonly maxLength: number;
 }
 
-/** Per-dimension log domains used only for display geometry. Physical labels stay unscaled. */
-export const STATE_VECTOR_SCALE: readonly [
+export type StateVectorScaleTable = readonly [
   StateVectorScale,
   StateVectorScale,
   StateVectorScale,
   StateVectorScale,
-] = Object.freeze([
-  Object.freeze({
-    minMagnitude: 30,
-    maxMagnitude: 0.99 * SPEED_OF_LIGHT_KM_S,
-    minLength: 0.35,
-    maxLength: 0.92,
-  }),
-  Object.freeze({
-    minMagnitude: 1e-9,
-    maxMagnitude: 0.009_806_65,
-    minLength: 0.25,
-    maxLength: 0.82,
-  }),
-  Object.freeze({
-    minMagnitude: SHIP_MASS_KG * 30,
-    maxMagnitude: SHIP_MASS_KG * NEAR_LIGHT_GAMMA * 0.99 * SPEED_OF_LIGHT_KM_S,
-    minLength: 0.32,
-    maxLength: 0.88,
-  }),
-  Object.freeze({
-    minMagnitude: 1e12,
-    maxMagnitude: 1e22,
-    minLength: 0.3,
-    maxLength: 0.86,
-  }),
-]);
+];
+
+/**
+ * Per-dimension log domains used only for display geometry (T0104 handoff, T0112).
+ *
+ * The momentum axis is the only one that depends on the vessel, and it used to
+ * hardcode `SHIP_MASS_KG = 10_000` — a copy of `DEFAULT_VESSEL.restMassKg` made
+ * before `VesselConfig` existed. Harmless while every vessel weighed ten tonnes,
+ * and quietly wrong afterwards: a heavier ship's momentum arrow would saturate at
+ * the top of the widget and stop conveying anything. It is a display heuristic,
+ * but it is a *HUD* display heuristic, so it belongs to this task; the fix is to
+ * take the rest mass rather than assume it.
+ *
+ * Physical labels are unaffected — `formatStateVectorMagnitude` formats the
+ * snapshot value directly and never consults a scale.
+ */
+export function createStateVectorScales(restMassKg: number): StateVectorScaleTable {
+  if (!Number.isFinite(restMassKg) || restMassKg <= 0) {
+    throw new RangeError('state-vector momentum scale requires a positive rest mass');
+  }
+  return Object.freeze([
+    Object.freeze({
+      minMagnitude: 30,
+      maxMagnitude: 0.99 * SPEED_OF_LIGHT_KM_S,
+      minLength: 0.35,
+      maxLength: 0.92,
+    }),
+    Object.freeze({
+      minMagnitude: 1e-9,
+      maxMagnitude: 0.009_806_65,
+      minLength: 0.25,
+      maxLength: 0.82,
+    }),
+    Object.freeze({
+      minMagnitude: restMassKg * 30,
+      maxMagnitude: restMassKg * NEAR_LIGHT_GAMMA * 0.99 * SPEED_OF_LIGHT_KM_S,
+      minLength: 0.32,
+      maxLength: 0.88,
+    }),
+    Object.freeze({
+      minMagnitude: 1e12,
+      maxMagnitude: 1e22,
+      minLength: 0.3,
+      maxLength: 0.86,
+    }),
+  ]);
+}
+
+/** Scales for the shipped default vessel; the table every existing caller had. */
+export const STATE_VECTOR_SCALE: StateVectorScaleTable = createStateVectorScales(
+  DEFAULT_VESSEL.restMassKg,
+);
 
 /** Maps a positive magnitude into one bounded, monotonic logarithmic display length. */
 export function logarithmicVectorLength(magnitude: number, scale: StateVectorScale): number {
@@ -100,13 +125,20 @@ function writeEndpointInto(
   return true;
 }
 
-/** Writes four scaled endpoints without allocating or changing their physical direction. */
+/**
+ * Writes four scaled endpoints without allocating or changing their physical
+ * direction.
+ *
+ * `scales` defaults to the shipped vessel's table so every pre-T0112 caller is
+ * unchanged; the widget passes the session vessel's table instead.
+ */
 export function writeStateVectorEndpointsInto(
   output: Float32Array,
   velocityKmS: Float64Array,
   accelerationKmS2: Float64Array,
   momentumKgKmS: Float64Array,
   angularMomentumKgKm2S: Float64Array,
+  scales: StateVectorScaleTable = STATE_VECTOR_SCALE,
 ): number {
   if (output.length < STATE_VECTOR_COMPONENT_COUNT) {
     throw new RangeError(`State-vector output requires ${STATE_VECTOR_COMPONENT_COUNT} components`);
@@ -121,18 +153,16 @@ export function writeStateVectorEndpointsInto(
   }
 
   let visibleMask = 0;
-  if (writeEndpointInto(output, 0, velocityKmS, STATE_VECTOR_SCALE[0] as StateVectorScale)) {
+  if (writeEndpointInto(output, 0, velocityKmS, scales[0])) {
     visibleMask |= 1 << StateVectorKind.VELOCITY;
   }
-  if (writeEndpointInto(output, 3, accelerationKmS2, STATE_VECTOR_SCALE[1] as StateVectorScale)) {
+  if (writeEndpointInto(output, 3, accelerationKmS2, scales[1])) {
     visibleMask |= 1 << StateVectorKind.ACCELERATION;
   }
-  if (writeEndpointInto(output, 6, momentumKgKmS, STATE_VECTOR_SCALE[2] as StateVectorScale)) {
+  if (writeEndpointInto(output, 6, momentumKgKmS, scales[2])) {
     visibleMask |= 1 << StateVectorKind.MOMENTUM;
   }
-  if (
-    writeEndpointInto(output, 9, angularMomentumKgKm2S, STATE_VECTOR_SCALE[3] as StateVectorScale)
-  ) {
+  if (writeEndpointInto(output, 9, angularMomentumKgKm2S, scales[3])) {
     visibleMask |= 1 << StateVectorKind.ANGULAR_MOMENTUM;
   }
   return visibleMask;

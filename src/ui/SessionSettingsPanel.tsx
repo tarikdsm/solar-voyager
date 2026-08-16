@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 
 import type { SessionActionResult, SessionExportResult } from '../game/sessionController.js';
 import type { TutorialController } from '../game/tutorialController.js';
+import { formatHudPreset, HUD_PRESETS, type HudPreset } from '../game/hud/hudPresets.js';
 import {
   GAMEPAD_AXES,
   GAMEPAD_CURVE_EXPONENT_MAX,
@@ -13,14 +14,14 @@ import {
   INPUT_ACTIONS,
   isUnboundInputCode,
   type GamepadAxisId,
-  type GameSettingsV4,
+  type GameSettingsV5,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV4;
+  readonly settings: GameSettingsV5;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;
@@ -32,6 +33,8 @@ export interface SessionSettingsPort {
   setGamepadDeadzone(deadzone: number): SessionActionResult;
   setCameraFovWidening(fovWidening: boolean): SessionActionResult;
   setCameraShake(shake: boolean): SessionActionResult;
+  setHudPreset(preset: HudPreset): SessionActionResult;
+  setHudBodyLabels(bodyLabels: boolean): SessionActionResult;
   updateQualityLock(qualityLock: QualityLock): SessionActionResult;
 }
 
@@ -58,6 +61,8 @@ export interface SessionSettingsModel {
   selectGamepadAxisSensitivity(axis: GamepadAxisId, value: string): PanelActionResult;
   setCameraFovWidening(fovWidening: boolean): PanelActionResult;
   setCameraShake(shake: boolean): PanelActionResult;
+  selectHudPreset(value: string): PanelActionResult;
+  setHudBodyLabels(bodyLabels: boolean): PanelActionResult;
 }
 
 export type SessionActivationCallback = (result: SessionActionResult) => void;
@@ -88,6 +93,8 @@ const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze
   // CruiseDirector (T0116) is what makes pressing either key do something.
   cruiseEngage: 'Cruise engage (reserved)',
   cruiseAbort: 'Cruise abort (reserved)',
+  hudPresetCycle: 'Cycle HUD preset',
+  hudBodyLabelsToggle: 'Toggle body labels',
 });
 
 const GAMEPAD_AXIS_LABELS: Readonly<Record<GamepadAxisId, string>> = Object.freeze({
@@ -106,6 +113,10 @@ function describeBinding(code: string): string {
 
 function simplify(result: SessionActionResult): PanelActionResult {
   return { ok: result.ok, message: result.message };
+}
+
+function isHudPresetValue(value: string): value is HudPreset {
+  return (HUD_PRESETS as readonly string[]).includes(value);
 }
 
 function isQualityLock(value: string): value is QualityLock {
@@ -183,6 +194,11 @@ export function createSessionSettingsModel(
     },
     setCameraFovWidening: (fovWidening) => simplify(session.setCameraFovWidening(fovWidening)),
     setCameraShake: (shake) => simplify(session.setCameraShake(shake)),
+    selectHudPreset: (value) =>
+      isHudPresetValue(value)
+        ? simplify(session.setHudPreset(value))
+        : { ok: false, message: 'Unsupported HUD preset' },
+    setHudBodyLabels: (bodyLabels) => simplify(session.setHudBodyLabels(bodyLabels)),
   };
 }
 
@@ -421,6 +437,40 @@ export function SessionSettingsPanel({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section aria-labelledby="hud-settings-title">
+          <h2 id="hud-settings-title">HUD</h2>
+          <p class="hud-settings-hint">
+            Clean keeps the reticle, the throttle strip and warnings. Pilot adds the navball, the
+            clocks and the warp indicator. Engineer restores every mission-control panel. Cycle in
+            flight with the HUD preset key.
+          </p>
+          <div class="hud-settings-grid">
+            <label class="quality-lock-label" for="hud-preset">
+              Preset
+              <select
+                id="hud-preset"
+                value={settings.hud.preset}
+                onChange={(event) => publish(model.selectHudPreset(event.currentTarget.value))}
+              >
+                {HUD_PRESETS.map((preset) => (
+                  <option key={preset} value={preset}>
+                    {formatHudPreset(preset)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label for="hud-body-labels">
+              <input
+                id="hud-body-labels"
+                type="checkbox"
+                checked={settings.hud.bodyLabels}
+                onChange={(event) => publish(model.setHudBodyLabels(event.currentTarget.checked))}
+              />
+              Show body labels in the world
+            </label>
           </div>
         </section>
 

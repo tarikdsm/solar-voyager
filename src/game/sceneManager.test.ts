@@ -117,3 +117,99 @@ describe('SceneManager', () => {
     expect(activationCalls).toBe(0);
   });
 });
+
+describe('SceneManager pause sub-state and menu return - T0112', () => {
+  function activeScenes() {
+    const session = new FakeSession();
+    const scenes = new SceneManager(session);
+    expect(scenes.startNewGame().ok).toBe(true);
+    return { scenes, session };
+  }
+
+  it('reports the phase and the pause sub-state as one observable state', () => {
+    const { scenes } = activeScenes();
+
+    expect(scenes.state).toBe('space');
+    expect(scenes.paused).toBe(false);
+    expect(scenes.pause()).toBe(true);
+    expect(scenes.state).toBe('paused');
+    // The phase stays two-valued: pause is a sub-state of gameplay, and every
+    // `phase === 'main-menu'` branch in the UI must keep meaning what it meant.
+    expect(scenes.phase).toBe('space');
+    expect(scenes.resume()).toBe(true);
+    expect(scenes.state).toBe('space');
+  });
+
+  it('is idempotent at both ends', () => {
+    const { scenes } = activeScenes();
+
+    expect(scenes.pause()).toBe(true);
+    expect(scenes.pause()).toBe(false);
+    expect(scenes.resume()).toBe(true);
+    expect(scenes.resume()).toBe(false);
+  });
+
+  it('refuses to pause the main menu', () => {
+    const scenes = new SceneManager(new FakeSession());
+
+    expect(scenes.pause()).toBe(false);
+    expect(scenes.state).toBe('main-menu');
+  });
+
+  it('toggles and reports the resulting flag', () => {
+    const { scenes } = activeScenes();
+
+    expect(scenes.togglePause()).toBe(true);
+    expect(scenes.togglePause()).toBe(false);
+    expect(scenes.paused).toBe(false);
+  });
+
+  /**
+   * v1's transition was one-way by construction: nothing could move the phase
+   * back, so "exit to menu" could not be built. This is the landmine T0112 owns.
+   */
+  it('returns to the menu and lets a new session start again', () => {
+    const { scenes, session } = activeScenes();
+    scenes.pause();
+
+    expect(scenes.returnToMainMenu()).toBe(true);
+    expect(scenes.state).toBe('main-menu');
+    // Never "paused in the menu": there is no resume button on that screen.
+    expect(scenes.paused).toBe(false);
+    expect(scenes.returnToMainMenu()).toBe(false);
+
+    session.validLocalSave = true;
+    expect(scenes.canContinue).toBe(true);
+    expect(scenes.startNewGame().ok).toBe(true);
+    expect(scenes.state).toBe('space');
+    expect(session.newGameCalls).toBe(2);
+  });
+
+  it('publishes every transition to subscribers until they unsubscribe', () => {
+    const session = new FakeSession();
+    const scenes = new SceneManager(session);
+    const states: string[] = [];
+    const unsubscribe = scenes.subscribe((state) => states.push(state));
+
+    scenes.startNewGame();
+    scenes.pause();
+    scenes.resume();
+    scenes.returnToMainMenu();
+    unsubscribe();
+    scenes.startNewGame();
+
+    expect(states).toEqual(['space', 'paused', 'space', 'main-menu']);
+  });
+
+  it('does not publish a failed entry', () => {
+    const session = new FakeSession();
+    session.newGameResult = { ok: false, message: 'Unable to start new game' };
+    const scenes = new SceneManager(session);
+    const states: string[] = [];
+    scenes.subscribe((state) => states.push(state));
+
+    scenes.startNewGame();
+
+    expect(states).toEqual([]);
+  });
+});

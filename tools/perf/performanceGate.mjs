@@ -11,10 +11,13 @@ import { installHighQualitySetting } from './browserSettings.mjs';
 import { measureBundleSizes } from './bundleMeasurement.mjs';
 import {
   classifyHeapConfirmation,
+  createHeapSettleTracker,
+  HEAP_SETTLE_STEP_MS,
   parsePerformanceGolden,
   validateBundleSizes,
   validateConfirmedHeapGrowth,
   validateHeapGrowth,
+  validateHeapSettling,
   validateWorkload,
 } from './performanceGateUtils.mjs';
 
@@ -24,7 +27,26 @@ const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const GOLDEN_PATH = fileURLToPath(new URL('./performance-golden.json', import.meta.url));
 const ALLOCATION_BYTES_PER_FRAME = 256 * 1024;
-const HEAP_SETTLE_MS = 60_000;
+/**
+ * Wall-clock budget for the pre-measurement heap settling loop.
+ *
+ * This used to be a flat 60 s wait, and a flat wait is a guess about a machine:
+ * startup settling finishes in seconds on a fast desktop and runs well past a
+ * minute on a software rasterizer, so one number was generous in one place and
+ * too short in the other. When it was too short the window opened *inside* the
+ * warm-up and reported it as retained growth.
+ *
+ * `settleHeapUntilStable` measures instead of guessing. Two caveats, both real:
+ *
+ * - It does **not** make the gate leak-proof. Growth that decays slowly is
+ *   simply waited out, and this waits up to three times longer than the old
+ *   fixed 60 s, so it is *more* permissive for a decaying-rate leak than what it
+ *   replaced. What it does guarantee is that the gate never reports a number it
+ *   knows it could not trust: failing to settle is a finding
+ *   (`validateHeapSettling`), not a log line.
+ * - The cap is wall clock, including the GC round-trips, not a sum of timeouts.
+ */
+const HEAP_SETTLE_MAX_MS = 180_000;
 const FIXTURE_SETTLE_MS = 1_000;
 const STABLE_SNAPSHOT_COUNT = 4;
 const PRODUCTION_ONLY = process.argv.includes('--production-only');
@@ -155,6 +177,34 @@ async function waitForStableWorkload(page) {
   throw new Error('Production workload did not settle into four identical snapshots.');
 }
 
+/**
+ * Waits until retained heap stops climbing, or the wall-clock cap expires.
+ *
+ * Requires `heapSettleRequiredSteps(durationMs)` *consecutive* quiet steps — as
+ * much quiet evidence as the window it is about to certify. Returns the whole
+ * observation so the caller can validate and report it; `settled: false` is a
+ * finding, never a shrug.
+ */
+async function settleHeapUntilStable(page, ceilingBytes, durationMs, label, maxMs) {
+  const tracker = createHeapSettleTracker(ceilingBytes, durationMs);
+  const startedMs = Date.now();
+  const deadlineMs = startedMs + maxMs;
+  let settled = tracker.observe(await forceGc(page));
+  while (!settled && Date.now() < deadlineMs) {
+    await page.waitForTimeout(HEAP_SETTLE_STEP_MS);
+    settled = tracker.observe(await forceGc(page));
+  }
+  const state = tracker.state;
+  const elapsedMs = Date.now() - startedMs;
+  console.log(
+    `Performance gate heap ${state.settled ? 'settled' : 'did NOT settle'}: ${label} after ` +
+      `${String(elapsedMs)} ms (${String(state.stableSteps)}/${String(state.requiredSteps)} quiet ` +
+      `steps of ${String(state.steps)}, peak step ${String(state.peakStepGrowthBytes)} B, budget ` +
+      `${String(state.stepBudgetBytes)} B)`,
+  );
+  return { ...state, elapsedMs };
+}
+
 async function measureHeapWindow(page, durationMs, label) {
   const beforeBytes = await forceGc(page);
   console.log(`Performance gate measuring: ${label}`);
@@ -188,8 +238,26 @@ async function measurePage(
     await exposeGc(page);
     let workload = await waitForStableWorkload(page);
     console.log(`Performance gate workload stable: ${label}`);
-    await page.waitForTimeout(allocationFixture ? FIXTURE_SETTLE_MS : HEAP_SETTLE_MS);
-    console.log(`Performance gate settled: ${label}`);
+    // The allocation fixture allocates every frame by design, so it can never
+    // stabilise; it keeps the short fixed wait and stays a working negative
+    // control.
+    let heapSettle = null;
+    if (allocationFixture) await page.waitForTimeout(FIXTURE_SETTLE_MS);
+    else {
+      if (!Number.isInteger(confirmationCeilingBytes)) {
+        // Defaulting to Infinity here would make every step "quiet" and settle
+        // unconditionally after the minimum number of steps — a silent pass
+        // built into the guard against silent passes.
+        throw new TypeError('a settled heap measurement requires an integer ceiling');
+      }
+      heapSettle = await settleHeapUntilStable(
+        page,
+        confirmationCeilingBytes,
+        durationMs,
+        label,
+        HEAP_SETTLE_MAX_MS,
+      );
+    }
     workload = await waitForStableWorkload(page);
     const heap = await measureHeapWindow(page, durationMs, label);
     let confirmationHeap = null;
@@ -204,7 +272,13 @@ async function measurePage(
       );
     }
     assert.deepEqual(browserErrors, []);
-    return { confirmationHeap, heap, workload };
+    // Wiring check: the settling observation must reach the caller, because
+    // `validateHeapSettling` is what stops the gate reporting a window it could
+    // not trust. A miswire here would silently restore the old behaviour.
+    if (!allocationFixture && typeof heapSettle?.settled !== 'boolean') {
+      throw new Error('production measurement produced no heap settling observation');
+    }
+    return { confirmationHeap, heap, heapSettle, workload };
   } finally {
     await page.close();
   }
@@ -275,11 +349,14 @@ async function main() {
       golden.heap.maxRetainedGrowthBytes,
     );
     const workloadFindings = validateWorkload(production.workload, golden.workload);
-    const heapFindings = validateConfirmedHeapGrowth(
-      production.heap,
-      production.confirmationHeap,
-      golden.heap.maxRetainedGrowthBytes,
-    );
+    const heapFindings = [
+      ...validateHeapSettling(production.heapSettle),
+      ...validateConfirmedHeapGrowth(
+        production.heap,
+        production.confirmationHeap,
+        golden.heap.maxRetainedGrowthBytes,
+      ),
+    ];
     if (PRODUCTION_ONLY) {
       const findings = [...bundleFindings, ...workloadFindings, ...heapFindings];
       process.stdout.write(

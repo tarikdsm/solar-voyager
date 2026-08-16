@@ -12,8 +12,11 @@ import {
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
   updateGamepadDeadzone,
+  updateHudBodyLabels,
+  updateHudPreset,
   type GamepadAxisId,
-  type GameSettingsV4,
+  type GameSettingsV5,
+  type HudPreset,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
@@ -25,7 +28,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV4 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV5 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -73,6 +76,16 @@ class FakeSession implements SessionSettingsPort {
   setCameraShake(shake: boolean): SessionActionResult {
     this.settings = updateCameraShake(this.settings, shake);
     return { ok: true, message: 'Camera shake updated' };
+  }
+
+  setHudPreset(preset: HudPreset): SessionActionResult {
+    this.settings = updateHudPreset(this.settings, preset);
+    return { ok: true, message: 'HUD preset updated' };
+  }
+
+  setHudBodyLabels(bodyLabels: boolean): SessionActionResult {
+    this.settings = updateHudBodyLabels(this.settings, bodyLabels);
+    return { ok: true, message: 'Body labels updated' };
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {

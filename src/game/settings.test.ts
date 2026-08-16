@@ -5,12 +5,14 @@ import {
   DEFAULT_CAMERA_SETTINGS,
   DEFAULT_GAME_SETTINGS,
   DEFAULT_GAMEPAD_SETTINGS,
+  DEFAULT_HUD_SETTINGS,
   GAMEPAD_AXES,
   INPUT_ACTIONS,
   isUnboundInputCode,
   LEGACY_SETTINGS_STORAGE_KEY,
   LEGACY_V2_SETTINGS_STORAGE_KEY,
   LEGACY_V3_SETTINGS_STORAGE_KEY,
+  LEGACY_V4_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
   parseProfileSettings,
@@ -24,6 +26,8 @@ import {
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
   updateGamepadDeadzone,
+  updateHudBodyLabels,
+  updateHudPreset,
   updateTutorialSettings,
   type GamepadAxisId,
   type KeyValueStorage,
@@ -290,12 +294,13 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 4,
+      version: 5,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
       gamepad: DEFAULT_GAME_SETTINGS.gamepad,
       camera: DEFAULT_GAME_SETTINGS.camera,
+      hud: DEFAULT_GAME_SETTINGS.hud,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
@@ -461,13 +466,16 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(4);
+      expect(result.settings.version).toBe(5);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
-      // Actions the v2 fixture predates (T0106's cruise pair) are backfilled.
+      // Actions the v2 fixture predates (T0106's cruise pair, T0112's HUD pair)
+      // are backfilled.
       expect(result.settings.inputBindings.cruiseEngage).toBe('KeyG');
       expect(result.settings.inputBindings.cruiseAbort).toBe('KeyV');
+      expect(result.settings.inputBindings.hudPresetCycle).toBe('KeyH');
+      expect(result.settings.inputBindings.hudBodyLabelsToggle).toBe('KeyL');
       expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
@@ -489,7 +497,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 4/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 5/u);
     });
 
     it('fails closed when writing a migrated legacy profile fails', () => {
@@ -571,7 +579,7 @@ describe('game settings', () => {
       );
     });
 
-    it('migrates a stored v3 profile to v4 and writes it forward to the current key', () => {
+    it('migrates a stored v3 profile across two generations to the current key', () => {
       const storage = new MemoryStorage();
       const document = profileV3Document();
       storage.values.set(LEGACY_V3_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -579,7 +587,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(4);
+      expect(result.settings.version).toBe(5);
       expect(result.settings.qualityLock).toBe('high');
       expect(result.settings.tutorial).toEqual({
         status: 'completed',
@@ -620,5 +628,158 @@ describe('game settings', () => {
       const projected = projectGameSettingsV1(updateCameraShake(DEFAULT_GAME_SETTINGS, false));
       expect(Object.keys(projected)).toEqual(['version', 'qualityLock', 'inputBindings']);
     });
+  });
+});
+
+describe('HUD settings (T0112)', () => {
+  function profileV4Document(): Record<string, unknown> {
+    return {
+      version: 4,
+      qualityLock: 'low',
+      inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+      tutorial: { status: 'skipped', stepId: 'focus-target' },
+      gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+      camera: { fovWidening: false, shake: true },
+    };
+  }
+
+  /**
+   * The whole point of the task: instrumentation is opt-in now. A fresh profile
+   * lands on Clean, and world labels stay on because a label with a distance is
+   * navigation rather than instrumentation.
+   */
+  it('defaults to the Clean preset with world labels on', () => {
+    expect(DEFAULT_HUD_SETTINGS).toEqual({ preset: 'clean', bodyLabels: true });
+    expect(DEFAULT_GAME_SETTINGS.hud).toBe(DEFAULT_HUD_SETTINGS);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(5);
+  });
+
+  it('updates each preference independently and keeps the document valid', () => {
+    const engineer = updateHudPreset(DEFAULT_GAME_SETTINGS, 'engineer');
+    expect(engineer.hud).toEqual({ preset: 'engineer', bodyLabels: true });
+    const quiet = updateHudBodyLabels(engineer, false);
+    expect(quiet.hud).toEqual({ preset: 'engineer', bodyLabels: false });
+    expect(() => parseProfileSettings(quiet)).not.toThrow();
+    expect(Object.isFrozen(quiet.hud)).toBe(true);
+  });
+
+  it('rejects an incomplete, excess or mistyped hud document', () => {
+    expect(() =>
+      parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, hud: { preset: 'clean' } }),
+    ).toThrow(/field is missing: bodyLabels/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        hud: { ...DEFAULT_HUD_SETTINGS, extra: 1 },
+      }),
+    ).toThrow(/unknown hud settings field/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        hud: { preset: 'spreadsheet', bodyLabels: true },
+      }),
+    ).toThrow(/hud preset is not supported/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        hud: { preset: 'clean', bodyLabels: 'yes' },
+      }),
+    ).toThrow(/bodyLabels must be a boolean/u);
+    expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, hud: null })).toThrow(
+      /hud settings must be an object/u,
+    );
+  });
+
+  it('migrates a stored v4 profile to v5 and writes it forward to the current key', () => {
+    const storage = new MemoryStorage();
+    const document = profileV4Document();
+    storage.values.set(LEGACY_V4_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: true, source: 'migrated' });
+    expect(result.settings.version).toBe(5);
+    expect(result.settings.qualityLock).toBe('low');
+    expect(result.settings.camera).toEqual({ fovWidening: false, shake: true });
+    expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+    // A rolled-back build reads its own key and cannot clobber the newer one.
+    expect(storage.values.get(LEGACY_V4_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+  });
+
+  it('prefers the current key over a stale v4 key present alongside it', () => {
+    const storage = new MemoryStorage();
+    const current = updateHudPreset(DEFAULT_GAME_SETTINGS, 'pilot');
+    storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+    storage.values.set(LEGACY_V4_SETTINGS_STORAGE_KEY, JSON.stringify(profileV4Document()));
+
+    expect(new SettingsRepository(storage).load()).toEqual({
+      ok: true,
+      settings: current,
+      source: 'stored',
+    });
+  });
+
+  it('climbs all four migration tiers from the original v1 key', () => {
+    const storage = new MemoryStorage();
+    storage.values.set(
+      LEGACY_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        qualityLock: 'high',
+        inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+      }),
+    );
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: true, source: 'migrated' });
+    expect(result.settings.version).toBe(5);
+    expect(result.settings.qualityLock).toBe('high');
+    expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
+    expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+    expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
+  });
+
+  it('keeps HUD preferences out of an imported save, like tutorial and camera state', () => {
+    const customized = updateHudBodyLabels(
+      updateHudPreset(DEFAULT_GAME_SETTINGS, 'engineer'),
+      false,
+    );
+    const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS);
+
+    const merged = mergeGameSettingsPreferences(customized, imported);
+
+    // Profile state, not mission state: a save someone emails you must not
+    // rearrange your HUD.
+    expect(merged.hud).toEqual(customized.hud);
+  });
+
+  /**
+   * `parseGameSettings` runs on every save load, so an action added by a later
+   * task must be backfilled rather than rejected — otherwise every existing save
+   * becomes unloadable the moment the registry grows. T0112 grew it by two.
+   */
+  it('keeps a save written before the HUD actions existed loadable', () => {
+    const bindings: Record<string, string> = { ...DEFAULT_GAME_SETTINGS.inputBindings };
+    delete bindings.hudPresetCycle;
+    delete bindings.hudBodyLabelsToggle;
+
+    const parsed = parseGameSettings({ version: 1, qualityLock: 'auto', inputBindings: bindings });
+
+    expect(parsed.inputBindings.hudPresetCycle).toBe('KeyH');
+    expect(parsed.inputBindings.hudBodyLabelsToggle).toBe('KeyL');
+    expect(() => parseGameSettings(parsed)).not.toThrow();
+  });
+
+  it('leaves a HUD action unbound rather than failing when its default is taken', () => {
+    const bindings: Record<string, string> = { ...DEFAULT_GAME_SETTINGS.inputBindings };
+    delete bindings.hudPresetCycle;
+    bindings.rollLeft = 'KeyH';
+
+    const parsed = parseGameSettings({ version: 1, qualityLock: 'auto', inputBindings: bindings });
+
+    expect(parsed.inputBindings.rollLeft).toBe('KeyH');
+    expect(isUnboundInputCode(parsed.inputBindings.hudPresetCycle)).toBe(true);
   });
 });

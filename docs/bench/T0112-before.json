@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-16T02:46:33.273Z",
+  "gitSha": "e4d2712ab52e393150f4ec2f8f8448ad04b00966",
+  "bundle": {
+    "entryFile": "assets/index-DKAUGext.js",
+    "entryGzipBytes": 143772,
+    "totalGzipBytes": 574602
+  },
+  "environment": {
+    "canvas": {
+      "height": 360,
+      "width": 640
+    },
+    "renderer": "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "softwareRasterizer": false
+  },
+  "schedule": {
+    "focusEvents": [
+      {
+        "frame": 300,
+        "key": "]"
+      },
+      {
+        "frame": 600,
+        "key": "j"
+      }
+    ],
+    "legs": [
+      {
+        "endFrame": 300,
+        "endSec": 60,
+        "id": "leo",
+        "startFrame": 0,
+        "startSec": 0,
+        "target": "earth"
+      },
+      {
+        "endFrame": 600,
+        "endSec": 120,
+        "id": "moon-flyby",
+        "startFrame": 300,
+        "startSec": 60,
+        "target": "moon"
+      },
+      {
+        "endFrame": 900,
+        "endSec": 180,
+        "id": "jupiter-approach",
+        "startFrame": 600,
+        "startSec": 120,
+        "target": "jupiter"
+      }
+    ],
+    "sampleFrames": 900,
+    "seed": 1511506142,
+    "virtualDurationSec": 180,
+    "zoomEvents": [
+      {
+        "delta": 62,
+        "frame": 60
+      },
+      {
+        "delta": 73,
+        "frame": 120
+      },
+      {
+        "delta": -50,
+        "frame": 180
+      },
+      {
+        "delta": 67,
+        "frame": 240
+      },
+      {
+        "delta": 67,
+        "frame": 300
+      },
+      {
+        "delta": -10,
+        "frame": 360
+      },
+      {
+        "delta": 44,
+        "frame": 420
+      },
+      {
+        "delta": 32,
+        "frame": 480
+      },
+      {
+        "delta": 14,
+        "frame": 540
+      },
+      {
+        "delta": -64,
+        "frame": 600
+      },
+      {
+        "delta": 33,
+        "frame": 660
+      },
+      {
+        "delta": -27,
+        "frame": 720
+      },
+      {
+        "delta": -72,
+        "frame": 780
+      },
+      {
+        "delta": -74,
+        "frame": 840
+      }
+    ]
+  },
+  "runs": [
+    {
+      "checkpointEvidence": [
+        {
+          "distanceToTargetKm": 6771.0084,
+          "dominantBodyId": "earth",
+          "loadedSimTimeSec": 0,
+          "loadedTargetBodyId": "earth",
+          "requestedSimTimeSec": 0,
+          "targetBodyId": "earth"
+        },
+        {
+          "distanceToTargetKm": 2737.4,
+          "dominantBodyId": "moon",
+          "loadedSimTimeSec": 60,
+          "loadedTargetBodyId": "moon",
+          "requestedSimTimeSec": 60,
+          "targetBodyId": "moon"
+        },
+        {
+          "distanceToTargetKm": 219911,
+          "dominantBodyId": "jupiter",
+          "loadedSimTimeSec": 120,
+          "loadedTargetBodyId": "jupiter",
+          "requestedSimTimeSec": 120,
+          "targetBodyId": "jupiter"
+        },
+        {
+          "distanceToTargetKm": 219911,
+          "dominantBodyId": "jupiter",
+          "loadedSimTimeSec": 180,
+          "loadedTargetBodyId": "jupiter",
+          "requestedSimTimeSec": 180,
+          "targetBodyId": "jupiter"
+        }
+      ],
+      "errors": [],
+      "finalFocusLabel": "Focus: Jupiter",
+      "routeEvidence": [
+        {
+          "distanceToTargetKm": 6771.0084,
+          "dominantBodyId": "earth",
+          "loadedSimTimeSec": 0,
+          "loadedTargetBodyId": "earth",
+          "requestedSimTimeSec": 0,
+          "targetBodyId": "earth",
+          "renderedDominantBody": "earth"
+        },
+        {
+          "distanceToTargetKm": 2737.4,
+          "dominantBodyId": "moon",
+          "loadedSimTimeSec": 60,
+          "loadedTargetBodyId": "moon",
+          "requestedSimTimeSec": 60,
+          "targetBodyId": "moon",
+          "renderedDominantBody": "moon"
+        },
+        {
+          "distanceToTargetKm": 219911,
+          "dominantBodyId": "jupiter",
+          "loadedSimTimeSec": 120,
+          "loadedTargetBodyId": "jupiter",
+          "requestedSimTimeSec": 120,
+          "targetBodyId": "jupiter",
+          "renderedDominantBody": "jupiter"
+        },
+        {
+          "distanceToTargetKm": 219911,
+          "dominantBodyId": "jupiter",
+          "loadedSimTimeSec": 180,
+          "loadedTargetBodyId": "jupiter",
+          "requestedSimTimeSec": 180,
+          "targetBodyId": "jupiter",
+          "renderedDominantBody": "jupiter"
+        }
+      ],
+      "summary": {
+        "heapDeltaBytes": 94120,
+        "legs": [
+          {
+            "id": "leo",
+            "medianMs": 18.1,
+            "p75Ms": 36.4,
+            "p99Ms": 72.701,
+            "workMedianMs": 4.4,
+            "workP75Ms": 6.325,
+            "workP99Ms": 9.302
+          },
+          {
+            "id": "moon-flyby",
+            "medianMs": 12.15,
+            "p75Ms": 36.3,
+            "p99Ms": 66.562,
+            "workMedianMs": 3.85,
+            "workP75Ms": 5.9,
+            "workP99Ms": 9.987
+          },
+          {
+            "id": "jupiter-approach",
+            "medianMs": 12.1,
+            "p75Ms": 36.3,
+            "p99Ms": 78.602,
+            "workMedianMs": 4.1,
+            "workP75Ms": 5.725,
+            "workP99Ms": 11.429
+          }
+        ],
+        "maxDrawCalls": 49,
+        "maxTriangles": 70452,
+        "pathHeapDeltaBytes": 19126888,
+        "steadyHeapAfterBytes": 154590800,
+        "steadyHeapBeforeBytes": 154496680,
+        "medianMs": 12.2,
+        "p75Ms": 36.3,
+        "p99Ms": 72.701,
+        "workMedianMs": 4.2,
+        "workP75Ms": 6,
+        "workP99Ms": 9.602
+      }
+    }
+  ],
+  "stability": {
+    "findings": [],
+    "limitFraction": 0.05
+  }
+}

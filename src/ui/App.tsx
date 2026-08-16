@@ -5,12 +5,24 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { WARP_LADDER, type WarpFactor } from '../core/time.js';
 import { createScaffoldState } from '../game/createScaffoldState.js';
 import type { GamePhase, SceneManager } from '../game/sceneManager.js';
+import {
+  CruiseStatus,
+  FlightWarnings,
+  HudPresetIndicator,
+  Reticle,
+  ThrottleSpeedStrip,
+} from './FlightStrip.js';
+import type { HudPresetStore } from './hudPresetSignals.js';
+import { PauseMenu, type PauseMenuActions } from './PauseMenu.js';
+import { WorldMarkerLayer } from './WorldMarkers.js';
 import type { SystemMapController } from '../game/systemMapController.js';
 import type { TutorialController } from '../game/tutorialController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
 import { PerfPanel } from './hud/PerfPanel.js';
 import type { PerfPanelStore } from './hud/perfPanelStore.js';
+import { hudPresetShows, type HudSurface } from '../game/hud/hudPresets.js';
+import type { SessionActionResult } from '../game/sessionController.js';
 import type { HudDisplaySignals, HudSignals } from './hudSignals.js';
 import { ImpactOverlay, type ImpactOverlayActions } from './ImpactOverlay.js';
 import type { ImpactDisplaySignals } from './impactSignals.js';
@@ -44,6 +56,10 @@ export interface AppProps {
     readonly onExpandedChange?: ((expanded: boolean) => void) | null;
   }> | null;
   readonly hardwareWarning?: HardwareAccelerationWarningData | null;
+  /** T0112 preset ring; absent renders the full Engineer HUD, as v1 did. */
+  readonly hudPreset?: HudPresetStore | null;
+  /** T0112 pause menu; absent leaves it unmounted (component harnesses). */
+  readonly pause?: PauseUiPort | null;
   /** ADR-036 surface-contact freeze overlay; absent leaves it unmounted. */
   readonly impact?: ImpactUiPort | null;
   readonly initialPhase?: GamePhase;
@@ -65,6 +81,19 @@ export interface AppProps {
 export interface SystemMapUiPort {
   readonly controller: SystemMapController;
   readonly signals: SystemMapSignalStore;
+}
+
+/**
+ * What the pause dialog can do to the session.
+ *
+ * `openSettings` is deliberately absent: expanding the existing settings panel is
+ * a pure view concern and `App` owns it, so `main.ts` never has to reach into the
+ * HUD's DOM to satisfy a menu button.
+ */
+export interface PauseUiPort {
+  resume(): void;
+  save(): SessionActionResult;
+  exitToMenu(): void;
 }
 
 export interface ImpactUiPort {
@@ -308,8 +337,10 @@ export function App({
   hud,
   hudState,
   hardwareWarning = null,
+  hudPreset = null,
   impact = null,
   initialPhase,
+  pause = null,
   onBurnLogExpandedChange = null,
   onHardwareWarningAcknowledged = null,
   onPerfPanelExpandedChange = null,
@@ -326,6 +357,9 @@ export function App({
 }: AppProps) {
   const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
   const [phase, setPhase] = useState<GamePhase>(startingPhase);
+  const [paused, setPaused] = useState(sceneManager?.paused ?? false);
+  const settingsHostRef = useRef<HTMLDivElement | null>(null);
+  const pauseLayerRef = useRef<HTMLDivElement | null>(null);
   const [tutorialProgress, setTutorialProgress] = useState(tutorial?.progress ?? null);
   const [, setTutorialRevision] = useState(0);
   const enteredSpace = useRef(startingPhase === 'space');
@@ -336,6 +370,26 @@ export function App({
     setPhase('space');
     onSpacePhaseEntered?.();
   }, [onSpacePhaseEntered]);
+
+  // T0112 — the menu return is real now, so the phase is no longer write-once:
+  // `SceneManager` owns it and this is the only place that mirrors it into state.
+  useEffect(() => {
+    if (sceneManager === null) return undefined;
+    return sceneManager.subscribe((state) => {
+      setPaused(state === 'paused');
+      if (state === 'main-menu') {
+        setPhase('main-menu');
+        return;
+      }
+      // Through `enterSpace`, never around it. Setting `enteredSpace` here
+      // directly would make this listener — which fires *inside*
+      // `SceneManager.startNewGame()`, before `MainMenu` gets its result — trip
+      // the guard that `enterSpace` uses to decide whether to activate the space
+      // phase at all, and the world would never start.
+      enterSpace();
+      setPhase('space');
+    });
+  }, [enterSpace, sceneManager]);
 
   useEffect(() => {
     setTutorialProgress(tutorial?.progress ?? null);
@@ -353,6 +407,38 @@ export function App({
   useEffect(() => {
     if (enteredSpace.current) onSpacePhaseEntered?.();
   }, [onSpacePhaseEntered]);
+
+  const pauseActions: PauseMenuActions | null =
+    pause === null
+      ? null
+      : {
+          resume: () => pause.resume(),
+          save: () => pause.save(),
+          exitToMenu: () => pause.exitToMenu(),
+          openSettings: () => {
+            // The panel is an uncontrolled `<details>` owned by
+            // `SessionSettingsPanel`; the pause menu opens it through the host
+            // element rather than duplicating the whole settings UI inside the
+            // dialog (two `id="session-settings"` nodes would be worse than this).
+            // The host lives beside the dialog in `.pause-layer`, *outside*
+            // `.hud-grid`, because the grid is a stacking context and nothing
+            // inside it can be lifted above the pause backdrop.
+            const host = settingsHostRef.current;
+            const details = host?.querySelector('details');
+            if (details instanceof HTMLDetailsElement) {
+              details.open = true;
+              details.querySelector('summary')?.focus();
+            }
+          },
+        };
+
+  const activePreset = hudPreset?.signals.preset.value ?? 'engineer';
+  // Reading the preset signal inside the render subscribes `App` to it, so a
+  // preset change re-renders exactly once and the Engineer panels are genuinely
+  // unmounted in Clean rather than merely hidden — which is the point of a preset
+  // whose job is to not be there.
+  const shows = (surface: HudSurface): boolean =>
+    hudPreset === null || hudPresetShows(activePreset, surface);
 
   if (phase === 'main-menu' && sceneManager !== null) {
     return (
@@ -375,85 +461,156 @@ export function App({
   }
 
   return (
-    <main class="app-overlay">
+    <main class="app-overlay" data-hud-preset={activePreset} data-paused={String(paused)}>
       {hardwareWarning === null ? null : (
         <HardwareAccelerationWarning
           rendererName={hardwareWarning.rendererName}
           onAcknowledged={onHardwareWarningAcknowledged}
         />
       )}
-      {perfPanel === null ? null : (
-        <PerfPanel store={perfPanel} onExpandedChange={onPerfPanelExpandedChange} />
-      )}
-      {systemMap === null || trajectoryPrediction === null ? null : (
-        <SystemMapPanel
-          bodyIds={bodyIds}
-          commands={commands}
-          controller={systemMap.controller}
-          map={systemMap.signals}
-          targetBody={hud.targetBody}
-          trajectoryPrediction={trajectoryPrediction.display}
-        />
-      )}
-      <SpaceHudSurfaces mapOpen={systemMap?.signals.display.open ?? false}>
-        {trajectoryPrediction === null ? null : (
-          <TrajectoryImpactWarning display={trajectoryPrediction.display} />
+      {/*
+        Everything the pause dialog must shut out, in one subtree so `inert` can
+        do it in one place. `aria-modal="true"` on the dialog is a claim about
+        the rest of the document, and `inert` is what makes the claim true: with
+        it the HUD is unfocusable and hidden from assistive technology, without
+        it Tab walks straight out of the dialog into the tutorial overlay and the
+        state-vector controls. Deliberately excluded: the hardware-acceleration
+        warning (a mandatory alert that outranks the pause), the pause layer
+        itself, and the impact overlay.
+      */}
+      <div class="hud-layer" inert={paused}>
+        {perfPanel === null ? null : (
+          <PerfPanel store={perfPanel} onExpandedChange={onPerfPanelExpandedChange} />
         )}
-        <h1 class="app-title">{scaffoldState.title}</h1>
+        {systemMap === null || trajectoryPrediction === null ? null : (
+          <SystemMapPanel
+            bodyIds={bodyIds}
+            commands={commands}
+            controller={systemMap.controller}
+            map={systemMap.signals}
+            suspended={paused}
+            targetBody={hud.targetBody}
+            trajectoryPrediction={trajectoryPrediction.display}
+          />
+        )}
+        <SpaceHudSurfaces mapOpen={systemMap?.signals.display.open ?? false}>
+          <WorldMarkerLayer
+            hud={hud}
+            markers={hudState.worldMarkers}
+            showTarget={shows('targetMarker')}
+            showLabels={hudPreset?.signals.bodyLabels ?? true}
+          />
+          <div class="hud-grid">
+            {trajectoryPrediction === null || !shows('warnings') ? null : (
+              <TrajectoryImpactWarning display={trajectoryPrediction.display} />
+            )}
+            <h1 class="app-title">{scaffoldState.title}</h1>
+            <Reticle show={shows('reticle')} />
+            <div class="hud-area hud-area-left">
+              {shows('orbitReadout') ? <OrbitReadout hud={hud} /> : null}
+              {shows('dualClock') ? <DualClock hud={hud} /> : null}
+              {shows('warpIndicator') ? (
+                <WarpControl commands={commands} hud={hud} hudState={hudState} />
+              ) : null}
+            </div>
+            <div class="hud-area hud-area-right">
+              <div class="hud-rail-head">
+                {hudPreset === null ? null : (
+                  <HudPresetIndicator label={hudPreset.display.presetLabel} />
+                )}
+              </div>
+              {shows('energyPanel') ? <EnergyPanel hud={hud} /> : null}
+              {burnLog === null || BurnLogPanelComponent === null || !shows('burnLog') ? null : (
+                <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />
+              )}
+              {shows('targetPanel') ? (
+                <TargetPanel
+                  bodyIds={bodyIds}
+                  commands={commands}
+                  hud={hud}
+                  hudState={hudState}
+                  trajectoryPrediction={trajectoryPrediction}
+                />
+              ) : null}
+              {stateVectors === null ||
+              stateVectorViewportRef === null ||
+              !shows('stateVectors') ? null : (
+                <StateVectorPanel
+                  display={stateVectors.display}
+                  pinnedToEcliptic={stateVectors.signals.pinnedToEcliptic}
+                  setPinnedToEcliptic={stateVectors.setPinnedToEcliptic.bind(stateVectors)}
+                  viewportRef={stateVectorViewportRef}
+                />
+              )}
+            </div>
+            <div class="hud-area hud-area-bottom-center">
+              <FlightWarnings hud={hud} show={shows('warnings')} />
+              <CruiseStatus show={shows('cruiseStatus')} />
+              {shows('navball') ? <Navball hud={hud} hudState={hudState} /> : null}
+              <ThrottleSpeedStrip
+                hud={hud}
+                hudState={hudState}
+                showAltitude={shows('radarAltitude')}
+                showWarp={shows('warpIndicator')}
+              />
+              {/*
+              Always mounted, never conditionally: `main.ts` throws at space-phase
+              activation if `#camera-focus-label` is missing, and three browser
+              gates read its `textContent`. Clean hides the section with `hidden`,
+              which leaves the text readable to the harnesses and to assistive
+              technology that queries it directly.
+            */}
+              <section
+                class="camera-help"
+                aria-label="Camera controls"
+                hidden={!shows('cameraHelp')}
+              >
+                <p id="camera-focus-label" class="camera-focus" aria-live="polite">
+                  Focus: Earth
+                </p>
+                <p class="camera-instructions">
+                  O chase/observatory · Drag to orbit · Scroll to zoom · Shift + Arrows/Page Up/Page
+                  Down · [ / ] change target · E Earth · J Jupiter · H cycle HUD · L body labels
+                </p>
+              </section>
+            </div>
+          </div>
+        </SpaceHudSurfaces>
+        {tutorial !== null &&
+        tutorialProgress !== null &&
+        (tutorialProgress.status === 'unoffered' || tutorialProgress.status === 'active') ? (
+          <TutorialOverlayView
+            controller={tutorial}
+            focusHeading={(heading) => {
+              tutorialHeading.current = heading;
+            }}
+            progress={tutorialProgress}
+            readoutsReady={tutorial.canAcknowledgeReadouts}
+          />
+        ) : null}
+      </div>
+      {/*
+        The paused surface: the dialog plus the one panel it can open. Rendered
+        outside `.hud-grid` so the z-ladder actually reaches above the backdrop,
+        and outside `.hud-layer` so it stays live while everything else is inert.
+        `display: contents`, so it changes no layout.
+      */}
+      <div class="pause-layer" ref={pauseLayerRef}>
         {session === null ? null : (
-          <SessionSettingsPanel
-            key={tutorialProgress?.status}
-            session={session}
-            onSaveSucceeded={onSaveSucceeded}
-            tutorial={tutorial}
-          />
+          <div class="hud-settings-host" ref={settingsHostRef}>
+            <SessionSettingsPanel
+              key={tutorialProgress?.status}
+              session={session}
+              onSaveSucceeded={onSaveSucceeded}
+              tutorial={tutorial}
+            />
+          </div>
         )}
-        <OrbitReadout hud={hud} />
-        <DualClock hud={hud} />
-        <WarpControl commands={commands} hud={hud} hudState={hudState} />
-        <EnergyPanel hud={hud} />
-        {burnLog === null || BurnLogPanelComponent === null ? null : (
-          <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />
+        {pauseActions === null ? null : (
+          <PauseMenu actions={pauseActions} open={paused} trapRootRef={pauseLayerRef} />
         )}
-        <TargetPanel
-          bodyIds={bodyIds}
-          commands={commands}
-          hud={hud}
-          hudState={hudState}
-          trajectoryPrediction={trajectoryPrediction}
-        />
-        {stateVectors === null || stateVectorViewportRef === null ? null : (
-          <StateVectorPanel
-            display={stateVectors.display}
-            pinnedToEcliptic={stateVectors.signals.pinnedToEcliptic}
-            setPinnedToEcliptic={stateVectors.setPinnedToEcliptic.bind(stateVectors)}
-            viewportRef={stateVectorViewportRef}
-          />
-        )}
-        <Navball hud={hud} hudState={hudState} />
-        <section class="camera-help" aria-label="Camera controls">
-          <p id="camera-focus-label" class="camera-focus" aria-live="polite">
-            Focus: Earth
-          </p>
-          <p class="camera-instructions">
-            O chase/observatory · Drag to orbit · Scroll to zoom · Shift + Arrows/Page Up/Page Down
-            · [ / ] change target · E Earth · J Jupiter
-          </p>
-        </section>
-      </SpaceHudSurfaces>
+      </div>
       {impact === null ? null : <ImpactOverlay actions={impact.actions} display={impact.display} />}
-      {tutorial !== null &&
-      tutorialProgress !== null &&
-      (tutorialProgress.status === 'unoffered' || tutorialProgress.status === 'active') ? (
-        <TutorialOverlayView
-          controller={tutorial}
-          focusHeading={(heading) => {
-            tutorialHeading.current = heading;
-          }}
-          progress={tutorialProgress}
-          readoutsReady={tutorial.canAcknowledgeReadouts}
-        />
-      ) : null}
     </main>
   );
 }

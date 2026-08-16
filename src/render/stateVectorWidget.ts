@@ -27,7 +27,12 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 import type { SimSnapshot } from '../sim/simulationSnapshot.js';
-import { STATE_VECTOR_COMPONENT_COUNT, writeStateVectorEndpointsInto } from './stateVectorModel.js';
+import {
+  STATE_VECTOR_COMPONENT_COUNT,
+  STATE_VECTOR_SCALE,
+  writeStateVectorEndpointsInto,
+  type StateVectorScaleTable,
+} from './stateVectorModel.js';
 
 const VECTOR_COUNT = 4;
 const VECTOR_COLORS = Object.freeze([0x5eead4, 0xfbbf24, 0xf472b6, 0xa78bfa]);
@@ -187,7 +192,11 @@ export class StateVectorWidget {
   private viewportWidth = 0;
   private viewportHeight = 0;
 
-  constructor() {
+  /** Momentum-axis scaling follows the session vessel (T0104 handoff, T0112). */
+  private scales: StateVectorScaleTable = STATE_VECTOR_SCALE;
+
+  constructor(scales: StateVectorScaleTable = STATE_VECTOR_SCALE) {
+    this.scales = scales;
     this.scene.name = 'state-vector-widget';
     const backdropGeometry = new PlaneGeometry(2.24, 2.24);
     const backdropMaterial = new MeshBasicMaterial({
@@ -325,6 +334,11 @@ export class StateVectorWidget {
     }
   }
 
+  /** Re-scales for a replaced vessel; a restore may bring a different one. */
+  setScales(scales: StateVectorScaleTable): void {
+    this.scales = scales;
+  }
+
   update(snapshot: SimSnapshot, mainCamera: Camera): void {
     this.visibleMask = writeStateVectorEndpointsInto(
       this.endpointComponents,
@@ -332,6 +346,7 @@ export class StateVectorWidget {
       snapshot.shipProperAccelerationKmS2,
       snapshot.shipRelativisticMomentumKgKmS,
       snapshot.shipAngularMomentumKgKm2S,
+      this.scales,
     );
     for (let index = 0; index < VECTOR_COUNT; index += 1) {
       const resource = this.vectorResources[index];

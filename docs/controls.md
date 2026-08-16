@@ -31,6 +31,8 @@ keys remain reserved for UI, browser, or operating-system behavior.
 | Target hold         | `8`       |
 | Kill rotation       | `X`       |
 | Stability assist    | `T`       |
+| Cycle HUD preset    | `H`       |
+| Toggle body labels  | `L`       |
 
 Flight axes are continuous while held. The throttle is a continuous lever in the 0–100% range: a tap
 nudges it by ten percent, and holding the key sweeps the full range in 1.5 seconds. Time warp follows
@@ -130,11 +132,37 @@ Camera**.
 
 | Action                   | Control                 |
 | ------------------------ | ----------------------- |
+| Pause / resume           | `Escape`                |
 | Open or close system map | `M`                     |
 | Open performance details | `F3`                    |
 | Traverse UI controls     | `Tab` / `Shift` + `Tab` |
 | Activate focused control | `Enter` or `Space`      |
 
-The system map, burn log, settings, save/load, import/export, quality selection, and tutorial all use
-native DOM controls and remain operable without a pointer. The HUD camera-help line repeats the most
-common camera and focus bindings during flight.
+## HUD presets
+
+The HUD ships in three presets and `H` cycles them:
+
+| Preset       | Shows                                                                    |
+| ------------ | ------------------------------------------------------------------------ |
+| **Clean**    | Reticle, target diamond, throttle/speed strip, cruise status, warnings   |
+| **Pilot**    | Adds the navball, both clocks, radar altitude and the warp indicator     |
+| **Engineer** | Adds every v1 panel: osculating orbit, energy ledger, state vectors, burn log, target list |
+
+A new profile starts on Clean. The choice is saved, so it survives a reload, and
+it can also be set in **Session & settings → HUD**. Accepting the optional
+tutorial switches to Engineer, because the tour walks you through those panels.
+
+In-world markers are independent of the preset: the target diamond carries its
+distance and pins itself to the screen edge when the target is off-screen or
+behind you, prograde and retrograde sit on the sky, and body labels with live
+distances toggle with `L`. Clicking a body selects it as the navigation target —
+the target list in the Engineer HUD remains as a fallback.
+
+`Escape` pauses. The simulation genuinely stops: nothing moves, no time passes,
+and the menu offers resume, settings, save and exit to the main menu. While the
+system map is open `Escape` closes the map instead, and during a surface-contact
+freeze the recovery overlay keeps it.
+
+The system map, burn log, settings, save/load, import/export, quality selection, the pause menu, and
+the tutorial all use native DOM controls and remain operable without a pointer. The HUD camera-help
+line repeats the most common camera and focus bindings during flight (Engineer preset).
