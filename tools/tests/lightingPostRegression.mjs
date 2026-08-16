@@ -137,6 +137,28 @@ function bloomMetrics(offImage, onImage) {
   };
 }
 
+/** Peak channel value inside the solar disc — the clip test, measured in pixels. */
+function discPeakChannel(image, radiusPx = 24) {
+  const centreX = image.width / 2;
+  const centreY = image.height / 2;
+  let peak = 0;
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const dx = x + 0.5 - centreX;
+      const dy = y + 0.5 - centreY;
+      if (dx * dx + dy * dy > radiusPx * radiusPx) continue;
+      const offset = (y * image.width + x) * image.channels;
+      peak = Math.max(
+        peak,
+        image.data[offset] ?? 0,
+        image.data[offset + 1] ?? 0,
+        image.data[offset + 2] ?? 0,
+      );
+    }
+  }
+  return peak;
+}
+
 function assertPipeline(snapshot, label) {
   assert.equal(snapshot.glError, 0, `${label}: WebGL error ${snapshot.glError}`);
   assert.equal(snapshot.bufferType, snapshot.expectedBufferType, `${label}: composer is not half-float`);
@@ -240,9 +262,102 @@ try {
     Math.max(...glare.quadrantLuminance) / Math.min(...glare.quadrantLuminance) < 1.15,
     `Production glare is not radially symmetric: ${JSON.stringify(glare)}`,
   );
+  // T0127 — the pass-insertion API is inert by default and deterministic when used.
+  const inserted = await page.evaluate(() => globalThis.__lightingPostHarness.insertedPassOrder());
+  assert.equal(inserted.glError, 0, `pass insertion: WebGL error ${inserted.glError}`);
+  assert.deepEqual(inserted.defaultPassNames, [
+    'RenderPass',
+    'RelativisticPostPass',
+    'AdaptiveBloomPass',
+    'AdaptiveSmaaPass',
+    'AdaptiveFxaaPass',
+    'AdaptiveOutputPass',
+  ]);
+  assert.deepEqual(inserted.anchors, ['scene', 'relativistic', 'bloom', 'anti-aliasing']);
+  assert.deepEqual(inserted.insertedPassNames, [
+    'RenderPass',
+    'InsertedScenePass',
+    'RelativisticPostPass',
+    'InsertedRelativisticPass',
+    'AdaptiveBloomPass',
+    'InsertedBloomPass',
+    'AdaptiveSmaaPass',
+    'AdaptiveFxaaPass',
+    'InsertedAntiAliasingPass',
+    'AdaptiveOutputPass',
+  ]);
+
+  // T0127 — the controller reaching the real renderer through the pipeline sink.
+  const exposure = await page.evaluate(() => globalThis.__lightingPostHarness.adaptiveExposure());
+  assert.equal(exposure.glError, 0, `exposure: WebGL error ${exposure.glError}`);
+  const [nearSun, mercury, earthPose, neptune] = exposure.poses;
+  for (const pose of exposure.poses) {
+    assert.equal(
+      pose.rendererExposure,
+      pose.targetExposure,
+      `${pose.label}: exposure did not reach the renderer: ${JSON.stringify(pose)}`,
+    );
+  }
+  assert.ok(
+    nearSun.sceneLuminance > mercury.sceneLuminance &&
+      mercury.sceneLuminance > earthPose.sceneLuminance &&
+      earthPose.sceneLuminance > neptune.sceneLuminance,
+    `scene luminance is not strictly ordered: ${JSON.stringify(exposure.poses)}`,
+  );
+  assert.ok(
+    nearSun.targetExposure < mercury.targetExposure &&
+      mercury.targetExposure < earthPose.targetExposure &&
+      earthPose.targetExposure < neptune.targetExposure,
+    `exposure is not strictly ordered: ${JSON.stringify(exposure.poses)}`,
+  );
+  assert.equal(nearSun.targetExposure, exposure.minExposure);
+  assert.equal(neptune.targetExposure, exposure.maxExposure);
+  assert.ok(
+    Math.abs(earthPose.targetExposure - 1) < 0.01,
+    `Earth is not the exposure-1 anchor: ${JSON.stringify(earthPose)}`,
+  );
+  for (const [measured, expected, label] of [
+    [exposure.brightToDarkSec, exposure.tauBrightToDarkSec, 'bright to dark'],
+    [exposure.darkToBrightSec, exposure.tauDarkToBrightSec, 'dark to bright'],
+  ]) {
+    assert.ok(
+      measured > expected * 0.9 && measured < expected * 1.1,
+      `${label} time constant is outside 10%: ${measured} vs ${expected}`,
+    );
+  }
+
+  // The photosphere clip criterion, measured in pixels rather than argued.
+  await page.evaluate(() => globalThis.__lightingPostHarness.renderProductionSun(false, true));
+  const sunAtUnitExposure = discPeakChannel(
+    await readPixels(await page.locator('canvas').screenshot()),
+  );
+  await page.evaluate(
+    (value) => globalThis.__lightingPostHarness.renderProductionSunAtExposure(value),
+    exposure.minExposure,
+  );
+  const sunAtMinExposure = discPeakChannel(
+    await readPixels(await page.locator('canvas').screenshot()),
+  );
+  assert.ok(
+    sunAtUnitExposure >= 250,
+    `production Sun is not clipped at the v1 fixed exposure: ${sunAtUnitExposure}`,
+  );
+  assert.ok(
+    sunAtMinExposure < 250,
+    `production Sun still clips at the exposure floor: ${sunAtMinExposure}`,
+  );
+  assert.ok(
+    sunAtMinExposure > 96,
+    `production Sun is too dark at the exposure floor: ${sunAtMinExposure}`,
+  );
+
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
-  process.stdout.write(`${JSON.stringify({ directFallback, earth, glare, bloom }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(
+      { directFallback, earth, glare, bloom, exposure, sunAtUnitExposure, sunAtMinExposure },
+      null,
+      2,
+    )}\n`);
 } finally {
   if (browser !== undefined) await browser.close();
   await server.close();
