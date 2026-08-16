@@ -433,6 +433,8 @@ these presentation bounds do not alter the physical definitions above.
 
 ## 8. Constant-acceleration relativistic intercept (guidance) — ADR-037
 
+> §8.7's pursuit fallback was amended by **ADR-043** (T0116) after it was flown.
+
 The cruise autopilot's guidance model. Symbols are §3's and
 `sim/ship/relativity.ts`'s throughout: `u` is celerity (proper velocity, km/s),
 `γ = √(1+|u|²/c²)`, `v = u/γ`, `β = |v|/c`, `α` is proper acceleration, `τ` is ship
@@ -692,19 +694,51 @@ A single fixed thrust axis cannot match both an arrival position and an arrival
 velocity, which is why §8.4 arrives at drift-frame rest and an insertion phase
 follows. Re-solving is valid only while the ship is still slow against its own
 profile (§8.6); the endgame belongs to the pursuit rule below, which needs no time of
-flight at all and is always available, including as the abort-resume mode:
+flight at all and is always available, including as the abort-resume mode.
+
+**Rendezvous form (ADR-043).** With `d_rel` the signed stand-off distance and
+`v_rel` the target-relative velocity:
 
 ```
-n̂      = normalize(r_j(t) − r(t))
-d_rel   = |r_j(t) − r(t)| − R_arr
+d_rel   = |r_j(t) − r(t)| − R_arr                  (signed; negative inside)
 v_rel   = v(t) − v_j(t)
-D_stop  = (c²/α)(γ_rel − 1)                        §8.3, evaluated on |v_rel|
+v_appr  = c·√(1 − 1/γ_a²),   γ_a = 1 + α·|d_rel| / (1.2 c²)      (§8.3 inverted)
+v_des   = v_appr · sign(d_rel) · normalize(r_j(t) − r(t))
+Δv⃗      = v_des − v_rel
+û       = normalize(Δv⃗),    α = min(α_max, |Δv⃗|/Δt)
+settle when |Δv⃗| ≲ the local circular speed's insertion tolerance
+```
+
+`v_appr` is the exact §8.3 stop-distance relation read backwards: the largest speed
+from which the ship can still stop within `|d_rel|/1.2`. The command is one vector —
+its direction is the aim, its magnitude is the throttle — and it degenerates to the
+two-branch statement it replaces: at rest it points at the target, and above `v_appr`
+it points along `−v̂_rel`. The 1.2 margin is the one the approach-brake assist engages
+at, having warned at 1.5.
+
+The earlier two-branch form was
+
+```
 if d_rel > 1.2 · D_stop :  û = normalize(r_j(t + t_lead) − r(t)),  α = α_max
 else                    :  û = −normalize(v_rel),                  α = α_max
-settle when |v_rel| < 1e-3 km/s
 ```
 
-with the lead `t_lead = 2·T_h(d_rel)` evaluated once from §8.2 — a closed form, not
-an iteration. The 1.2 margin is the one the approach-brake assist engages at, having
-warned at 1.5. Specified here; **implemented in the game layer** by T0116, because it
-commands throttle and attitude rather than computing a trajectory.
+with `t_lead = 2·T_h(d_rel)` from §8.2. It does not fly, for two independent reasons
+(both measured in T0116, ADR-043): the lead is evaluated in the **heliocentric** frame
+while §8.4 hands the endgame a ship *co-moving with its target* at up to 30 km/s, so a
+90 s lead points ≈ 2,700 km wide of a 200 km approach; and repairing that with §8.4's
+own `− v(t)·t_lead` drift term makes the aim reverse the instant `v·t_lead` exceeds
+`d_rel`, which is exactly where the branch switch lives. On the LEO→Mars route that is
+1,746 branch flips, 39 % of the endgame's frames spent unpowered in a slew that never
+converges, and no arrival.
+
+Specified here; **implemented in the game layer** by T0116, because it commands
+throttle and attitude rather than computing a trajectory. Two further scope notes the
+implementation is obliged to handle and the model above does not express: the solve is
+blind to the **geometry** as well as the gravity, so a departure whose profile axis
+passes through the body the ship is orbiting must be biased above the local horizon
+until it is clear (T0116 holds ≥ 15° inside 4 `R_col` of a non-target dominant body);
+and the `|v_rel| < 1e-3 km/s` settle is unreachable under time warp, because the
+target's own gravity adds `g·Δt` of velocity every step — 0.02 km/s per frame at
+Jupiter's stand-off at 1000× — so insertion settles against a fraction of the local
+circular speed instead.
