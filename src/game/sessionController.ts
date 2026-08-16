@@ -11,6 +11,8 @@ import {
   parseProfileSettings,
   projectGameSettingsV1,
   rebindInput,
+  updateAudioExteriorMusic,
+  updateAudioLevel,
   updateCameraFovWidening,
   updateCameraShake,
   updateGamepadAxisInvert,
@@ -25,6 +27,7 @@ import {
   updateSkyPanorama,
   updateSkyZodiacalLight,
   updateTutorialSettings,
+  type AudioBus,
   type ExposureMode,
   type GamepadAxisId,
   type GameSettingsV8,
@@ -421,6 +424,30 @@ export class GameSessionController {
       return {
         ok: false,
         message: 'Unable to update HUD preferences',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  /** T0144 — one mixer bus level, persisted in the profile (ADR-041). */
+  setAudioLevel(bus: AudioBus, level: number): SessionActionResult {
+    try {
+      const candidate = updateAudioLevel(this.currentSettings, bus, level);
+      return this.commitSettings(candidate, 'Audio level updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update audio level', detail: describeError(error) };
+    }
+  }
+
+  /** T0144 — whether the score survives an exterior camera (Kubrick mode). */
+  setAudioExteriorMusic(exteriorMusic: boolean): SessionActionResult {
+    try {
+      const candidate = updateAudioExteriorMusic(this.currentSettings, exteriorMusic);
+      return this.commitSettings(candidate, 'Exterior music updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update exterior music',
         detail: describeError(error),
       };
     }

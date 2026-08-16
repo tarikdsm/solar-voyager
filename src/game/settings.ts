@@ -167,7 +167,7 @@ export interface HudSettings {
 }
 
 /**
- * Independent profile settings document, superseded by {@link GameSettingsV6}.
+ * Independent profile settings document, superseded by {@link GameSettingsV7}.
  *
  * Kept only as the strict parse target for the one-time v5->v6 migration
  * (`parseProfileSettingsV5`), exactly as V4 is kept for v4->v5.
@@ -196,9 +196,9 @@ export interface RenderSettings {
 }
 
 /**
- * Independent profile settings document, superseded by {@link GameSettingsV8}.
+ * Independent profile settings document, superseded by {@link GameSettingsV7}.
  *
- * Kept only as the strict parse target for the one-time v6->v8 migration
+ * Kept only as the strict parse target for the one-time v6->v7 migration
  * (`parseProfileSettingsV6`), exactly as V5 is kept for v5->v6.
  */
 export interface GameSettingsV6 {
@@ -210,6 +210,54 @@ export interface GameSettingsV6 {
   readonly camera: CameraSettings;
   readonly hud: HudSettings;
   readonly render: RenderSettings;
+}
+
+/** Mixer buses the player can set independently (T0144, ADR-041). */
+export const AUDIO_BUSES = Object.freeze(['master', 'music', 'sfx', 'ui'] as const);
+
+export type AudioBus = (typeof AUDIO_BUSES)[number];
+
+/**
+ * Mixer levels and the Kubrick-mode music policy (T0144, ADR-041).
+ *
+ * Levels are stored as the **slider position** in [0, 1], not as a gain: the
+ * perceptual taper lives in `game/audio/audioDirector.ts` so the persisted
+ * number is the one the panel shows, and a future taper change does not
+ * invalidate every stored profile.
+ *
+ * Defaults are deliberately below unity (design doc section 2): the game ships
+ * audible rather than muted — the AudioContext is not even constructed until a
+ * real user gesture, so page load stays silent without a mute — but the first
+ * second of a session should not be a surprise.
+ *
+ * `exteriorMusic` is the one half of Kubrick mode the player chooses: exterior
+ * cameras always silence the diegetic sfx bus, and this decides whether the
+ * non-diegetic score survives with them or the vacuum is total.
+ */
+export interface AudioSettings {
+  readonly master: number;
+  readonly music: number;
+  readonly sfx: number;
+  readonly ui: number;
+  readonly exteriorMusic: boolean;
+}
+
+/**
+ * Independent profile settings document, superseded by {@link GameSettingsV8}.
+ *
+ * Kept only as the strict parse target for the one-time v7->v8 migration
+ * (`parseProfileSettingsV7`), exactly as V6 is kept for v6->v7.
+ */
+export interface GameSettingsV7 {
+  readonly version: 7;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
+  readonly camera: CameraSettings;
+  readonly hud: HudSettings;
+  readonly render: RenderSettings;
+  readonly audio: AudioSettings;
 }
 
 /**
@@ -229,6 +277,7 @@ export interface SkySettings {
 }
 
 /** Independent profile settings document stored outside save slots. */
+/** Independent profile settings document stored outside save slots. */
 export interface GameSettingsV8 {
   readonly version: 8;
   readonly qualityLock: QualityLock;
@@ -238,6 +287,7 @@ export interface GameSettingsV8 {
   readonly camera: CameraSettings;
   readonly hud: HudSettings;
   readonly render: RenderSettings;
+  readonly audio: AudioSettings;
   readonly sky: SkySettings;
 }
 
@@ -282,13 +332,9 @@ export type SettingsSaveResult =
  * untouched until a v3-aware build reads it again.
  */
 export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
-/** The v6 profile key (T0127's era, pre-deep-sky) — read-and-migrate-forward only. */
-/**
- * Generation 7 is T0144's audio document. The constant exists so the storage
- * ladder has a named, reserved slot; the tier that reads it arrives with T0144.
- */
+/** The v7 profile key (T0144's era, pre-deep-sky) — read-and-migrate-forward only. */
 export const LEGACY_V7_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
-
+/** The v6 profile key (T0127 era, pre-audio) — read-and-migrate-forward only. */
 export const LEGACY_V6_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
 /** The v5 profile key (T0112's era, pre-exposure-mode) — read-and-migrate-forward only. */
 export const LEGACY_V5_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
@@ -572,6 +618,64 @@ function freezeV6Settings(
   });
 }
 
+function freezeAudioSettings(
+  master: number,
+  music: number,
+  sfx: number,
+  ui: number,
+  exteriorMusic: boolean,
+): AudioSettings {
+  return Object.freeze({ master, music, sfx, ui, exteriorMusic });
+}
+
+/** Valid range of every mixer level: the slider position, not a gain. */
+export const AUDIO_LEVEL_MIN = 0;
+export const AUDIO_LEVEL_MAX = 1;
+
+/**
+ * Audible out of the box at modest levels, with the score kept on exterior
+ * cameras (design doc section 2).
+ *
+ * The ship is louder than the score because the ship is the subject; both sit
+ * below unity so a player on speakers is not startled by the first burn.
+ */
+export const DEFAULT_AUDIO_SETTINGS = freezeAudioSettings(0.7, 0.5, 0.7, 0.5, true);
+
+function freezeV7Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+  camera: CameraSettings,
+  hud: HudSettings,
+  render: RenderSettings,
+  audio: AudioSettings,
+): GameSettingsV7 {
+  return Object.freeze({
+    version: 7 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+    camera: Object.isFrozen(camera)
+      ? camera
+      : freezeCameraSettings(camera.fovWidening, camera.shake),
+    hud: Object.isFrozen(hud) ? hud : freezeHudSettings(hud.preset, hud.bodyLabels),
+    render: Object.isFrozen(render) ? render : freezeRenderSettings(render.exposureMode),
+    audio: Object.isFrozen(audio)
+      ? audio
+      : freezeAudioSettings(audio.master, audio.music, audio.sfx, audio.ui, audio.exteriorMusic),
+  });
+}
+
 function freezeSkySettings(
   panorama: boolean,
   zodiacalLight: boolean,
@@ -591,6 +695,7 @@ function freezeV8Settings(
   camera: CameraSettings,
   hud: HudSettings,
   render: RenderSettings,
+  audio: AudioSettings,
   sky: SkySettings,
 ): GameSettingsV8 {
   return Object.freeze({
@@ -612,6 +717,9 @@ function freezeV8Settings(
       : freezeCameraSettings(camera.fovWidening, camera.shake),
     hud: Object.isFrozen(hud) ? hud : freezeHudSettings(hud.preset, hud.bodyLabels),
     render: Object.isFrozen(render) ? render : freezeRenderSettings(render.exposureMode),
+    audio: Object.isFrozen(audio)
+      ? audio
+      : freezeAudioSettings(audio.master, audio.music, audio.sfx, audio.ui, audio.exteriorMusic),
     sky: Object.isFrozen(sky)
       ? sky
       : freezeSkySettings(sky.panorama, sky.zodiacalLight, sky.constellations),
@@ -626,6 +734,7 @@ export const DEFAULT_GAME_SETTINGS = freezeV8Settings(
   DEFAULT_CAMERA_SETTINGS,
   DEFAULT_HUD_SETTINGS,
   DEFAULT_RENDER_SETTINGS,
+  DEFAULT_AUDIO_SETTINGS,
   DEFAULT_SKY_SETTINGS,
 );
 
@@ -957,9 +1066,9 @@ function parseRenderSettings(value: unknown): RenderSettings {
 /**
  * Strictly parses the superseded version-6 profile settings document.
  *
- * Not exported: the only remaining caller is the v6->v8 migration inside
+ * Not exported: the only remaining caller is the v6->v7 migration inside
  * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
- * `parseProfileSettings` used to do before `sky` existed.
+ * `parseProfileSettings` used to do before `audio` existed.
  */
 function parseProfileSettingsV6(value: unknown): GameSettingsV6 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
@@ -983,6 +1092,31 @@ function parseProfileSettingsV6(value: unknown): GameSettingsV6 {
   );
 }
 
+function validateAudioLevel(value: unknown, bus: AudioBus): number {
+  if (!isFiniteNumberInRange(value, AUDIO_LEVEL_MIN, AUDIO_LEVEL_MAX)) {
+    throw new RangeError(
+      `audio ${bus} level must be a number in [${String(AUDIO_LEVEL_MIN)}, ${String(AUDIO_LEVEL_MAX)}]`,
+    );
+  }
+  return value;
+}
+
+/** Strictly parses mixer levels and the Kubrick music policy. Every field is required. */
+function parseAudioSettings(value: unknown): AudioSettings {
+  if (!isRecord(value)) throw new RangeError('audio settings must be an object');
+  assertExactKeys(value, [...AUDIO_BUSES, 'exteriorMusic'], 'unknown audio settings field');
+  if (typeof value.exteriorMusic !== 'boolean') {
+    throw new RangeError('audio exteriorMusic must be a boolean');
+  }
+  return freezeAudioSettings(
+    validateAudioLevel(value.master, 'master'),
+    validateAudioLevel(value.music, 'music'),
+    validateAudioLevel(value.sfx, 'sfx'),
+    validateAudioLevel(value.ui, 'ui'),
+    value.exteriorMusic,
+  );
+}
+
 /** Strictly parses deep-sky background toggles. Every field is required. */
 function parseSkySettings(value: unknown): SkySettings {
   if (!isRecord(value)) throw new RangeError('sky settings must be an object');
@@ -1000,8 +1134,47 @@ function parseSkySettings(value: unknown): SkySettings {
   }
   return freezeSkySettings(value.panorama, value.zodiacalLight, value.constellations);
 }
+/**
+ * Strictly parses a superseded version-7 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v7->v8 migration inside
+ * {@link SettingsRepository.load}, exactly as `parseProfileSettingsV6` is kept
+ * for v6->v7.
+ */
+function parseProfileSettingsV7(value: unknown): GameSettingsV7 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    [
+      'version',
+      'qualityLock',
+      'inputBindings',
+      'tutorial',
+      'gamepad',
+      'camera',
+      'hud',
+      'render',
+      'audio',
+    ],
+    'unknown profile settings field',
+  );
+  if (value.version !== 7) throw new RangeError('profile settings version must be 7');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV7Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+    parseCameraSettings(value.camera),
+    parseHudSettings(value.hud),
+    parseRenderSettings(value.render),
+    parseAudioSettings(value.audio),
+  );
+}
 
-/** Strictly parses the independent version-7 profile settings document. */
+/** Strictly parses the independent version-8 profile settings document. */
 export function parseProfileSettings(value: unknown): GameSettingsV8 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
@@ -1015,6 +1188,7 @@ export function parseProfileSettings(value: unknown): GameSettingsV8 {
       'camera',
       'hud',
       'render',
+      'audio',
       'sky',
     ],
     'unknown profile settings field',
@@ -1031,6 +1205,7 @@ export function parseProfileSettings(value: unknown): GameSettingsV8 {
     parseCameraSettings(value.camera),
     parseHudSettings(value.hud),
     parseRenderSettings(value.render),
+    parseAudioSettings(value.audio),
     parseSkySettings(value.sky),
   );
 }
@@ -1112,24 +1287,37 @@ function migrateProfileV5ToV6(settings: GameSettingsV5): GameSettingsV6 {
 }
 
 /**
- * Lifts a superseded v6 profile to v8 by attaching default deep-sky toggles.
+ * Lifts a superseded v6 profile to v7 by attaching default mixer levels.
  *
- * **Generation 7 belongs to T0144 (audio) and is not in this tree.** It lands
- * ahead of this branch, so the chain is
- * `v6 exposure -> v7 audio -> v8 sky`. When T0144 merges, split this into
- * `migrateProfileV6ToV7` (attach audio) followed by a `migrateProfileV7ToV8`
- * that keeps this body, and give the v7 storage tier below its strict parser.
- * Until then a v7 document cannot be strictly parsed here and falls through to
- * defaults, which is the one thing the merge must fix.
- *
- * Same shape as `migrateProfileV5ToV6` one version up: `sky` is a brand-new
+ * Same shape as `migrateProfileV5ToV6` one version up: `audio` is a brand-new
  * required object with no prior partial state anywhere in a v6 document to
  * recover from, so this is a whole-document migration rather than a per-field
- * backfill. A returning player therefore gets the panorama and the zodiacal band
- * — the scenery the feature exists to show — with the constellation overlay off,
- * exactly as a fresh profile does.
+ * backfill. A returning player therefore lands on the shipped defaults — audible,
+ * not muted (design doc section 2) — which is the same posture a new profile gets.
  */
-function migrateProfileV6ToV8(settings: GameSettingsV6): GameSettingsV8 {
+function migrateProfileV6ToV7(settings: GameSettingsV6): GameSettingsV7 {
+  return freezeV7Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    settings.gamepad,
+    settings.camera,
+    settings.hud,
+    settings.render,
+    DEFAULT_AUDIO_SETTINGS,
+  );
+}
+
+/**
+ * Lifts a superseded v7 profile to v8 by attaching default deep-sky toggles.
+ *
+ * Same shape as `migrateProfileV6ToV7` one version up: `sky` is a brand-new
+ * required object with no prior partial state anywhere in a v7 document to
+ * recover from, so this is a whole-document migration rather than a per-field
+ * backfill. Everything the player already chose — including their mixer levels —
+ * is carried across untouched; only `sky` is new.
+ */
+function migrateProfileV7ToV8(settings: GameSettingsV7): GameSettingsV8 {
   return freezeV8Settings(
     settings.qualityLock,
     { ...settings.inputBindings },
@@ -1138,8 +1326,20 @@ function migrateProfileV6ToV8(settings: GameSettingsV6): GameSettingsV8 {
     settings.camera,
     settings.hud,
     settings.render,
+    settings.audio,
     DEFAULT_SKY_SETTINGS,
   );
+}
+
+/**
+ * The full v6->v8 chain, named once.
+ *
+ * Every storage tier below v7 has to climb through audio to reach the sky, and
+ * spelling that nesting out at each of the five call sites is how a tier quietly
+ * ends up skipping a generation.
+ */
+function migrateProfileV6ToV8(settings: GameSettingsV6): GameSettingsV8 {
+  return migrateProfileV7ToV8(migrateProfileV6ToV7(settings));
 }
 
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
@@ -1151,10 +1351,10 @@ export function projectGameSettingsV1(settings: GameSettingsV8): GameSettingsV1 
 /**
  * Merges imported save preferences while preserving profile-only state.
  *
- * Tutorial progress, gamepad calibration, camera toggles, HUD preferences,
- * renderer preferences and deep-sky toggles belong to the player's profile, not
- * to a mission someone emailed them, so only the two fields the save DTO
- * actually carries are taken from the import.
+ * Tutorial progress, gamepad calibration, camera toggles, HUD preferences and
+ * renderer preferences belong to the player's profile, not to a mission someone
+ * emailed them, so only the two fields the save DTO actually carries are taken
+ * from the import.
  */
 export function mergeGameSettingsPreferences(
   profile: GameSettingsV8,
@@ -1170,6 +1370,7 @@ export function mergeGameSettingsPreferences(
     validatedProfile.camera,
     validatedProfile.hud,
     validatedProfile.render,
+    validatedProfile.audio,
     validatedProfile.sky,
   );
 }
@@ -1229,6 +1430,23 @@ export function updateRenderExposureMode(
   exposureMode: ExposureMode,
 ): GameSettingsV8 {
   return parseProfileSettings({ ...settings, render: { ...settings.render, exposureMode } });
+}
+
+/** Returns a validated frozen profile with one mixer bus level changed. */
+export function updateAudioLevel(
+  settings: GameSettingsV8,
+  bus: AudioBus,
+  level: number,
+): GameSettingsV8 {
+  return parseProfileSettings({ ...settings, audio: { ...settings.audio, [bus]: level } });
+}
+
+/** Returns a validated frozen profile with the Kubrick-mode music policy toggled. */
+export function updateAudioExteriorMusic(
+  settings: GameSettingsV8,
+  exteriorMusic: boolean,
+): GameSettingsV8 {
+  return parseProfileSettings({ ...settings, audio: { ...settings.audio, exteriorMusic } });
 }
 
 /** Returns a validated frozen profile with the Milky Way panorama toggled. */
@@ -1355,8 +1573,27 @@ export class SettingsRepository {
       }
     }
 
-    // Tier 2: the v6 key (T0127's era, pre-deep-sky). Migrate up one step and
-    // persist forward to the current key.
+    // Tier 2: the v7 key (T0144's era, pre-deep-sky). One step up, then persist
+    // forward to the current key so the mixer levels a player already chose are
+    // never quietly replaced by defaults.
+    let legacyV7Text: string | null;
+    try {
+      legacyV7Text = this.storage.getItem(LEGACY_V7_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV7Text !== null) {
+      return this.migrateForward(() =>
+        migrateProfileV7ToV8(parseProfileSettingsV7(JSON.parse(legacyV7Text as string) as unknown)),
+      );
+    }
+
+    // Tier 3: the v6 key (T0127 era, pre-audio). Migrate up two steps and persist
+    // forward to the current key.
     let legacyV6Text: string | null;
     try {
       legacyV6Text = this.storage.getItem(LEGACY_V6_SETTINGS_STORAGE_KEY);
@@ -1373,7 +1610,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 3: the v5 key (T0112's era, pre-exposure-mode). Migrate up two steps
+    // Tier 4: the v5 key (T0112's era, pre-exposure-mode). Migrate up three steps
     // and persist forward to the current key.
     let legacyV5Text: string | null;
     try {
@@ -1395,7 +1632,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 4: the v4 key (T0110's era, pre-HUD-preset). Migrate up three steps and
+    // Tier 5: the v4 key (T0110's era, pre-HUD-preset). Migrate up four steps and
     // persist forward to the current key.
     let legacyV4Text: string | null;
     try {
@@ -1419,7 +1656,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 5: the v3 key (T0106's era, pre-camera). Migrate up four steps and
+    // Tier 6: the v3 key (T0106's era, pre-camera). Migrate up five steps and
     // persist forward to the current key.
     let legacyV3Text: string | null;
     try {
@@ -1445,7 +1682,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 6: the v2 key (T0108's era, pre-gamepad). Migrate up five steps and
+    // Tier 7: the v2 key (T0108's era, pre-gamepad). Migrate up six steps and
     // persist forward to the current key.
     let legacyV2Text: string | null;
     try {
@@ -1473,7 +1710,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 7: the v1 key (pre-T0108, standalone-profile era). Migrate up six
+    // Tier 8: the v1 key (pre-T0108, standalone-profile era). Migrate up seven
     // steps and persist forward to the current key.
     let legacyV1Text: string | null;
     try {
@@ -1514,8 +1751,7 @@ export class SettingsRepository {
    * Every tier does exactly this, and each added generation made the copy-paste
    * version of it longer; sharing it means a new generation adds one `if` block
    * instead of another twenty lines of identical error plumbing. (T0112's v5
-   * tier was the first to cash that in; T0127's v6 tier was the second, and
-   * T0126's v7 tier the third.)
+   * tier was the first to cash that in; T0127's v6 tier was the second.)
    */
   private migrateForward(migrate: () => GameSettingsV8, label = 'settings'): SettingsLoadResult {
     let migrated: GameSettingsV8;

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import profileV2Fixture from '../../tests/fixtures/settings-profile-v2.json';
 import {
+  AUDIO_BUSES,
+  DEFAULT_AUDIO_SETTINGS,
   DEFAULT_CAMERA_SETTINGS,
   DEFAULT_GAME_SETTINGS,
   DEFAULT_GAMEPAD_SETTINGS,
@@ -17,6 +19,7 @@ import {
   LEGACY_V4_SETTINGS_STORAGE_KEY,
   LEGACY_V5_SETTINGS_STORAGE_KEY,
   LEGACY_V6_SETTINGS_STORAGE_KEY,
+  LEGACY_V7_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
   parseProfileSettings,
@@ -24,6 +27,10 @@ import {
   rebindInput,
   SETTINGS_STORAGE_KEY,
   SettingsRepository,
+  type GamepadAxisId,
+  type KeyValueStorage,
+  updateAudioExteriorMusic,
+  updateAudioLevel,
   updateCameraFovWidening,
   updateCameraShake,
   updateGamepadAxisInvert,
@@ -37,8 +44,6 @@ import {
   updateSkyPanorama,
   updateSkyZodiacalLight,
   updateTutorialSettings,
-  type GamepadAxisId,
-  type KeyValueStorage,
 } from './settings.js';
 
 class MemoryStorage implements KeyValueStorage {
@@ -310,6 +315,7 @@ describe('game settings', () => {
       camera: DEFAULT_GAME_SETTINGS.camera,
       hud: DEFAULT_GAME_SETTINGS.hud,
       render: DEFAULT_GAME_SETTINGS.render,
+      audio: DEFAULT_GAME_SETTINGS.audio,
       sky: DEFAULT_GAME_SETTINGS.sky,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
@@ -469,7 +475,7 @@ describe('game settings', () => {
       expect(merged.gamepad).toEqual(customized.gamepad);
     });
 
-    it('migrates a stored v2 profile (no gamepad field) across two generations to the current key', () => {
+    it('migrates a stored v2 profile (no gamepad field) across four generations to the current key', () => {
       const storage = new MemoryStorage();
       storage.values.set(LEGACY_V2_SETTINGS_STORAGE_KEY, JSON.stringify(profileV2Fixture));
 
@@ -489,8 +495,6 @@ describe('game settings', () => {
       expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
-      expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
-      expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
       // Written forward to the dedicated current key, not back into the v2 one —
       // a downgraded build must never see (and clobber) the migrated result.
       expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
@@ -591,7 +595,7 @@ describe('game settings', () => {
       );
     });
 
-    it('migrates a stored v3 profile across two generations to the current key', () => {
+    it('migrates a stored v3 profile across three generations to the current key', () => {
       const storage = new MemoryStorage();
       const document = profileV3Document();
       storage.values.set(LEGACY_V3_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -607,8 +611,6 @@ describe('game settings', () => {
       });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
-      expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
-      expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
       expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
       // The v3 document stays where it is: a rolled-back build reads its own key
       // and never sees, or clobbers, the newer one.
@@ -716,8 +718,6 @@ describe('HUD settings (T0112)', () => {
     expect(result.settings.qualityLock).toBe('low');
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: true });
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
-    expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
-    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
     expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
     // A rolled-back build reads its own key and cannot clobber the newer one.
     expect(storage.values.get(LEGACY_V4_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
@@ -736,7 +736,7 @@ describe('HUD settings (T0112)', () => {
     });
   });
 
-  it('climbs all six migration tiers from the original v1 key', () => {
+  it('climbs all five migration tiers from the original v1 key', () => {
     const storage = new MemoryStorage();
     storage.values.set(
       LEGACY_SETTINGS_STORAGE_KEY,
@@ -755,8 +755,6 @@ describe('HUD settings (T0112)', () => {
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
     expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
     expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
-    expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
-    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
   });
 
   it('keeps HUD preferences out of an imported save, like tutorial and camera state', () => {
@@ -864,7 +862,9 @@ describe('render settings (T0127)', () => {
     expect(result.settings.hud).toEqual({ preset: 'pilot', bodyLabels: false });
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: false });
     expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
-    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
+    // Two generations in one read since T0144: v5 -> v6 attaches the exposure
+    // mode, v6 -> v7 attaches the mixer, and both land on their defaults.
+    expect(result.settings.audio).toEqual(DEFAULT_AUDIO_SETTINGS);
     expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
     // A rolled-back build reads its own key and cannot clobber the newer one.
     expect(storage.values.get(LEGACY_V5_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
@@ -895,6 +895,149 @@ describe('render settings (T0127)', () => {
       'qualityLock',
       'inputBindings',
     ]);
+  });
+});
+
+/**
+ * T0144 — profile generation v7: the mixer.
+ *
+ * Design: `docs/superpowers/specs/2026-08-16-audio-engine-design.md` section 6.
+ * ADR-041 records the "ships audible, not muted" decision these defaults encode.
+ * The generation is v7 rather than v6 because T0127 took v6 for `render` first;
+ * the two stay separate migration tiers so the chain says what was added when.
+ */
+describe('audio settings (T0144)', () => {
+  function profileV6Document(): Record<string, unknown> {
+    return {
+      version: 6,
+      qualityLock: 'medium',
+      inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+      tutorial: { status: 'completed', stepId: 'return-to-play' },
+      gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+      camera: { fovWidening: false, shake: false },
+      hud: { preset: 'pilot', bodyLabels: false },
+      render: { exposureMode: 'fixed' },
+    };
+  }
+
+  it('ships audible at modest levels rather than muted', () => {
+    // The decision the task brief demanded be closed: a fresh profile makes
+    // sound. Silence before the first gesture is the AudioContext lifecycle's
+    // job, not the mixer's.
+    expect(DEFAULT_AUDIO_SETTINGS).toEqual({
+      master: 0.7,
+      music: 0.5,
+      sfx: 0.7,
+      ui: 0.5,
+      exteriorMusic: true,
+    });
+    for (const bus of AUDIO_BUSES) {
+      expect(DEFAULT_AUDIO_SETTINGS[bus]).toBeGreaterThan(0);
+      expect(DEFAULT_AUDIO_SETTINGS[bus]).toBeLessThan(1);
+    }
+    expect(DEFAULT_GAME_SETTINGS.audio).toBe(DEFAULT_AUDIO_SETTINGS);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(8);
+  });
+
+  it('updates each bus independently and keeps the document valid', () => {
+    let settings = DEFAULT_GAME_SETTINGS;
+    for (const bus of AUDIO_BUSES) settings = updateAudioLevel(settings, bus, 0.25);
+    expect(settings.audio).toEqual({
+      master: 0.25,
+      music: 0.25,
+      sfx: 0.25,
+      ui: 0.25,
+      exteriorMusic: true,
+    });
+    const vacuum = updateAudioExteriorMusic(settings, false);
+    expect(vacuum.audio.exteriorMusic).toBe(false);
+    expect(vacuum.audio.master).toBe(0.25);
+    expect(() => parseProfileSettings(vacuum)).not.toThrow();
+    expect(Object.isFrozen(vacuum.audio)).toBe(true);
+  });
+
+  it('accepts both ends of the slider', () => {
+    expect(updateAudioLevel(DEFAULT_GAME_SETTINGS, 'master', 0).audio.master).toBe(0);
+    expect(updateAudioLevel(DEFAULT_GAME_SETTINGS, 'master', 1).audio.master).toBe(1);
+  });
+
+  it('rejects an incomplete, excess or out-of-range audio document', () => {
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        audio: { master: 1, music: 1, sfx: 1, exteriorMusic: true },
+      }),
+    ).toThrow(/field is missing: ui/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        audio: { ...DEFAULT_AUDIO_SETTINGS, extra: 1 },
+      }),
+    ).toThrow(/unknown audio settings field/u);
+    expect(() => updateAudioLevel(DEFAULT_GAME_SETTINGS, 'music', 1.5)).toThrow(
+      /audio music level must be a number in \[0, 1\]/u,
+    );
+    expect(() => updateAudioLevel(DEFAULT_GAME_SETTINGS, 'sfx', Number.NaN)).toThrow(
+      /audio sfx level must be a number/u,
+    );
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        audio: { ...DEFAULT_AUDIO_SETTINGS, exteriorMusic: 'yes' },
+      }),
+    ).toThrow(/exteriorMusic must be a boolean/u);
+    expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, audio: null })).toThrow(
+      /audio settings must be an object/u,
+    );
+  });
+
+  it('migrates a stored v6 profile to the current generation and writes it forward', () => {
+    const storage = new MemoryStorage();
+    const document = profileV6Document();
+    storage.values.set(LEGACY_V6_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: true, source: 'migrated' });
+    expect(result.settings.version).toBe(8);
+    expect(result.settings.qualityLock).toBe('medium');
+    expect(result.settings.hud).toEqual({ preset: 'pilot', bodyLabels: false });
+    // T0127's field survives the tier that follows it — the point of keeping the
+    // two generations separate rather than folding audio into v6.
+    expect(result.settings.render).toEqual({ exposureMode: 'fixed' });
+    // A returning player lands on the shipped defaults, audible — the same
+    // posture a new profile gets.
+    expect(result.settings.audio).toEqual(DEFAULT_AUDIO_SETTINGS);
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+    // A rolled-back build reads its own key and cannot clobber the newer one.
+    expect(storage.values.get(LEGACY_V6_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+  });
+
+  it('prefers the current key over a stale v6 key present alongside it', () => {
+    const storage = new MemoryStorage();
+    const current = updateAudioLevel(DEFAULT_GAME_SETTINGS, 'music', 0.15);
+    storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+    storage.values.set(LEGACY_V6_SETTINGS_STORAGE_KEY, JSON.stringify(profileV6Document()));
+
+    expect(new SettingsRepository(storage).load()).toEqual({
+      ok: true,
+      settings: current,
+      source: 'stored',
+    });
+  });
+
+  it('keeps mixer levels out of an imported save, like tutorial and HUD state', () => {
+    const customized = updateAudioExteriorMusic(
+      updateAudioLevel(DEFAULT_GAME_SETTINGS, 'master', 0.1),
+      false,
+    );
+    const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS);
+
+    const merged = mergeGameSettingsPreferences(customized, imported);
+
+    // Profile state, not mission state: a save someone emails you must not turn
+    // your speakers up.
+    expect(merged.audio).toEqual(customized.audio);
   });
 });
 
@@ -1088,5 +1231,51 @@ describe('sky settings (T0126)', () => {
     const projected = projectGameSettingsV1(updateSkyPanorama(DEFAULT_GAME_SETTINGS, false));
 
     expect(Object.keys(projected)).toEqual(['version', 'qualityLock', 'inputBindings']);
+  });
+  /**
+   * The regression this whole generation split exists for.
+   *
+   * T0126 and T0144 both claimed generation 7 for a while. If the v7 storage tier
+   * is missing, or migrates from the wrong base, a player who set their mixer
+   * between the two merges gets a silent settings reset - the one outcome the
+   * migration chain exists to prevent. Non-default levels on every bus, so a
+   * migration that quietly substitutes DEFAULT_AUDIO_SETTINGS cannot pass.
+   */
+  it('carries non-default v7 mixer levels through to v8 with sky at defaults', () => {
+    const storedAudio = {
+      master: 0.31,
+      music: 0.11,
+      sfx: 0.93,
+      ui: 0.22,
+      exteriorMusic: false,
+    };
+    const storage = new MemoryStorage();
+    storage.values.set(
+      LEGACY_V7_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 7,
+        qualityLock: 'medium',
+        inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+        tutorial: { status: 'completed', stepId: 'return-to-play' },
+        gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+        camera: { fovWidening: false, shake: false },
+        hud: { preset: 'engineer', bodyLabels: false },
+        render: { exposureMode: 'fixed' },
+        audio: storedAudio,
+      }),
+    );
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result.ok).toBe(true);
+    expect(result.settings.version).toBe(8);
+    expect(result.settings.audio).toEqual(storedAudio);
+    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
+    // Everything else the player chose survives the climb too.
+    expect(result.settings.qualityLock).toBe('medium');
+    expect(result.settings.hud).toEqual({ preset: 'engineer', bodyLabels: false });
+    expect(result.settings.render).toEqual({ exposureMode: 'fixed' });
+    // And it is written forward, so the next launch takes the tier-1 path.
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '').version).toBe(8);
   });
 });

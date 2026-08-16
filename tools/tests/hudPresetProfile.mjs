@@ -66,6 +66,10 @@ const ENGINEER_PROFILE = JSON.stringify({
   // T0127 — pin the v1 fixed exposure so the screenshot-comparing gates keep a
   // stable key while the adaptive controller runs everywhere else.
   render: { exposureMode: 'fixed' },
+  // T0144 mixer levels at the shipped defaults. These gates never produce a
+  // gesture-driven unlock they care about, so the levels are only here to satisfy
+  // the strict v8 parse; `test:audio` owns the audio behaviour.
+  audio: { master: 0.7, music: 0.5, sfx: 0.7, ui: 0.5, exteriorMusic: true },
   // T0126 — panorama and zodiacal band off: both paint the whole background and
   // several gates compare screenshots. `test:milky-way` covers them switched on.
   sky: { panorama: false, zodiacalLight: false, constellations: false },

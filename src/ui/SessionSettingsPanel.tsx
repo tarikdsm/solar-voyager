@@ -4,6 +4,9 @@ import type { SessionActionResult, SessionExportResult } from '../game/sessionCo
 import type { TutorialController } from '../game/tutorialController.js';
 import { formatHudPreset, HUD_PRESETS, type HudPreset } from '../game/hud/hudPresets.js';
 import {
+  AUDIO_BUSES,
+  AUDIO_LEVEL_MAX,
+  AUDIO_LEVEL_MIN,
   GAMEPAD_AXES,
   GAMEPAD_CURVE_EXPONENT_MAX,
   GAMEPAD_CURVE_EXPONENT_MIN,
@@ -13,6 +16,7 @@ import {
   GAMEPAD_SENSITIVITY_MIN,
   INPUT_ACTIONS,
   isUnboundInputCode,
+  type AudioBus,
   type ExposureMode,
   type GamepadAxisId,
   type GameSettingsV8,
@@ -32,6 +36,8 @@ export interface SessionSettingsPort {
   setGamepadAxisSensitivity(axis: GamepadAxisId, sensitivity: number): SessionActionResult;
   setGamepadCurveExponent(curveExponent: number): SessionActionResult;
   setGamepadDeadzone(deadzone: number): SessionActionResult;
+  setAudioLevel(bus: AudioBus, level: number): SessionActionResult;
+  setAudioExteriorMusic(exteriorMusic: boolean): SessionActionResult;
   setCameraFovWidening(fovWidening: boolean): SessionActionResult;
   setCameraShake(shake: boolean): SessionActionResult;
   setSkyPanorama(enabled: boolean): SessionActionResult;
@@ -64,6 +70,8 @@ export interface SessionSettingsModel {
   selectGamepadCurveExponent(value: string): PanelActionResult;
   setGamepadAxisInvert(axis: GamepadAxisId, invert: boolean): PanelActionResult;
   selectGamepadAxisSensitivity(axis: GamepadAxisId, value: string): PanelActionResult;
+  selectAudioLevel(bus: AudioBus, value: string): PanelActionResult;
+  setAudioExteriorMusic(exteriorMusic: boolean): PanelActionResult;
   setCameraFovWidening(fovWidening: boolean): PanelActionResult;
   setCameraShake(shake: boolean): PanelActionResult;
   setSkyPanorama(enabled: boolean): PanelActionResult;
@@ -104,6 +112,13 @@ const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze
   cruiseAbort: 'Cruise abort (reserved)',
   hudPresetCycle: 'Cycle HUD preset',
   hudBodyLabelsToggle: 'Toggle body labels',
+});
+
+const AUDIO_BUS_LABELS: Readonly<Record<AudioBus, string>> = Object.freeze({
+  master: 'Master',
+  music: 'Music',
+  sfx: 'Ship & effects',
+  ui: 'Interface',
 });
 
 const GAMEPAD_AXIS_LABELS: Readonly<Record<GamepadAxisId, string>> = Object.freeze({
@@ -205,6 +220,14 @@ export function createSessionSettingsModel(
         ? { ok: false, message: 'Unsupported gamepad sensitivity' }
         : simplify(session.setGamepadAxisSensitivity(axis, sensitivity));
     },
+    selectAudioLevel: (bus, value) => {
+      const level = parseFiniteNumber(value);
+      return level === null
+        ? { ok: false, message: 'Unsupported audio level' }
+        : simplify(session.setAudioLevel(bus, level));
+    },
+    setAudioExteriorMusic: (exteriorMusic) =>
+      simplify(session.setAudioExteriorMusic(exteriorMusic)),
     setCameraFovWidening: (fovWidening) => simplify(session.setCameraFovWidening(fovWidening)),
     setCameraShake: (shake) => simplify(session.setCameraShake(shake)),
     setSkyPanorama: (enabled) => simplify(session.setSkyPanorama(enabled)),
@@ -510,6 +533,47 @@ export function SessionSettingsPanel({
                 onChange={(event) => publish(model.setHudBodyLabels(event.currentTarget.checked))}
               />
               Show body labels in the world
+            </label>
+          </div>
+        </section>
+
+        <section aria-labelledby="audio-settings-title">
+          <h2 id="audio-settings-title">Audio</h2>
+          <p class="audio-settings-hint">
+            Sound starts with your first click and never before it. Exterior cameras go
+            vacuum-silent on purpose — there is no medium out there to carry the ship — so only the
+            score can follow you outside.
+          </p>
+          <div class="audio-mixer-grid">
+            {AUDIO_BUSES.map((bus) => (
+              <label key={bus} for={`audio-${bus}`}>
+                <span class="audio-mixer-name">{AUDIO_BUS_LABELS[bus]}</span>
+                <input
+                  id={`audio-${bus}`}
+                  type="range"
+                  min={AUDIO_LEVEL_MIN}
+                  max={AUDIO_LEVEL_MAX}
+                  step="0.05"
+                  value={settings.audio[bus]}
+                  onInput={(event) =>
+                    publish(model.selectAudioLevel(bus, event.currentTarget.value))
+                  }
+                />
+                <output class="audio-mixer-value" for={`audio-${bus}`}>
+                  {`${String(Math.round(settings.audio[bus] * 100))}%`}
+                </output>
+              </label>
+            ))}
+            <label class="audio-mixer-toggle" for="audio-exterior-music">
+              <input
+                id="audio-exterior-music"
+                type="checkbox"
+                checked={settings.audio.exteriorMusic}
+                onChange={(event) =>
+                  publish(model.setAudioExteriorMusic(event.currentTarget.checked))
+                }
+              />
+              Keep music on exterior cameras
             </label>
           </div>
         </section>
