@@ -8,6 +8,7 @@ import {
   DEFAULT_GAME_SETTINGS,
   DEFAULT_GAMEPAD_SETTINGS,
   DEFAULT_HUD_SETTINGS,
+  DEFAULT_RENDER_SETTINGS,
   GAMEPAD_AXES,
   INPUT_ACTIONS,
   isUnboundInputCode,
@@ -16,6 +17,7 @@ import {
   LEGACY_V3_SETTINGS_STORAGE_KEY,
   LEGACY_V4_SETTINGS_STORAGE_KEY,
   LEGACY_V5_SETTINGS_STORAGE_KEY,
+  LEGACY_V6_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
   parseProfileSettings,
@@ -33,6 +35,7 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  updateRenderExposureMode,
   updateTutorialSettings,
   type GamepadAxisId,
   type KeyValueStorage,
@@ -299,13 +302,14 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 6,
+      version: 7,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
       gamepad: DEFAULT_GAME_SETTINGS.gamepad,
       camera: DEFAULT_GAME_SETTINGS.camera,
       hud: DEFAULT_GAME_SETTINGS.hud,
+      render: DEFAULT_GAME_SETTINGS.render,
       audio: DEFAULT_GAME_SETTINGS.audio,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
@@ -472,7 +476,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(6);
+      expect(result.settings.version).toBe(7);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
@@ -503,7 +507,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 6/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 7/u);
     });
 
     it('fails closed when writing a migrated legacy profile fails', () => {
@@ -593,7 +597,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(6);
+      expect(result.settings.version).toBe(7);
       expect(result.settings.qualityLock).toBe('high');
       expect(result.settings.tutorial).toEqual({
         status: 'completed',
@@ -657,7 +661,7 @@ describe('HUD settings (T0112)', () => {
   it('defaults to the Clean preset with world labels on', () => {
     expect(DEFAULT_HUD_SETTINGS).toEqual({ preset: 'clean', bodyLabels: true });
     expect(DEFAULT_GAME_SETTINGS.hud).toBe(DEFAULT_HUD_SETTINGS);
-    expect(DEFAULT_GAME_SETTINGS.version).toBe(6);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(7);
   });
 
   it('updates each preference independently and keeps the document valid', () => {
@@ -696,7 +700,7 @@ describe('HUD settings (T0112)', () => {
     );
   });
 
-  it('migrates a stored v4 profile to v6 and writes it forward to the current key', () => {
+  it('migrates a stored v4 profile forward to the current key', () => {
     const storage = new MemoryStorage();
     const document = profileV4Document();
     storage.values.set(LEGACY_V4_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -704,7 +708,7 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(6);
+    expect(result.settings.version).toBe(7);
     expect(result.settings.qualityLock).toBe('low');
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: true });
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
@@ -740,7 +744,7 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(6);
+    expect(result.settings.version).toBe(7);
     expect(result.settings.qualityLock).toBe('high');
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
     expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
@@ -790,13 +794,7 @@ describe('HUD settings (T0112)', () => {
   });
 });
 
-/**
- * T0144 — profile generation v6: the mixer.
- *
- * Design: `docs/superpowers/specs/2026-08-16-audio-engine-design.md` section 6.
- * ADR-041 records the "ships audible, not muted" decision these defaults encode.
- */
-describe('audio settings (T0144)', () => {
+describe('render settings (T0127)', () => {
   function profileV5Document(): Record<string, unknown> {
     return {
       version: 5,
@@ -806,6 +804,113 @@ describe('audio settings (T0144)', () => {
       gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
       camera: { fovWidening: false, shake: false },
       hud: { preset: 'pilot', bodyLabels: false },
+    };
+  }
+
+  /**
+   * Adaptive exposure is the point of T0127, so it is on out of the box; `fixed`
+   * exists because a moving exposure is a real accessibility concern and because
+   * the governor pins it on its lowest rungs.
+   */
+  it('defaults to adaptive exposure', () => {
+    expect(DEFAULT_RENDER_SETTINGS).toEqual({ exposureMode: 'auto' });
+    expect(DEFAULT_GAME_SETTINGS.render).toBe(DEFAULT_RENDER_SETTINGS);
+  });
+
+  it('updates the exposure mode and keeps the document valid', () => {
+    const fixed = updateRenderExposureMode(DEFAULT_GAME_SETTINGS, 'fixed');
+    expect(fixed.render).toEqual({ exposureMode: 'fixed' });
+    expect(Object.isFrozen(fixed.render)).toBe(true);
+    expect(() => parseProfileSettings(fixed)).not.toThrow();
+    expect(updateRenderExposureMode(fixed, 'auto').render).toEqual({ exposureMode: 'auto' });
+  });
+
+  it('rejects an incomplete, excess or mistyped render document', () => {
+    expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, render: {} })).toThrow(
+      /field is missing: exposureMode/u,
+    );
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        render: { exposureMode: 'auto', extra: 1 },
+      }),
+    ).toThrow(/unknown render settings field/u);
+    expect(() =>
+      parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, render: { exposureMode: 'cinematic' } }),
+    ).toThrow(/render exposure mode is not supported/u);
+    expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, render: null })).toThrow(
+      /render settings must be an object/u,
+    );
+  });
+
+  it('migrates a stored v5 profile forward to the current key', () => {
+    const storage = new MemoryStorage();
+    const document = profileV5Document();
+    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: true, source: 'migrated' });
+    expect(result.settings.version).toBe(7);
+    expect(result.settings.qualityLock).toBe('medium');
+    expect(result.settings.hud).toEqual({ preset: 'pilot', bodyLabels: false });
+    expect(result.settings.camera).toEqual({ fovWidening: false, shake: false });
+    expect(result.settings.render).toEqual(DEFAULT_RENDER_SETTINGS);
+    // Two generations in one read since T0144: v5 -> v6 attaches the exposure
+    // mode, v6 -> v7 attaches the mixer, and both land on their defaults.
+    expect(result.settings.audio).toEqual(DEFAULT_AUDIO_SETTINGS);
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+    // A rolled-back build reads its own key and cannot clobber the newer one.
+    expect(storage.values.get(LEGACY_V5_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+  });
+
+  it('prefers the current key over a stale v5 key present alongside it', () => {
+    const storage = new MemoryStorage();
+    const current = updateRenderExposureMode(DEFAULT_GAME_SETTINGS, 'fixed');
+    storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(profileV5Document()));
+
+    expect(new SettingsRepository(storage).load()).toEqual({
+      ok: true,
+      settings: current,
+      source: 'stored',
+    });
+  });
+
+  it('keeps the exposure mode out of an imported save, like camera and HUD state', () => {
+    const customized = updateRenderExposureMode(DEFAULT_GAME_SETTINGS, 'fixed');
+    const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS);
+
+    expect(mergeGameSettingsPreferences(customized, imported).render).toEqual({
+      exposureMode: 'fixed',
+    });
+    expect(Object.keys(projectGameSettingsV1(customized))).toEqual([
+      'version',
+      'qualityLock',
+      'inputBindings',
+    ]);
+  });
+});
+
+/**
+ * T0144 — profile generation v7: the mixer.
+ *
+ * Design: `docs/superpowers/specs/2026-08-16-audio-engine-design.md` section 6.
+ * ADR-041 records the "ships audible, not muted" decision these defaults encode.
+ * The generation is v7 rather than v6 because T0127 took v6 for `render` first;
+ * the two stay separate migration tiers so the chain says what was added when.
+ */
+describe('audio settings (T0144)', () => {
+  function profileV6Document(): Record<string, unknown> {
+    return {
+      version: 6,
+      qualityLock: 'medium',
+      inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+      tutorial: { status: 'completed', stepId: 'return-to-play' },
+      gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+      camera: { fovWidening: false, shake: false },
+      hud: { preset: 'pilot', bodyLabels: false },
+      render: { exposureMode: 'fixed' },
     };
   }
 
@@ -825,7 +930,7 @@ describe('audio settings (T0144)', () => {
       expect(DEFAULT_AUDIO_SETTINGS[bus]).toBeLessThan(1);
     }
     expect(DEFAULT_GAME_SETTINGS.audio).toBe(DEFAULT_AUDIO_SETTINGS);
-    expect(DEFAULT_GAME_SETTINGS.version).toBe(6);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(7);
   });
 
   it('updates each bus independently and keeps the document valid', () => {
@@ -880,31 +985,33 @@ describe('audio settings (T0144)', () => {
     );
   });
 
-  it('migrates a stored v5 profile to v6 and writes it forward to the current key', () => {
+  it('migrates a stored v6 profile to v7 and writes it forward to the current key', () => {
     const storage = new MemoryStorage();
-    const document = profileV5Document();
-    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+    const document = profileV6Document();
+    storage.values.set(LEGACY_V6_SETTINGS_STORAGE_KEY, JSON.stringify(document));
 
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(6);
+    expect(result.settings.version).toBe(7);
     expect(result.settings.qualityLock).toBe('medium');
     expect(result.settings.hud).toEqual({ preset: 'pilot', bodyLabels: false });
-    expect(result.settings.camera).toEqual({ fovWidening: false, shake: false });
+    // T0127's field survives the tier that follows it — the point of keeping the
+    // two generations separate rather than folding audio into v6.
+    expect(result.settings.render).toEqual({ exposureMode: 'fixed' });
     // A returning player lands on the shipped defaults, audible — the same
     // posture a new profile gets.
     expect(result.settings.audio).toEqual(DEFAULT_AUDIO_SETTINGS);
     expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
     // A rolled-back build reads its own key and cannot clobber the newer one.
-    expect(storage.values.get(LEGACY_V5_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+    expect(storage.values.get(LEGACY_V6_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
   });
 
-  it('prefers the current key over a stale v5 key present alongside it', () => {
+  it('prefers the current key over a stale v6 key present alongside it', () => {
     const storage = new MemoryStorage();
     const current = updateAudioLevel(DEFAULT_GAME_SETTINGS, 'music', 0.15);
     storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
-    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(profileV5Document()));
+    storage.values.set(LEGACY_V6_SETTINGS_STORAGE_KEY, JSON.stringify(profileV6Document()));
 
     expect(new SettingsRepository(storage).load()).toEqual({
       ok: true,

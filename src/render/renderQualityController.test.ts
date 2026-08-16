@@ -24,8 +24,10 @@ function fixture(postProcessingAvailable = true) {
     setRingParticleCount: vi.fn(),
   };
   const relativisticVisuals = { setQualityEnabled: vi.fn() };
+  const exposure = { setGovernorMode: vi.fn() };
   const controller = new RenderQualityController({
     assetLoader,
+    exposure,
     pipeline,
     postProcessingAvailable,
     proceduralSun,
@@ -37,6 +39,7 @@ function fixture(postProcessingAvailable = true) {
   return {
     assetLoader,
     controller,
+    exposure,
     pipeline,
     proceduralSun,
     renderer,
@@ -64,12 +67,15 @@ describe('RenderQualityController', () => {
     expect(subject.visualSystem.setProceduralQuality).toHaveBeenCalledWith('minimum');
     expect(subject.visualSystem.setRingParticleCount).toHaveBeenCalledWith(0);
     expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenCalledWith(false);
+    // T0127 — the tier-1 rungs pin fixed exposure; the player setting is separate.
+    expect(subject.exposure.setGovernorMode).toHaveBeenCalledWith('fixed');
 
     const full = QUALITY_PROFILES[0];
     if (full === undefined) throw new Error('full profile missing');
     subject.controller.apply(full);
     expect(subject.pipeline.selectQuality).toHaveBeenLastCalledWith(full, true);
     expect(subject.relativisticVisuals.setQualityEnabled).toHaveBeenLastCalledWith(true);
+    expect(subject.exposure.setGovernorMode).toHaveBeenLastCalledWith('auto');
   });
 
   it('does not reapply the same rung and keeps post effects off on software rendering', () => {

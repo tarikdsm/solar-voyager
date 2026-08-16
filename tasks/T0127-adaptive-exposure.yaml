@@ -1,8 +1,8 @@
 id: T0127
 title: Pass-insertion API and adaptive exposure controller
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0127-adaptive-exposure
 depends_on:
   - T0103
 milestone: V2M3

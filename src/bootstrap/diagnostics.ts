@@ -5,11 +5,12 @@ import type { SystemMapMode } from '../game/systemMapController.js';
 import type { TutorialController } from '../game/tutorialController.js';
 import type { BodyModelLoadState } from '../render/bodyVisualSystem.js';
 import type { EpochWorld } from '../render/createEpochWorld.js';
+import type { ExposureController } from '../render/exposureController.js';
 import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
 
 /**
- * The frozen browser-diagnostic contract: eight `canvas.solarVoyager*` objects
+ * The frozen browser-diagnostic contract: nine `canvas.solarVoyager*` objects
  * that roughly 25 Playwright gates read by property name.
  *
  * Every definition site is a literal
@@ -18,7 +19,7 @@ import type { BurnLogEntry } from '../sim/ship/ledger.js';
  * asserts that both the member lists and the definition sites are exactly these.
  * Extend them; never drop a field (`AGENTS.md` Global Constraints).
  *
- * `solarVoyagerTelemetry` is the ninth canvas property and is not here:
+ * `solarVoyagerTelemetry` is the tenth canvas property and is not here:
  * `render/telemetry.ts` owns it behind `RENDER_TELEMETRY_PROPERTY`.
  */
 
@@ -69,6 +70,20 @@ export interface CameraRuntimeDiagnostics {
   readonly positionXKm: number;
   readonly positionYKm: number;
   readonly positionZKm: number;
+}
+
+/**
+ * Adaptive exposure state (T0127), so a browser gate can prove the display-only
+ * controller from outside the process: which mode is in force, what the scene key
+ * says, and what actually reached `toneMappingExposure`.
+ */
+export interface ExposureRuntimeDiagnostics {
+  readonly mode: string;
+  readonly userMode: string;
+  readonly governorMode: string;
+  readonly exposure: number;
+  readonly targetExposure: number;
+  readonly sceneLuminance: number;
 }
 
 export interface SystemMapRuntimeDiagnostics {
@@ -486,6 +501,39 @@ export function createAudioRuntimeDiagnostics(
     ),
   ) as AudioRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerAudio', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createExposureRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  exposureController: ExposureController,
+): ExposureRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get mode() {
+          return exposureController.mode;
+        },
+        get userMode() {
+          return exposureController.playerMode;
+        },
+        get governorMode() {
+          return exposureController.qualityMode;
+        },
+        get exposure() {
+          return exposureController.exposure;
+        },
+        get targetExposure() {
+          return exposureController.targetExposure;
+        },
+        get sceneLuminance() {
+          return exposureController.sceneLuminance;
+        },
+      },
+      null,
+    ),
+  ) as ExposureRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerExposure', { value: diagnostics });
   return diagnostics;
 }
 

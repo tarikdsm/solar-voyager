@@ -1,6 +1,7 @@
 import {
   ACESFilmicToneMapping,
   HalfFloatType,
+  REVISION,
   type ShaderMaterial,
   Vector2,
   type WebGLRenderTarget,
@@ -57,10 +58,61 @@ export interface PostComposerPort {
     readonly texture: { readonly type: number };
   };
   addPass(pass: PostPassPort): void;
+  insertPass(pass: PostPassPort, index: number): void;
   setPixelRatio(pixelRatio: number): void;
   setSize(width: number, height: number): void;
   render(deltaTime?: number): void;
   dispose(): void;
+}
+
+/**
+ * The ordering seams a caller may attach a post pass to.
+ *
+ * The chain is a fixed spine of six pipeline-owned passes; an anchor names the
+ * seam *after* one of them:
+ *
+ * ```
+ * RenderPass                         <- always first
+ *   'scene'          raw HDR scene, before relativistic aberration
+ * RelativisticPostPass
+ *   'relativistic'   aberrated image, still pre-bloom (god rays, T0142)
+ * AdaptiveBloomPass
+ *   'bloom'          bloomed image, before anti-aliasing (lens flare, T0142)
+ * AdaptiveSmaaPass, AdaptiveFxaaPass
+ *   'anti-aliasing'  resolved image, before tone mapping
+ * AdaptiveOutputPass                 <- always last; owns ACES tone mapping
+ * ```
+ *
+ * Ordering contract, in full:
+ *
+ * 1. A pass lands immediately after its anchor's spine pass, and after every pass
+ *    already inserted at the same anchor. Order is therefore a pure function of
+ *    (anchor, insertion sequence) — never of module import order.
+ * 2. Nothing may precede `RenderPass` or follow `AdaptiveOutputPass`. Tone mapping
+ *    and output colour conversion happen exactly once, at the end.
+ * 3. The pipeline takes ownership: inserted passes are sized by the composer,
+ *    receive `setRenderScale` when they implement it, are force-enabled for the
+ *    warm-up render (shader precompilation, performance-spec §5), and are disposed
+ *    in reverse insertion order by {@link LightingPostPipeline.dispose}.
+ * 4. Inserting nothing leaves the default six-pass order byte-identical — the
+ *    frozen `passNames` assertion in `tools/tests/lightingPostRegression.mjs` is
+ *    the gate that proves it.
+ */
+export const POST_PASS_ANCHORS = Object.freeze([
+  'scene',
+  'relativistic',
+  'bloom',
+  'anti-aliasing',
+] as const);
+
+export type PostPassAnchor = (typeof POST_PASS_ANCHORS)[number];
+
+/** Count of pipeline-owned passes preceding each anchor's insertion block. */
+const ANCHOR_SPINE_PREFIX = Object.freeze([1, 2, 3, 5]);
+
+/** Sink for the single `toneMappingExposure` writer (`exposureController.ts`). */
+export interface ExposureSinkPort {
+  setExposure(exposure: number): void;
 }
 
 export interface LightingPostBackend {
@@ -89,6 +141,59 @@ interface AdaptiveBloomInternals {
   readonly separableBlurMaterials: readonly ShaderMaterial[];
   readonly compositeMaterial: ShaderMaterial;
   readonly blendMaterial: ShaderMaterial;
+}
+
+/**
+ * The three.js revision the private-field reads below were validated against.
+ *
+ * Adaptive render scaling needs SMAA's internal render targets and bloom's blur
+ * chain, and neither is exported. That dependency is real but it must never be
+ * silent: `lightingPostPipeline.canary.test.ts` fails the build when the installed
+ * revision moves away from this constant, so a three.js bump is forced to re-run
+ * the private-field validation deliberately instead of discovering the breakage in
+ * a browser gate.
+ */
+export const VALIDATED_THREE_REVISION = '185';
+
+export const SMAA_INTERNAL_FIELDS = Object.freeze([
+  '_edgesRT',
+  '_weightsRT',
+  '_materialEdges',
+  '_materialWeights',
+  '_materialBlend',
+] as const);
+
+export const BLOOM_INTERNAL_FIELDS = Object.freeze([
+  'renderTargetBright',
+  'renderTargetsHorizontal',
+  'renderTargetsVertical',
+  'materialHighPassFilter',
+  'separableBlurMaterials',
+  'compositeMaterial',
+  'blendMaterial',
+] as const);
+
+/**
+ * Narrows a three.js pass to the private fields this module mutates, failing at
+ * construction with the field name rather than mid-resize with a `TypeError`.
+ */
+export function assertPassInternals<T>(
+  ownerLabel: string,
+  owner: object,
+  fields: readonly string[],
+): T {
+  const record = owner as Record<string, unknown>;
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index] as string;
+    if (record[field] === undefined || record[field] === null) {
+      throw new Error(
+        `${ownerLabel} no longer exposes the three.js internal "${field}". ` +
+          `Adaptive post-processing was validated against three.js r${VALIDATED_THREE_REVISION} ` +
+          `(installed r${REVISION}); re-validate the private-field contract before bumping three.js.`,
+      );
+    }
+  }
+  return owner as T;
 }
 
 function installUvScale(material: ShaderMaterial): void {
@@ -147,10 +252,16 @@ class AdaptiveOutputPass extends OutputPass implements AdaptivePostPassPort {
 
 class AdaptiveSmaaPass extends SMAAPass implements AdaptivePostPassPort {
   private renderScale = 1;
+  private readonly internals: AdaptiveSmaaInternals;
 
   constructor() {
     super();
-    const internals = this as unknown as AdaptiveSmaaInternals;
+    const internals = assertPassInternals<AdaptiveSmaaInternals>(
+      'AdaptiveSmaaPass',
+      this,
+      SMAA_INTERNAL_FIELDS,
+    );
+    this.internals = internals;
     installUvScale(internals._materialEdges);
     installUvScale(internals._materialWeights);
     installUvScale(internals._materialBlend);
@@ -167,7 +278,7 @@ class AdaptiveSmaaPass extends SMAAPass implements AdaptivePostPassPort {
   }
 
   private applyScale(): void {
-    const internals = this as unknown as AdaptiveSmaaInternals;
+    const internals = this.internals;
     setTargetViewportScale(internals._edgesRT, this.renderScale);
     setTargetViewportScale(internals._weightsRT, this.renderScale);
     setMaterialUvScale(internals._materialEdges, this.renderScale);
@@ -179,10 +290,16 @@ class AdaptiveSmaaPass extends SMAAPass implements AdaptivePostPassPort {
 class AdaptiveBloomPass extends UnrealBloomPass implements UnrealBloomPassPort {
   private renderScale = 1;
   private bloomScale = 1;
+  private readonly internals: AdaptiveBloomInternals;
 
   constructor() {
     super(new Vector2(1, 1), BLOOM_STRENGTH, BLOOM_RADIUS, BLOOM_THRESHOLD);
-    const internals = this as unknown as AdaptiveBloomInternals;
+    const internals = assertPassInternals<AdaptiveBloomInternals>(
+      'AdaptiveBloomPass',
+      this,
+      BLOOM_INTERNAL_FIELDS,
+    );
+    this.internals = internals;
     installUvScale(internals.materialHighPassFilter);
     for (const material of internals.separableBlurMaterials) installUvScale(material);
     installUvScale(internals.compositeMaterial);
@@ -201,7 +318,7 @@ class AdaptiveBloomPass extends UnrealBloomPass implements UnrealBloomPassPort {
   }
 
   private applyScale(): void {
-    const internals = this as unknown as AdaptiveBloomInternals;
+    const internals = this.internals;
     const targetScale = this.renderScale * this.bloomScale;
     setTargetViewportScale(internals.renderTargetBright, targetScale);
     for (const target of internals.renderTargetsHorizontal) {
@@ -219,7 +336,7 @@ class AdaptiveBloomPass extends UnrealBloomPass implements UnrealBloomPassPort {
   }
 }
 
-const THREE_POST_BACKEND: LightingPostBackend = {
+export const DEFAULT_POST_BACKEND: LightingPostBackend = {
   createComposer: (renderer) => new EffectComposer(renderer) as unknown as PostComposerPort,
   createRenderPass: (scene, camera) => new RenderPass(scene, camera) as unknown as PostPassPort,
   createBloomPass: () => new AdaptiveBloomPass(),
@@ -235,8 +352,17 @@ function assertPositiveFinite(label: string, value: number): void {
   }
 }
 
-/** Owns the single half-float RenderPass → bloom → ACES OutputPass chain. */
-export class LightingPostPipeline {
+/** Detected once, at insertion time, so the render-scale walk stays branch-free. */
+function isAdaptivePass(pass: PostPassPort): pass is AdaptivePostPassPort {
+  return typeof (pass as Partial<AdaptivePostPassPort>).setRenderScale === 'function';
+}
+
+/**
+ * Owns the single half-float RenderPass → bloom → AA → ACES OutputPass chain, the
+ * seams other subsystems attach passes to ({@link POST_PASS_ANCHORS}), and the one
+ * write to `renderer.toneMappingExposure`.
+ */
+export class LightingPostPipeline implements ExposureSinkPort {
   readonly composer: PostComposerPort;
   readonly renderPass: PostPassPort;
   readonly relativisticPass: RelativisticPostPassPort;
@@ -248,15 +374,31 @@ export class LightingPostPipeline {
   private pixelRatio: number;
   private renderScale = 1;
   private bloomResolution: Exclude<BloomQuality, 'off'> = 'full';
+  /** Inserted passes in chain order; parallel arrays keep the frame path cold. */
+  private readonly insertedPasses: PostPassPort[] = [];
+  private readonly insertedAdaptivePasses: (AdaptivePostPassPort | null)[] = [];
+  private readonly insertedEnabled: boolean[] = [];
+  private readonly anchorCounts = new Int32Array(POST_PASS_ANCHORS.length);
 
   constructor(
     private readonly renderer: WebGLRenderer,
     private readonly scene: Scene,
     private readonly camera: Camera,
-    backend: LightingPostBackend = THREE_POST_BACKEND,
+    backend: LightingPostBackend = DEFAULT_POST_BACKEND,
+    /**
+     * Gain applied to every {@link setExposure} value.
+     *
+     * The direct (post-processing unavailable) path has no bloom to carry the
+     * highlights, so it has always compensated with a fixed exposure of 3. Folding
+     * that in here keeps `setExposure(1)` byte-for-byte identical to the pre-T0127
+     * behaviour of *both* paths, which is what makes the `fixed` exposure mode an
+     * exact rollback rather than an approximation.
+     */
+    private readonly baseExposure = 1,
   ) {
+    assertPositiveFinite('Base exposure', baseExposure);
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = baseExposure;
     this.pixelRatio = renderer.getPixelRatio();
 
     this.composer = backend.createComposer(renderer);
@@ -301,6 +443,47 @@ export class LightingPostPipeline {
     this.applyQualityScale();
   }
 
+  /**
+   * Inserts `pass` at the seam named by `anchor`, per the ordering contract on
+   * {@link POST_PASS_ANCHORS}. Setup-time only — never call this from the frame loop.
+   */
+  insertPass(pass: PostPassPort, anchor: PostPassAnchor): void {
+    const anchorIndex = POST_PASS_ANCHORS.indexOf(anchor);
+    if (anchorIndex < 0) {
+      throw new RangeError(
+        `Unknown post-processing anchor "${String(anchor)}"; expected one of ${POST_PASS_ANCHORS.join(', ')}.`,
+      );
+    }
+    if (this.composer.passes.includes(pass)) {
+      throw new Error('This post-processing pass is already in the chain.');
+    }
+    const prefix = ANCHOR_SPINE_PREFIX[anchorIndex];
+    if (prefix === undefined) throw new Error('Post-processing anchor table is inconsistent.');
+    let insertIndex = prefix;
+    for (let index = 0; index <= anchorIndex; index += 1) {
+      insertIndex += this.anchorCounts[index] as number;
+    }
+    this.composer.insertPass(pass, insertIndex);
+    this.anchorCounts[anchorIndex] = (this.anchorCounts[anchorIndex] as number) + 1;
+    const adaptive = isAdaptivePass(pass) ? pass : null;
+    // Chain order and bookkeeping order must agree, or dispose and warm-up would
+    // walk a different chain than the composer renders.
+    const bookkeepingIndex = insertIndex - prefix;
+    this.insertedPasses.splice(bookkeepingIndex, 0, pass);
+    this.insertedAdaptivePasses.splice(bookkeepingIndex, 0, adaptive);
+    this.insertedEnabled.splice(bookkeepingIndex, 0, pass.enabled);
+    adaptive?.setRenderScale(this.renderScale);
+  }
+
+  /**
+   * The single write to `renderer.toneMappingExposure` (`exposureController.ts`
+   * owns the value; plan §3.5).
+   */
+  setExposure(exposure: number): void {
+    assertPositiveFinite('Tone mapping exposure', exposure);
+    this.renderer.toneMappingExposure = this.baseExposure * exposure;
+  }
+
   setBloomEnabled(enabled: boolean): void {
     this.setBloomQuality(enabled ? 'full' : 'off');
   }
@@ -340,11 +523,21 @@ export class LightingPostPipeline {
       this.relativisticPass.enabled = true;
       this.smaaPass.enabled = true;
       this.fxaaPass.enabled = true;
+      for (let index = 0; index < this.insertedPasses.length; index += 1) {
+        const inserted = this.insertedPasses[index] as PostPassPort;
+        this.insertedEnabled[index] = inserted.enabled;
+        inserted.enabled = true;
+      }
       this.composer.render(0);
       this.bloomPass.enabled = bloomEnabled;
       this.relativisticPass.enabled = relativisticEnabled;
       this.smaaPass.enabled = smaaEnabled;
       this.fxaaPass.enabled = fxaaEnabled;
+      for (let index = 0; index < this.insertedPasses.length; index += 1) {
+        (this.insertedPasses[index] as PostPassPort).enabled = this.insertedEnabled[
+          index
+        ] as boolean;
+      }
       return;
     }
     this.renderer.render(this.scene, this.camera);
@@ -360,6 +553,9 @@ export class LightingPostPipeline {
   }
 
   dispose(): void {
+    for (let index = this.insertedPasses.length - 1; index >= 0; index -= 1) {
+      (this.insertedPasses[index] as PostPassPort).dispose();
+    }
     this.renderPass.dispose();
     this.relativisticPass.dispose();
     this.bloomPass.dispose();
@@ -379,5 +575,8 @@ export class LightingPostPipeline {
     this.fxaaPass.setRenderScale(this.renderScale);
     this.outputPass.setRenderScale(this.renderScale);
     this.bloomPass.setQualityScale(this.renderScale, this.bloomResolution === 'half' ? 0.5 : 1);
+    for (let index = 0; index < this.insertedAdaptivePasses.length; index += 1) {
+      this.insertedAdaptivePasses[index]?.setRenderScale(this.renderScale);
+    }
   }
 }

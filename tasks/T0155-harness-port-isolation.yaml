@@ -1,0 +1,23 @@
+id: T0155
+title: Isolate browser-harness ports per worktree
+status: IN_PROGRESS
+agent: claude
+branch: task/T0155-harness-port-isolation
+depends_on: []
+milestone: V2M6
+spec: |
+  Thirty-six browser harnesses and benches hardcode a listen port, and the pool is reused: 4176,
+  4177, 4178, 4179, 4180, 4185, 4186, 4187, 4188 and 4198 each appear in two or three files. CI runs
+  them one at a time so it never mattered. Parallel task worktrees run them at the same time, where
+  a collision is a hard failure that reads exactly like a real defect: T0127 lost three gate runs to
+  "Port 4177 is already in use" held by another lane's flightBench, and a bench paired against a
+  contended run produced a 2x p75 "regression" that did not survive scrutiny.
+  Derive a per-checkout port offset so concurrent worktrees cannot collide, with CI behaviour
+  bit-identical.
+acceptance:
+  - A single shared helper owns port resolution and every harness and bench uses it
+  - A checkout outside .worktrees resolves to the historical port, so CI is unchanged
+  - Two checkouts under .worktrees with different directory names resolve to different ports, proven
+    by a unit test
+  - The offset is stable across runs for the same worktree, so a failure is reproducible
+handoff_notes: ""

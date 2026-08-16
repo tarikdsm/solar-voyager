@@ -1,8 +1,8 @@
 id: T0144
 title: Web Audio engine, AudioDirector, mixer settings, Kubrick mode
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0144-audio-engine
 depends_on:
   - T0103
 milestone: V2M5

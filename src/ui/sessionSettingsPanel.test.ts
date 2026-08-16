@@ -16,9 +16,11 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  updateRenderExposureMode,
   type AudioBus,
+  type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV6,
+  type GameSettingsV7,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -31,7 +33,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV6 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV7 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -107,6 +109,11 @@ class FakeSession implements SessionSettingsPort {
   setHudBodyLabels(bodyLabels: boolean): SessionActionResult {
     this.settings = updateHudBodyLabels(this.settings, bodyLabels);
     return { ok: true, message: 'Body labels updated' };
+  }
+
+  setExposureMode(exposureMode: ExposureMode): SessionActionResult {
+    this.settings = updateRenderExposureMode(this.settings, exposureMode);
+    return { ok: true, message: 'Exposure mode updated' };
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {
@@ -326,6 +333,21 @@ describe('session settings panel model', () => {
     );
     expect(session.settings).toBe(before);
     expect(model.selectQuality('ultra')).toMatchObject({ ok: false });
+  });
+
+  it('selects an exposure mode and rejects an unsupported one (T0127)', () => {
+    const session = new FakeSession();
+    const model = createSessionSettingsModel(session, new FakeFiles());
+
+    expect(model.selectExposureMode('fixed')).toMatchObject({ ok: true });
+    expect(session.settings.render.exposureMode).toBe('fixed');
+    expect(model.selectExposureMode('cinematic')).toMatchObject({
+      ok: false,
+      message: 'Unsupported exposure mode',
+    });
+    expect(session.settings.render.exposureMode).toBe('fixed');
+    expect(model.selectExposureMode('auto')).toMatchObject({ ok: true });
+    expect(session.settings.render.exposureMode).toBe('auto');
   });
 
   describe('audio mixer controls (T0144)', () => {
