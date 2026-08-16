@@ -20,6 +20,17 @@ export const ZODIACAL_PEAK_DISPLAY_RADIANCE = ZODIACAL_MAX_NITS / DISPLAY_REFERE
 
 /** Solar elongation at and below which the elongation term saturates (30 deg). */
 export const ZODIACAL_PEAK_ELONGATION_RAD = Math.PI / 6;
+/**
+ * Inner working angle: 15 deg, below which the band is not drawn at all.
+ *
+ * Leinert et al. tabulate zodiacal brightness only for elongations above ~15
+ * deg, because closer in the F-corona dominates and the Sun swamps the
+ * measurement. Solar Voyager already renders that light — it is the procedural
+ * Sun's corona — so continuing the band inward would double-count it and paint a
+ * flat 2-nit disc across a 60 deg cone centred on the Sun. The term is tapered
+ * smoothly to zero across this angle instead of being clamped to a plateau.
+ */
+export const ZODIACAL_INNER_WORKING_ANGLE_RAD = Math.PI / 12;
 /** Falloff exponent of surface brightness with solar elongation. */
 export const ZODIACAL_ELONGATION_EXPONENT = 1.3;
 /** Amplitude of the anti-solar gegenschein bump, relative to the peak. */
@@ -47,6 +58,8 @@ export const ZODIACAL_COLOR = Object.freeze([1, 0.96, 0.88] as const);
  * brightness rises steeply toward small solar elongation and saturates near the
  * inner working angle; it falls by roughly a factor 2.6 from the ecliptic to the
  * ecliptic pole; and a shallow gegenschein bump sits at the anti-solar point.
+ * Inside {@link ZODIACAL_INNER_WORKING_ANGLE_RAD} the band tapers to nothing,
+ * where the procedural Sun's corona takes over.
  * The absolute scale is a display budget, not a photometric measurement — the
  * real band is ~1e-3 nits and would be invisible under any tone curve.
  *
@@ -65,7 +78,10 @@ export function zodiacalLightDisplayRadiance(
   );
   const antiSolar = (Math.PI - elongation) / ZODIACAL_GEGENSCHEIN_WIDTH_RAD;
   const gegenschein = ZODIACAL_GEGENSCHEIN_AMPLITUDE * Math.exp(-antiSolar * antiSolar);
-  const shape = Math.min(1, elongationTerm + gegenschein);
+  const shape =
+    Math.min(1, elongationTerm + gegenschein) *
+    // Taper from the unclamped angle so a sightline straight at the Sun is exactly zero.
+    innerWorkingAngleTaper(Math.abs(solarElongationRad));
   const latitude =
     ZODIACAL_POLAR_FLOOR +
     (1 - ZODIACAL_POLAR_FLOOR) *
@@ -73,6 +89,12 @@ export function zodiacalLightDisplayRadiance(
   const distanceAu = Math.max(heliocentricDistanceKm / AU_KM, ZODIACAL_MINIMUM_DISTANCE_AU);
   const distance = Math.min(1, (1 / distanceAu) ** ZODIACAL_HELIOCENTRIC_EXPONENT);
   return ZODIACAL_PEAK_DISPLAY_RADIANCE * shape * latitude * distance;
+}
+
+/** Smoothstep from 0 at the Sun to 1 at the inner working angle. */
+function innerWorkingAngleTaper(elongationRad: number): number {
+  const t = Math.min(1, Math.max(0, elongationRad / ZODIACAL_INNER_WORKING_ANGLE_RAD));
+  return t * t * (3 - 2 * t);
 }
 
 function glslFloat(value: number): string {
@@ -98,8 +120,12 @@ export const ZODIACAL_LIGHT_GLSL = /* glsl */ `
     float elongationTerm =
       min(1.0, pow(${glslFloat(ZODIACAL_PEAK_ELONGATION_RAD)} / elongation, ${glslFloat(ZODIACAL_ELONGATION_EXPONENT)}));
     float antiSolar = (3.141592653589793 - elongation) / ${glslFloat(ZODIACAL_GEGENSCHEIN_WIDTH_RAD)};
+    // Tapered to nothing inside the inner working angle; the procedural Sun's
+    // corona owns the light there.
+    float taper = smoothstep(0.0, ${glslFloat(ZODIACAL_INNER_WORKING_ANGLE_RAD)}, elongation);
     float shape =
-      min(1.0, elongationTerm + ${glslFloat(ZODIACAL_GEGENSCHEIN_AMPLITUDE)} * exp(-antiSolar * antiSolar));
+      min(1.0, elongationTerm + ${glslFloat(ZODIACAL_GEGENSCHEIN_AMPLITUDE)} * exp(-antiSolar * antiSolar)) *
+      taper;
     float cosineLatitude = sqrt(max(0.0, 1.0 - eclipticDirection.z * eclipticDirection.z));
     float latitude =
       ${glslFloat(ZODIACAL_POLAR_FLOOR)} +

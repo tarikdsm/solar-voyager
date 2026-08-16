@@ -338,8 +338,15 @@ never pull the player out of the chase view.
   bounded by 1, that is a hard ceiling, checked numerically in
   `src/render/zodiacalLight.test.ts` and read back through
   `canvas.solarVoyagerSky.zodiacalPeakNits` by the browser gate.
+- The band tapers to zero inside a 15° solar elongation, where the procedural
+  Sun's corona owns the light (physics-spec §1.2). `npm run test:procedural-sun`
+  measures the sky's contribution to the annulus around the Sun in both states
+  and asserts the Sun still reads at more than ten times the sky behind it.
 - Toggleable via settings (`sky.zodiacalLight`, default on). With both the
   panorama and the band off the sky mesh is not drawn at all.
+- Any consumer that moves the camera outside the frame loop must call
+  `MilkyWaySky.update()` itself, or the band keeps the solar elongation and
+  heliocentric distance it had at world creation.
 
 ### 5.3 Constellation lines (T0126)
 

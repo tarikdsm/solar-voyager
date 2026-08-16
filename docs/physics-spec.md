@@ -67,7 +67,8 @@ ecliptic latitude `β` and heliocentric distance `r`:
 ```
 e(ε)  = min(1, (ε₀/max(ε, 10⁻³))^1.3)                     ε₀ = 30° = π/6
 g(ε)  = 0.10 · exp(−((π − ε)/0.35)²)                       gegenschein
-S(ε)  = min(1, e(ε) + g(ε))
+w(ε)  = smoothstep(0, ε_w, ε)                              ε_w = 15° = π/12
+S(ε)  = min(1, e(ε) + g(ε)) · w(ε)
 L(β)  = 0.385 + 0.615 · |cos β|^3.5
 D(r)  = min(1, (1 AU / max(r, 0.3 AU))^2.3)
 I     = I_peak · S(ε) · L(β) · D(r)
@@ -80,6 +81,15 @@ small solar elongation that saturates near the inner working angle, a fall of
 roughly a factor 2.6 from the ecliptic to the ecliptic pole, and a shallow
 gegenschein at the anti-solar point. `D(r)` combines the `n(r) ∝ r^−1.3` dust
 density with `r^−2` illumination.
+
+`w(ε)` is the **inner working angle** taper. Leinert et al. tabulate zodiacal
+brightness only above ~15° elongation, because closer in the F-corona dominates
+and the Sun swamps the measurement. Solar Voyager already renders that light as
+the procedural Sun's corona (rendering-spec §5), so continuing the band inward
+would double-count it — and because `e(ε)` saturates at `ε ≤ 30°`, an untapered
+model paints a flat peak-brightness disc across a 60° cone centred on the Sun.
+The taper was added after `npm run test:procedural-sun` measured exactly that.
+`w ≤ 1`, so the `I ≤ I_peak` bound is unchanged.
 
 `I_peak` is a **display budget, not a photometric measurement**: the real band is
 ~10⁻³ cd/m² and would be invisible under any tone curve. See rendering-spec §5.2

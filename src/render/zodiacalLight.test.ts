@@ -5,6 +5,7 @@ import {
   DISPLAY_REFERENCE_WHITE_NITS,
   ZODIACAL_MAX_NITS,
   ZODIACAL_PEAK_DISPLAY_RADIANCE,
+  ZODIACAL_INNER_WORKING_ANGLE_RAD,
   ZODIACAL_PEAK_ELONGATION_RAD,
   zodiacalLightDisplayRadiance,
   zodiacalLightScale,
@@ -34,6 +35,33 @@ describe('zodiacalLightDisplayRadiance', () => {
     expect(peak * DISPLAY_REFERENCE_WHITE_NITS).toBeLessThanOrEqual(ZODIACAL_MAX_NITS);
     // The budget must actually be reached, or the band is quietly invisible.
     expect(peak * DISPLAY_REFERENCE_WHITE_NITS).toBeCloseTo(ZODIACAL_MAX_NITS, 6);
+  });
+
+  it('tapers to nothing inside the inner working angle', () => {
+    // The procedural Sun's corona owns the light below 15 deg; a band painted
+    // there would double-count it and put a flat disc around the Sun.
+    expect(zodiacalLightDisplayRadiance(0, 0, ONE_AU_KM)).toBe(0);
+    const atHalfAngle = zodiacalLightDisplayRadiance(
+      ZODIACAL_INNER_WORKING_ANGLE_RAD / 2,
+      0,
+      ONE_AU_KM,
+    );
+    const atWorkingAngle = zodiacalLightDisplayRadiance(
+      ZODIACAL_INNER_WORKING_ANGLE_RAD,
+      0,
+      ONE_AU_KM,
+    );
+    expect(atHalfAngle).toBeGreaterThan(0);
+    // Smoothstep is exactly half-way at the half-angle.
+    expect(atHalfAngle).toBeCloseTo(atWorkingAngle / 2, 12);
+    expect(atHalfAngle).toBeLessThan(atWorkingAngle);
+    // Continuous across the join: no visible ring at the taper edge.
+    const justOutside = zodiacalLightDisplayRadiance(
+      ZODIACAL_INNER_WORKING_ANGLE_RAD * 1.01,
+      0,
+      ONE_AU_KM,
+    );
+    expect(Math.abs(justOutside - atWorkingAngle)).toBeLessThan(atWorkingAngle * 0.02);
   });
 
   it('peaks toward the Sun and in the ecliptic plane', () => {
