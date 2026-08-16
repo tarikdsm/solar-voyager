@@ -21,6 +21,72 @@ This is the contract all physics code and tests are written against. Implementat
 - Constants: `AU = 1.495978707e8 km`, `G` never used directly — bodies carry GM (more precise).
 - Precision check: at Neptune (4.5e9 km) float64 resolution ≈ 1e-6 km = 1 mm. One global frame suffices.
 
+### 1.1 Galactic frame (T0126)
+
+The deep-sky background is defined in galactic coordinates, so rendering needs
+one rotation from the simulation frame. It is built in `src/core/galacticFrame.ts`
+from the three IAU 1958 constants in their J2000 realisation (Hipparcos/Tycho,
+ESA SP-1200 vol. 1 §1.5.3), never from a transcribed matrix:
+
+- `α_NGP = 192.85948°`, `δ_NGP = 27.12825°` — the north galactic pole in J2000
+  equatorial coordinates.
+- `l_NCP = 122.93192°` — the galactic longitude of the north celestial pole.
+
+Construction. With `ẑ_G` the pole direction and `n̂ = ẑ_eq × ẑ_G / |·|` the
+ascending node of the galactic equator on the celestial equator (which lies at
+galactic longitude `l_Ω = l_NCP − 90° = 32.93192°`), the galactic basis in
+equatorial coordinates is
+
+```
+x̂_G = R(ẑ_G, −l_Ω) n̂        ŷ_G = ẑ_G × x̂_G
+M_gal←eq = [x̂_G; ŷ_G; ẑ_G]   (rows)
+M_gal←ecl = M_gal←eq · R_x(−ε)
+```
+
+`ε = 23.439291111°` is the J2000 mean obliquity and **must** equal
+`J2000_OBLIQUITY_RAD` in `tools/bake_stars.py`, which is the value the shipped
+star catalog was rotated into the ecliptic frame with; a disagreement would shear
+the panorama against the stars by up to 23°. The pair is locked by a test.
+
+Galactic longitude/latitude of a galactic-frame unit direction are
+`l = atan2(y, x)` wrapped to `[0, 2π)` and `b = atan2(z, √(x²+y²))`.
+
+Verification (`src/core/galacticFrame.test.ts`, `tests/render/galacticSkyOrientation.test.ts`):
+the matrix is orthonormal with `det = +1`; it sends the defining pole to `b = +90°`
+and the north celestial pole to `(l, b) = (l_NCP, δ_NGP)`; and it reproduces
+SIMBAD's galactic coordinates for α CMa, α Car and α Lyr to better than 0.1″ from
+their catalogued ICRS positions, and to better than 2″ through the float32
+records actually shipped in `data/stars.bin` (Yale quantises RA to 0.1ˢ and
+declination to 1″, so ~2″ is the catalog's own floor).
+
+### 1.2 Zodiacal light photometry (T0126)
+
+Surface brightness of the zodiacal band as a function of solar elongation `ε`,
+ecliptic latitude `β` and heliocentric distance `r`:
+
+```
+e(ε)  = min(1, (ε₀/max(ε, 10⁻³))^1.3)                     ε₀ = 30° = π/6
+g(ε)  = 0.10 · exp(−((π − ε)/0.35)²)                       gegenschein
+S(ε)  = min(1, e(ε) + g(ε))
+L(β)  = 0.385 + 0.615 · |cos β|^3.5
+D(r)  = min(1, (1 AU / max(r, 0.3 AU))^2.3)
+I     = I_peak · S(ε) · L(β) · D(r)
+```
+
+This is an **analytic fit, not a radiative-transfer solution**. The shape
+reproduces the three features reported in Leinert et al. (1998), "The 1997
+reference of diffuse night sky brightness", A&AS 127, 1 (§8): a steep rise toward
+small solar elongation that saturates near the inner working angle, a fall of
+roughly a factor 2.6 from the ecliptic to the ecliptic pole, and a shallow
+gegenschein at the anti-solar point. `D(r)` combines the `n(r) ∝ r^−1.3` dust
+density with `r^−2` illumination.
+
+`I_peak` is a **display budget, not a photometric measurement**: the real band is
+~10⁻³ cd/m² and would be invisible under any tone curve. See rendering-spec §5.2
+for the display mapping and the 2 nit cap. Because `S`, `L` and `D` are each
+bounded by 1 by construction, `I ≤ I_peak` everywhere — which is what makes the
+cap provable rather than asserted.
+
 ## 2. Celestial bodies — analytic Keplerian rails (ADR-001)
 
 Each body carries osculating elements at epoch, baked from JPL Horizons (`tools/bake_ephemerides.py` → `data/bodies.json`):

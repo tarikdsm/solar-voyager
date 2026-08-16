@@ -240,3 +240,27 @@ and requires byte-identical GLB, PNG and SOURCES.md.
 ## Adding a new body (see agents/skills/add-celestial-body.md)
 
 bodies.json entry → bake check vectors → builder script params → run build → manifest within budget → visual tier thresholds → regression vector test.
+
+## Deep-sky panoramas (`sky` category, T0126)
+
+The one ingest input that is not a body: no GLB, no `data/bodies.json` entry, no
+directory walk.
+
+1. `python -X utf8 tools/fetch_textures.py --only milkyway-panorama` downloads the
+   pinned ESO source, verifies its SHA-256, resizes it to 4096×2048, and writes
+   `assets/textures-src/milkyway/milkyway_panorama.jpg` plus a generated
+   `SOURCES.md`.
+2. `npm run assets:ingest` encodes it — and its `_2k` / `_1k` tiers — to KTX2 via
+   `tools/assets/skyTextures.mjs`, and appends a manifest entry
+   `{ id, category: 'sky', triangles: 0, files }`.
+
+The asset list is **declared** in `SKY_TEXTURE_ASSETS` (`tools/assets/config.mjs`)
+rather than discovered, because the source tree it lives in is shared with
+ordinary body textures that must not be ingested twice. Panoramas are validated
+for 2:1 aspect, power-of-two dimensions, a `<id>_` filename prefix and a
+`SOURCES.md` listing, and are held to a 4 MiB per-asset byte budget (currently
+1,366,396 B across three tiers).
+
+This runs inside `assets:ingest` rather than as a separate encoder because
+`publishDirectory()` atomically replaces the whole `public/assets` tree: anything
+the ingest does not produce is deleted on its next run.

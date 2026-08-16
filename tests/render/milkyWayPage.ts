@@ -89,7 +89,6 @@ interface MilkyWayHarness {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __milkyWayHarness: MilkyWayHarness | undefined;
 }
 
