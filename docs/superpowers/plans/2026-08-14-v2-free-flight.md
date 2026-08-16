@@ -255,8 +255,54 @@ export class CameraDirector {
   readonly chaseDistanceShipLengths: number; readonly chaseArmDistanceKm: number;
   readonly chaseFovOffsetDeg: number; readonly chaseShakeAmplitudeDeg: number;
   readonly chaseFovWideningEnabled: boolean; readonly chaseShakeEnabled: boolean;
+  // Added by T0125 (this block updated per the naming rule below). Rationale in
+  // docs/superpowers/specs/2026-08-16-cinematic-photo-mode-design.md §2.
+  rollCameraBy(deltaRad: number): boolean;      // true when the active mode consumed it
+  adjustCameraFovBy(deltaDeg: number): boolean; // clamped to CINEMATIC_MIN/MAX_FOV_DEG
+  readonly directFocusEnabled: boolean;         // false in cinematic: E is its roll key
+  readonly cinematicRollRad: number; readonly cinematicFovDeg: number;
+  readonly cinematicDrifting: boolean;
 }
-export const IMPLEMENTED_CAMERA_MODES: readonly CameraMode[];  // ['chase','observatory'] at T0110
+export const IMPLEMENTED_CAMERA_MODES: readonly CameraMode[];
+// ['chase','observatory'] at T0110; ['chase','cinematic','observatory'] at T0125.
+// T0124 inserts 'cockpit' at index 1 for the spec §5 ring chase->cockpit->cinematic.
+
+// game/cinematicCameraController.ts (T0125) — roll, FOV and idle drift over the
+// shared OrbitCameraController; owns no position state of its own.
+export class CinematicCameraController {
+  constructor(options: { orbit: OrbitCameraController; baseFovDeg: number });
+  update(wallDtSec: number, active: boolean): void;   // allocation-free
+  rollBy(deltaRad: number): void; adjustFovBy(deltaDeg: number): void;
+  noteInteraction(): void; reset(): void;
+  readonly cameraPositionKm: ReadonlyVec3; readonly lookDirection: ReadonlyVec3;
+  readonly upDirection: ReadonlyVec3;                 // orthonormal, rollable
+  readonly rollRad: number; readonly fovDeg: number; readonly drifting: boolean;
+}
+export const CINEMATIC_MIN_FOV_DEG = 20; export const CINEMATIC_MAX_FOV_DEG = 90;
+export const CINEMATIC_ROLL_RATE_RAD_PER_SEC = 0.8;
+export const CINEMATIC_FOV_RATE_DEG_PER_SEC = 20;
+export const CINEMATIC_DRIFT_RATE_RAD_PER_SEC = 0.02;  // T0148 reuses this idle
+export const CINEMATIC_DRIFT_IDLE_DELAY_SEC = 2.5;
+
+// game/photo/photoCapture.ts (T0125) — consumed by T0147
+export interface CaptureMeta {
+  readonly simTimeSec: number; readonly tauSec: number;
+  readonly positionKm: ReadonlyVec3;         // the SHIP's heliocentric position
+  readonly dominantBodyId: string | null; readonly gammaMax: number;
+  readonly utcTimeMs: number;                // added for T0147's album timestamp
+  readonly sequence: number;                 // 1-based per session; filename identity
+}
+export interface CaptureSink { capture(blob: Blob, meta: CaptureMeta): Promise<void> }
+export interface CaptureFrameSource { encodeFrame(): Promise<Blob> }
+export class PhotoCaptureController {
+  constructor(ports: { frames: CaptureFrameSource; sink: CaptureSink; snapshot(): SimSnapshot });
+  observe(snapshot: SimSnapshot): void;      // peak gamma, on the 10 Hz HUD tick
+  resetStatistics(): void;                   // session replacement
+  capture(): Promise<boolean>;               // one in flight; extras dropped, not queued
+  readonly status: CaptureStatus; readonly captureCount: number;
+  readonly dropCount: number; readonly lastError: string | null;
+  readonly lastMeta: CaptureMeta | null;
+}
 
 // game/chaseCameraController.ts (T0110) — pure numeric, injected with the ship's packed-position
 // offset and hull length because `game/` may not import `render/`.

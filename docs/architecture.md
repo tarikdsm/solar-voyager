@@ -75,8 +75,11 @@ src/
 ├── game/
 │   ├── input/                              # LANDED engine+bindings (T0105) + gamepad (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
-│   ├── cameraDirector.ts                   # LANDED chase/observatory + cross-fade (T0110); cockpit/cinematic (T0124/25)
+│   ├── cameraDirector.ts                   # LANDED chase/observatory (T0110) + cinematic (T0125); cockpit (T0124)
 │   ├── chaseCameraController.ts            # LANDED spring-arm f64 controller (T0110)
+│   ├── cinematicCameraController.ts        # LANDED roll/FOV/idle drift over the orbit camera (T0125)
+│   ├── cameraInputRouter.ts                # LANDED camera roll, FOV and the shutter (T0125)
+│   ├── photo/                              # LANDED CaptureSink + download sink (T0125); album sink (T0147)
 │   ├── cameraTransition.ts                 # LANDED shared blend primitives (T0110)
 │   ├── diary/                              # NEW  milestones, diaryStore, album (T0146/47)
 │   ├── audio/audioDirector.ts              # NEW  snapshot→audio state (T0144)
@@ -85,6 +88,7 @@ src/
 │   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
 ├── render/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
+│   ├── frameCapture.ts                     # LANDED canvas to PNG, no preserveDrawingBuffer (T0125)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
 │   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
 │   ├── exposureController.ts               # LANDED single toneMappingExposure owner (T0127)
