@@ -87,6 +87,21 @@ unsupported features such as post-processing on software rendering stay off.
 - `data/initial-path.json` is the reviewed source of truth for runtime files fetched before interaction. The budget checker validates and sums those canonical files once, then adds all built code and WASM conservatively (ADR-023).
 - Vite: code-split the map view and menus; no dependency > 50 KB gzip enters the bundle without an ADR (coding-standards).
 
+### Explicitly excluded windows (not steady state)
+
+- **Photo capture (T0125).** One press of the capture key re-renders the scene once and allocates a
+  PNG `Blob` (order 1–4 MB), an object URL, a `CaptureMeta` and a filename, all unreachable once the
+  sink resolves and the URL is revoked. This is a user-initiated one-shot outside the frame loop, and
+  it is excluded from the heap-growth gate by construction: the gate measures a 30 s window on a page
+  that never captures. A heap window that *does* contain a capture is not a steady-state measurement
+  and must not be reported as one. The frame-time spike of the extra render is likewise expected.
+  Nothing else about photo mode allocates: the cinematic camera writes into preallocated scratch and
+  the peak-γ statistic is a scalar comparison on the existing 10 Hz tick.
+
+### Explicitly excluded windows (not steady state)
+
+- **Photo capture (T0125).** One press of the capture key re-renders the scene once and allocates a PNG `Blob` (order 1–4 MB), an object URL, a `CaptureMeta` and a filename, all unreachable once the sink resolves and the URL is revoked in its `finally`. This is a user-initiated one-shot outside the frame loop, and it is excluded from the heap-growth gate by construction: the gate measures a 30 s window on a page that never captures. A heap window that *does* contain a capture is not a steady-state measurement and must not be reported as one; the frame-time spike of the extra render is expected for the same reason. Nothing else about photo mode allocates — the cinematic camera writes into preallocated scratch and the peak-γ statistic is a scalar comparison on the existing 10 Hz tick.
+
 ### DOM / HUD
 - Preact signals update leaf text nodes only — no re-render cascades; numeric readouts update at 10–20 Hz (imperceptible; FPS counter exempt), formatted via memoized formatters.
 - Animate only `transform`/`opacity` (compositor-only); never touch layout-triggering properties per frame; `contain: strict` on HUD panels.

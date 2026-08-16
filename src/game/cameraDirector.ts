@@ -6,25 +6,32 @@ import {
   slerpUnitDirectionInto,
   smootherstep,
 } from './cameraTransition.js';
+import { CinematicCameraController } from './cinematicCameraController.js';
 import {
   DEFAULT_TRANSFER_DURATION_SEC,
   type OrbitCameraController,
 } from './orbitCameraController.js';
 import type { CameraSettings } from './settings.js';
 
-/** Plan §2 shared contract. `cockpit` and `cinematic` arrive with T0124/T0125. */
+/** Plan §2 shared contract. `cockpit` arrives with T0124. */
 export type CameraMode = 'chase' | 'cockpit' | 'cinematic' | 'observatory';
 
-/** The modes this task implements, in the order `cycle()` walks them. */
+/**
+ * The modes this build implements, in the order `cycle()` walks them.
+ *
+ * Spec §5 fixes the ring as chase → cockpit → cinematic, with observatory reached
+ * from the map and the camera menu; observatory sits last so T0124 can insert
+ * `cockpit` at index 1 without moving anything else.
+ */
 export const IMPLEMENTED_CAMERA_MODES: readonly CameraMode[] = Object.freeze([
   'chase',
+  'cinematic',
   'observatory',
 ] as const);
 
 /** Task that owns each mode this build does not implement yet. */
 const PENDING_CAMERA_MODE_OWNERS: Readonly<Record<string, string>> = Object.freeze({
   cockpit: 'T0124',
-  cinematic: 'T0125',
 });
 
 /**
@@ -96,6 +103,7 @@ function assertImplemented(mode: CameraMode): void {
 export class CameraDirector {
   private readonly orbit: OrbitCameraController;
   private readonly chase: ChaseCameraController;
+  private readonly cinematic: CinematicCameraController;
   private readonly shipFocusId: string;
   private readonly shipPositionOffset: number;
   private readonly baseFovDeg: number;
@@ -146,6 +154,10 @@ export class CameraDirector {
     }
     this.orbit = options.orbit;
     this.chase = options.chase;
+    this.cinematic = new CinematicCameraController({
+      orbit: options.orbit,
+      baseFovDeg: options.baseFovDeg,
+    });
     this.shipFocusId = options.shipFocusId;
     this.shipPositionOffset = options.shipPositionOffset;
     this.baseFovDeg = options.baseFovDeg;
@@ -158,7 +170,9 @@ export class CameraDirector {
       defaultObservatoryFocusId === this.shipFocusId ? 'earth' : defaultObservatoryFocusId;
     // Keep the orbit camera's ring index on whatever the director is showing, so
     // `[` / `]` walk one ring across both modes.
-    if (initialMode === 'chase') this.orbit.focusBody(this.shipFocusId);
+    if (initialMode === 'chase' || initialMode === 'cinematic') {
+      this.orbit.focusBody(this.shipFocusId);
+    }
   }
 
   get mode(): CameraMode {
@@ -196,6 +210,13 @@ export class CameraDirector {
     if (mode === 'chase') {
       this.chase.resetArmOffsets();
       this.orbit.focusBody(this.shipFocusId);
+    } else if (mode === 'cinematic') {
+      // The 39 m view of the hull observatory must never show is exactly what
+      // photo mode is for.
+      this.orbit.focusBody(this.shipFocusId);
+      // Roll is a per-shot choice and starts level; the field of view is a lens
+      // the player picked and deliberately survives a mode change.
+      this.cinematic.reset();
     } else if (this.orbit.focusId === this.shipFocusId) {
       // Never hand the player a 39 m "observatory" view of their own hull.
       this.orbit.focusBody(this.lastObservatoryFocusId);
@@ -253,13 +274,63 @@ export class CameraDirector {
   }
 
   orbitBy(deltaYawRad: number, deltaPitchRad: number): void {
-    if (this.currentMode === 'chase') this.chase.orbitBy(deltaYawRad, deltaPitchRad);
-    else this.orbit.orbitBy(deltaYawRad, deltaPitchRad);
+    if (this.currentMode === 'chase') {
+      this.chase.orbitBy(deltaYawRad, deltaPitchRad);
+      return;
+    }
+    this.orbit.orbitBy(deltaYawRad, deltaPitchRad);
+    this.cinematic.noteInteraction();
   }
 
   zoomByWheel(wheelDelta: number): void {
-    if (this.currentMode === 'chase') this.chase.zoomByWheel(wheelDelta);
-    else this.orbit.zoomByWheel(wheelDelta);
+    if (this.currentMode === 'chase') {
+      this.chase.zoomByWheel(wheelDelta);
+      return;
+    }
+    this.orbit.zoomByWheel(wheelDelta);
+    this.cinematic.noteInteraction();
+  }
+
+  /**
+   * Camera roll, in radians; ignored outside cinematic (T0125).
+   *
+   * Reporting whether the input was consumed is what lets `Q`/`E` be camera roll
+   * in cinematic and stay free elsewhere without any caller knowing the mode.
+   */
+  rollCameraBy(deltaRad: number): boolean {
+    if (this.currentMode !== 'cinematic') return false;
+    this.cinematic.rollBy(deltaRad);
+    return true;
+  }
+
+  /** Field-of-view nudge inside the cinematic envelope; ignored in other modes. */
+  adjustCameraFovBy(deltaDeg: number): boolean {
+    if (this.currentMode !== 'cinematic') return false;
+    this.cinematic.adjustFovBy(deltaDeg);
+    return true;
+  }
+
+  /**
+   * Whether the hardcoded direct-focus camera keys (`[`, `]`, `E`, `J`) apply.
+   *
+   * False in cinematic: `E` is that mode's roll-right binding, and every one of
+   * those keys would leave the mode anyway, so the mode key is the way out.
+   */
+  get directFocusEnabled(): boolean {
+    return this.currentMode !== 'cinematic';
+  }
+
+  /** Cinematic read side, for the frozen `solarVoyagerCamera` browser diagnostic. */
+  get cinematicRollRad(): number {
+    return this.cinematic.rollRad;
+  }
+
+  get cinematicFovDeg(): number {
+    return this.cinematic.fovDeg;
+  }
+
+  get cinematicDrifting(): boolean {
+    return this.cinematic.drifting;
   }
 
   /** Arm length in ship lengths; surfaced for the browser camera diagnostic. */
@@ -313,6 +384,7 @@ export class CameraDirector {
   prime(attitudeQuaternion: Float64Array): void {
     this.orbit.update(0);
     this.chase.update(0, attitudeQuaternion, 0, 0, -1, false);
+    this.cinematic.update(0, this.currentMode === 'cinematic');
     this.writeActiveModePose();
     this.chase.reset();
   }
@@ -342,6 +414,9 @@ export class CameraDirector {
       clearanceBodyIndex,
       frozen,
     );
+    // After the orbit camera, because the cinematic up vector is derived from the
+    // orbit frame this step just recomputed.
+    this.cinematic.update(wallDtSec, this.currentMode === 'cinematic');
 
     if (!this.transitionActive) {
       this.writeActiveModePose();
@@ -373,6 +448,19 @@ export class CameraDirector {
       this.currentPose.upDirection.y = this.chase.upDirection.y;
       this.currentPose.upDirection.z = this.chase.upDirection.z;
       this.currentPose.fovDeg = this.baseFovDeg + this.chase.fovOffsetDeg;
+      return;
+    }
+    if (this.currentMode === 'cinematic') {
+      this.currentPose.positionKm.x = this.orbit.cameraPositionKm.x;
+      this.currentPose.positionKm.y = this.orbit.cameraPositionKm.y;
+      this.currentPose.positionKm.z = this.orbit.cameraPositionKm.z;
+      this.currentPose.lookDirection.x = this.orbit.lookDirection.x;
+      this.currentPose.lookDirection.y = this.orbit.lookDirection.y;
+      this.currentPose.lookDirection.z = this.orbit.lookDirection.z;
+      this.currentPose.upDirection.x = this.cinematic.upDirection.x;
+      this.currentPose.upDirection.y = this.cinematic.upDirection.y;
+      this.currentPose.upDirection.z = this.cinematic.upDirection.z;
+      this.currentPose.fovDeg = this.cinematic.fovDeg;
       return;
     }
     this.currentPose.positionKm.x = this.orbit.cameraPositionKm.x;
@@ -553,20 +641,22 @@ export class CameraDirector {
   }
 
   private endUpX(): number {
-    return this.currentMode === 'chase' ? this.chase.upDirection.x : 0;
+    if (this.currentMode === 'chase') return this.chase.upDirection.x;
+    return this.currentMode === 'cinematic' ? this.cinematic.upDirection.x : 0;
   }
 
   private endUpY(): number {
-    return this.currentMode === 'chase' ? this.chase.upDirection.y : 1;
+    if (this.currentMode === 'chase') return this.chase.upDirection.y;
+    return this.currentMode === 'cinematic' ? this.cinematic.upDirection.y : 1;
   }
 
   private endUpZ(): number {
-    return this.currentMode === 'chase' ? this.chase.upDirection.z : 0;
+    if (this.currentMode === 'chase') return this.chase.upDirection.z;
+    return this.currentMode === 'cinematic' ? this.cinematic.upDirection.z : 0;
   }
 
   private endFovDeg(): number {
-    return this.currentMode === 'chase'
-      ? this.baseFovDeg + this.chase.fovOffsetDeg
-      : this.baseFovDeg;
+    if (this.currentMode === 'chase') return this.baseFovDeg + this.chase.fovOffsetDeg;
+    return this.currentMode === 'cinematic' ? this.cinematic.fovDeg : this.baseFovDeg;
   }
 }

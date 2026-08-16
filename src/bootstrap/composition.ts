@@ -8,6 +8,7 @@ import {
   createNewGameSimulation,
   createRespawnPersistentState,
 } from '../game/createNewGameSimulation.js';
+import { CameraInputRouter, isCinematicOnlyAction } from '../game/cameraInputRouter.js';
 import { CruiseDirector } from '../game/flight/cruiseDirector.js';
 import { FlightController } from '../game/flight/flightController.js';
 import { FlightInputRouter } from '../game/flight/flightInputRouter.js';
@@ -15,6 +16,11 @@ import { createBodyRadiiKm } from '../game/hud/bodyMarkerCatalog.js';
 import { pickBodyIndexAtPixel, pickMapBodyIndexAtPixel } from '../game/hud/bodyPicking.js';
 import { HudInputRouter } from '../game/hud/hudInputRouter.js';
 import { isEditableTarget } from '../game/input/bindings.js';
+import {
+  DownloadCaptureSink,
+  type DownloadCapturePort,
+} from '../game/photo/downloadCaptureSink.js';
+import { PhotoCaptureController } from '../game/photo/photoCapture.js';
 import { GamepadPoller, type GamepadHost } from '../game/input/gamepad.js';
 import {
   InputEngine,
@@ -43,6 +49,7 @@ import { createEpochWorld, type EpochWorldMilestone } from '../render/createEpoc
 import { createRenderer, type RendererBootstrap } from '../render/createRenderer.js';
 import { calculateDrawingBufferDimension } from '../render/drawingBufferSize.js';
 import { ExposureController } from '../render/exposureController.js';
+import { CanvasFrameEncoder } from '../render/frameCapture.js';
 import { LightingPostPipeline } from '../render/lightingPostPipeline.js';
 import { PerfGovernor, createPerfQualityState } from '../render/perfGovernor.js';
 import { RelativisticVisualController } from '../render/relativisticVisualController.js';
@@ -77,6 +84,7 @@ import {
   createAudioRuntimeDiagnostics,
   createBurnLogRuntimeDiagnostics,
   createCameraRuntimeDiagnostics,
+  createPhotoRuntimeDiagnostics,
   createExposureRuntimeDiagnostics,
   createRuntimeResourceCounts,
   createShipRuntimeDiagnostics,
@@ -167,6 +175,28 @@ function createBrowserGamepadHost(): GamepadHost {
     },
   };
 }
+
+/**
+ * The browser side of the photo download sink (T0125).
+ *
+ * Deliberately identical in shape to `browserSessionFilePort.saveJson`, which has
+ * shipped this same detached-anchor-then-revoke sequence since v1: the download
+ * has already been handed to the browser when `click()` returns, so releasing the
+ * object URL immediately is what keeps a multi-megabyte blob from being pinned
+ * for the page's lifetime.
+ */
+const browserDownloadCapturePort: DownloadCapturePort = Object.freeze({
+  createObjectUrl: (blob: Blob) => URL.createObjectURL(blob),
+  revokeObjectUrl: (url: string) => {
+    URL.revokeObjectURL(url);
+  },
+  saveAs: (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = url;
+    link.click();
+  },
+});
 
 /**
  * One-shot user-gesture port for the audio engine (T0144, ADR-041).
@@ -385,6 +415,8 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       // A restore or a new game teleports the ship; without this the chase arm
       // would spend 0.7 s of spring flying across the gap it never travelled.
       runtime.world?.cameraDirector.resetChase();
+      // Peak gamma is a per-session statistic, and this is a different session.
+      runtime.photoCapture?.resetStatistics();
       impactStore.publish(replacement.snapshot, restorePoints.count);
       // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
       // and the regime scaling below depends on it — so the vessel goes first.
@@ -897,12 +929,14 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     trajectoryPredictionStore,
     updateBurnLogRuntime,
 
+    cameraInputRouter: null,
     cruiseDirector: null,
     flightController: null,
     flightInputRouter: null,
     hudInputRouter: null,
     inputEngine: null,
     perfGovernor: null,
+    photoCapture: null,
     postPipeline: null,
     relativisticVisuals: null,
     stateVectorWidget: null,
@@ -1197,6 +1231,22 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       postProcessingEnabled ? 1 : SOFTWARE_FALLBACK_EXPOSURE,
     );
     runtime.postPipeline = postPipeline;
+    // T0125 — the photo path re-renders through this same pipeline, so a capture
+    // is the frame the player is looking at and `preserveDrawingBuffer` stays
+    // false (design doc section 3.1).
+    const photoSink = new DownloadCaptureSink(browserDownloadCapturePort);
+    const photoCapture = new PhotoCaptureController({
+      frames: new CanvasFrameEncoder({
+        canvas,
+        renderFrame: () => {
+          postPipeline.render(postProcessingEnabled);
+        },
+      }),
+      sink: photoSink,
+      snapshot: () => session.simulation.snapshot,
+    });
+    runtime.photoCapture = photoCapture;
+    createPhotoRuntimeDiagnostics(canvas, photoCapture, photoSink);
     const exposureController = new ExposureController({
       sink: postPipeline,
       positionsKm: world.positionsKm,
@@ -1291,6 +1341,10 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       // A gamepad has no per-event target to gate on the way keyboard does;
       // this is the one shared UI-focus predicate every input source uses.
       isTextEntryActive: () => isEditableTarget(document.activeElement),
+      // T0125 — the camera's mode-scoped keys are claimed only while that mode
+      // is running, so `E` keeps focusing Earth everywhere else.
+      isActionActive: (action) =>
+        !isCinematicOnlyAction(action) || activeWorld.cameraDirector.mode === 'cinematic',
     });
     runtime.inputEngine = inputEngine;
     const flightController = new FlightController({
@@ -1322,6 +1376,16 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       toggleBodyLabels: () => {
         hudPresetStore.toggleBodyLabels();
         persistHudPreferences();
+      },
+    });
+    // T0125 — camera roll, field of view and the shutter, from the same polled
+    // frame the flight and HUD routers read. The director reports whether the
+    // active mode consumed the input, so Q/E are inert outside cinematic.
+    runtime.cameraInputRouter = new CameraInputRouter({
+      rollCameraBy: (deltaRad) => activeWorld.cameraDirector.rollCameraBy(deltaRad),
+      adjustCameraFovBy: (deltaDeg) => activeWorld.cameraDirector.adjustCameraFovBy(deltaDeg),
+      capturePhoto: () => {
+        void runtime.photoCapture?.capture();
       },
     });
     inputEngine.setThrottleAxis(

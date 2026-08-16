@@ -34,6 +34,15 @@ export const INPUT_ACTIONS = Object.freeze([
   // rebinding UI, rather than becoming two more hardcoded camera-style keys.
   'hudPresetCycle',
   'hudBodyLabelsToggle',
+  // T0125 cinematic camera and photo mode, on the same reasoning. Roll and field
+  // of view are level-queried so a held key is continuous, which a keydown ladder
+  // in `ui/cameraInputController.ts` could not be. Appended, never reordered:
+  // `parseInputBindings` backfills a new action into an older profile.
+  'cameraRollLeft',
+  'cameraRollRight',
+  'cameraFovNarrow',
+  'cameraFovWiden',
+  'photoCapture',
 ] as const);
 
 /** Per-axis gamepad calibration: pitch/yaw/roll are rate axes, throttle is the trigger pair. */
@@ -337,6 +346,11 @@ const DEFAULT_INPUT_BINDINGS: Record<InputAction, string> = {
   cruiseAbort: 'KeyV',
   hudPresetCycle: 'KeyH',
   hudBodyLabelsToggle: 'KeyL',
+  cameraRollLeft: 'KeyQ',
+  cameraRollRight: 'KeyE',
+  cameraFovNarrow: 'Comma',
+  cameraFovWiden: 'Period',
+  photoCapture: 'KeyP',
 };
 
 /** Gamepad shaping defaults and valid ranges (T0106 brief: deadzone 0.08, curve exponent 1.6). */

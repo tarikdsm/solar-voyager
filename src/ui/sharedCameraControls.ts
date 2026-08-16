@@ -18,6 +18,8 @@ export interface SharedCameraTarget {
   cycleFocus(step: number): string;
   /** Only the space camera has modes; see {@link CameraControlPort.cycleCameraMode}. */
   cycle?(): void;
+  /** Only the space camera can suppress them; see {@link CameraControlPort.directFocusEnabled}. */
+  readonly directFocusEnabled?: boolean;
 }
 
 /**
@@ -90,5 +92,10 @@ export class SharedCameraControls implements CameraControlPort {
    */
   cycleCameraMode(): void {
     this.camera.cycle?.();
+  }
+
+  /** Relayed from the camera, so only the mode owner decides (T0125). */
+  get directFocusEnabled(): boolean {
+    return this.camera.directFocusEnabled ?? true;
   }
 }

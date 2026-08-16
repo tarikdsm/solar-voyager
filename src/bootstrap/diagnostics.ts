@@ -1,5 +1,5 @@
-import type { AudioSystem } from '../game/audio/audioSystem.js';
 import type { CameraDirector, CameraMode } from '../game/cameraDirector.js';
+import type { CaptureStatus, PhotoCaptureController } from '../game/photo/photoCapture.js';
 import type { StartupDiagnostic } from '../game/startupTracker.js';
 import type { SystemMapMode } from '../game/systemMapController.js';
 import type { TutorialController } from '../game/tutorialController.js';
@@ -8,9 +8,10 @@ import type { EpochWorld } from '../render/createEpochWorld.js';
 import type { ExposureController } from '../render/exposureController.js';
 import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
+import type { AudioSystem } from '../game/audio/audioSystem.js';
 
 /**
- * The frozen browser-diagnostic contract: nine `canvas.solarVoyager*` objects
+ * The frozen browser-diagnostic contract: ten `canvas.solarVoyager*` objects
  * that roughly 25 Playwright gates read by property name.
  *
  * Every definition site is a literal
@@ -19,7 +20,7 @@ import type { BurnLogEntry } from '../sim/ship/ledger.js';
  * asserts that both the member lists and the definition sites are exactly these.
  * Extend them; never drop a field (`AGENTS.md` Global Constraints).
  *
- * `solarVoyagerTelemetry` is the tenth canvas property and is not here:
+ * `solarVoyagerTelemetry` is the ninth canvas property and is not here:
  * `render/telemetry.ts` owns it behind `RENDER_TELEMETRY_PROPERTY`.
  */
 
@@ -70,6 +71,31 @@ export interface CameraRuntimeDiagnostics {
   readonly positionXKm: number;
   readonly positionYKm: number;
   readonly positionZKm: number;
+  /** Cinematic mode (T0125); zero and inert in every other mode. */
+  readonly cinematicRollRad: number;
+  readonly cinematicFovDeg: number;
+  readonly cinematicDrifting: boolean;
+  readonly directFocusEnabled: boolean;
+}
+
+/**
+ * Photo capture (T0125), so a browser gate can prove a capture happened without
+ * a download landing on the runner's disk: how many were taken, how many were
+ * dropped as re-entrant, what the sink named the last one and what it stamped.
+ */
+export interface PhotoRuntimeDiagnostics {
+  readonly status: CaptureStatus;
+  readonly captureCount: number;
+  readonly dropCount: number;
+  readonly lastError: string | null;
+  readonly lastFilename: string | null;
+  readonly lastSimTimeSec: number;
+  readonly lastTauSec: number;
+  readonly lastDominantBodyId: string | null;
+  readonly lastGammaMax: number;
+  readonly lastPositionXKm: number;
+  readonly lastPositionYKm: number;
+  readonly lastPositionZKm: number;
 }
 
 /**
@@ -123,51 +149,6 @@ export interface BurnLogRuntimeDiagnostics {
   completedCount: number;
   publishCount: number;
   structuralRebuildCount: number;
-}
-
-/**
- * T0144 (ADR-041) — the audio subsystem, observable from a browser gate.
- *
- * `contextState` is `'none'` until a user gesture arrives, which is the whole
- * autoplay contract made testable: a harness that never clicks must see
- * `'none'`, `unlocked === false` and `contextCreationCount === 0` for the life
- * of the page.
- *
- * `RuntimeResourceCounts` deliberately does not carry `audioContextCreations`
- * instead: two `deepEqual` whole-shape pins in `tools/tests/mainMenuRegression.mjs`
- * compare that object in full, and the count is gesture-dependent — it would make
- * an unrelated gate's fixture depend on how the harness happens to reach the
- * space phase.
- */
-export interface AudioRuntimeDiagnostics {
-  readonly identity: 'solarVoyagerAudio.v1';
-  readonly unlocked: boolean;
-  readonly contextState: string;
-  readonly contextCreationCount: number;
-  readonly unlockAttemptCount: number;
-  readonly paramWriteCount: number;
-  readonly suspendedByVisibility: boolean;
-  readonly musicContext: string;
-  /**
-   * Live equal-power crossfade weights, in `MUSIC_CONTEXTS` order.
-   *
-   * Exposed because a browser gate cannot otherwise tell "the mix is settled"
-   * from "the 4 s opening crossfade is still running": the bus gains go quiet
-   * long before the layer weights do, and the weights are what keep writing.
-   * T0145 reads the same array to prove its stems crossfade.
-   */
-  readonly musicLayerGains: Float64Array;
-  readonly perspective: string;
-  readonly warningActive: boolean;
-  readonly masterGain: number;
-  readonly musicBusGain: number;
-  readonly sfxBusGain: number;
-  readonly uiBusGain: number;
-  readonly engineGain: number;
-  readonly engineCutoffHz: number;
-  readonly engineDetuneCents: number;
-  readonly warpMuffle: number;
-  readonly gammaStress: number;
 }
 
 export interface TutorialRuntimeDiagnostics {
@@ -428,6 +409,18 @@ export function createCameraRuntimeDiagnostics(
          * the process: it stays at the arm length while chasing and grows to
          * astronomical values in observatory mode.
          */
+        get cinematicRollRad() {
+          return cameraDirector.cinematicRollRad;
+        },
+        get cinematicFovDeg() {
+          return cameraDirector.cinematicFovDeg;
+        },
+        get cinematicDrifting() {
+          return cameraDirector.cinematicDrifting;
+        },
+        get directFocusEnabled() {
+          return cameraDirector.directFocusEnabled;
+        },
         get shipDistanceKm() {
           return Math.hypot(
             (shipPositionsKm[shipPositionOffset] as number) - cameraDirector.pose.positionKm.x,
@@ -441,6 +434,157 @@ export function createCameraRuntimeDiagnostics(
   ) as CameraRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerCamera', { value: diagnostics });
   return diagnostics;
+}
+
+export function createPhotoRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  photoCapture: PhotoCaptureController,
+  sink: { readonly lastFilename: string | null },
+): PhotoRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get status() {
+          return photoCapture.status;
+        },
+        get captureCount() {
+          return photoCapture.captureCount;
+        },
+        get dropCount() {
+          return photoCapture.dropCount;
+        },
+        get lastError() {
+          return photoCapture.lastError;
+        },
+        get lastFilename() {
+          return sink.lastFilename;
+        },
+        get lastSimTimeSec() {
+          return photoCapture.lastMeta?.simTimeSec ?? Number.NaN;
+        },
+        get lastTauSec() {
+          return photoCapture.lastMeta?.tauSec ?? Number.NaN;
+        },
+        get lastDominantBodyId() {
+          return photoCapture.lastMeta?.dominantBodyId ?? null;
+        },
+        get lastGammaMax() {
+          return photoCapture.lastMeta?.gammaMax ?? Number.NaN;
+        },
+        get lastPositionXKm() {
+          return photoCapture.lastMeta?.positionKm.x ?? Number.NaN;
+        },
+        get lastPositionYKm() {
+          return photoCapture.lastMeta?.positionKm.y ?? Number.NaN;
+        },
+        get lastPositionZKm() {
+          return photoCapture.lastMeta?.positionKm.z ?? Number.NaN;
+        },
+      },
+      null,
+    ),
+  ) as PhotoRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerPhoto', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createExposureRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  exposureController: ExposureController,
+): ExposureRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get mode() {
+          return exposureController.mode;
+        },
+        get userMode() {
+          return exposureController.playerMode;
+        },
+        get governorMode() {
+          return exposureController.qualityMode;
+        },
+        get exposure() {
+          return exposureController.exposure;
+        },
+        get targetExposure() {
+          return exposureController.targetExposure;
+        },
+        get sceneLuminance() {
+          return exposureController.sceneLuminance;
+        },
+      },
+      null,
+    ),
+  ) as ExposureRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerExposure', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createSystemMapRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  seed: SystemMapDiagnosticSeed,
+): SystemMapRuntimeDiagnostics {
+  const diagnostics: SystemMapRuntimeDiagnostics = {
+    scene: seed.scene,
+    mapSceneCreations: 1,
+    mode: seed.mode,
+    focusBodyId: seed.focusBodyId,
+    targetBodyId: null,
+    simulationTimeSec: seed.simulationTimeSec,
+    spaceRenderCount: 0,
+    spaceRenderCountAtModeChange: 0,
+    mapRenderCount: 0,
+    trajectoryLineVisible: false,
+    trajectoryMarkersVisible: false,
+  };
+  Object.defineProperty(canvas, 'solarVoyagerSystemMap', { value: diagnostics });
+  return diagnostics;
+}
+
+/**
+ * T0144 (ADR-041) — the audio subsystem, observable from a browser gate.
+ *
+ * `contextState` is `'none'` until a user gesture arrives, which is the whole
+ * autoplay contract made testable: a harness that never clicks must see
+ * `'none'`, `unlocked === false` and `contextCreationCount === 0` for the life
+ * of the page.
+ *
+ * `RuntimeResourceCounts` deliberately does not carry `audioContextCreations`
+ * instead: two `deepEqual` whole-shape pins in `tools/tests/mainMenuRegression.mjs`
+ * compare that object in full, and the count is gesture-dependent — it would make
+ * an unrelated gate's fixture depend on how the harness happens to reach the
+ * space phase.
+ */
+export interface AudioRuntimeDiagnostics {
+  readonly identity: 'solarVoyagerAudio.v1';
+  readonly unlocked: boolean;
+  readonly contextState: string;
+  readonly contextCreationCount: number;
+  readonly unlockAttemptCount: number;
+  readonly paramWriteCount: number;
+  readonly suspendedByVisibility: boolean;
+  readonly musicContext: string;
+  /**
+   * Live equal-power crossfade weights, in `MUSIC_CONTEXTS` order.
+   *
+   * Exposed because a browser gate cannot otherwise tell "the mix is settled"
+   * from "the 4 s opening crossfade is still running": the bus gains go quiet
+   * long before the layer weights do, and the weights are what keep writing.
+   * T0145 reads the same array to prove its stems crossfade.
+   */
+  readonly musicLayerGains: Float64Array;
+  readonly perspective: string;
+  readonly warningActive: boolean;
+  readonly masterGain: number;
+  readonly musicBusGain: number;
+  readonly sfxBusGain: number;
+  readonly uiBusGain: number;
+  readonly engineGain: number;
+  readonly engineCutoffHz: number;
+  readonly engineDetuneCents: number;
+  readonly warpMuffle: number;
+  readonly gammaStress: number;
 }
 
 export function createAudioRuntimeDiagnostics(
@@ -513,59 +657,5 @@ export function createAudioRuntimeDiagnostics(
     ),
   ) as AudioRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerAudio', { value: diagnostics });
-  return diagnostics;
-}
-
-export function createExposureRuntimeDiagnostics(
-  canvas: HTMLCanvasElement,
-  exposureController: ExposureController,
-): ExposureRuntimeDiagnostics {
-  const diagnostics = Object.freeze(
-    Object.setPrototypeOf(
-      {
-        get mode() {
-          return exposureController.mode;
-        },
-        get userMode() {
-          return exposureController.playerMode;
-        },
-        get governorMode() {
-          return exposureController.qualityMode;
-        },
-        get exposure() {
-          return exposureController.exposure;
-        },
-        get targetExposure() {
-          return exposureController.targetExposure;
-        },
-        get sceneLuminance() {
-          return exposureController.sceneLuminance;
-        },
-      },
-      null,
-    ),
-  ) as ExposureRuntimeDiagnostics;
-  Object.defineProperty(canvas, 'solarVoyagerExposure', { value: diagnostics });
-  return diagnostics;
-}
-
-export function createSystemMapRuntimeDiagnostics(
-  canvas: HTMLCanvasElement,
-  seed: SystemMapDiagnosticSeed,
-): SystemMapRuntimeDiagnostics {
-  const diagnostics: SystemMapRuntimeDiagnostics = {
-    scene: seed.scene,
-    mapSceneCreations: 1,
-    mode: seed.mode,
-    focusBodyId: seed.focusBodyId,
-    targetBodyId: null,
-    simulationTimeSec: seed.simulationTimeSec,
-    spaceRenderCount: 0,
-    spaceRenderCountAtModeChange: 0,
-    mapRenderCount: 0,
-    trajectoryLineVisible: false,
-    trajectoryMarkersVisible: false,
-  };
-  Object.defineProperty(canvas, 'solarVoyagerSystemMap', { value: diagnostics });
   return diagnostics;
 }

@@ -106,6 +106,11 @@ const INPUT_ACTION_LABELS: Readonly<Record<InputAction, string>> = Object.freeze
   cruiseAbort: 'Cruise abort (reserved)',
   hudPresetCycle: 'Cycle HUD preset',
   hudBodyLabelsToggle: 'Toggle body labels',
+  cameraRollLeft: 'Camera roll left (cinematic)',
+  cameraRollRight: 'Camera roll right (cinematic)',
+  cameraFovNarrow: 'Camera zoom in (cinematic)',
+  cameraFovWiden: 'Camera zoom out (cinematic)',
+  photoCapture: 'Take photo',
 });
 
 const AUDIO_BUS_LABELS: Readonly<Record<AudioBus, string>> = Object.freeze({

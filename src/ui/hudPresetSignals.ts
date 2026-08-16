@@ -20,6 +20,15 @@ import {
 export interface HudPresetSignals {
   readonly preset: Signal<HudPreset>;
   readonly bodyLabels: Signal<boolean>;
+  /**
+   * Whole-HUD suppression, independent of the preset (T0125).
+   *
+   * Cinematic mode hides the instrument surfaces without changing which preset
+   * the player is on, so cycling back out restores exactly what was there. The
+   * frame loop assigns this every frame from the camera mode; an unchanged value
+   * is a no-op in `@preact/signals`, so it costs nothing.
+   */
+  readonly hudHidden: Signal<boolean>;
 }
 
 export interface HudPresetDisplaySignals {
@@ -37,6 +46,7 @@ export interface HudPresetStore {
   cyclePreset(): HudPreset;
   setBodyLabels(enabled: boolean): void;
   toggleBodyLabels(): boolean;
+  setHudHidden(hidden: boolean): void;
 }
 
 class SignalHudPresetStore implements HudPresetStore {
@@ -45,7 +55,11 @@ class SignalHudPresetStore implements HudPresetStore {
   private readonly surfaceSignals = new Map<HudSurface, ReadonlySignal<boolean>>();
 
   constructor(preset: HudPreset, bodyLabels: boolean) {
-    this.signals = { preset: signal(preset), bodyLabels: signal(bodyLabels) };
+    this.signals = {
+      preset: signal(preset),
+      bodyLabels: signal(bodyLabels),
+      hudHidden: signal(false),
+    };
     this.display = {
       presetLabel: computed(() => formatHudPreset(this.signals.preset.value)),
       bodyLabelsLabel: computed(() => (this.signals.bodyLabels.value ? 'Labels on' : 'Labels off')),
@@ -85,6 +99,10 @@ class SignalHudPresetStore implements HudPresetStore {
     const next = !this.signals.bodyLabels.value;
     this.signals.bodyLabels.value = next;
     return next;
+  }
+
+  setHudHidden(hidden: boolean): void {
+    this.signals.hudHidden.value = hidden;
   }
 }
 
