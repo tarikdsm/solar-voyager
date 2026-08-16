@@ -22,7 +22,7 @@ const TARGET_SAMPLE_MIN = 96;
 const TARGET_SAMPLE_MAX = 160;
 /** Silhouette sampling stays inside this radius so nothing off-axis leaks in. */
 const SILHOUETTE_RADIUS_PX = 120;
-const SILHOUETTE_LUMINANCE = 8;
+const SILHOUETTE_LUMINANCE = 0;
 const SATURN_POSITION_KM = { x: -5 * AU_KM, y: -10 * AU_KM, z: 0 };
 
 interface SilhouetteMetrics {
@@ -32,6 +32,8 @@ interface SilhouetteMetrics {
   readonly axisRatio: number;
   readonly majorAxisPx: number;
   readonly minorAxisPx: number;
+  readonly boundsWidthPx: number;
+  readonly boundsHeightPx: number;
 }
 
 interface VisualTierSnapshot {
@@ -245,7 +247,16 @@ function silhouetteMetrics(): SilhouetteMetrics {
       sumY += y + 0.5;
     }
   }
-  if (area === 0) return { area: 0, axisRatio: 0, majorAxisPx: 0, minorAxisPx: 0 };
+  if (area === 0) {
+    return {
+      area: 0,
+      axisRatio: 0,
+      majorAxisPx: 0,
+      minorAxisPx: 0,
+      boundsWidthPx: 0,
+      boundsHeightPx: 0,
+    };
+  }
   const meanX = sumX / area;
   const meanY = sumY / area;
   let varianceX = 0;
@@ -276,11 +287,34 @@ function silhouetteMetrics(): SilhouetteMetrics {
   const gap = Math.sqrt((varianceX - varianceY) ** 2 + 4 * covariance * covariance);
   const major = Math.sqrt(Math.max(0, (trace + gap) / 2)) * 4;
   const minor = Math.sqrt(Math.max(0, (trace - gap) / 2)) * 4;
+  let minimumX = VIEWPORT_SIZE;
+  let maximumX = 0;
+  let minimumY = VIEWPORT_SIZE;
+  let maximumY = 0;
+  for (let y = 0; y < VIEWPORT_SIZE; y += 1) {
+    for (let x = 0; x < VIEWPORT_SIZE; x += 1) {
+      const dx = x + 0.5 - center;
+      const dy = y + 0.5 - center;
+      if (dx * dx + dy * dy > SILHOUETTE_RADIUS_PX * SILHOUETTE_RADIUS_PX) continue;
+      const offset = (y * VIEWPORT_SIZE + x) * 4;
+      const luminance =
+        (pixels[offset] ?? 0) * 0.2126 +
+        (pixels[offset + 1] ?? 0) * 0.7152 +
+        (pixels[offset + 2] ?? 0) * 0.0722;
+      if (luminance <= SILHOUETTE_LUMINANCE) continue;
+      minimumX = Math.min(minimumX, x);
+      maximumX = Math.max(maximumX, x);
+      minimumY = Math.min(minimumY, y);
+      maximumY = Math.max(maximumY, y);
+    }
+  }
   return {
     area,
     axisRatio: major === 0 ? 0 : minor / major,
     majorAxisPx: major,
     minorAxisPx: minor,
+    boundsWidthPx: maximumX - minimumX + 1,
+    boundsHeightPx: maximumY - minimumY + 1,
   };
 }
 

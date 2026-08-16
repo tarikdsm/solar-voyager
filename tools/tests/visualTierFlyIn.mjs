@@ -4,7 +4,9 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 const HOST = '127.0.0.1';
-const PORT = 4177;
+// Overridable so parallel worktrees on one machine do not collide on the port;
+// CI and the default `npm run test:visual-tiers` keep 4177.
+const PORT = Number(process.env.VISUAL_TIER_PORT ?? 4177);
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/visualTierFlyIn.html`;
 const AU_KM = 149_597_870.7;
 const EARTH_LEO_CENTER_KM = 6_371.0084 + 400;
