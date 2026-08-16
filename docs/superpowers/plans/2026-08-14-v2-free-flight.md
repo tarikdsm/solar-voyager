@@ -64,11 +64,11 @@ src/
 │   ├── simulation.ts                       # MOD  vessel injection, collision, slew (T0104/07/11)
 │   └── simulationSnapshot.ts               # MOD  impact fields + vessel echo (ADR) (T0111)
 ├── core/time.ts                            # MOD  MAX_THRUST_WARP retune (T0115)
+├── bootstrap/                              # LANDED decomposed main.ts modules (T0113)
+│   ├── composition.ts                      #      wiring order (transcribed from main.ts)
+│   ├── frameLoop.ts                        #      commands→step→snapshot→render+UI
+│   └── diagnostics.ts                      #      the 6 canvas contracts + RuntimeResourceCounts
 ├── game/
-│   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
-│   │   ├── composition.ts                  #      wiring order (transcribed from main.ts)
-│   │   ├── frameLoop.ts                    #      commands→step→snapshot→render+UI
-│   │   └── diagnostics.ts                  #      the 6 canvas contracts + RuntimeResourceCounts
 │   ├── input/                              # NEW  input engine (T0105) + gamepad (T0106)
 │   │   ├── inputEngine.ts                  #      pointer-lock, axes, focus policy
 │   │   ├── bindings.ts                     #      actions/axes registry (settings-backed)
@@ -622,7 +622,7 @@ milestone: V2M1
 spec: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md §12.3
 acceptance:
   - New tests/architecture/diagnosticsContract.test.ts asserts all 6 canvas diagnostics + RuntimeResourceCounts shapes BEFORE the split; unchanged after
-  - main.ts <= 200 lines (imports + composition call); game/bootstrap/{composition,frameLoop,diagnostics}.ts own the rest verbatim (behavior-preserving)
+  - main.ts <= 200 lines (imports + composition call); src/bootstrap/{composition,frameLoop,diagnostics}.ts own the rest verbatim (behavior-preserving). NAMING-RULE DEVIATION, T0113: the planned `game/bootstrap/` is impossible — `import/no-restricted-paths` forbids `src/game` importing `src/render`+`src/ui`, and the composition root must import both. It lives at `src/bootstrap/`, beside `main.ts` and outside every layer, and `docs/architecture.md` is corrected in the same PR.
   - All 24 Playwright harnesses green without modification (proof the contracts held)
   - Frame-loop instrumentation seams (sim/render/ui ms splits) preserved exactly
 handoff_notes: "Behavior-preserving refactor ONLY — no new features. Move code, keep order. The startup sequence order (renderer->world->probe->menu->activation) is hard-won; transcribe, don't re-derive."

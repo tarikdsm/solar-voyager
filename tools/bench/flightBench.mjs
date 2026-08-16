@@ -22,6 +22,10 @@ const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 const STEADY_HEAP_SETTLE_MS = 30_000;
 const STEADY_HEAP_MEASURE_MS = 30_000;
+/** `hudPresetCycle`'s default binding, and the clean|pilot|engineer ring length. */
+const HUD_PRESET_CYCLE_KEY = 'KeyH';
+const HUD_PRESET_RING_LENGTH = 3;
+const HUD_PRESET_SETTLE_MS = 100;
 const DEFAULT_SAMPLE_FRAMES = 900;
 const DEFAULT_OUTPUT = 'docs/bench/T0092-flight.json';
 const PRIMING_RUNS = 2;
@@ -94,6 +98,38 @@ function addBrowserErrorListeners(page, errors) {
   page.on('crash', () => errors.push('page crash'));
 }
 
+/**
+ * Cycles the HUD to the Engineer preset before anything is measured.
+ *
+ * T0112 made **Clean** the out-of-the-box HUD, which unmounts `#orbit-readout` —
+ * the panel `validateFlightRoute` reads to confirm each checkpoint actually
+ * rendered. `installHighQualitySetting` deliberately plants the pre-T0106 v2
+ * profile to exercise the settings migration chain, and that chain backfills
+ * `hud.preset: 'clean'`, so since T0112 this harness could never reach its own
+ * checkpoint assertion: `npm run bench` fails on `main` with a 5 s timeout on
+ * `#orbit-title`. `bench` is not a CI step, which is why nothing caught it.
+ * Found and repaired while producing T0113's required bench evidence; the same
+ * failure reproduces on the pre-split tree.
+ *
+ * Pressing the bound cycle key instead of planting an Engineer profile keeps
+ * both things the fixture exists for — `qualityLock: 'high'` (the measured
+ * workload) and the v2 -> v5 migration coverage — and keeps the measured HUD the
+ * same full instrument set every pre-T0112 baseline was taken with.
+ *
+ * A loop rather than two fixed presses because the app persists the preset it
+ * lands on: the priming runs write a v5 profile that already reads Engineer, and
+ * `SettingsRepository` prefers the newest generation, so a blind double-press
+ * would cycle the second run straight back past Clean.
+ */
+async function cycleToEngineerHud(page) {
+  for (let attempt = 0; attempt < HUD_PRESET_RING_LENGTH; attempt += 1) {
+    if ((await page.locator('#orbit-title').count()) > 0) return;
+    await page.keyboard.press(HUD_PRESET_CYCLE_KEY);
+    await page.waitForTimeout(HUD_PRESET_SETTLE_MS);
+  }
+  await page.waitForSelector('#orbit-title', { state: 'attached', timeout: 5_000 });
+}
+
 async function waitForReady(page) {
   const response = await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
   if (!response?.ok()) throw new Error(`Production page returned ${String(response?.status())}.`);
@@ -101,6 +137,7 @@ async function waitForReady(page) {
     '#space-canvas[data-renderer-ready="true"][data-camera-ready="true"]',
     { state: 'attached', timeout: 30_000 },
   );
+  await cycleToEngineerHud(page);
   await page.waitForFunction(
     (telemetryProperty) => {
       const canvas = globalThis.document.querySelector('#space-canvas');

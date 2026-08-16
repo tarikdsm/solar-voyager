@@ -1,0 +1,48 @@
+id: T0113
+title: Decompose main.ts into bootstrap modules with a diagnostics contract test
+status: REVIEW
+agent: claude
+branch: task/T0113-bootstrap-decomposition
+depends_on: [T0103]
+milestone: V2M1
+spec: |
+  Every V2M1 task added wiring to src/main.ts, which reached 1,656 lines. Pay that down with a
+  strictly behaviour-preserving refactor, protected by a contract test written BEFORE any code moves,
+  and close the milestone.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 12.3;
+  design doc docs/superpowers/specs/2026-08-16-bootstrap-decomposition-design.md.
+acceptance:
+  - A diagnostics contract test asserts every frozen canvas diagnostic and RuntimeResourceCounts BEFORE the split, and is unchanged after
+  - main.ts is imports plus a composition call; the bootstrap modules own the rest verbatim
+  - Every browser gate passes unmodified, proving the contracts held
+  - Frame-loop instrumentation seams (sim, render and UI millisecond splits) are preserved exactly
+handoff_notes: |
+  main.ts 1,656 -> 53 lines. The modules landed in src/bootstrap/, NOT src/game/bootstrap/ as the plan
+  said: ESLint's import/no-restricted-paths forbids game/ importing render/ and ui/, which a
+  composition root must do. The implementer verified this with a probe before choosing the layout
+  rather than discovering it late; architecture.md and the plan are corrected in the same PR under the
+  plan's own naming rule. composition.ts is 1,257 lines and wants a fourth module before V2M2 adds
+  more wiring.
+  The contract test (tests/architecture/diagnosticsContract.test.ts) was written and committed FIRST,
+  passing against the unsplit main.ts, then left unchanged across the move. Roughly 25 browser gates
+  read those diagnostics and only mainMenuRegression pinned their shape, so this test is the safety
+  net the refactor rested on.
+  npm run bench was ALREADY BROKEN ON MAIN before this task: T0112 made Clean the default HUD and
+  validateFlightRoute waits on the Engineer-only #orbit-title, and bench is not a CI step so nothing
+  caught it. The implementer reproduced the identical failure on the pre-split tree first, proving it
+  was inherited, then repaired the harness in its own commit — this task cannot produce its mandated
+  frame-loop evidence otherwise.
+  Verification: 38 checks green run one at a time — lint, typecheck, format, 1,267 Vitest, build, all
+  29 browser gates, the Python tool suite and every check:* script. Bench: frame and work median and
+  p75 identical, draw calls and triangles bit-identical, heap +3,004 B against the 196,608 B ceiling,
+  entry gzip -270 B. No golden or budget re-baselined.
+  V2M1 EXIT ASSESSMENT — 3 of 5 met, 2 require a human and are recorded honestly rather than asserted:
+  all v1 sim goldens green (met); crash and restore covered at sim, game and UI level (met, though no
+  gate crashes the production page end to end); the ship is visible and flies with a chase camera
+  (met). NOT verified: hand-flying Earth to Moon with mouse-look — automated proxies pass but nothing
+  covers whether a real mouse gesture acquires Pointer Lock, which cameraControlsRegression's own
+  header already records as a gap. NOT verified: 60 fps on the performance-spec reference machine at
+  gameplay resolution — every V2M1 task shipped the same bench-machine evidence instead.
+  Unrelated observations left unfixed, per the behaviour-preserving rule: burnLogPanelRegression.mjs is
+  orphaned (no script, no CI); test:system-map-panel, ring-systems and ring-flythrough exist in
+  package.json but not in CI; .prettierignore does not cover .claude/.

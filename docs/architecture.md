@@ -14,12 +14,20 @@ core  ←  sim  ←  game  ←  render / ui
   (`game/input/`: binding registry, shared UI-focus policy, pointer lock, per-frame `InputFrame`).
 - **`src/render/`** — three.js scenes. Consumes snapshots, owns the float64→float32 camera-relative boundary.
 - **`src/ui/`** — Preact + @preact/signals HUD overlay (DOM, above the canvas).
+- **`src/main.ts` + `src/bootstrap/`** — the composition root, deliberately **outside** every layer
+  directory. Joining `sim`, `game`, `render` and `ui` is its entire job, so it is the one place that
+  imports from all of them; putting it inside any layer would violate `import/no-restricted-paths`
+  (T0113 verified this: `src/game/bootstrap/` cannot import `render/`). `main.ts` resolves the
+  document contract and calls `bootstrap/composition.ts`; `bootstrap/frameLoop.ts` owns the
+  animation-frame callback and the state it shares with composition; `bootstrap/diagnostics.ts`
+  owns the seven frozen `canvas.solarVoyager*` browser-diagnostic objects.
 
 ## Directory layout
 
 ```
 src/
-├── main.ts                     # bootstrap, wires sceneManager
+├── main.ts                     # entry: resolves the document contract, calls the composition root
+├── bootstrap/                  # composition root (outside the layering — see below)
 ├── core/                       # vec3, time, constants, events
 ├── sim/
 │   ├── bodies/                 # kepler.ts (elliptic + hyperbolic solver), orbitalElements.ts
@@ -52,6 +60,7 @@ their v2 behavior from the named task — none of that v2 behavior has landed ye
 
 ```
 src/
+├── bootstrap/                              # LANDED decomposed main.ts modules (T0113)
 ├── sim/
 │   ├── ship/vessel.ts                      # LANDED VesselConfig + defaults (T0104)
 │   ├── ship/attitude.ts                    # LANDED slew-limited hold pursuit (T0107)
@@ -62,7 +71,6 @@ src/
 │   └── simulationSnapshot.ts               # MOD  manual-rotation lockout LANDED (T0107); impact fields (T0111)
 ├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
 ├── game/
-│   ├── bootstrap/                          # NEW  decomposed main.ts modules (T0113)
 │   ├── input/                              # LANDED engine+bindings (T0105) + gamepad (T0106)
 │   ├── flight/                             # NEW  flightController, assists, cruiseDirector (T0108/16/18)
 │   ├── cameraDirector.ts                   # LANDED chase/observatory + cross-fade (T0110); cockpit/cinematic (T0124/25)
@@ -132,7 +140,7 @@ Gamepad API and is merged into the same frame — keyboard and gamepad axes add 
 the throttle lever directly rather than joining the keyboard ramp, and `A`/`B` latch two reserved
 actions (`cruiseEngage`/`cruiseAbort`) for T0116 — never a second path into `FlightController`. Connect/
 disconnect gates every `getGamepads()` call, so an unconnected pad costs nothing per frame. DOM access
-stays behind structural ports; `main.ts` supplies the adapters. Design:
+stays behind structural ports; `bootstrap/composition.ts` supplies the adapters. Design:
 `docs/superpowers/specs/2026-08-14-input-engine-design.md`,
 `docs/superpowers/specs/2026-08-15-gamepad-design.md`.
 
@@ -201,8 +209,8 @@ simulation, renderer, or runtime GPU resource.
 ## Performance architecture
 
 - `render/telemetry.ts` is the single source of perf truth (frame-time ring buffer, ms splits per subsystem, renderer.info snapshots); consumed by the perf HUD (top-left), the adaptive quality governor (`render/perfGovernor.ts`) and the bench harness. The frame orchestrator measures the `SimulationCore.step()` call and passes that scalar to telemetry; deterministic `SimSnapshot` data does not depend on a wall clock (ADR-024).
-- GPU context creation policy (high-performance request, strict/fallback handling, software classification and warning) lives in one place: the renderer bootstrap in `main.ts`/`render/`. Browsers and drivers remain authoritative over the actual adapter. Contract: `docs/performance-spec.md` §2, ADR-008.
-- The frame loop is owned by `main.ts`: `commands → sim.step() → snapshot → render + UI`, instrumented at each seam. Zero-allocation rules apply to everything this loop calls (performance-spec §5).
+- GPU context creation policy (high-performance request, strict/fallback handling, software classification and warning) lives in one place: the renderer bootstrap in `bootstrap/composition.ts`/`render/`. Browsers and drivers remain authoritative over the actual adapter. Contract: `docs/performance-spec.md` §2, ADR-008.
+- The frame loop is owned by `bootstrap/frameLoop.ts`: `commands → sim.step() → snapshot → render + UI`, instrumented at each seam. Zero-allocation rules apply to everything this loop calls (performance-spec §5), including the single mutable `FrameLoopRuntime` the loop shares with the composition root — it is allocated once, never per frame.
 - Production builds retain Vite's Oxc minification, deterministically recompress entry chunks with Terser, and minify copied standalone JavaScript decoders only when their gzip size improves. This keeps optional setup UI within the fixed JavaScript/CSS gzip gate without changing runtime behavior or the budget.
 - Startup is an explicit measured state machine: the static semantic shell reports completed critical-path and shader milestones, `startupQuality.ts` selects the initial unlocked governor rung from context/probe evidence, and lazy body assets remain disabled until gameplay activation. A frozen canvas diagnostic and the cold-load browser gate preserve timing, transfer, program and recovery evidence.
 
