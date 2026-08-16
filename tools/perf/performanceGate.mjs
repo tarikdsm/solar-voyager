@@ -24,7 +24,25 @@ const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const GOLDEN_PATH = fileURLToPath(new URL('./performance-golden.json', import.meta.url));
 const ALLOCATION_BYTES_PER_FRAME = 256 * 1024;
-const HEAP_SETTLE_MS = 60_000;
+/**
+ * Settling budget for the production page, in milliseconds.
+ *
+ * This used to be a flat 60 s wait, and a flat wait is a guess about a machine.
+ * Startup settling — asset streaming, shader warm-up, first-use JS structures —
+ * finishes in a couple of seconds on a fast desktop and takes well over a minute
+ * on a software rasterizer, so the same number was generous in one place and too
+ * short in the other. When it was too short the 30 s window opened *inside* the
+ * warm-up and reported it as retained growth: ~500 kB measured 5 s after
+ * readiness, ~76 kB at 45 s, ~15 kB at 90 s, on a tree with no leak in it.
+ *
+ * `settleHeapUntilStable` replaces it with a measurement: sample the heap until
+ * it stops climbing, then measure. Faster than the old fixed wait when the page
+ * is ready early, and patient when it is not. It cannot mask a leak — a real one
+ * never stabilises, the cap below expires, and the window measures it anyway.
+ */
+const HEAP_SETTLE_STEP_MS = 5_000;
+const HEAP_SETTLE_MAX_MS = 180_000;
+const HEAP_SETTLE_STABLE_STEPS = 2;
 const FIXTURE_SETTLE_MS = 1_000;
 const STABLE_SNAPSHOT_COUNT = 4;
 const PRODUCTION_ONLY = process.argv.includes('--production-only');
@@ -155,6 +173,36 @@ async function waitForStableWorkload(page) {
   throw new Error('Production workload did not settle into four identical snapshots.');
 }
 
+/**
+ * Waits until retained heap stops climbing, or the cap expires.
+ *
+ * "Stable" is scaled from the gate's own ceiling so the two can never drift
+ * apart: a step may grow by at most half the ceiling's per-step share of the
+ * measurement window, and two consecutive steps must qualify. With the shipped
+ * golden that is 16,384 B per 5 s step against a 196,608 B / 30 s budget.
+ */
+async function settleHeapUntilStable(page, ceilingBytes, durationMs, label) {
+  const perStepCeilingBytes = Math.floor(
+    (ceilingBytes * HEAP_SETTLE_STEP_MS) / durationMs / 2,
+  );
+  let previousBytes = await forceGc(page);
+  let elapsedMs = 0;
+  let stableSteps = 0;
+  while (elapsedMs < HEAP_SETTLE_MAX_MS && stableSteps < HEAP_SETTLE_STABLE_STEPS) {
+    await page.waitForTimeout(HEAP_SETTLE_STEP_MS);
+    elapsedMs += HEAP_SETTLE_STEP_MS;
+    const currentBytes = await forceGc(page);
+    const growthBytes = currentBytes - previousBytes;
+    previousBytes = currentBytes;
+    stableSteps = growthBytes <= perStepCeilingBytes ? stableSteps + 1 : 0;
+  }
+  const settled = stableSteps >= HEAP_SETTLE_STABLE_STEPS;
+  console.log(
+    `Performance gate heap ${settled ? 'settled' : 'did NOT settle'}: ${label} after ${String(elapsedMs)} ms`,
+  );
+  return { elapsedMs, settled };
+}
+
 async function measureHeapWindow(page, durationMs, label) {
   const beforeBytes = await forceGc(page);
   console.log(`Performance gate measuring: ${label}`);
@@ -188,7 +236,19 @@ async function measurePage(
     await exposeGc(page);
     let workload = await waitForStableWorkload(page);
     console.log(`Performance gate workload stable: ${label}`);
-    await page.waitForTimeout(allocationFixture ? FIXTURE_SETTLE_MS : HEAP_SETTLE_MS);
+    // The allocation fixture allocates every frame by design, so it can never
+    // stabilise; it keeps the short fixed wait and stays a working negative
+    // control.
+    let heapSettle = null;
+    if (allocationFixture) await page.waitForTimeout(FIXTURE_SETTLE_MS);
+    else {
+      heapSettle = await settleHeapUntilStable(
+        page,
+        confirmationCeilingBytes ?? Number.POSITIVE_INFINITY,
+        durationMs,
+        label,
+      );
+    }
     console.log(`Performance gate settled: ${label}`);
     workload = await waitForStableWorkload(page);
     const heap = await measureHeapWindow(page, durationMs, label);
@@ -204,7 +264,7 @@ async function measurePage(
       );
     }
     assert.deepEqual(browserErrors, []);
-    return { confirmationHeap, heap, workload };
+    return { confirmationHeap, heap, heapSettle, workload };
   } finally {
     await page.close();
   }

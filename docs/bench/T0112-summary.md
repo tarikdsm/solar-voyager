@@ -76,8 +76,56 @@ task.
 
 ## Gates
 
-`npm run test:perf-gates` passed unchanged: draw calls 33, triangles 82,429,
-heap growth 64,200 B, both bundle budgets satisfied.
+`npm run test:perf-gates` passes: draw calls 33, triangles 82,429, both bundle
+budgets satisfied, retained heap 72,572 B against the 196,608 B ceiling.
+
+### The CI heap failure, and why the ceiling did not move
+
+CI reported 1,580,288 B of retained growth on the production page while the same
+gate measured 62,700 B locally. Diagnosed by measuring rather than guessing; every
+figure below is a 30 s window at 640×360 with a forced double GC at each end, the
+gate's own method.
+
+| Configuration                                             | Retained delta |
+| --------------------------------------------------------- | -------------: |
+| HEAD, window opened 5 s after readiness                   |      521,887 B |
+| HEAD, 5 s, restore-point ring capture disabled            |      520,731 B |
+| HEAD, 5 s, trajectory predictor disabled                  |      531,027 B |
+| **Branch base `b29ec08`, 5 s — none of this task's code** |  **494,527 B** |
+| HEAD, window opened 45 s after readiness                  |       75,779 B |
+| HEAD, window opened 90 s after readiness                  |       14,507 B |
+
+What this shows:
+
+1. **It is not a leak.** The growth decays monotonically with how long the page is
+   left alone — 522 kB → 76 kB → 15 kB — and stops entirely once startup settling
+   finishes. A leak does not stop.
+2. **It is not this task's.** The identical measurement on the branch base gives
+   494,527 B. T0112 adds roughly 27 kB, about 5%, which is inside the run-to-run
+   spread of the configurations above (494–531 kB).
+3. **It is not the obvious suspects.** Disabling the restore-point ring changed
+   nothing (520,731 B); disabling the predictor changed nothing (531,027 B); DOM
+   node count is constant across every window (and T0112 _cuts_ it from 10,307 to
+   415, because Clean unmounts the panels rather than hiding them).
+
+The real defect was in the gate: it waited a flat `HEAP_SETTLE_MS = 60_000` and
+then measured. A flat wait is a guess about a machine — generous on a desktop,
+too short on a software rasterizer, where settling runs well past a minute. When
+it was too short the window opened _inside_ the warm-up and reported it as
+retained growth.
+
+`settleHeapUntilStable` replaces the guess with a measurement: sample the heap
+every 5 s until two consecutive steps grow by no more than half the ceiling's
+per-step share (16,384 B here), then measure, capped at 180 s. On this machine it
+now finishes in 50 s — faster than the old fixed wait — and it will be patient on
+a slow runner. **The ceiling did not move and the window is still 30 s.** It
+cannot mask a leak: a real one never stabilises, the cap expires, and the window
+measures it regardless. The allocation-fixture negative control, which allocates
+256 kB every frame, still trips the gate at 4,475,352 B.
+
+Left for a separate decision: _what_ is still settling for 60–90 s under software
+rasterization on a page that has already reported a stable draw-call and triangle
+workload. It is pre-existing, it is bounded, and it is not this task's to chase.
 
 ## Visual evidence
 
