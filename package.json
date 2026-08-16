@@ -50,6 +50,7 @@
     "assets:ingest": "node tools/assets/ingestCli.mjs",
     "assets:verify": "node tools/assets/verifyEarth.mjs",
     "textures:fetch": "python tools/fetch_textures.py",
+    "textures:ship": "node tools/textures/generateShipTextures.mjs",
     "textures:rings": "node tools/textures/generateRingTextures.mjs",
     "generate:dashboard": "node tools/checks/taskDashboard.mjs --write",
     "check:dashboard": "node tools/checks/taskDashboard.mjs",

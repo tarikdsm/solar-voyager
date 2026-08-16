@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "workload": {
-    "drawCalls": 33,
+    "drawCalls": 27,
     "toleranceFraction": 0.1,
-    "triangles": 82429
+    "triangles": 100471
   },
   "heap": {
     "durationMs": 30000,
