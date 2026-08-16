@@ -119,6 +119,7 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     lightCount: 'readonly number',
     modelBound: 'readonly boolean',
     navFactor: 'readonly number',
+    nonFiniteObserved: 'readonly boolean',
     plumeMagnitude: 'readonly number',
     rcsFiring: 'readonly boolean',
     rcsLiveCapacity: 'readonly number',
