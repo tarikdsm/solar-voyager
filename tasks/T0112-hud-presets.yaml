@@ -1,0 +1,56 @@
+id: T0112
+title: HUD preset system (Clean v0), pause menu, target diamond
+status: REVIEW
+agent: claude
+branch: task/T0112-hud-presets
+depends_on: [T0105, T0109]
+milestone: V2M1
+spec: |
+  v1's HUD was eight absolutely-positioned panels of mission-control instrumentation with no pause
+  and no way to see your target in the world. The maintainer's complaint was never that the numbers
+  were wrong, but that the instruments were the whole game. Make the HUD a game HUD: minimal by
+  default, engineering panels on demand, markers in the world, and a real pause.
+  Spec of record: docs/superpowers/specs/2026-08-14-v2-free-flight-design.md section 7;
+  design doc docs/superpowers/specs/2026-08-15-hud-presets-design.md.
+acceptance:
+  - Preset state machine Clean/Pilot/Engineer with a cycle key; Engineer equals every v1 panel; Clean shows reticle, throttle and context-unit speed, cruise placeholder and warnings
+  - World markers - target diamond with distance, prograde and retrograde, toggleable body labels - projected in the game layer from float64, driven through the 10 Hz signals, no per-frame allocation
+  - Real pause - Escape halts the simulation with resume, settings, save and exit-to-menu; sceneManager gains a paused sub-state and a menu return
+  - Design tokens and a CSS grid replace the absolute positioning of the migrated panels
+handoff_notes: |
+  PRESETS are a monotone tier ladder, so an unranked surface defaults to the top tier and
+  "Engineer equals everything" is true by construction rather than by enumeration.
+  MARKERS project from float64 in the game layer with no second Math.fround site and no three.js
+  raycasting. Review found and the fix corrected a DOUBLE MIRROR for behind-camera targets: the
+  projection divided by |depth| to un-mirror and clampToViewportEdge mirrored again, so a target
+  astern-and-right landed on the LEFT edge and flipped as the player turned toward it. Verified after
+  the fix by independent arithmetic: astern-and-right lands right, astern-and-above lands top.
+  PAUSE is a genuine halt - step() is skipped, simDeltaSec is 0, and rAF keeps running so telemetry
+  can never hand step() a menu-length wall delta. The Escape rule is ORDER-INDEPENDENT by design, not
+  by listener registration: either SystemMapPanel's preventDefault stops the input engine, or
+  handlePauseRequested returns on systemMapController.mode !== 'space'. Both orderings give
+  "map closes, nothing pauses". Verified from flight, map-open, pause-open and the main menu.
+  A CRITICAL defect was found by review and fixed: .hud-grid carries position:absolute plus a z-index,
+  which establishes a stacking context, so #session-settings could not be lifted above the pause card
+  by any z-index and the Settings button opened an invisible, unclickable panel. The panel now renders
+  in a display:contents .pause-layer beside the dialog, in the backdrop's own stacking context.
+  Verifying it BY CLICKING (Playwright actionability, not a JS click) then exposed a second layer: the
+  SwiftShader hardware warning was itself covering the summary. The gate now hit-tests and clicks it.
+  Pause also gates the keydown listeners it does not own (SystemMapPanel, CameraInputController), and
+  the HUD is inert while the dialog is open, so aria-modal is backed rather than merely claimed.
+  HANDOFFS: T0104's hardcoded SHIP_MASS_KG in stateVectorModel.ts is fixed to read the vessel.
+  T0111's restore-ring inversion was already landed by T0110 and was verified present. T0108's
+  SimSnapshot body rates were DECLINED with reasoning in design doc section 9.2 - it is a contract
+  change needing its own ADR, nothing here reads rates, and pause deliberately uses resetAxes, whose
+  contract is "forget intent, do not overwrite rates", so the symptom is not worsened.
+  The T0106 harness gap is closed: tests/render/sessionSettingsPage.tsx now imports app.css.
+  Deferred, not defects of this task: the Engineer right rail scrolls at 720p (T0119/T0149 own the
+  docking component); accepting the tutorial forces and persists Engineer because the v1 tour points
+  at panels Clean hides; the tutorial overlay's heading overlaps its buttons in an unmigrated panel.
+  Deferred minors from review: the focus trap's structural fix is sound by inspection but its actual
+  mechanism (listener attach timing and dependency churn) is not regression-tested, so reintroducing
+  `actions` into the effect deps would not be caught; and hudPresetsRegression computes a `reachable`
+  field it never asserts.
+  Verification: 1242 Vitest passed / 3 skipped, lint, typecheck, format; ten browser gates run one at
+  a time; perf gates clean with draw calls 33 / triangles 82,429 exactly on golden, heap 64 kB against
+  the 196,608 B ceiling, bundle 583,152 B against 1,000,000. No golden or budget moved.
