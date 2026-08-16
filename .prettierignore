@@ -8,6 +8,7 @@ coverage/
 
 # Binary, generated, and source-asset areas.
 assets/
+.texture-cache/
 public/assets/
 data/
 tools/*
