@@ -158,7 +158,28 @@ export interface HudSettings {
   readonly bodyLabels: boolean;
 }
 
-/** Independent profile settings document stored outside save slots. */
+/**
+ * Deep-sky background toggles (T0126).
+ *
+ * The panorama and the zodiacal band are on by default because they are the
+ * point of the feature; constellation lines are off by default because they are
+ * an overlay, not scenery.
+ */
+export interface SkySettings {
+  /** Draw the Milky Way panorama behind the star field. */
+  readonly panorama: boolean;
+  /** Draw the faint zodiacal-light gradient along the ecliptic. */
+  readonly zodiacalLight: boolean;
+  /** Draw the 88 IAU constellation-line figures. */
+  readonly constellations: boolean;
+}
+
+/**
+ * Independent profile settings document, superseded by {@link GameSettingsV6}.
+ *
+ * Kept only as the strict parse target for the one-time v5->v6 migration
+ * (`parseProfileSettingsV5`), exactly as V4 is kept for v4->v5.
+ */
 export interface GameSettingsV5 {
   readonly version: 5;
   readonly qualityLock: QualityLock;
@@ -169,6 +190,18 @@ export interface GameSettingsV5 {
   readonly hud: HudSettings;
 }
 
+/** Independent profile settings document stored outside save slots. */
+export interface GameSettingsV6 {
+  readonly version: 6;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
+  readonly camera: CameraSettings;
+  readonly hud: HudSettings;
+  readonly sky: SkySettings;
+}
+
 export interface KeyValueStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -177,12 +210,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV5;
+      readonly settings: GameSettingsV6;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV5;
+      readonly settings: GameSettingsV6;
       readonly error: string;
     };
 
@@ -209,7 +242,9 @@ export type SettingsSaveResult =
  * older build never touches it, so the newer document simply waits
  * untouched until a v3-aware build reads it again.
  */
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
+/** The v5 profile key (T0112's era, pre-deep-sky) — read-and-migrate-forward only. */
+export const LEGACY_V5_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
 /** The v4 profile key (T0110's era, pre-HUD-preset) — read-and-migrate-forward only. */
 export const LEGACY_V4_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
 /** The v3 profile key (T0106's era, pre-camera) — read-and-migrate-forward only. */
@@ -423,6 +458,17 @@ function freezeHudSettings(preset: HudPreset, bodyLabels: boolean): HudSettings 
 /** Clean preset with world labels on — the v2 out-of-the-box HUD. */
 export const DEFAULT_HUD_SETTINGS = freezeHudSettings('clean', true);
 
+function freezeSkySettings(
+  panorama: boolean,
+  zodiacalLight: boolean,
+  constellations: boolean,
+): SkySettings {
+  return Object.freeze({ panorama, zodiacalLight, constellations });
+}
+
+/** Scenery on, overlay off — the deep sky as it looks, without the figure lines. */
+export const DEFAULT_SKY_SETTINGS = freezeSkySettings(true, true, false);
+
 function freezeV5Settings(
   qualityLock: QualityLock,
   inputBindings: Record<InputAction, string>,
@@ -452,13 +498,47 @@ function freezeV5Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV5Settings(
+function freezeV6Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+  camera: CameraSettings,
+  hud: HudSettings,
+  sky: SkySettings,
+): GameSettingsV6 {
+  return Object.freeze({
+    version: 6 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+    camera: Object.isFrozen(camera)
+      ? camera
+      : freezeCameraSettings(camera.fovWidening, camera.shake),
+    hud: Object.isFrozen(hud) ? hud : freezeHudSettings(hud.preset, hud.bodyLabels),
+    sky: Object.isFrozen(sky)
+      ? sky
+      : freezeSkySettings(sky.panorama, sky.zodiacalLight, sky.constellations),
+  });
+}
+
+export const DEFAULT_GAME_SETTINGS = freezeV6Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
   DEFAULT_GAMEPAD_SETTINGS,
   DEFAULT_CAMERA_SETTINGS,
   DEFAULT_HUD_SETTINGS,
+  DEFAULT_SKY_SETTINGS,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -744,8 +824,14 @@ function parseHudSettings(value: unknown): HudSettings {
   return freezeHudSettings(value.preset, value.bodyLabels);
 }
 
-/** Strictly parses the independent version-5 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV5 {
+/**
+ * Strictly parses the superseded version-5 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v5->v6 migration inside
+ * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
+ * `parseProfileSettings` used to do before `sky` existed.
+ */
+function parseProfileSettingsV5(value: unknown): GameSettingsV5 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -763,6 +849,47 @@ export function parseProfileSettings(value: unknown): GameSettingsV5 {
     parseGamepadSettings(value.gamepad),
     parseCameraSettings(value.camera),
     parseHudSettings(value.hud),
+  );
+}
+
+/** Strictly parses deep-sky background toggles. Every field is required. */
+function parseSkySettings(value: unknown): SkySettings {
+  if (!isRecord(value)) throw new RangeError('sky settings must be an object');
+  assertExactKeys(
+    value,
+    ['panorama', 'zodiacalLight', 'constellations'],
+    'unknown sky settings field',
+  );
+  if (typeof value.panorama !== 'boolean') throw new RangeError('sky panorama must be a boolean');
+  if (typeof value.zodiacalLight !== 'boolean') {
+    throw new RangeError('sky zodiacalLight must be a boolean');
+  }
+  if (typeof value.constellations !== 'boolean') {
+    throw new RangeError('sky constellations must be a boolean');
+  }
+  return freezeSkySettings(value.panorama, value.zodiacalLight, value.constellations);
+}
+
+/** Strictly parses the independent version-6 profile settings document. */
+export function parseProfileSettings(value: unknown): GameSettingsV6 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    ['version', 'qualityLock', 'inputBindings', 'tutorial', 'gamepad', 'camera', 'hud', 'sky'],
+    'unknown profile settings field',
+  );
+  if (value.version !== 6) throw new RangeError('profile settings version must be 6');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV6Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+    parseCameraSettings(value.camera),
+    parseHudSettings(value.hud),
+    parseSkySettings(value.sky),
   );
 }
 
@@ -822,8 +949,30 @@ function migrateProfileV4ToV5(settings: GameSettingsV4): GameSettingsV5 {
   );
 }
 
+/**
+ * Lifts a superseded v5 profile to v6 by attaching default deep-sky toggles.
+ *
+ * Same shape as `migrateProfileV4ToV5` one version up: `sky` is a brand-new
+ * required object with no prior partial state anywhere in a v5 document to
+ * recover from, so this is a whole-document migration rather than a per-field
+ * backfill. A returning player therefore gets the panorama and the zodiacal band
+ * — the scenery the feature exists to show — with the constellation overlay off,
+ * exactly as a fresh profile does.
+ */
+function migrateProfileV5ToV6(settings: GameSettingsV5): GameSettingsV6 {
+  return freezeV6Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    settings.gamepad,
+    settings.camera,
+    settings.hud,
+    DEFAULT_SKY_SETTINGS,
+  );
+}
+
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV5): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV6): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
@@ -831,45 +980,68 @@ export function projectGameSettingsV1(settings: GameSettingsV5): GameSettingsV1 
 /**
  * Merges imported save preferences while preserving profile-only state.
  *
- * Tutorial progress, gamepad calibration, camera toggles and HUD preferences
- * belong to the player's profile, not to a mission someone emailed them, so only the two
- * fields the save DTO actually carries are taken from the import.
+ * Tutorial progress, gamepad calibration, camera toggles, HUD preferences and
+ * deep-sky toggles belong to the player's profile, not to a mission someone
+ * emailed them, so only the two fields the save DTO actually carries are taken
+ * from the import.
  */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV5,
+  profile: GameSettingsV6,
   preferences: GameSettingsV1,
-): GameSettingsV5 {
+): GameSettingsV6 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV5Settings(
+  return freezeV6Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
     validatedProfile.gamepad,
     validatedProfile.camera,
     validatedProfile.hud,
+    validatedProfile.sky,
   );
 }
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   tutorial: TutorialProgress,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({ ...settings, tutorial });
 }
 
 /** Returns a validated frozen profile with the chase field-of-view widening toggled. */
 export function updateCameraFovWidening(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   fovWidening: boolean,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, fovWidening } });
 }
 
 /** Returns a validated frozen profile with the chase camera shake toggled. */
-export function updateCameraShake(settings: GameSettingsV5, shake: boolean): GameSettingsV5 {
+export function updateCameraShake(settings: GameSettingsV6, shake: boolean): GameSettingsV6 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
+}
+
+/** Returns a validated frozen profile with the Milky Way panorama toggled. */
+export function updateSkyPanorama(settings: GameSettingsV6, panorama: boolean): GameSettingsV6 {
+  return parseProfileSettings({ ...settings, sky: { ...settings.sky, panorama } });
+}
+
+/** Returns a validated frozen profile with the zodiacal-light gradient toggled. */
+export function updateSkyZodiacalLight(
+  settings: GameSettingsV6,
+  zodiacalLight: boolean,
+): GameSettingsV6 {
+  return parseProfileSettings({ ...settings, sky: { ...settings.sky, zodiacalLight } });
+}
+
+/** Returns a validated frozen profile with the constellation-line figures toggled. */
+export function updateSkyConstellations(
+  settings: GameSettingsV6,
+  constellations: boolean,
+): GameSettingsV6 {
+  return parseProfileSettings({ ...settings, sky: { ...settings.sky, constellations } });
 }
 
 /**
@@ -883,52 +1055,52 @@ export function updateCameraShake(settings: GameSettingsV5, shake: boolean): Gam
  * persists it, so the toggle silently does nothing.
  */
 export function updateHudSettings(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   preset: HudPreset,
   bodyLabels: boolean,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({ ...settings, hud: { preset, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with a new HUD preset. */
-export function updateHudPreset(settings: GameSettingsV5, preset: HudPreset): GameSettingsV5 {
+export function updateHudPreset(settings: GameSettingsV6, preset: HudPreset): GameSettingsV6 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, preset } });
 }
 
 /** Returns a validated frozen profile with the world body labels toggled. */
-export function updateHudBodyLabels(settings: GameSettingsV5, bodyLabels: boolean): GameSettingsV5 {
+export function updateHudBodyLabels(settings: GameSettingsV6, bodyLabels: boolean): GameSettingsV6 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   action: InputAction,
   code: string,
-): GameSettingsV5 {
+): GameSettingsV6 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
 }
 
 /** Returns a validated frozen profile with the global gamepad deadzone updated. */
-export function updateGamepadDeadzone(settings: GameSettingsV5, deadzone: number): GameSettingsV5 {
+export function updateGamepadDeadzone(settings: GameSettingsV6, deadzone: number): GameSettingsV6 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
 }
 
 /** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
 export function updateGamepadCurveExponent(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   curveExponent: number,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
 }
 
 /** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
 export function updateGamepadAxisInvert(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   axis: GamepadAxisId,
   invert: boolean,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -940,10 +1112,10 @@ export function updateGamepadAxisInvert(
 
 /** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
 export function updateGamepadAxisSensitivity(
-  settings: GameSettingsV5,
+  settings: GameSettingsV6,
   axis: GamepadAxisId,
   sensitivity: number,
-): GameSettingsV5 {
+): GameSettingsV6 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -1003,7 +1175,25 @@ export class SettingsRepository {
       }
     }
 
-    // Tier 2: the v4 key (T0110's era, pre-HUD-preset). Migrate up one step and
+    // Tier 2: the v5 key (T0112's era, pre-deep-sky). Migrate up one step and
+    // persist forward to the current key.
+    let legacyV5Text: string | null;
+    try {
+      legacyV5Text = this.storage.getItem(LEGACY_V5_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV5Text !== null) {
+      return this.migrateForward(() =>
+        migrateProfileV5ToV6(parseProfileSettingsV5(JSON.parse(legacyV5Text as string) as unknown)),
+      );
+    }
+
+    // Tier 3: the v4 key (T0110's era, pre-HUD-preset). Migrate up two steps and
     // persist forward to the current key.
     let legacyV4Text: string | null;
     try {
@@ -1017,11 +1207,15 @@ export class SettingsRepository {
     }
     if (legacyV4Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV4ToV5(parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown)),
+        migrateProfileV5ToV6(
+          migrateProfileV4ToV5(
+            parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown),
+          ),
+        ),
       );
     }
 
-    // Tier 3: the v3 key (T0106's era, pre-camera). Migrate up two steps and
+    // Tier 4: the v3 key (T0106's era, pre-camera). Migrate up three steps and
     // persist forward to the current key.
     let legacyV3Text: string | null;
     try {
@@ -1035,15 +1229,17 @@ export class SettingsRepository {
     }
     if (legacyV3Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV4ToV5(
-          migrateProfileV3ToV4(
-            parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown),
+        migrateProfileV5ToV6(
+          migrateProfileV4ToV5(
+            migrateProfileV3ToV4(
+              parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown),
+            ),
           ),
         ),
       );
     }
 
-    // Tier 4: the v2 key (T0108's era, pre-gamepad). Migrate up three steps and
+    // Tier 5: the v2 key (T0108's era, pre-gamepad). Migrate up four steps and
     // persist forward to the current key.
     let legacyV2Text: string | null;
     try {
@@ -1057,17 +1253,19 @@ export class SettingsRepository {
     }
     if (legacyV2Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV4ToV5(
-          migrateProfileV3ToV4(
-            migrateProfileV2ToV3(
-              parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+        migrateProfileV5ToV6(
+          migrateProfileV4ToV5(
+            migrateProfileV3ToV4(
+              migrateProfileV2ToV3(
+                parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+              ),
             ),
           ),
         ),
       );
     }
 
-    // Tier 5: the v1 key (pre-T0108, standalone-profile era). Migrate up four
+    // Tier 6: the v1 key (pre-T0108, standalone-profile era). Migrate up five
     // steps and persist forward to the current key.
     let legacyV1Text: string | null;
     try {
@@ -1085,11 +1283,13 @@ export class SettingsRepository {
 
     return this.migrateForward(
       () =>
-        migrateProfileV4ToV5(
-          migrateProfileV3ToV4(
-            migrateProfileV2ToV3(
-              migrateLegacySettings(
-                parseGameSettings(JSON.parse(legacyV1Text as string) as unknown),
+        migrateProfileV5ToV6(
+          migrateProfileV4ToV5(
+            migrateProfileV3ToV4(
+              migrateProfileV2ToV3(
+                migrateLegacySettings(
+                  parseGameSettings(JSON.parse(legacyV1Text as string) as unknown),
+                ),
               ),
             ),
           ),
@@ -1102,12 +1302,12 @@ export class SettingsRepository {
    * Runs one migration tier: parse, then persist forward under the current key.
    *
    * Every tier does exactly this, and each added generation made the copy-paste
-   * version of it longer; sharing it means a future v6 adds one `if` block
+   * version of it longer; sharing it means a future v7 adds one `if` block
    * instead of another twenty lines of identical error plumbing. (T0112's v5
-   * tier was the first to cash that in.)
+   * tier was the first to cash that in; T0126's v6 tier was the second.)
    */
-  private migrateForward(migrate: () => GameSettingsV5, label = 'settings'): SettingsLoadResult {
-    let migrated: GameSettingsV5;
+  private migrateForward(migrate: () => GameSettingsV6, label = 'settings'): SettingsLoadResult {
+    let migrated: GameSettingsV6;
     try {
       migrated = migrate();
     } catch (error: unknown) {
@@ -1129,7 +1329,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV5): SettingsSaveResult {
+  save(settings: GameSettingsV6): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

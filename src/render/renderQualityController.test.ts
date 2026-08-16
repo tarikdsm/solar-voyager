@@ -24,6 +24,7 @@ function fixture(postProcessingAvailable = true) {
     setRingParticleCount: vi.fn(),
   };
   const relativisticVisuals = { setQualityEnabled: vi.fn() };
+  const skybox = { setSkyboxTier: vi.fn() };
   const controller = new RenderQualityController({
     assetLoader,
     pipeline,
@@ -31,6 +32,7 @@ function fixture(postProcessingAvailable = true) {
     proceduralSun,
     renderer,
     relativisticVisuals,
+    skybox,
     starfield,
     visualSystem,
   });
@@ -41,6 +43,7 @@ function fixture(postProcessingAvailable = true) {
     proceduralSun,
     renderer,
     relativisticVisuals,
+    skybox,
     starfield,
     visualSystem,
   };

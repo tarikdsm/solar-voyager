@@ -1079,6 +1079,8 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       postPass: postPipeline.relativisticPass,
       spaceScene: world.spaceScene,
       starfield: world.starfield,
+      milkyWaySky: world.milkyWaySky,
+      constellationLines: world.constellationLines,
     });
     runtime.relativisticVisuals = relativisticVisuals;
     const qualityController = new RenderQualityController({
@@ -1088,6 +1090,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       proceduralSun: world.proceduralSun,
       renderer,
       relativisticVisuals,
+      skybox: world.milkyWaySky,
       starfield: world.starfield,
       visualSystem: world.visualSystem,
     });

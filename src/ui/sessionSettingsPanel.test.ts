@@ -14,8 +14,11 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  updateSkyConstellations,
+  updateSkyPanorama,
+  updateSkyZodiacalLight,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV6,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -28,7 +31,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV5 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV6 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -76,6 +79,21 @@ class FakeSession implements SessionSettingsPort {
   setCameraShake(shake: boolean): SessionActionResult {
     this.settings = updateCameraShake(this.settings, shake);
     return { ok: true, message: 'Camera shake updated' };
+  }
+
+  setSkyPanorama(enabled: boolean): SessionActionResult {
+    this.settings = updateSkyPanorama(this.settings, enabled);
+    return { ok: true, message: 'Milky Way panorama updated' };
+  }
+
+  setSkyZodiacalLight(enabled: boolean): SessionActionResult {
+    this.settings = updateSkyZodiacalLight(this.settings, enabled);
+    return { ok: true, message: 'Zodiacal light updated' };
+  }
+
+  setSkyConstellations(enabled: boolean): SessionActionResult {
+    this.settings = updateSkyConstellations(this.settings, enabled);
+    return { ok: true, message: 'Constellation lines updated' };
   }
 
   setHudPreset(preset: HudPreset): SessionActionResult {
@@ -348,6 +366,39 @@ describe('session settings panel model', () => {
       expect(model.selectGamepadAxisSensitivity('throttle', '1.75')).toMatchObject({ ok: true });
       expect(session.settings.gamepad.axes.throttle.sensitivity).toBe(1.75);
       expect(session.settings.gamepad.axes.roll.invert).toBe(true); // still set from above
+    });
+  });
+
+  describe('sky settings controls (T0126)', () => {
+    it('forwards each deep-sky checkbox to its own port method', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.setSkyPanorama(false)).toEqual({ ok: true, message: 'Milky Way panorama updated' });
+      expect(session.settings.sky.panorama).toBe(false);
+      expect(model.setSkyZodiacalLight(false)).toEqual({
+        ok: true,
+        message: 'Zodiacal light updated',
+      });
+      expect(session.settings.sky.zodiacalLight).toBe(false);
+      expect(model.setSkyConstellations(true)).toEqual({
+        ok: true,
+        message: 'Constellation lines updated',
+      });
+      expect(session.settings.sky.constellations).toBe(true);
+    });
+
+    it('leaves the other two toggles alone when one changes', () => {
+      const session = new FakeSession();
+      const model = createSessionSettingsModel(session, new FakeFiles());
+
+      expect(model.setSkyConstellations(true)).toMatchObject({ ok: true });
+
+      expect(session.settings.sky).toEqual({
+        panorama: true,
+        zodiacalLight: true,
+        constellations: true,
+      });
     });
   });
 });

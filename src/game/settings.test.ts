@@ -6,6 +6,7 @@ import {
   DEFAULT_GAME_SETTINGS,
   DEFAULT_GAMEPAD_SETTINGS,
   DEFAULT_HUD_SETTINGS,
+  DEFAULT_SKY_SETTINGS,
   GAMEPAD_AXES,
   INPUT_ACTIONS,
   isUnboundInputCode,
@@ -13,6 +14,7 @@ import {
   LEGACY_V2_SETTINGS_STORAGE_KEY,
   LEGACY_V3_SETTINGS_STORAGE_KEY,
   LEGACY_V4_SETTINGS_STORAGE_KEY,
+  LEGACY_V5_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
   parseProfileSettings,
@@ -28,6 +30,9 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  updateSkyConstellations,
+  updateSkyPanorama,
+  updateSkyZodiacalLight,
   updateTutorialSettings,
   type GamepadAxisId,
   type KeyValueStorage,
@@ -294,13 +299,14 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 5,
+      version: 6,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
       gamepad: DEFAULT_GAME_SETTINGS.gamepad,
       camera: DEFAULT_GAME_SETTINGS.camera,
       hud: DEFAULT_GAME_SETTINGS.hud,
+      sky: DEFAULT_GAME_SETTINGS.sky,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
@@ -466,7 +472,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(5);
+      expect(result.settings.version).toBe(6);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
@@ -479,6 +485,7 @@ describe('game settings', () => {
       expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+      expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
       // Written forward to the dedicated current key, not back into the v2 one —
       // a downgraded build must never see (and clobber) the migrated result.
       expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
@@ -497,7 +504,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 5/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 6/u);
     });
 
     it('fails closed when writing a migrated legacy profile fails', () => {
@@ -587,7 +594,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(5);
+      expect(result.settings.version).toBe(6);
       expect(result.settings.qualityLock).toBe('high');
       expect(result.settings.tutorial).toEqual({
         status: 'completed',
@@ -595,6 +602,7 @@ describe('game settings', () => {
       });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+      expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
       expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
       // The v3 document stays where it is: a rolled-back build reads its own key
       // and never sees, or clobbers, the newer one.
@@ -651,7 +659,7 @@ describe('HUD settings (T0112)', () => {
   it('defaults to the Clean preset with world labels on', () => {
     expect(DEFAULT_HUD_SETTINGS).toEqual({ preset: 'clean', bodyLabels: true });
     expect(DEFAULT_GAME_SETTINGS.hud).toBe(DEFAULT_HUD_SETTINGS);
-    expect(DEFAULT_GAME_SETTINGS.version).toBe(5);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(6);
   });
 
   it('updates each preference independently and keeps the document valid', () => {
@@ -690,7 +698,7 @@ describe('HUD settings (T0112)', () => {
     );
   });
 
-  it('migrates a stored v4 profile to v5 and writes it forward to the current key', () => {
+  it('migrates a stored v4 profile past v5 and writes it forward to the current key', () => {
     const storage = new MemoryStorage();
     const document = profileV4Document();
     storage.values.set(LEGACY_V4_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -698,10 +706,11 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(5);
+    expect(result.settings.version).toBe(6);
     expect(result.settings.qualityLock).toBe('low');
     expect(result.settings.camera).toEqual({ fovWidening: false, shake: true });
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
+    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
     expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
     // A rolled-back build reads its own key and cannot clobber the newer one.
     expect(storage.values.get(LEGACY_V4_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
@@ -720,7 +729,7 @@ describe('HUD settings (T0112)', () => {
     });
   });
 
-  it('climbs all four migration tiers from the original v1 key', () => {
+  it('climbs all five migration tiers from the original v1 key', () => {
     const storage = new MemoryStorage();
     storage.values.set(
       LEGACY_SETTINGS_STORAGE_KEY,
@@ -734,8 +743,9 @@ describe('HUD settings (T0112)', () => {
     const result = new SettingsRepository(storage).load();
 
     expect(result).toMatchObject({ ok: true, source: 'migrated' });
-    expect(result.settings.version).toBe(5);
+    expect(result.settings.version).toBe(6);
     expect(result.settings.qualityLock).toBe('high');
+    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
     expect(result.settings.hud).toEqual(DEFAULT_HUD_SETTINGS);
     expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
     expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
@@ -781,5 +791,187 @@ describe('HUD settings (T0112)', () => {
 
     expect(parsed.inputBindings.rollLeft).toBe('KeyH');
     expect(isUnboundInputCode(parsed.inputBindings.hudPresetCycle)).toBe(true);
+  });
+});
+
+describe('sky settings (T0126)', () => {
+  function profileV5Document(): Record<string, unknown> {
+    return {
+      version: 5,
+      qualityLock: 'medium',
+      inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+      tutorial: { status: 'completed', stepId: 'return-to-play' },
+      gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+      camera: { fovWidening: false, shake: false },
+      hud: { preset: 'engineer', bodyLabels: false },
+    };
+  }
+
+  /**
+   * Scenery is the point of the feature, so the panorama and the zodiacal band
+   * ship on; the constellation figures are an overlay drawn over that scenery,
+   * so they are opt-in.
+   */
+  it('defaults the two scenery layers on and the constellation overlay off', () => {
+    expect(DEFAULT_SKY_SETTINGS).toEqual({
+      panorama: true,
+      zodiacalLight: true,
+      constellations: false,
+    });
+    expect(DEFAULT_GAME_SETTINGS.sky).toBe(DEFAULT_SKY_SETTINGS);
+    expect(DEFAULT_GAME_SETTINGS.version).toBe(6);
+  });
+
+  it('toggles each layer independently and keeps the document valid', () => {
+    const noPanorama = updateSkyPanorama(DEFAULT_GAME_SETTINGS, false);
+    expect(noPanorama.sky).toEqual({
+      panorama: false,
+      zodiacalLight: true,
+      constellations: false,
+    });
+    const noZodiacal = updateSkyZodiacalLight(noPanorama, false);
+    expect(noZodiacal.sky).toEqual({
+      panorama: false,
+      zodiacalLight: false,
+      constellations: false,
+    });
+    const withFigures = updateSkyConstellations(noZodiacal, true);
+    expect(withFigures.sky).toEqual({
+      panorama: false,
+      zodiacalLight: false,
+      constellations: true,
+    });
+    expect(() => parseProfileSettings(withFigures)).not.toThrow();
+    expect(Object.isFrozen(withFigures.sky)).toBe(true);
+    // The originals are untouched: every mutator returns a fresh document.
+    expect(DEFAULT_GAME_SETTINGS.sky).toEqual(DEFAULT_SKY_SETTINGS);
+  });
+
+  it('rejects an incomplete, excess or mistyped sky document', () => {
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        sky: { panorama: true, zodiacalLight: true },
+      }),
+    ).toThrow(/field is missing: constellations/u);
+    expect(() =>
+      parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, sky: { panorama: true } }),
+    ).toThrow(/field is missing: zodiacalLight/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        sky: { ...DEFAULT_SKY_SETTINGS, nebulae: true },
+      }),
+    ).toThrow(/unknown sky settings field/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        sky: { ...DEFAULT_SKY_SETTINGS, panorama: 'yes' },
+      }),
+    ).toThrow(/panorama must be a boolean/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        sky: { ...DEFAULT_SKY_SETTINGS, zodiacalLight: 1 },
+      }),
+    ).toThrow(/zodiacalLight must be a boolean/u);
+    expect(() =>
+      parseProfileSettings({
+        ...DEFAULT_GAME_SETTINGS,
+        sky: { ...DEFAULT_SKY_SETTINGS, constellations: null },
+      }),
+    ).toThrow(/constellations must be a boolean/u);
+    expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, sky: null })).toThrow(
+      /sky settings must be an object/u,
+    );
+  });
+
+  it('rejects a v6 document that predates the sky group entirely', () => {
+    const withoutSky: Record<string, unknown> = { ...DEFAULT_GAME_SETTINGS };
+    delete withoutSky.sky;
+
+    expect(() => parseProfileSettings(withoutSky)).toThrow(/field is missing: sky/u);
+  });
+
+  it('migrates a stored v5 profile to v6 and writes it forward to the current key', () => {
+    const storage = new MemoryStorage();
+    const document = profileV5Document();
+    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: true, source: 'migrated' });
+    expect(result.settings.version).toBe(6);
+    expect(result.settings.qualityLock).toBe('medium');
+    // Everything the v5 document did carry survives untouched…
+    expect(result.settings.camera).toEqual({ fovWidening: false, shake: false });
+    expect(result.settings.hud).toEqual({ preset: 'engineer', bodyLabels: false });
+    expect(result.settings.tutorial).toEqual({ status: 'completed', stepId: 'return-to-play' });
+    // …and only the brand-new group arrives from the defaults.
+    expect(result.settings.sky).toEqual(DEFAULT_SKY_SETTINGS);
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+    // A rolled-back build reads its own key and cannot clobber the newer one.
+    expect(storage.values.get(LEGACY_V5_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+  });
+
+  it('prefers the current key over a stale v5 key present alongside it', () => {
+    const storage = new MemoryStorage();
+    const current = updateSkyConstellations(DEFAULT_GAME_SETTINGS, true);
+    storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(profileV5Document()));
+
+    expect(new SettingsRepository(storage).load()).toEqual({
+      ok: true,
+      settings: current,
+      source: 'stored',
+    });
+  });
+
+  it('does not fall back to the v5 key when a present v6 profile is invalid', () => {
+    const storage = new MemoryStorage();
+    storage.values.set(SETTINGS_STORAGE_KEY, '{bad json');
+    storage.values.set(LEGACY_V5_SETTINGS_STORAGE_KEY, JSON.stringify(profileV5Document()));
+
+    const result = new SettingsRepository(storage).load();
+
+    expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
+    if (!result.ok) expect(result.error).toMatch(/parse settings/u);
+  });
+
+  it('round-trips the deep-sky toggles through storage', () => {
+    const storage = new MemoryStorage();
+    const repository = new SettingsRepository(storage);
+    const customized = updateSkyConstellations(
+      updateSkyZodiacalLight(updateSkyPanorama(DEFAULT_GAME_SETTINGS, false), false),
+      true,
+    );
+
+    expect(repository.save(customized)).toEqual({ ok: true });
+    expect(repository.load()).toEqual({ ok: true, settings: customized, source: 'stored' });
+    expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '').sky).toEqual({
+      panorama: false,
+      zodiacalLight: false,
+      constellations: true,
+    });
+  });
+
+  it('keeps deep-sky toggles out of an imported save, like HUD and camera state', () => {
+    const customized = updateSkyConstellations(
+      updateSkyPanorama(DEFAULT_GAME_SETTINGS, false),
+      true,
+    );
+    const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS);
+
+    const merged = mergeGameSettingsPreferences(customized, imported);
+
+    // Profile state, not mission state: a save someone emails you must not
+    // relight your sky.
+    expect(merged.sky).toEqual(customized.sky);
+  });
+
+  it('keeps deep-sky toggles out of the save-embedded preferences DTO', () => {
+    const projected = projectGameSettingsV1(updateSkyPanorama(DEFAULT_GAME_SETTINGS, false));
+
+    expect(Object.keys(projected)).toEqual(['version', 'qualityLock', 'inputBindings']);
   });
 });

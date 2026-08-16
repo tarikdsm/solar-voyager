@@ -183,6 +183,24 @@ RECIPES = {
         output_format="jpeg",
         quality=92,
     ),
+    # The one non-body recipe: the deep-sky panorama consumed by
+    # `npm run assets:ingest` as the "sky" category (T0126). `body_id` is only an
+    # output-directory slug here, so it deliberately has no data/bodies.json entry.
+    "milkyway-panorama": TextureRecipe(
+        id="milkyway-panorama",
+        body_id="milkyway",
+        role="panorama",
+        source_url="https://cdn.eso.org/images/large/eso0932a.jpg",
+        product_url="https://www.eso.org/public/images/eso0932a/",
+        license="CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+        credit="Milky Way panorama: ESO/S. Brunier, CC BY 4.0.",
+        sha256="60400c92c54b7c1bd12299c69e83b16e5b6256e7dabacc478c021758ecd28179",
+        width=4096,
+        height=2048,
+        output_name="milkyway_panorama.jpg",
+        output_format="jpeg",
+        quality=92,
+    ),
 }
 
 

@@ -12,6 +12,8 @@ export const QUALITY_FRAME_WINDOW_SIZE = 120;
 export type BloomQuality = 'full' | 'half' | 'off';
 export type AntiAliasingQuality = 'smaa' | 'fxaa' | 'off';
 export type TextureQualityCap = 'full' | '2k' | '1k';
+/** Deep-sky panorama resolution rung: 4k source, 2k source, or no panorama (T0126). */
+export type SkyboxQualityTier = 'full' | 'half' | 'off';
 
 export interface RenderQualityProfile {
   readonly antiAliasing: AntiAliasingQuality;
@@ -22,6 +24,7 @@ export interface RenderQualityProfile {
   readonly renderScale: number;
   readonly ringParticleCount: number;
   readonly rung: number;
+  readonly skyboxTier: SkyboxQualityTier;
   readonly starCountCap: number;
   readonly textureCap: TextureQualityCap;
   readonly tier: number;
@@ -42,6 +45,12 @@ function profile(
   upAction: string,
 ): RenderQualityProfile {
   const ringParticleCount = tier >= 5 ? 4096 : tier === 4 ? 2048 : tier >= 2 ? 1024 : 0;
+  // Derived from `tier` for the same reason `ringParticleCount` is: adding a
+  // twelfth positional parameter would touch all fifteen call sites for a knob
+  // that moves strictly with the tier. The panorama drops to its 2k source when
+  // the tier reaches 3 and is switched off entirely at tier 1, where a
+  // full-screen textured sphere is the single cheapest thing left to cut.
+  const skyboxTier: SkyboxQualityTier = tier >= 4 ? 'full' : tier >= 2 ? 'half' : 'off';
   return Object.freeze({
     antiAliasing,
     bloom,
@@ -51,6 +60,7 @@ function profile(
     renderScale,
     ringParticleCount,
     rung,
+    skyboxTier,
     starCountCap,
     textureCap,
     tier,

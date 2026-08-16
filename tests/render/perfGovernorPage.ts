@@ -96,6 +96,8 @@ const relativisticVisuals = new RelativisticVisualController({
   postPass: pipeline.relativisticPass,
   spaceScene: world.spaceScene,
   starfield: world.starfield,
+  milkyWaySky: world.milkyWaySky,
+  constellationLines: world.constellationLines,
 });
 
 function resize(): void {
@@ -111,6 +113,7 @@ const controller = new RenderQualityController({
   proceduralSun: world.proceduralSun,
   renderer,
   relativisticVisuals,
+  skybox: world.milkyWaySky,
   starfield: world.starfield,
   visualSystem: world.visualSystem,
 });

@@ -3,6 +3,7 @@ import type { WebGLRenderer } from 'three';
 import type {
   RenderQualityApplicationPort,
   RenderQualityProfile,
+  SkyboxQualityTier,
   TextureQualityCap,
 } from './perfGovernor.js';
 import type { ProceduralSunQuality } from './proceduralSunState.js';
@@ -34,6 +35,11 @@ export interface QualityRelativisticVisualPort {
   setQualityEnabled(enabled: boolean): void;
 }
 
+/** T0126 — the deep-sky panorama's resolution rung. */
+export interface QualitySkyboxPort {
+  setSkyboxTier(tier: SkyboxQualityTier): void;
+}
+
 export interface RenderQualityControllerOptions {
   readonly assetLoader: QualityAssetLoaderPort;
   readonly pipeline: QualityPostPipelinePort;
@@ -41,6 +47,7 @@ export interface RenderQualityControllerOptions {
   readonly proceduralSun: QualityProceduralPort;
   readonly renderer: WebGLRenderer;
   readonly relativisticVisuals: QualityRelativisticVisualPort;
+  readonly skybox: QualitySkyboxPort;
   readonly starfield: QualityStarfieldPort;
   readonly visualSystem: QualityVisualSystemPort;
 }
@@ -53,6 +60,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
   private readonly postProcessingAvailable: boolean;
   private readonly proceduralSun: QualityProceduralPort;
   private readonly relativisticVisuals: QualityRelativisticVisualPort;
+  private readonly skybox: QualitySkyboxPort;
   private readonly starfield: QualityStarfieldPort;
   private readonly visualSystem: QualityVisualSystemPort;
   private appliedRung = -1;
@@ -63,6 +71,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.postProcessingAvailable = options.postProcessingAvailable;
     this.proceduralSun = options.proceduralSun;
     this.relativisticVisuals = options.relativisticVisuals;
+    this.skybox = options.skybox;
     this.starfield = options.starfield;
     this.visualSystem = options.visualSystem;
     this.basePixelRatio = options.renderer.getPixelRatio();
@@ -83,6 +92,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.visualSystem.setProceduralQuality(profile.proceduralQuality);
     this.visualSystem.setRingParticleCount(profile.ringParticleCount);
     this.relativisticVisuals.setQualityEnabled(this.postProcessingAvailable && profile.tier >= 3);
+    this.skybox.setSkyboxTier(profile.skyboxTier);
     this.appliedRung = profile.rung;
   }
 }

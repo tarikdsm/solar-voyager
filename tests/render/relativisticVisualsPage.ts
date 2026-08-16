@@ -89,10 +89,16 @@ pipeline.setAntiAliasing('off');
 pipeline.resize(WIDTH, HEIGHT, 1);
 pipeline.warmUp();
 
+// This page exists to exercise the post pass, so the sky visuals are inert
+// stubs: adding real ones would repaint the background this gate samples. Their
+// aberration coherence is proven in tools/tests/milkyWayRegression.mjs instead.
+const inertSkyPort = { setRelativisticObserver: (): void => {} };
 const controller = new RelativisticVisualController({
   postPass: pipeline.relativisticPass,
   spaceScene,
   starfield,
+  milkyWaySky: inertSkyPort,
+  constellationLines: inertSkyPort,
 });
 controller.setQualityEnabled(true);
 const snapshot = createSimulationSnapshotBuffer([]);

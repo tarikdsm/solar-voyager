@@ -20,9 +20,12 @@ import {
   updateHudBodyLabels,
   updateHudPreset,
   updateHudSettings,
+  updateSkyConstellations,
+  updateSkyPanorama,
+  updateSkyZodiacalLight,
   updateTutorialSettings,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV6,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -69,13 +72,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV5, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV6, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV5;
+  private currentSettings: GameSettingsV6;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -92,7 +95,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV5, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV6, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -112,7 +115,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV5 {
+  get settings(): GameSettingsV6 {
     return this.currentSettings;
   }
 
@@ -349,6 +352,48 @@ export class GameSessionController {
     }
   }
 
+  /** T0126 — Milky Way panorama on or off. */
+  setSkyPanorama(enabled: boolean): SessionActionResult {
+    try {
+      const candidate = updateSkyPanorama(this.currentSettings, enabled);
+      return this.commitSettings(candidate, 'Milky Way panorama updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update the Milky Way panorama',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  /** T0126 — zodiacal-light gradient on or off. */
+  setSkyZodiacalLight(enabled: boolean): SessionActionResult {
+    try {
+      const candidate = updateSkyZodiacalLight(this.currentSettings, enabled);
+      return this.commitSettings(candidate, 'Zodiacal light updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update the zodiacal light',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  /** T0126 — constellation-line figures on or off. */
+  setSkyConstellations(enabled: boolean): SessionActionResult {
+    try {
+      const candidate = updateSkyConstellations(this.currentSettings, enabled);
+      return this.commitSettings(candidate, 'Constellation lines updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update the constellation lines',
+        detail: describeError(error),
+      };
+    }
+  }
+
   /** T0112 — HUD preset ring position, persisted in the profile. */
   setHudPreset(preset: HudPreset): SessionActionResult {
     try {
@@ -443,7 +488,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV5,
+    settings: GameSettingsV6,
     successMessage: string,
     publish = true,
   ): SessionActionResult {
