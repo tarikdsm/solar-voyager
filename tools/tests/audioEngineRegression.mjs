@@ -355,7 +355,10 @@ try {
           paramWrites: steadyWrites,
         },
         visibility: { resumedState: resumed.contextState },
-        warnings: warnings.length,
+        // Printed, not just counted: a future run must be able to tell one
+        // benign software-rasteriser warning from an autoplay warning that
+        // slipped the pattern.
+        warnings,
       },
       null,
       2,
