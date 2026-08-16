@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { render } from 'preact';
 
 import { SystemMapController } from '../../src/game/systemMapController.js';
+import { TargetSelectionController } from '../../src/game/targetSelection.js';
 import type { Commands } from '../../src/sim/simulationSnapshot.js';
 import '../../src/ui/app.css';
 import { SystemMapPanel } from '../../src/ui/SystemMapPanel.js';
@@ -35,10 +36,12 @@ const controller = new SystemMapController({
   onFocusChange: (bodyId) => map.publishFocus(bodyId),
 });
 
+const targetSelection = new TargetSelectionController({ bodyIds: BODY_IDS, commands });
+
 render(
   <SystemMapPanel
     bodyIds={BODY_IDS}
-    commands={commands}
+    targetSelection={targetSelection}
     controller={controller}
     map={map}
     targetBody={targetBody}

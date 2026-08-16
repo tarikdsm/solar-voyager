@@ -5,7 +5,13 @@ import {
   type SimulationSnapshotBuffer,
 } from '../../sim/simulationSnapshot.js';
 import type { CameraPose } from '../cameraDirector.js';
-import { MIN_PICK_RADIUS_PX, pickBodyIndexAtPixel } from './bodyPicking.js';
+import { OrbitCameraController } from '../orbitCameraController.js';
+import {
+  MIN_PICK_RADIUS_PX,
+  SYSTEM_MAP_CAMERA_FOV_DEG,
+  pickBodyIndexAtPixel,
+  pickMapBodyIndexAtPixel,
+} from './bodyPicking.js';
 
 const WIDTH_PX = 1_600;
 const HEIGHT_PX = 800;
@@ -150,5 +156,141 @@ describe('angular-disc body picking - T0112', () => {
         1,
       ),
     ).toThrow(/one position triple per catalog body/u);
+  });
+});
+
+/**
+ * The system map does not draw bodies at their angular size: one `gl_PointSize`
+ * icon batch renders every body at a constant 8 CSS px (14 when selected). So the
+ * map shares the projection and the nearest-along-ray rule but replaces the
+ * angular disc with a flat {@link MIN_PICK_RADIUS_PX} floor.
+ */
+describe('system-map icon picking - T0117', () => {
+  const MAP_BODY_IDS = Object.freeze(['sun', 'earth', 'moon']);
+  /** The map camera's own field of view, unlike the 90 degrees used above. */
+  const MAP_TAN_HALF_FOV = Math.tan((SYSTEM_MAP_CAMERA_FOV_DEG * Math.PI) / 360);
+
+  function mapOffsetPx(xKm: number, depthKm: number): number {
+    return (xKm / depthKm / (MAP_TAN_HALF_FOV * (WIDTH_PX / HEIGHT_PX))) * (WIDTH_PX / 2);
+  }
+
+  /** Sun far off to the side, Earth ahead, Moon on the same ray but nearer. */
+  function mapScene(): SimulationSnapshotBuffer {
+    const snapshot = createSimulationSnapshotBuffer(MAP_BODY_IDS);
+    snapshot.bodyPositionsKm.set([75_000, 0, -100_000], 0);
+    snapshot.bodyPositionsKm.set([0, 0, -1_000_000], 3);
+    snapshot.bodyPositionsKm.set([0, 0, -500_000], 6);
+    return snapshot;
+  }
+
+  function pickMap(snapshot: SimulationSnapshotBuffer, x: number, y: number): number {
+    return pickMapBodyIndexAtPixel(
+      snapshot,
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: -1 },
+      WIDTH_PX,
+      HEIGHT_PX,
+      x,
+      y,
+    );
+  }
+
+  it('picks the nearest body along the ray, as the space view does', () => {
+    expect(pickMap(mapScene(), CENTER_X, CENTER_Y)).toBe(2);
+  });
+
+  /**
+   * The rule that distinguishes the map from the space view. The Sun's angular
+   * radius at this range is 3,626 px — larger than the whole viewport — so
+   * angular-disc picking would hand it the centre pixel. The map draws no disc
+   * there at all: just an 8 px icon 391 px off to the right, and the centre
+   * pixel belongs to the Moon's icon.
+   */
+  it('ignores angular size and clicks the icon', () => {
+    const snapshot = mapScene();
+    // Sun radius 695,700 km at 100,000 km: an enormous disc, no icon here.
+    snapshot.bodyPositionsKm.set([75_000, 0, -100_000], 0);
+    expect(pickMap(snapshot, CENTER_X, CENTER_Y)).toBe(2);
+
+    const sunX = CENTER_X + mapOffsetPx(75_000, 100_000);
+    expect(pickMap(snapshot, sunX, CENTER_Y)).toBe(0);
+    expect(pickMap(snapshot, sunX - MIN_PICK_RADIUS_PX - 6, CENTER_Y)).toBe(-1);
+  });
+
+  it('returns -1 for empty sky and for bodies behind the camera', () => {
+    const snapshot = mapScene();
+    expect(pickMap(snapshot, 20, 20)).toBe(-1);
+    snapshot.bodyPositionsKm.set([0, 0, 100_000], 0);
+    snapshot.bodyPositionsKm.set([0, 0, 200_000], 3);
+    snapshot.bodyPositionsKm.set([0, 0, 300_000], 6);
+    expect(pickMap(snapshot, CENTER_X, CENTER_Y)).toBe(-1);
+  });
+
+  /**
+   * The degenerate pose the map genuinely reaches and the space view rarely
+   * does: yaw 90 degrees at zero pitch aims the orbit camera straight down -Y,
+   * antiparallel to the (0,1,0) up hint three.js uses, so `cross(forward, hint)`
+   * vanishes. `Matrix4.lookAt` nudges and keeps drawing icons; the picker has to
+   * nudge identically or it returns -1 over a body the player can see.
+   */
+  it('survives the map look direction that is parallel to the up hint', () => {
+    const snapshot = createSimulationSnapshotBuffer(MAP_BODY_IDS);
+    snapshot.bodyPositionsKm.set([0, -1_000_000, 0], 0);
+    snapshot.bodyPositionsKm.set([0, -2_000_000, 0], 3);
+    snapshot.bodyPositionsKm.set([0, -3_000_000, 0], 6);
+
+    expect(
+      pickMapBodyIndexAtPixel(
+        snapshot,
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: -1, z: 0 },
+        WIDTH_PX,
+        HEIGHT_PX,
+        CENTER_X,
+        CENTER_Y,
+      ),
+    ).toBe(0);
+  });
+
+  /**
+   * Driven by the production map camera rather than a hand-written pose: the
+   * body the orbit camera is focused on must be the body under the middle of the
+   * map. This is the acceptance criterion's "known camera pose -> expected body".
+   */
+  it('picks the orbit camera focus from the centre pixel', () => {
+    const positionsKm = new Float64Array([0, 0, 0, 1.496e8, 0, 0, 2.279e8, 0, 0]);
+    const snapshot = createSimulationSnapshotBuffer(MAP_BODY_IDS);
+    snapshot.bodyPositionsKm.set(positionsKm);
+    const camera = new OrbitCameraController({
+      positionsKm,
+      targets: [
+        { id: 'sun', positionOffset: 0, meanRadiusKm: 695_700 },
+        { id: 'earth', positionOffset: 3, meanRadiusKm: 6_371 },
+        { id: 'moon', positionOffset: 6, meanRadiusKm: 3_389 },
+      ],
+      initialFocusId: 'sun',
+      initialCameraPositionKm: { x: 0, y: 0, z: 3e8 },
+    });
+
+    for (const [focusId, expectedIndex] of [
+      ['sun', 0],
+      ['earth', 1],
+      ['moon', 2],
+    ] as const) {
+      camera.focusBody(focusId);
+      // Settle the 1.5 s focus transfer so the pose is the focus's own.
+      for (let frame = 0; frame < 200; frame += 1) camera.update(1 / 60);
+      expect(
+        pickMapBodyIndexAtPixel(
+          snapshot,
+          camera.cameraPositionKm,
+          camera.lookDirection,
+          WIDTH_PX,
+          HEIGHT_PX,
+          CENTER_X,
+          CENTER_Y,
+        ),
+      ).toBe(expectedIndex);
+    }
   });
 });

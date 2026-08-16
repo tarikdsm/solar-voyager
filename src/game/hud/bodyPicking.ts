@@ -1,3 +1,4 @@
+import type { ReadonlyVec3 } from '../../core/vec3.js';
 import type { SimSnapshot } from '../../sim/simulationSnapshot.js';
 import type { CameraPose } from '../cameraDirector.js';
 import {
@@ -29,32 +30,49 @@ import {
  */
 export const MIN_PICK_RADIUS_PX = 8;
 
+/**
+ * Vertical field of view of the system-map camera, in degrees.
+ *
+ * `render/spaceScene.ts` constructs every `CameraRelativeSpaceScene` camera with
+ * this value and the map has no camera of its own, but `game/` may not import
+ * `render/`. `src/render/systemMapScene.test.ts` asserts the two agree, the same
+ * way `markerCameraAgreement.test.ts` pins the space-view convention.
+ */
+export const SYSTEM_MAP_CAMERA_FOV_DEG = 75;
+
 const basisScratch = new Float64Array(CAMERA_BASIS_COMPONENTS);
 const pointScratch = new Float64Array(PROJECTED_POINT_COMPONENTS);
 
 /**
- * Returns the catalog index of the body under a viewport pixel, or -1.
+ * Mutable stand-in for a `CameraPose` the map camera does not publish.
  *
- * `radiiKm` is the catalog mean radius per body, in `snapshot.bodyIds` order.
- * The ship is not a candidate because `snapshot.bodyPositionsKm` contains
- * catalog bodies only; the length check makes that structural rather than
- * assumed.
- *
- * Selection rule: among every body whose projected disc contains the pixel, the
- * one with the smallest positive depth wins — nearest along the ray, which is
- * what makes clicking Io in front of Jupiter select Io.
+ * `OrbitCameraController` exposes a position and a look direction; the up hint
+ * and the field of view come from the three.js camera it drives, which never has
+ * `camera.up` reassigned and so keeps the library default. Preallocated: the map
+ * pick path allocates nothing.
  */
-export function pickBodyIndexAtPixel(
+const mapPoseScratch = {
+  positionKm: { x: 0, y: 0, z: 0 },
+  lookDirection: { x: 0, y: 0, z: -1 },
+  upDirection: { x: 0, y: 1, z: 0 },
+  fovDeg: SYSTEM_MAP_CAMERA_FOV_DEG,
+};
+
+/**
+ * Shared hit test. `radiiKm === null` means "flat {@link MIN_PICK_RADIUS_PX} for
+ * every body", which is the system map's constant-size icon rule.
+ */
+function pickNearestBodyIndex(
   snapshot: SimSnapshot,
   pose: CameraPose,
-  radiiKm: Float64Array,
+  radiiKm: Float64Array | null,
   widthPx: number,
   heightPx: number,
   pixelX: number,
   pixelY: number,
 ): number {
   const bodyCount = snapshot.bodyIds.length;
-  if (radiiKm.length < bodyCount) {
+  if (radiiKm !== null && radiiKm.length < bodyCount) {
     throw new RangeError('body picking requires one mean radius per catalog body');
   }
   if (snapshot.bodyPositionsKm.length !== bodyCount * 3) {
@@ -86,10 +104,13 @@ export function pickBodyIndexAtPixel(
     const centerX = pointScratch[0] as number;
     const centerY = pointScratch[1] as number;
     if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) continue;
-    const pickRadiusPx = Math.max(
-      MIN_PICK_RADIUS_PX,
-      apparentRadiusPx(radiiKm[bodyIndex] as number, depthKm, tanHalfFov, heightPx),
-    );
+    const pickRadiusPx =
+      radiiKm === null
+        ? MIN_PICK_RADIUS_PX
+        : Math.max(
+            MIN_PICK_RADIUS_PX,
+            apparentRadiusPx(radiiKm[bodyIndex] as number, depthKm, tanHalfFov, heightPx),
+          );
     const deltaX = pixelX - centerX;
     const deltaY = pixelY - centerY;
     if (deltaX * deltaX + deltaY * deltaY > pickRadiusPx * pickRadiusPx) continue;
@@ -97,4 +118,61 @@ export function pickBodyIndexAtPixel(
     bestDepthKm = depthKm;
   }
   return bestIndex;
+}
+
+/**
+ * Returns the catalog index of the body under a viewport pixel, or -1.
+ *
+ * `radiiKm` is the catalog mean radius per body, in `snapshot.bodyIds` order.
+ * The ship is not a candidate because `snapshot.bodyPositionsKm` contains
+ * catalog bodies only; the length check makes that structural rather than
+ * assumed.
+ *
+ * Selection rule: among every body whose projected disc contains the pixel, the
+ * one with the smallest positive depth wins — nearest along the ray, which is
+ * what makes clicking Io in front of Jupiter select Io.
+ */
+export function pickBodyIndexAtPixel(
+  snapshot: SimSnapshot,
+  pose: CameraPose,
+  radiiKm: Float64Array,
+  widthPx: number,
+  heightPx: number,
+  pixelX: number,
+  pixelY: number,
+): number {
+  return pickNearestBodyIndex(snapshot, pose, radiiKm, widthPx, heightPx, pixelX, pixelY);
+}
+
+/**
+ * Returns the catalog index of the body whose **system-map icon** covers a
+ * viewport pixel, or -1.
+ *
+ * The map draws one constant-size icon batch rather than angular discs, so every
+ * candidate gets a flat {@link MIN_PICK_RADIUS_PX} radius — enough to cover the
+ * 4 px icon with slop, and small enough that the Sun does not swallow a third of
+ * the screen. Everything else is the space view's rule: nearest along the ray
+ * wins, and the ship is excluded because `snapshot.bodyPositionsKm` is the
+ * catalog-only array.
+ *
+ * The up hint and field of view are the map camera's implicit ones (three.js
+ * default up, {@link SYSTEM_MAP_CAMERA_FOV_DEG}); `OrbitCameraController`
+ * publishes only the position and the look direction.
+ */
+export function pickMapBodyIndexAtPixel(
+  snapshot: SimSnapshot,
+  cameraPositionKm: ReadonlyVec3,
+  lookDirection: ReadonlyVec3,
+  widthPx: number,
+  heightPx: number,
+  pixelX: number,
+  pixelY: number,
+): number {
+  mapPoseScratch.positionKm.x = cameraPositionKm.x;
+  mapPoseScratch.positionKm.y = cameraPositionKm.y;
+  mapPoseScratch.positionKm.z = cameraPositionKm.z;
+  mapPoseScratch.lookDirection.x = lookDirection.x;
+  mapPoseScratch.lookDirection.y = lookDirection.y;
+  mapPoseScratch.lookDirection.z = lookDirection.z;
+  return pickNearestBodyIndex(snapshot, mapPoseScratch, null, widthPx, heightPx, pixelX, pixelY);
 }
