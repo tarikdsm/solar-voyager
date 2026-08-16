@@ -99,7 +99,11 @@ single-run before/after pair can therefore manufacture a 2× p75 "regression" or
 self-comparison is clean. The 5% gate did exactly its job here.
 
 The root cause is worth fixing at the orchestrator level rather than per task: **`npm run bench` and
-the Playwright gates are not safe to run concurrently across worktrees.** They contend for one GPU
-and they bind fixed ports (`test:visual-tiers` is 4177, the bench has its own), so a parallel agent
-both perturbs the numbers and hard-fails the gate with `Port 4177 is already in use`. Bench and
-browser-gate runs need a machine-wide lock, or a per-worktree port offset at minimum.
+the Playwright gates are not safe to run concurrently across worktrees.** They contend for one GPU,
+and worse, `tools/bench/flightBench.mjs` and `tools/tests/visualTierFlyIn.mjs` bind the _same_ fixed
+port — both are `127.0.0.1:4177`. Any agent running `npm run bench` therefore hard-fails any agent
+running `npm run test:visual-tiers` with `Port 4177 is already in use`, which happened twice here
+(T0128's and then T0144's bench). Two further gates failed under the same contention and passed on a
+straight retry: `test:tutorial` timed out after 30 s waiting for `#burn-log-active` to hide, and the
+first `test:visual-tiers` attempt. Bench and browser-gate runs need a machine-wide lock, or a
+per-worktree port offset at minimum.
