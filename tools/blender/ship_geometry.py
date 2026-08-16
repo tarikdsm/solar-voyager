@@ -110,9 +110,16 @@ def transform(
         vertices.append(
             (placed[0] + translation[0], placed[1] + translation[1], placed[2] + translation[2])
         )
+    # A rigid placement must not perturb the analytic normals: renormalizing an
+    # already-unit vector costs a bit or two of drift for nothing.
+    uniform = scale == (1.0, 1.0, 1.0)
     normal_faces = tuple(
         tuple(
-            rotate(_normalize((normal[0] / scale[0], normal[1] / scale[1], normal[2] / scale[2])))
+            rotate(normal)
+            if uniform
+            else rotate(
+                _normalize((normal[0] / scale[0], normal[1] / scale[1], normal[2] / scale[2]))
+            )
             for normal in face
         )
         for face in mesh.normal_faces
@@ -327,12 +334,12 @@ def disc(
         for index in range(segments):
             first = 1 + index
             second = 1 + (index + 1) % segments
-            faces.append((0, second, first) if facing >= 0.0 else (0, first, second))
+            faces.append((0, first, second) if facing >= 0.0 else (0, second, first))
             if with_uvs:
                 center_uv = (uv_center[0], uv_center[1])
                 a = uv_for(ring_direction(2.0 * math.pi * index / segments), 1.0)
                 b = uv_for(ring_direction(2.0 * math.pi * ((index + 1) % segments) / segments), 1.0)
-                uv_faces.append((center_uv, b, a) if facing >= 0.0 else (center_uv, a, b))
+                uv_faces.append((center_uv, a, b) if facing >= 0.0 else (center_uv, b, a))
             else:
                 uv_faces.append(())
             normal_faces.append((normal, normal, normal))
