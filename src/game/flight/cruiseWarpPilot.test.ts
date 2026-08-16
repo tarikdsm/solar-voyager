@@ -76,7 +76,8 @@ describe('CruiseWarpPilot', () => {
     let reachedFrame = -1;
     for (let index = 0; index < frames; index += 1) {
       h.run(MAX_THRUST_WARP, 1);
-      if (reachedFrame < 0 && h.snapshot.requestedWarp <= DECOMPRESSED_WARP) reachedFrame = index + 1;
+      if (reachedFrame < 0 && h.snapshot.requestedWarp <= DECOMPRESSED_WARP)
+        reachedFrame = index + 1;
     }
     expect(reachedFrame).toBeGreaterThan(0);
     expect(reachedFrame * FRAME_SEC).toBeLessThanOrEqual(1);
