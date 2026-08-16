@@ -153,11 +153,38 @@ async function startFreshTutorial(page, dismissWarningBeforeStart = false) {
   await waitForStep(page, 'focus-target', 'Focus a target');
 }
 
+/**
+ * Selects Mars in the navigation-target `<select>`, keyboard-focused first.
+ *
+ * Does not simulate typing "Mars" character by character. It used to, via
+ * `page.keyboard.type`, relying on the browser's native multi-character
+ * type-ahead search to land on the right option. That search resets once the
+ * gap between keystrokes exceeds roughly a second (confirmed directly:
+ * `page.keyboard.type('Mars', { delay: 1100 })` reproduces the exact CI
+ * failure unthrottled — the search restarts on 'a' instead of accumulating
+ * "Ma", landing on whatever a lone "a"/"r"/"s" resolves to instead of Mars).
+ * Typing "M" alone always matches Mercury first, the catalog's other early
+ * "M" body, which is harmless *if* "a" arrives before the browser's reset
+ * window closes.
+ *
+ * T0110 made that window easy to miss. Selecting a target now also re-aims
+ * the observatory camera and rewrites the focus label
+ * (`sessionCommands.setTarget` in `src/main.ts`) — real synchronous work
+ * that the wrong, transient "Mercury" match now pays for too, on every
+ * keystroke, not just the last one. On a contended CI runner that is enough
+ * added latency between keystrokes to cross the reset window that a fast
+ * local machine never approaches. The fix is not to re-time the keystrokes —
+ * a faster or slower runner would only move where it breaks — it is to stop
+ * depending on an OS/browser input heuristic for a property this test does
+ * not actually care about. `selectOption` fires the exact same `change`
+ * event `commands.setTarget` listens for, in one deterministic step, so the
+ * product path under test — a real DOM event driving `setTarget`, re-aiming
+ * the camera and advancing the tutorial — is unchanged.
+ */
 async function selectMarsWithKeyboard(page) {
   const selector = page.locator('#target-selector');
   await selector.focus();
-  await page.keyboard.type('Mars');
-  await page.keyboard.press('Enter');
+  await selector.selectOption('mars');
   assert.equal(await selector.inputValue(), 'mars', 'keyboard target selection did not choose Mars');
 }
 
