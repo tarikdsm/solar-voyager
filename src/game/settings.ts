@@ -176,7 +176,7 @@ export interface HudSettings {
 }
 
 /**
- * Independent profile settings document, superseded by {@link GameSettingsV6}.
+ * Independent profile settings document, superseded by {@link GameSettingsV7}.
  *
  * Kept only as the strict parse target for the one-time v5->v6 migration
  * (`parseProfileSettingsV5`), exactly as V4 is kept for v4->v5.
@@ -204,7 +204,12 @@ export interface RenderSettings {
   readonly exposureMode: ExposureMode;
 }
 
-/** Independent profile settings document stored outside save slots. */
+/**
+ * Independent profile settings document, superseded by {@link GameSettingsV7}.
+ *
+ * Kept only as the strict parse target for the one-time v6->v7 migration
+ * (`parseProfileSettingsV6`), exactly as V5 is kept for v5->v6.
+ */
 export interface GameSettingsV6 {
   readonly version: 6;
   readonly qualityLock: QualityLock;
@@ -216,6 +221,49 @@ export interface GameSettingsV6 {
   readonly render: RenderSettings;
 }
 
+/** Mixer buses the player can set independently (T0144, ADR-041). */
+export const AUDIO_BUSES = Object.freeze(['master', 'music', 'sfx', 'ui'] as const);
+
+export type AudioBus = (typeof AUDIO_BUSES)[number];
+
+/**
+ * Mixer levels and the Kubrick-mode music policy (T0144, ADR-041).
+ *
+ * Levels are stored as the **slider position** in [0, 1], not as a gain: the
+ * perceptual taper lives in `game/audio/audioDirector.ts` so the persisted
+ * number is the one the panel shows, and a future taper change does not
+ * invalidate every stored profile.
+ *
+ * Defaults are deliberately below unity (design doc section 2): the game ships
+ * audible rather than muted — the AudioContext is not even constructed until a
+ * real user gesture, so page load stays silent without a mute — but the first
+ * second of a session should not be a surprise.
+ *
+ * `exteriorMusic` is the one half of Kubrick mode the player chooses: exterior
+ * cameras always silence the diegetic sfx bus, and this decides whether the
+ * non-diegetic score survives with them or the vacuum is total.
+ */
+export interface AudioSettings {
+  readonly master: number;
+  readonly music: number;
+  readonly sfx: number;
+  readonly ui: number;
+  readonly exteriorMusic: boolean;
+}
+
+/** Independent profile settings document stored outside save slots. */
+export interface GameSettingsV7 {
+  readonly version: 7;
+  readonly qualityLock: QualityLock;
+  readonly inputBindings: InputBindings;
+  readonly tutorial: TutorialProgress;
+  readonly gamepad: GamepadSettings;
+  readonly camera: CameraSettings;
+  readonly hud: HudSettings;
+  readonly render: RenderSettings;
+  readonly audio: AudioSettings;
+}
+
 export interface KeyValueStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -224,12 +272,12 @@ export interface KeyValueStorage {
 export type SettingsLoadResult =
   | {
       readonly ok: true;
-      readonly settings: GameSettingsV6;
+      readonly settings: GameSettingsV7;
       readonly source: 'default' | 'stored' | 'migrated';
     }
   | {
       readonly ok: false;
-      readonly settings: GameSettingsV6;
+      readonly settings: GameSettingsV7;
       readonly error: string;
     };
 
@@ -256,7 +304,9 @@ export type SettingsSaveResult =
  * older build never touches it, so the newer document simply waits
  * untouched until a v3-aware build reads it again.
  */
-export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
+export const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+/** The v6 profile key (T0127 era, pre-audio) — read-and-migrate-forward only. */
+export const LEGACY_V6_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v6';
 /** The v5 profile key (T0112's era, pre-exposure-mode) — read-and-migrate-forward only. */
 export const LEGACY_V5_SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
 /** The v4 profile key (T0110's era, pre-HUD-preset) — read-and-migrate-forward only. */
@@ -544,7 +594,65 @@ function freezeV6Settings(
   });
 }
 
-export const DEFAULT_GAME_SETTINGS = freezeV6Settings(
+function freezeAudioSettings(
+  master: number,
+  music: number,
+  sfx: number,
+  ui: number,
+  exteriorMusic: boolean,
+): AudioSettings {
+  return Object.freeze({ master, music, sfx, ui, exteriorMusic });
+}
+
+/** Valid range of every mixer level: the slider position, not a gain. */
+export const AUDIO_LEVEL_MIN = 0;
+export const AUDIO_LEVEL_MAX = 1;
+
+/**
+ * Audible out of the box at modest levels, with the score kept on exterior
+ * cameras (design doc section 2).
+ *
+ * The ship is louder than the score because the ship is the subject; both sit
+ * below unity so a player on speakers is not startled by the first burn.
+ */
+export const DEFAULT_AUDIO_SETTINGS = freezeAudioSettings(0.7, 0.5, 0.7, 0.5, true);
+
+function freezeV7Settings(
+  qualityLock: QualityLock,
+  inputBindings: Record<InputAction, string>,
+  tutorial: TutorialProgress,
+  gamepad: GamepadSettings,
+  camera: CameraSettings,
+  hud: HudSettings,
+  render: RenderSettings,
+  audio: AudioSettings,
+): GameSettingsV7 {
+  return Object.freeze({
+    version: 7 as const,
+    qualityLock,
+    inputBindings: Object.freeze(inputBindings),
+    tutorial: Object.isFrozen(tutorial)
+      ? tutorial
+      : freezeTutorial(tutorial.status, tutorial.stepId),
+    gamepad: Object.isFrozen(gamepad)
+      ? gamepad
+      : freezeGamepadSettings(
+          gamepad.deadzone,
+          gamepad.curveExponent,
+          gamepad.axes as Record<GamepadAxisId, GamepadAxisSettings>,
+        ),
+    camera: Object.isFrozen(camera)
+      ? camera
+      : freezeCameraSettings(camera.fovWidening, camera.shake),
+    hud: Object.isFrozen(hud) ? hud : freezeHudSettings(hud.preset, hud.bodyLabels),
+    render: Object.isFrozen(render) ? render : freezeRenderSettings(render.exposureMode),
+    audio: Object.isFrozen(audio)
+      ? audio
+      : freezeAudioSettings(audio.master, audio.music, audio.sfx, audio.ui, audio.exteriorMusic),
+  });
+}
+
+export const DEFAULT_GAME_SETTINGS = freezeV7Settings(
   'auto',
   { ...DEFAULT_INPUT_BINDINGS },
   { status: 'unoffered', stepId: 'focus-target' },
@@ -552,6 +660,7 @@ export const DEFAULT_GAME_SETTINGS = freezeV6Settings(
   DEFAULT_CAMERA_SETTINGS,
   DEFAULT_HUD_SETTINGS,
   DEFAULT_RENDER_SETTINGS,
+  DEFAULT_AUDIO_SETTINGS,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -879,8 +988,14 @@ function parseRenderSettings(value: unknown): RenderSettings {
   return freezeRenderSettings(value.exposureMode);
 }
 
-/** Strictly parses the independent version-6 profile settings document. */
-export function parseProfileSettings(value: unknown): GameSettingsV6 {
+/**
+ * Strictly parses the superseded version-6 profile settings document.
+ *
+ * Not exported: the only remaining caller is the v6->v7 migration inside
+ * `SettingsRepository.load()`. Kept byte-for-byte equivalent to what
+ * `parseProfileSettings` used to do before `audio` existed.
+ */
+function parseProfileSettingsV6(value: unknown): GameSettingsV6 {
   if (!isRecord(value)) throw new RangeError('profile settings must be an object');
   assertExactKeys(
     value,
@@ -899,6 +1014,65 @@ export function parseProfileSettings(value: unknown): GameSettingsV6 {
     parseCameraSettings(value.camera),
     parseHudSettings(value.hud),
     parseRenderSettings(value.render),
+  );
+}
+
+function validateAudioLevel(value: unknown, bus: AudioBus): number {
+  if (!isFiniteNumberInRange(value, AUDIO_LEVEL_MIN, AUDIO_LEVEL_MAX)) {
+    throw new RangeError(
+      `audio ${bus} level must be a number in [${String(AUDIO_LEVEL_MIN)}, ${String(AUDIO_LEVEL_MAX)}]`,
+    );
+  }
+  return value;
+}
+
+/** Strictly parses mixer levels and the Kubrick music policy. Every field is required. */
+function parseAudioSettings(value: unknown): AudioSettings {
+  if (!isRecord(value)) throw new RangeError('audio settings must be an object');
+  assertExactKeys(value, [...AUDIO_BUSES, 'exteriorMusic'], 'unknown audio settings field');
+  if (typeof value.exteriorMusic !== 'boolean') {
+    throw new RangeError('audio exteriorMusic must be a boolean');
+  }
+  return freezeAudioSettings(
+    validateAudioLevel(value.master, 'master'),
+    validateAudioLevel(value.music, 'music'),
+    validateAudioLevel(value.sfx, 'sfx'),
+    validateAudioLevel(value.ui, 'ui'),
+    value.exteriorMusic,
+  );
+}
+
+/** Strictly parses the independent version-7 profile settings document. */
+export function parseProfileSettings(value: unknown): GameSettingsV7 {
+  if (!isRecord(value)) throw new RangeError('profile settings must be an object');
+  assertExactKeys(
+    value,
+    [
+      'version',
+      'qualityLock',
+      'inputBindings',
+      'tutorial',
+      'gamepad',
+      'camera',
+      'hud',
+      'render',
+      'audio',
+    ],
+    'unknown profile settings field',
+  );
+  if (value.version !== 7) throw new RangeError('profile settings version must be 7');
+  if (!isQualityLock(value.qualityLock)) {
+    throw new RangeError('profile settings quality lock is not supported');
+  }
+  return freezeV7Settings(
+    value.qualityLock,
+    parseInputBindings(value.inputBindings),
+    parseTutorial(value.tutorial),
+    parseGamepadSettings(value.gamepad),
+    parseCameraSettings(value.camera),
+    parseHudSettings(value.hud),
+    parseRenderSettings(value.render),
+    parseAudioSettings(value.audio),
   );
 }
 
@@ -978,8 +1152,30 @@ function migrateProfileV5ToV6(settings: GameSettingsV5): GameSettingsV6 {
   );
 }
 
+/**
+ * Lifts a superseded v6 profile to v7 by attaching default mixer levels.
+ *
+ * Same shape as `migrateProfileV5ToV6` one version up: `audio` is a brand-new
+ * required object with no prior partial state anywhere in a v6 document to
+ * recover from, so this is a whole-document migration rather than a per-field
+ * backfill. A returning player therefore lands on the shipped defaults — audible,
+ * not muted (design doc section 2) — which is the same posture a new profile gets.
+ */
+function migrateProfileV6ToV7(settings: GameSettingsV6): GameSettingsV7 {
+  return freezeV7Settings(
+    settings.qualityLock,
+    { ...settings.inputBindings },
+    settings.tutorial,
+    settings.gamepad,
+    settings.camera,
+    settings.hud,
+    settings.render,
+    DEFAULT_AUDIO_SETTINGS,
+  );
+}
+
 /** Projects profile preferences into the stable DTO used by SaveEnvelopeV3. */
-export function projectGameSettingsV1(settings: GameSettingsV6): GameSettingsV1 {
+export function projectGameSettingsV1(settings: GameSettingsV7): GameSettingsV1 {
   const validated = parseProfileSettings(settings);
   return freezeV1Settings(validated.qualityLock, { ...validated.inputBindings });
 }
@@ -993,12 +1189,12 @@ export function projectGameSettingsV1(settings: GameSettingsV6): GameSettingsV1 
  * from the import.
  */
 export function mergeGameSettingsPreferences(
-  profile: GameSettingsV6,
+  profile: GameSettingsV7,
   preferences: GameSettingsV1,
-): GameSettingsV6 {
+): GameSettingsV7 {
   const validatedProfile = parseProfileSettings(profile);
   const validated = parseGameSettings(preferences);
-  return freezeV6Settings(
+  return freezeV7Settings(
     validated.qualityLock,
     { ...validated.inputBindings },
     validatedProfile.tutorial,
@@ -1006,27 +1202,28 @@ export function mergeGameSettingsPreferences(
     validatedProfile.camera,
     validatedProfile.hud,
     validatedProfile.render,
+    validatedProfile.audio,
   );
 }
 
 /** Returns a validated frozen profile with new tutorial progress. */
 export function updateTutorialSettings(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   tutorial: TutorialProgress,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({ ...settings, tutorial });
 }
 
 /** Returns a validated frozen profile with the chase field-of-view widening toggled. */
 export function updateCameraFovWidening(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   fovWidening: boolean,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, fovWidening } });
 }
 
 /** Returns a validated frozen profile with the chase camera shake toggled. */
-export function updateCameraShake(settings: GameSettingsV6, shake: boolean): GameSettingsV6 {
+export function updateCameraShake(settings: GameSettingsV7, shake: boolean): GameSettingsV7 {
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
 }
 
@@ -1041,60 +1238,77 @@ export function updateCameraShake(settings: GameSettingsV6, shake: boolean): Gam
  * persists it, so the toggle silently does nothing.
  */
 export function updateHudSettings(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   preset: HudPreset,
   bodyLabels: boolean,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({ ...settings, hud: { preset, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with a new HUD preset. */
-export function updateHudPreset(settings: GameSettingsV6, preset: HudPreset): GameSettingsV6 {
+export function updateHudPreset(settings: GameSettingsV7, preset: HudPreset): GameSettingsV7 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, preset } });
 }
 
 /** Returns a validated frozen profile with the world body labels toggled. */
-export function updateHudBodyLabels(settings: GameSettingsV6, bodyLabels: boolean): GameSettingsV6 {
+export function updateHudBodyLabels(settings: GameSettingsV7, bodyLabels: boolean): GameSettingsV7 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, bodyLabels } });
 }
 
 /** Returns a validated frozen profile with a new exposure mode (T0127). */
 export function updateRenderExposureMode(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   exposureMode: ExposureMode,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({ ...settings, render: { ...settings.render, exposureMode } });
+}
+
+/** Returns a validated frozen profile with one mixer bus level changed. */
+export function updateAudioLevel(
+  settings: GameSettingsV7,
+  bus: AudioBus,
+  level: number,
+): GameSettingsV7 {
+  return parseProfileSettings({ ...settings, audio: { ...settings.audio, [bus]: level } });
+}
+
+/** Returns a validated frozen profile with the Kubrick-mode music policy toggled. */
+export function updateAudioExteriorMusic(
+  settings: GameSettingsV7,
+  exteriorMusic: boolean,
+): GameSettingsV7 {
+  return parseProfileSettings({ ...settings, audio: { ...settings.audio, exteriorMusic } });
 }
 
 /** Returns a validated frozen profile with one input action rebound. */
 export function rebindInput(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   action: InputAction,
   code: string,
-): GameSettingsV6 {
+): GameSettingsV7 {
   const nextBindings = { ...settings.inputBindings, [action]: code };
   return parseProfileSettings({ ...settings, inputBindings: nextBindings });
 }
 
 /** Returns a validated frozen profile with the global gamepad deadzone updated. */
-export function updateGamepadDeadzone(settings: GameSettingsV6, deadzone: number): GameSettingsV6 {
+export function updateGamepadDeadzone(settings: GameSettingsV7, deadzone: number): GameSettingsV7 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, deadzone } });
 }
 
 /** Returns a validated frozen profile with the global gamepad response-curve exponent updated. */
 export function updateGamepadCurveExponent(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   curveExponent: number,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({ ...settings, gamepad: { ...settings.gamepad, curveExponent } });
 }
 
 /** Returns a validated frozen profile with one gamepad axis's invert flag updated. */
 export function updateGamepadAxisInvert(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   axis: GamepadAxisId,
   invert: boolean,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -1106,10 +1320,10 @@ export function updateGamepadAxisInvert(
 
 /** Returns a validated frozen profile with one gamepad axis's sensitivity updated. */
 export function updateGamepadAxisSensitivity(
-  settings: GameSettingsV6,
+  settings: GameSettingsV7,
   axis: GamepadAxisId,
   sensitivity: number,
-): GameSettingsV6 {
+): GameSettingsV7 {
   return parseProfileSettings({
     ...settings,
     gamepad: {
@@ -1169,7 +1383,25 @@ export class SettingsRepository {
       }
     }
 
-    // Tier 2: the v5 key (T0112's era, pre-exposure-mode). Migrate up one step
+    // Tier 2: the v6 key (T0127 era, pre-audio). Migrate up one step and persist
+    // forward to the current key.
+    let legacyV6Text: string | null;
+    try {
+      legacyV6Text = this.storage.getItem(LEGACY_V6_SETTINGS_STORAGE_KEY);
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        settings: DEFAULT_GAME_SETTINGS,
+        error: `Unable to read settings: ${describeError(error)}`,
+      };
+    }
+    if (legacyV6Text !== null) {
+      return this.migrateForward(() =>
+        migrateProfileV6ToV7(parseProfileSettingsV6(JSON.parse(legacyV6Text as string) as unknown)),
+      );
+    }
+
+    // Tier 3: the v5 key (T0112's era, pre-exposure-mode). Migrate up two steps
     // and persist forward to the current key.
     let legacyV5Text: string | null;
     try {
@@ -1183,11 +1415,15 @@ export class SettingsRepository {
     }
     if (legacyV5Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV5ToV6(parseProfileSettingsV5(JSON.parse(legacyV5Text as string) as unknown)),
+        migrateProfileV6ToV7(
+          migrateProfileV5ToV6(
+            parseProfileSettingsV5(JSON.parse(legacyV5Text as string) as unknown),
+          ),
+        ),
       );
     }
 
-    // Tier 3: the v4 key (T0110's era, pre-HUD-preset). Migrate up two steps and
+    // Tier 4: the v4 key (T0110's era, pre-HUD-preset). Migrate up three steps and
     // persist forward to the current key.
     let legacyV4Text: string | null;
     try {
@@ -1201,15 +1437,17 @@ export class SettingsRepository {
     }
     if (legacyV4Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV5ToV6(
-          migrateProfileV4ToV5(
-            parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown),
+        migrateProfileV6ToV7(
+          migrateProfileV5ToV6(
+            migrateProfileV4ToV5(
+              parseProfileSettingsV4(JSON.parse(legacyV4Text as string) as unknown),
+            ),
           ),
         ),
       );
     }
 
-    // Tier 4: the v3 key (T0106's era, pre-camera). Migrate up three steps and
+    // Tier 5: the v3 key (T0106's era, pre-camera). Migrate up four steps and
     // persist forward to the current key.
     let legacyV3Text: string | null;
     try {
@@ -1223,17 +1461,19 @@ export class SettingsRepository {
     }
     if (legacyV3Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV5ToV6(
-          migrateProfileV4ToV5(
-            migrateProfileV3ToV4(
-              parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown),
+        migrateProfileV6ToV7(
+          migrateProfileV5ToV6(
+            migrateProfileV4ToV5(
+              migrateProfileV3ToV4(
+                parseProfileSettingsV3(JSON.parse(legacyV3Text as string) as unknown),
+              ),
             ),
           ),
         ),
       );
     }
 
-    // Tier 5: the v2 key (T0108's era, pre-gamepad). Migrate up four steps and
+    // Tier 6: the v2 key (T0108's era, pre-gamepad). Migrate up five steps and
     // persist forward to the current key.
     let legacyV2Text: string | null;
     try {
@@ -1247,11 +1487,13 @@ export class SettingsRepository {
     }
     if (legacyV2Text !== null) {
       return this.migrateForward(() =>
-        migrateProfileV5ToV6(
-          migrateProfileV4ToV5(
-            migrateProfileV3ToV4(
-              migrateProfileV2ToV3(
-                parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+        migrateProfileV6ToV7(
+          migrateProfileV5ToV6(
+            migrateProfileV4ToV5(
+              migrateProfileV3ToV4(
+                migrateProfileV2ToV3(
+                  parseProfileSettingsV2(JSON.parse(legacyV2Text as string) as unknown),
+                ),
               ),
             ),
           ),
@@ -1259,7 +1501,7 @@ export class SettingsRepository {
       );
     }
 
-    // Tier 6: the v1 key (pre-T0108, standalone-profile era). Migrate up five
+    // Tier 7: the v1 key (pre-T0108, standalone-profile era). Migrate up six
     // steps and persist forward to the current key.
     let legacyV1Text: string | null;
     try {
@@ -1277,12 +1519,14 @@ export class SettingsRepository {
 
     return this.migrateForward(
       () =>
-        migrateProfileV5ToV6(
-          migrateProfileV4ToV5(
-            migrateProfileV3ToV4(
-              migrateProfileV2ToV3(
-                migrateLegacySettings(
-                  parseGameSettings(JSON.parse(legacyV1Text as string) as unknown),
+        migrateProfileV6ToV7(
+          migrateProfileV5ToV6(
+            migrateProfileV4ToV5(
+              migrateProfileV3ToV4(
+                migrateProfileV2ToV3(
+                  migrateLegacySettings(
+                    parseGameSettings(JSON.parse(legacyV1Text as string) as unknown),
+                  ),
                 ),
               ),
             ),
@@ -1300,8 +1544,8 @@ export class SettingsRepository {
    * instead of another twenty lines of identical error plumbing. (T0112's v5
    * tier was the first to cash that in; T0127's v6 tier was the second.)
    */
-  private migrateForward(migrate: () => GameSettingsV6, label = 'settings'): SettingsLoadResult {
-    let migrated: GameSettingsV6;
+  private migrateForward(migrate: () => GameSettingsV7, label = 'settings'): SettingsLoadResult {
+    let migrated: GameSettingsV7;
     try {
       migrated = migrate();
     } catch (error: unknown) {
@@ -1323,7 +1567,7 @@ export class SettingsRepository {
     return { ok: true, settings: migrated, source: 'migrated' };
   }
 
-  save(settings: GameSettingsV6): SettingsSaveResult {
+  save(settings: GameSettingsV7): SettingsSaveResult {
     try {
       const validated = parseProfileSettings(settings);
       this.storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(validated));

@@ -3,7 +3,21 @@ import { clamp, smootherstep } from './cameraTransition.js';
 
 /** Shared by every animated camera move, including `CameraDirector`'s mode cross-fade. */
 export const DEFAULT_TRANSFER_DURATION_SEC = 1.5;
-const DEFAULT_MAX_DISTANCE_KM = 1e10;
+/**
+ * How far the observatory camera may pull back, kilometres (T0129).
+ *
+ * The wheel used to stop at 1e10 km, which is exactly where the outer catalog
+ * begins — Eris reaches 1.4617e10 km — so the system could never be framed
+ * whole. 2e10 km frames it, and sits inside `SPACE_FAR_KM` (2.5e10) so ordinary
+ * outward zoom never pushes its own focus body through the far plane. Focus
+ * transitions across the doubled span are fuzzed over every ordered catalog
+ * pair in `orbitCameraController.test.ts`, because the distance blend is
+ * logarithmic and one non-positive intermediate would poison the pose for the
+ * rest of the session.
+ *
+ * The system map passes its own `maxDistanceKm` and is unaffected.
+ */
+export const DEFAULT_MAX_DISTANCE_KM = 2e10;
 /** Absolute floor on camera-to-surface clearance, 2 m. */
 const MIN_CLEARANCE_KM = 0.002;
 /** Relative clearance term, so huge bodies keep a proportional standoff. */

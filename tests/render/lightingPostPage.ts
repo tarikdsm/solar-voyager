@@ -23,6 +23,8 @@ import {
 import { LightingPostPipeline, POST_PASS_ANCHORS } from '../../src/render/lightingPostPipeline.js';
 
 const VIEWPORT_SIZE = 512;
+/** Rotates Earth so the Pacific hemisphere is the night side under test. */
+const EARTH_NIGHT_SIM_TIME_SEC = 36_008;
 const EARTH_CAMERA_RADII = 3;
 const SUN_CAMERA_RADII = 20;
 const MODEL_FADE_START_MS = 1_000;
@@ -361,6 +363,10 @@ globalThis.__lightingPostHarness = {
     };
   },
   renderEarthNight(emissionEnabled) {
+    // T0128 gave Earth its real orientation, so which hemisphere this fixture
+    // sees is now a choice rather than an accident. State it: an explicit
+    // simulation time turns the Pacific night side toward the camera, where
+    // "mostly dark with localized city lights" is the measurement it wants.
     // `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is
     // the ship's, so `lookAt` alone no longer reproduces this fixture's framing.
     // State the world-frame up this measurement has always assumed.
@@ -372,12 +378,14 @@ globalThis.__lightingPostHarness = {
       VIEWPORT_SIZE,
       world.spaceScene.camera.fov * (Math.PI / 180),
       MODEL_FADE_START_MS,
+      EARTH_NIGHT_SIM_TIME_SEC,
     );
     world.visualSystem.update(
       nightCameraPositionKm,
       VIEWPORT_SIZE,
       world.spaceScene.camera.fov * (Math.PI / 180),
       MODEL_FADE_END_MS,
+      EARTH_NIGHT_SIM_TIME_SEC,
     );
     const earthLoadState = world.visualSystem.getLoadState('earth');
     if (earthLoadState === 'ready') setEarthEmissionEnabled(emissionEnabled);

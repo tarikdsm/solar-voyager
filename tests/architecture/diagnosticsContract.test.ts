@@ -33,6 +33,7 @@ const SOURCE_ROOT = join(process.cwd(), 'src');
 
 /** Every canvas property the browser gates may rely on, and nothing else. */
 const DIAGNOSTIC_PROPERTIES = [
+  'solarVoyagerAudio',
   'solarVoyagerBurnLog',
   'solarVoyagerCamera',
   'solarVoyagerExposure',
@@ -100,6 +101,29 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     noseNodeAlignment: 'readonly number',
     pointOpacity: 'readonly number',
     resolved: 'readonly boolean',
+  },
+  // canvas.solarVoyagerAudio
+  AudioRuntimeDiagnostics: {
+    contextCreationCount: 'readonly number',
+    contextState: 'readonly string',
+    engineCutoffHz: 'readonly number',
+    engineDetuneCents: 'readonly number',
+    engineGain: 'readonly number',
+    gammaStress: 'readonly number',
+    identity: "readonly 'solarVoyagerAudio.v1'",
+    masterGain: 'readonly number',
+    musicBusGain: 'readonly number',
+    musicContext: 'readonly string',
+    musicLayerGains: 'readonly Float64Array',
+    paramWriteCount: 'readonly number',
+    perspective: 'readonly string',
+    sfxBusGain: 'readonly number',
+    suspendedByVisibility: 'readonly boolean',
+    uiBusGain: 'readonly number',
+    unlockAttemptCount: 'readonly number',
+    unlocked: 'readonly boolean',
+    warningActive: 'readonly boolean',
+    warpMuffle: 'readonly number',
   },
   // canvas.solarVoyagerCamera
   CameraRuntimeDiagnostics: {

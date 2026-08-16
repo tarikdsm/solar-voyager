@@ -1,6 +1,6 @@
 id: T0121
 title: Remodel the ship for close-up beauty (build_ship.py v2)
-status: IN_PROGRESS
+status: DONE
 agent: claude
 branch: task/T0121-ship-remodel
 depends_on:
@@ -21,4 +21,45 @@ acceptance:
   - Ship budget total at or under 8 MB; the Blender smoke test is green; visual check renders
     committed under docs/bench
 handoff_notes: |
-  Read agents/skills/blender-asset-authoring.md. Determinism rules: analytic normals, texcoord rounding, canonical triangle order (see common/export.py). The new node names are consumed by T0122 and are therefore API.
+  NODE API (consumed downstream, do not rename): hull_tip, engine_nozzle, rcs_pod_1..4, light_nav_l,
+  light_nav_r, light_beacon, canopy, cockpit_eye. RCS numbering is 1 forward-port, 2 forward-starboard,
+  3 aft-port, 4 aft-starboard; each origin is the pod centre between its four bells. Port is glTF -Z,
+  starboard +Z, up +Y. The table is regenerated into assets/models/ship/SOURCES.md on every build.
+  T0122: engine_nozzle's origin is the THROAT, not the exit — the exit is at local x = -1.5, and the bell
+  is a closed shell, so a plume drawn inside it is occluded by the liner. Anchor at the node origin and
+  emit aft. The three mat_light_* materials carry only a low baseline emission (strength 1.2 to 1.4) so
+  the asset reads as lights-on before you exist; blink and intensity are yours.
+  T0124: cockpit_eye is a meshless marker at model (6.40, 1.75, 0) in glTF axes, inside the canopy shell
+  whose glass tops out about 0.55 m above the hull. The canopy is its own node with its own material, so
+  hide it or render it as the frame silhouette without patching build_ship.py. No interior shell exists;
+  add one in ship_config.py if you need it.
+  T0123: bare plating is 0.92 metalness / 0.29 roughness, painted service panels 0.12 / 0.58, sooted aft
+  rows roughen toward 0.6.
+  LANDMINE — TEXTURE V ORIENTATION. Blender maps V=0 to the tail AND its glTF exporter writes
+  v_gltf = 1 - v_blender, whose origin is the TOP row. Row 0 of the maps is the nose, the last row the
+  tail. This was got backwards first (soot on the nose cone) and is now pinned by a test.
+  LANDMINE — CAP DISC WINDING. The triangle fan in disc() was wound inside-out. Invisible in every render
+  because each cap hides behind another part; caught only by a unit test. If you add a visible cap
+  anywhere, trust the test, not the render.
+  LANDMINE — assets:ingest --only <id> WITHOUT --output WILL DESTROY public/assets: publishDirectory
+  renames staging over the output root. Full ingest is about 35 minutes on this machine.
+  Blender stores obj.location as float32, so asserting an authored f64 origin to 1e-9 fails on any
+  non-representable literal. build_manifest() and _ship_length() assume every object has a mesh;
+  cockpit_eye is an Empty, so mesh and marker objects are kept in separate lists.
+  canonicalize_mesh_normals() from T0131 was deliberately NOT applied: this asset carries no
+  Blender-computed normals — every primitive emits one exact analytic normal per face corner via
+  normals_split_custom_set(). WHEN THAT HELPER MEETS THIS ASSET, APPLYING IT MUST BE A NO-OP; IF IT IS
+  NOT, THAT IS A FINDING. Determinism is proven by the gated double build, not asserted.
+  The authoring frame changed: v2 authors directly in the final frame and deletes the old -90 degree
+  reorientation, because two frames in one file is a sign-error generator. The exported model frame is
+  unchanged, so shipVisual.ts's MODEL_TO_BODY quaternion is untouched.
+  test:blender and assets:ingest are NOT in ci.yml (they need local Blender and KTX-Software), which is
+  why the node and axis contracts are duplicated into test:tools via the Blender-free ship_geometry.py
+  and ship_config.py modules.
+  Verification: 23,580 triangles (budget 30,000), 2.56 MiB of the 8 MiB ship allowance; test:tools 76 ->
+  149 tests; test:blender green with byte-identical double build of the glb and all four PNGs;
+  test:ship-visual drawCalls 19, noseAlignment 1, glError 0; 1360 Vitest passed.
+  GOLDEN MOVED, in its own commit: performance-golden.json drawCalls 33 -> 27 and triangles 82,429 ->
+  100,471. The delta is exactly and only the ship (+18,042 = 23,580 - 5,538; -6 = 18 mesh nodes - 24).
+  The perf scenario has resolved the ship mesh since T0110 made chase the default camera, so a remodel
+  necessarily moves it. The heap gate was untouched and stayed settled at 15,628 B.

@@ -2,6 +2,7 @@ import {
   AmbientLight,
   DirectionalLight,
   Mesh,
+  type Object3D,
   PerspectiveCamera,
   Scene,
   Vector3,
@@ -11,6 +12,7 @@ import {
 import bodiesDocument from '../../data/bodies.json';
 import { loadAssetManifest } from '../../src/render/assetManifest.js';
 import { BodyAssetLoader } from '../../src/render/bodyAssetLoader.js';
+import { writeBodyAttitudeInto } from '../../src/render/bodySpin.js';
 import { ringDefinitionFor, type RingDefinition } from '../../src/render/ringCatalog.js';
 import { prepareRingSystem, type PreparedRingSystem } from '../../src/render/ringSystem.js';
 
@@ -38,6 +40,7 @@ interface RingRenderSnapshot extends PixelMetrics {
   readonly glError: number;
   readonly mode: ViewMode;
   readonly programs: number;
+  readonly spinAngleRad: number;
   readonly triangles: number;
 }
 
@@ -48,7 +51,7 @@ interface RingSystemsHarness {
     readonly afterWarmUp: number;
     readonly beforeWarmUp: number;
   };
-  render(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot;
+  render(bodyId: BodyId, mode: ViewMode, spinAngleRad?: number): RingRenderSnapshot;
 }
 
 declare global {
@@ -90,6 +93,11 @@ const loader = new BodyAssetLoader(renderer, manifest);
 const fixtures = new Map<BodyId, FixtureBody>();
 const transformed = new Vector3();
 
+/**
+ * Model-local (pole `+Y`) into world (ecliptic `+Z` north) — the inverse of
+ * `writeEquatorFrameVectorInto`, kept here so the fixture and `bodySpin.ts`
+ * cannot drift apart silently.
+ */
 function rotateLocalIntoGlobal(
   target: Vector3,
   x: number,
@@ -99,7 +107,20 @@ function rotateLocalIntoGlobal(
 ): void {
   const cosine = Math.cos(tilt);
   const sine = Math.sin(tilt);
-  target.set(cosine * x - sine * y, sine * x + cosine * y, z);
+  target.set(x, y * sine - z * cosine, y * cosine + z * sine);
+}
+
+const attitudeScratch = new Float64Array(4);
+
+function applyBodyAttitude(target: Object3D, tiltRad: number, spinAngleRad: number): void {
+  writeBodyAttitudeInto(attitudeScratch, 0, tiltRad, spinAngleRad);
+  target.quaternion.set(
+    attitudeScratch[0] as number,
+    attitudeScratch[1] as number,
+    attitudeScratch[2] as number,
+    attitudeScratch[3] as number,
+  );
+  target.updateMatrix();
 }
 
 for (const bodyId of BODY_IDS) {
@@ -126,8 +147,11 @@ for (const bodyId of BODY_IDS) {
   });
   if (prepared === null) throw new Error(`Ring fixture found an incomplete ${bodyId} model.`);
   prepared.setParticleCount(0);
+  // T0128: the tilt is no longer applied by `prepareRingSystem`; `bodySpin.ts`
+  // owns it and writes the root attitude, so the fixture does the same.
+  applyBodyAttitude(model.root, body.axialTiltRad, 0);
+  controlRoot.quaternion.copy(model.root.quaternion);
   model.root.scale.setScalar(definition.referenceRadiusKm);
-  controlRoot.rotation.z = body.axialTiltRad;
   controlRoot.scale.setScalar(definition.referenceRadiusKm);
   controlRoot.visible = false;
   controlRoot.updateMatrix();
@@ -270,9 +294,12 @@ function pixelMetrics(definition: RingDefinition, cameraDistanceKm: number): Pix
   };
 }
 
-function renderBody(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot {
+function renderBody(bodyId: BodyId, mode: ViewMode, spinAngleRad = 0): RingRenderSnapshot {
   const fixture = fixtures.get(bodyId);
   if (fixture === undefined) throw new Error(`Unknown ring fixture ${bodyId}.`);
+  applyBodyAttitude(fixture.root, fixture.tilt, spinAngleRad);
+  fixture.controlRoot.quaternion.copy(fixture.root.quaternion);
+  fixture.controlRoot.updateMatrix();
   for (const candidate of fixtures.values()) {
     candidate.root.visible = candidate === fixture && mode !== 'planet-shadow-control';
     candidate.controlRoot.visible = candidate === fixture && mode === 'planet-shadow-control';
@@ -329,11 +356,13 @@ function renderBody(bodyId: BodyId, mode: ViewMode): RingRenderSnapshot {
     transformed.y,
     transformed.z,
     123_456,
+    spinAngleRad,
   );
   renderer.render(scene, camera);
   return {
     bodyId,
     mode,
+    spinAngleRad,
     ...pixelMetrics(fixture.definition, cameraDistance),
     calls: renderer.info.render.calls,
     glError: renderer.getContext().getError(),

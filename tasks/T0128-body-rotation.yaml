@@ -1,6 +1,6 @@
 id: T0128
 title: Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0128-body-rotation
 depends_on:
@@ -19,4 +19,48 @@ acceptance:
   - Earth clouds move on sim time so pause freezes them
   - Tier browser gate cases are extended with zero new allocation
 handoff_notes: |
-  bodySpin.ts computes per-body quaternions into the packed attitude path once per frame, 43 preallocated quats. Rotation phase at epoch is UNCALIBRATED because the catalog has no W0: document phase-accurate rate with arbitrary epoch phase honestly in the release notes. Earth may be hand-anchored to the J2026 sub-solar point.
+  A REAL ORIENTATION BUG EXISTED AND IS NOW FIXED. The render frame IS the physics frame (ecliptic
+  J2000, +Z north) but assets are Y-up, so every unrotated body had its pole lying IN the ecliptic
+  plane; ringSystem.ts then tilted that already-wrong axis inside that plane, standing Saturn's rings
+  perpendicular to the ecliptic. No gate caught it because ringSystemsPage.ts and ringFlythroughPage.ts
+  built their camera and Sun vectors with the SAME wrong rotation — the fixtures agreed with the bug.
+  Both now rotate through bodySpin's frame. IF YOU ADD A RING OR ORIENTATION FIXTURE, use
+  writeBodyAttitudeInto / writeEquatorFrameVectorInto, never a hand-rolled rotation.
+  WHAT THIS DOES NOT CLAIM. Rotation PHASE is uncalibrated for 42 of 43 bodies: the catalog has no W0,
+  so phase-accurate RATE with arbitrary epoch phase. Earth is anchored to GMST at J2026 (IAU-1982),
+  ignoring precession, nutation and UT1-TDB — good to a few tenths of a degree near epoch, drifting
+  about 0.014 deg/yr. Pole AZIMUTH is also a convention: obliquity alone does not fix a pole and the
+  catalog has no IAU (alpha0, delta0), so each equator's ascending node is placed at ecliptic longitude
+  0 — exact for Earth, arbitrary elsewhere. The obliquity, hence the equator and ring PLANE, is real.
+  Fixing azimuth needs pole vectors in bodies.json, which is a schema change and therefore an ADR.
+  Both statements are in docs/rendering-spec.md section 3.2.
+  DATA DEFECT, filed as T0156 rather than fixed here: bodies.json double-counts retrograde rotation for
+  venus, uranus and pluto, so they render PROGRADE. triton, bennu and ryugu are correct.
+  NO SHADER FLAG FOR OBLATENESS, deliberately: three.js already uploads
+  normalMatrix = transpose(inverse(modelView3x3)) per object per draw, which is the exact normal
+  transform for an object-space non-uniform scale and yields the true ellipsoid normal on an icosphere.
+  Asserted numerically against the analytic normal to 1e-10.
+  T0130 SPECIFICALLY: tier-2 spheres are now non-uniformly scaled, scale.set(Req, Req*ratio, Req).
+  Raising icosahedron detail 2 to 4 must KEEP the scale, not bake flattening into geometry, or tier 2
+  and tier 3 diverge again. Read surface for tests: getEquatorialRadiusKm, getPolarRadiusKm,
+  readAttitudeInto, getSpinAngleRad. If you collapse the fallback plus textured double mesh into one,
+  applyAttitude must still reach every surviving mesh. UNVERIFIED and yours to measure: whether the
+  tier-2 icosphere UV origin coincides with the Blender UV sphere's — a constant offset would show as a
+  longitude ghost during the 2-to-3 cross-fade.
+  Tier-2 ringed bodies now scale by referenceRadiusKm instead of meanRadiusKm, matching tier 3 and
+  closing a pre-existing 3.5 percent radius pop. Tier selection and apparent magnitude still use
+  meanRadiusKm. The ring annulus rotates with its planet and the particle field is counter-spun back
+  into the non-spinning equatorial frame so Keplerian streaming stays exact — without that it ran 1.84x
+  too fast at Saturn's B ring. Ring shadow geometry now lives in the spinning body frame and
+  uRingSunDirection is the spinning-frame Sun; T0141 should reuse writeBodyFrameVectorInto rather than
+  adding a second frame convention.
+  Cloud drift was re-derived, not just re-clocked: reinterpreting the old 6 h WALL period as sim time
+  would have been a 460 m/s zonal wind lapping the planet four times a day at warp. It is now 46.4 d
+  relative, from 10 m/s eastward over the equatorial circumference.
+  Verification: 1279 Vitest passed / 3 skipped on a quiet run; visual-tiers, ring-systems,
+  ring-flythrough, surface-detail, gas-giants, lighting-post, smoke all green. Draw calls 49 and
+  triangles 70,452 unchanged; allocation probe 7,276 B over 20,000 updates against 65,536 B. The flight
+  bench tripped its own variance gate on BOTH sets under parallel-lane load, so the cost was measured in
+  isolation: 13.92 microseconds/frame for all 129 quaternion writes. No golden or budget moved; the
+  lighting-post dark fraction went 0.723 to 0.853 against an UNCHANGED 0.75 threshold by making the
+  fixture's pose explicit.
