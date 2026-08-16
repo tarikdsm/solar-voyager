@@ -1739,7 +1739,7 @@
   {
     "id": "T0114",
     "title": "Constant-acceleration relativistic intercept solver (physics-spec section 8)",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0114-guidance-solver",
     "depends_on": [
@@ -1754,7 +1754,7 @@
       "The 1D profile matches closed-form hyperbolic motion to 1e-9 relative; stop distance matches the exact form",
       "Degenerate cases return ok=false cleanly, covering same-body targets, non-positive alpha and non-convergence"
     ],
-    "handoff_notes": "Design doc first. Pure sim module consuming CompiledRails read-only. The fallback pursuit rule (plan section 3.3.6) is specified here but implemented in T0116.\n"
+    "handoff_notes": "THE KAPPA GUARD IS THE MOST IMPORTANT THING HERE. The plan's convergence test alone admits spurious\nroots: re-solving from 75 and 90 percent along a flown Neptune profile converges to 4.23 d and\n1.68 d remaining when the truth is 1.24 d and 0.50 d. Those are real solutions in which the ship\ndrifts past Neptune and boosts back, arriving at about 4,000 km/s. The solver rejects them with\nkappa = |v0 - v_target(t0+T)| / (alpha*T/2) \u003c= 0.1. Departure solves measure 0.0019 to 0.036;\nmid-cruise re-solves measure 0.245 to 1.615.\nT0116: THIS IS A DEPARTURE SOLVER. Re-solve only while the ship is still slow against its own\nprofile. A mid-cruise ok=false is a routing decision, not an error — switch to the physics-spec\nsection 8.7 pursuit rule, which is specified there in full and is yours to implement.\nARRIVAL IS AT REST IN THE SHIP'S INITIAL DRIFT FRAME, not relative to the target. The insert phase\nmust remove v0 - v_target(t_arrival): measured 6.8 km/s Moon, 63.5 Mars, 25.0 Jupiter, 39.2\nNeptune, 38.0 Sun. At 10 g those cost 70 to 650 s and 300 m to 20,000 km of stop distance. On MARS\nthat residual's stop distance is 2.02x the 3-radius stand-off, so the insert burn does not fit\ninside the arrival sphere on that route. Expected and correct: the \"residual must be brakeable\ninside the stand-off\" rule was tried as a validity guard and rejected because it kills the\ncanonical Mars route.\nNEVER pass SimulationCore's live RailsState into CompiledRails. It caches the current frame's body\npositions keyed on (timeSec, catalog); the solver evaluates future times through it and would\nsilently corrupt every downstream consumer in that frame. Use createCompiledRails, which allocates\nits own. evaluateRailsInto throws RangeError on a non-finite time, so every iterate is validated\nbefore it reaches rails — a guidance solve must not throw into a director's update(). Preserve that.\nRING-AWARE STAND-OFFS ARE THE CALLER'S TABLE, not the solver's: data/rings.json is game-layer data.\nThe solver defaults orbit to 3x R_col and floors everything at R_col. 3x R_col at Jupiter is\n214,476 km, which is INSIDE the Thebe gossamer ring, so the override is mandatory, not cosmetic.\nNumbers are in physics-spec section 8.5.\nEARTH-MARS IS 2.4 AU AT J2026, not the 0.52 AU the plan assumed, so that route is 1.40 d rather\nthan about 1.0 d. Arithmetic, not a discrepancy — but T0120 should add a second Mars scenario at a\nnear-conjunction t0.\nTwo additive fields against plan section 2, updated there in the same PR: iterations (the\nacceptance criterion is a bound on it and it was unobservable) and aimUnit (the profile is defined\nby its thrust axis; nothing can fly it without one). CompiledRails is defined by this task — the\nplan named the type but it did not exist. Plan section 3.3.3 was corrected in place: its\n\"flipAt adjusted for initial v-parallel\" is a no-op because v0 is already removed inside d_k, and\n\"brake to relative rest\" is unachievable with a single fixed thrust axis.\nThe exact displacement identity in physics-spec section 8.4 is the ready-made basis for an exact\n3-unknown Newton solve if the mid-course loop ever proves insufficient. Deliberately not built: the\nmeasured miss is already 1e-6 and the gravity term the solver omits is about 1e-4 larger.\nADR-037 section 7 carries the golden policy T0120 needs, including 1e-9 relative comparison because\nMath.asinh is not bit-reproducible across engines, and the rule that the acceptance numbers are\ncontract and may not be widened to make a route pass.\nVerification: 1302 Vitest passed / 3 skipped (+36 new), lint, typecheck, format, build, smoke,\nperf-gates unchanged at 33 draw calls. No bench: nothing outside src/sim/guidance imports either\nmodule, so the frame loop is provably untouched. No golden or budget moved.\n"
   },
   {
     "id": "T0115",
@@ -1778,9 +1778,9 @@
   {
     "id": "T0116",
     "title": "CruiseDirector: engage and abort, phase machine, warp piloting, insertion",
-    "status": "TODO",
-    "agent": "",
-    "branch": "",
+    "status": "IN_PROGRESS",
+    "agent": "claude",
+    "branch": "task/T0116-cruise-director",
     "depends_on": [
       "T0114",
       "T0108"
@@ -1799,9 +1799,9 @@
   {
     "id": "T0117",
     "title": "Select cruise and nav target by clicking bodies in world and in map",
-    "status": "TODO",
-    "agent": "",
-    "branch": "",
+    "status": "REVIEW",
+    "agent": "claude",
+    "branch": "task/T0117-click-to-target",
     "depends_on": [
       "T0112"
     ],
@@ -1994,7 +1994,7 @@
   {
     "id": "T0127",
     "title": "Pass-insertion API and adaptive exposure controller",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0127-adaptive-exposure",
     "depends_on": [
@@ -2008,12 +2008,12 @@
       "visualTier magnitude tests are untouched and green because exposure is display-only",
       "Settings expose auto and fixed exposure modes and the governor can pin fixed on a low tier"
     ],
-    "handoff_notes": "This task creates the API that T0142 and future passes use. The AdaptiveSmaa and Bloom private-field casts live here; contain them behind the API and add a three.js version canary test.\n"
+    "handoff_notes": "T0142 IS THE FIRST EXTERNAL CONSUMER. Use insertPass(pass, 'relativistic') for god rays (after\naberration so the screen-space sun position matches the shifted image, before bloom so the rays\nbloom) and insertPass(pass, 'bloom') for the flare. The pipeline TAKES OWNERSHIP: it sizes your\npass through the composer, calls setRenderScale if you implement AdaptivePostPassPort,\nforce-enables it for the warm-up render so precompile happens there, and disposes in reverse\ninsertion order. Never call composer.insertPass directly and never call insertPass from the frame\nloop. POST_PASS_ANCHORS is exported for tests.\nEXPOSURE IS NOT A POST PASS. Implementing plan section 3.5 literally appends a seventh entry to\ncomposer.passes by default, which the frozen passNames gate forbids. The pipeline implements a\none-method ExposureSinkPort instead and stays the only module touching renderer.toneMappingExposure\n— do not add a second writer. Adaptation is a first-order lag in LOG exposure, so tau means the\nsame thing across the 7-stop range.\nTHREE.JS CANARY: VALIDATED_THREE_REVISION = '185' in lightingPostPipeline.ts. A version bump fails\nlightingPostPipeline.canary.test.ts immediately; re-validate SMAA_INTERNAL_FIELDS,\nBLOOM_INTERNAL_FIELDS and the vUv rewrite before moving the constant. The canary builds the real\npasses in Node with a five-line Image stub, no GPU needed.\nTWO PRE-EXISTING RADIOMETRIC BUGS BOUND THE EXPOSURE WINDOW, neither fixed here.\n(a) SUN_EMISSIVE_INTENSITY = 4 in bodyVisualSystem.ts is distance-independent, so the solar disc\ngets DIMMER as you approach; it alone sets E_min = 1/8. T0141 should retune E_min together with the\nSun's radiance. (b) AMBIENT_LIGHT_INTENSITY = 0.02 in solarLighting.ts is never rescaled by\nSolarLighting.update(), which only touches the directional light. At Neptune the ambient term is\nabout 5.8x the sunlight, so the terminator is washed out AT ANY EXPOSURE — exposure is a gain and\ncannot restore contrast. That caps E_max at 16 and belongs to T0123 or T0140.\nExposureController.reset(camera, dominantBodyIndex) snaps with no fade — call it after any camera\ndiscontinuity (restore teleport, cruise insertion, respawn). update() takes the WALL delta.\nDiagnostics went from seven canvas objects to eight (solarVoyagerExposure). Settings gained\nrender.exposureMode; any harness seeding a profile must include it, the parser is strict.\nVerification: 1300 Vitest passed / 3 skipped; lighting-post, visual-tiers, procedural-sun,\nrelativistic-visuals, perf-governor, session-settings, hud-presets, tutorial, startup, main-menu,\nsmoke all green. Draw calls 49 and triangles 70,452 identical; heap LOWER than baseline; bundle\n+2,026 B gzip. No golden or budget moved. The raw bench pairing showed a 2x p75 \"regression\" that\ndid not survive scrutiny — the harness's own variance gate failed the feature build against ITSELF\nunder parallel-lane load; docs/bench/T0127-summary.md records the analysis instead of the number.\n"
   },
   {
     "id": "T0128",
     "title": "Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0128-body-rotation",
     "depends_on": [
@@ -2070,7 +2070,7 @@
   {
     "id": "T0131",
     "title": "build_asteroid.py and build_comet.py with shape-model ingest",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0131-asteroid-comet-builders",
     "depends_on": [
@@ -2084,12 +2084,12 @@
       "Double builds are byte-identical and unit tests land in the Python tool suite with SOURCES.md per body",
       "Asteroid and comet category budget of 5000 tris each is enforced in config.mjs"
     ],
-    "handoff_notes": "Shape model sources are NASA PDS SBN and public domain. Pin URLs and SHA-256 through the T0132 fetch mechanism; T0132 may land first or in the same week.\n"
+    "handoff_notes": "THE SEAM LINES UP WITH T0132. ShapeModelSource maps field-for-field onto TextureRecipe; role=\"shape\"\nis an accepted role; kind=\"file\" is exactly the verified-byte-copy mode a .obj needs. SHAPE_ROOT is\nassets/textures-src (gitignored except SOURCES.md), so shape models are never committed. To enable a\nreal model, T0138/T0139 must: add a RECIPES entry with kind=\"file\", role=\"shape\",\noutput_name=\"\u003cid>_shape.obj\" — NOTE width/height are required __init__ kwargs even for kind=\"file\",\npass 0, 0 because validate() returns before checking them; copy that entry's source_url and sha256\ninto SHAPE_MODEL_SOURCES in tools/blender/small_body_config.py; build with --shape real. Until then\n--shape real EXITS 2 rather than silently shipping a procedural Eros. No URL or checksum was invented.\nPICK A SOURCE TIER \u003c= 5000 FACETS where the archive offers one; the decimator works but a pinned low\ntier is lossless by comparison. common/shape_model.py parses Wavefront OBJ ONLY — a .tab or ICQ source\nneeds a new parser.\nTHE NORMALIZATION CONTRACT UNDER-SIZES ELONGATED BODIES. Ingest requires max radius exactly 1.0 and the\nengine multiplies by meanRadiusKm, so Eros (really about 34 km long, meanRadiusKm 8.42) renders about\n17 km long. Pre-existing MODELING-GUIDE section 3 contract, not introduced here — T0138 should decide\ndeliberately whether to accept it or raise an ADR.\nSHAPE_PARAMETERS axis ratios are authored approximations, deliberately hedged in a comment; refine per\nbody against the published shape models. They live in small_body_config.py, NOT bodies.json — adding\ntriaxial fields to the catalog is a schema change and therefore an ADR.\nGeodesic frequency 15 (4500 tris) replaces Blender's icosphere operator, which only reaches 1280 or\n5120 and would force asteroids to 26 percent of budget. canonicalize_mesh_normals in common/glb.py\ngeneralizes the existing ellipsoid pass for displaced and decimated meshes; decimation is uniform-grid\nvertex clustering, not the DECIMATE modifier, so it cannot drift between Blender versions.\nLANDMINE FIXED: build_all.discover_builders requires every build_\u003cid>.py to name a catalog body, so\nasteroid and comet joined EXCLUDED_BUILDERS. T0138/T0139 add one-line delegating shims if they want\nper-body discovery.\nLANDMINE LEFT FOR T0121: build_ship.py has smooth-shaded objects and never canonicalizes normals, and\ntest:blender only ever built the test sphere, so the committed ship.glb is a latent double-build\ndeterminism hazard. canonicalize_mesh_normals(glb_path) is a one-line fix.\nNEW TOOL: node tools/tests/validateAuthoredAsset.mjs \u003cdir> \u003cid> \u003ccategory> runs only the\nMODELING-GUIDE contract half of ingest, no KTX-Software needed. Each albedo is about 12 s of pure\nPython noise by design, so test:blender is now about 2 minutes.\nVerification: test:tools 60 -> 112 tests OK; 1270 Vitest passed; lint, typecheck, format, build,\ntest:blender, check:budgets (repo 184.96 of 300 MiB), smoke all green. No budget or golden moved.\n"
   },
   {
     "id": "T0132",
     "title": "Checksummed on-demand source fetching; stop committing 8K sources",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0132-texture-fetch-policy",
     "depends_on": [
@@ -2103,7 +2103,7 @@
       "ADR-039 lands, asset-pipeline.md is updated and the repo-budget check documents the policy",
       "Python tests cover a checksum mismatch failing and a cache hit skipping the download"
     ],
-    "handoff_notes": "Do not delete existing textures-src content in this task; the policy applies to NEW bodies. All 34 upcoming bodies depend on this.\n"
+    "handoff_notes": "Adding a source is one TextureRecipe in RECIPES; the field-by-field template lives in\nagents/skills/add-celestial-body.md under \"Source manifest entries\". Commit SOURCES.md, never the\nimagery: if git status shows a new body's jpg or png as untracked-but-not-ignored, the gitignore\npolicy is broken and that is the bug to fix.\nUse python -X utf8 for direct invocations on Windows (a repo hook blocks bare python script.py);\nthe tool also reconfigures stdio to UTF-8 itself because NASA and CC credit strings carry accents\nthat would raise UnicodeEncodeError on CP1252.\nSet SOLAR_VOYAGER_TEXTURE_CACHE to a shared path when several V2M4 worktrees run at once, or each\none re-downloads every 8K source. To get a checksum, fetch once with a deliberately wrong sha256\nand read the measured digest out of the error, then REVIEW the file before pinning it.\nThree additions beyond the literal task text, all justified in ADR-039: kind=\"file\" for verified\nbyte-copy of non-image sources (T0131 pins PDS shape models through this mechanism and Sharp\ncannot open .tab or .obj), per-source max_bytes replacing the global 64 MiB cap, and --source now\ninstalling into the cache instead of bypassing it so the offline recovery path and the normal path\nconverge.\nKNOWN, NOT FIXED HERE. assets/textures-src/earth/SOURCES.md is stale against its own generator\n(committed text says \"normalized to 8192x4096\", the generator emits \"resized to 8192x4096\"), so any\nregenerated SOURCES.md will show that diff — expected, not a regression. build/ is gitignored but\nNOT excluded from the repo-budget walk in assetBudgets.mjs (dist, coverage and output are), which\nis why the verified cache lives at .texture-cache/ and not under build/.\nTHE OTHER HALF OF THE 300 MiB PROBLEM is assets/models/ at 64 MiB of committed authored\ndeliverables; ADR-039 is scoped to sources and deliberately does not touch them. Whoever hits the\nrepo budget during the V2M4 asset lane should read ADR-039's \"What this ADR does not solve\".\nVerification: test:tools 60 -> 76 tests, lint, typecheck, format, build, check:budgets (repo 177.68\nof 300 MiB), check:licenses, smoke. Offline re-run reproduced earth_albedo.png byte-identical to the\ncommitted artifact, which is the real proof the rewrite is output-compatible. No budget or golden\nmoved.\n"
   },
   {
     "id": "T0133",
@@ -2313,7 +2313,7 @@
   {
     "id": "T0144",
     "title": "Web Audio engine, AudioDirector, mixer settings, Kubrick mode",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0144-audio-engine",
     "depends_on": [
@@ -2527,6 +2527,42 @@
       "The roadmap gains v3 backlog stubs covering landing, launch phase, a WebGPU ADR and ship interior"
     ],
     "handoff_notes": "Do not relax any gate to pass. File fix-tasks instead.\n"
+  },
+  {
+    "id": "T0155",
+    "title": "Isolate browser-harness ports per worktree",
+    "status": "DONE",
+    "agent": "claude",
+    "branch": "task/T0155-harness-port-isolation",
+    "depends_on": [],
+    "milestone": "V2M6",
+    "spec": "Thirty-six browser harnesses and benches hardcode a listen port, and the pool is reused: 4176,\n4177, 4178, 4179, 4180, 4185, 4186, 4187, 4188 and 4198 each appear in two or three files. CI runs\nthem one at a time so it never mattered. Parallel task worktrees run them at the same time, where\na collision is a hard failure that reads exactly like a real defect: T0127 lost three gate runs to\n\"Port 4177 is already in use\" held by another lane's flightBench, and a bench paired against a\ncontended run produced a 2x p75 \"regression\" that did not survive scrutiny.\nDerive a per-checkout port offset so concurrent worktrees cannot collide, with CI behaviour\nbit-identical.\n",
+    "acceptance": [
+      "A single shared helper owns port resolution and every harness and bench uses it",
+      "A checkout outside .worktrees resolves to the historical port, so CI is unchanged",
+      "Two checkouts under .worktrees with different directory names resolve to different ports, proven by a unit test",
+      "The offset is stable across runs for the same worktree, so a failure is reproducible"
+    ],
+    "handoff_notes": "tools/harnessPort.mjs owns port resolution; all 35 harnesses and benches call\nresolveHarnessPort(\u003chistorical port>). The offset comes from the CHECKOUT PATH, not an environment\nvariable, so no runner has to remember to set anything, and a checkout outside .worktrees resolves to\nits historical port — that is what keeps CI bit-identical. The offset is a stable FNV-1a hash of the\nworktree name so a collision stays reproducible instead of becoming a lottery.\nIf you add a harness, call resolveHarnessPort rather than writing a literal, and do not assume your\nport is free on a developer machine running several worktrees.\nThe first CI run failed on a Windows-literal path fixture: a backslash is a separator on Windows and a\nlegal filename character on Linux, so the test passed locally and failed on ubuntu. Build path fixtures\nwith path.join.\nMeasured: main 4177, .worktrees/T0116 5713, .worktrees/T0127 5969, .worktrees/T0144 4241.\nVerification: harnessPort.test.mjs 6 passed; lint, typecheck, format clean; proven end to end by\nrunning test:render-depth and test:starfield inside a worktree checkout, both green on offset ports.\n"
+  },
+  {
+    "id": "T0156",
+    "title": "Fix double-counted retrograde rotation for Venus, Uranus and Pluto",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0128"
+    ],
+    "milestone": "V2M4",
+    "spec": "data/bodies.json encodes retrograde rotation twice for three bodies, so they render prograde.\nThe schema's rule is that a negative rotation period means retrograde ABOUT THE DECLARED POLE, but\ntools/bake_ephemerides.py transcribed the NASA fact sheets, which state retrograde twice: once as\nan obliquity above 90 degrees and once as a negative period. venus (177.36 deg, -20997360 s),\nuranus (97.77 deg, -62063.712 s) and pluto (122.53 deg, -551854.08 s) are affected. triton, bennu\nand ryugu encode it once each and are correct.\nFound by T0128, which implements the documented convention verbatim and deliberately left the data\nalone because a bake change carries its own review surface.\n",
+    "acceptance": [
+      "The three periods are corrected in the bake table and regenerated into data/bodies.json, never hand-edited",
+      "Venus, Uranus and Pluto rotate retrograde in the render, asserted against the bodySpin convention",
+      "Bodies that already encoded retrograde once are unchanged, asserted",
+      "A schema-level test rejects a future entry that encodes retrograde twice, so the class of defect cannot return"
+    ],
+    "handoff_notes": "This is a data and bake change, not a render change: bodySpin.ts already implements the documented\nconvention correctly. Decide in the PR whether the catalog rule should be restated in the schema\ndocs so the next transcription cannot repeat it.\n"
   }
 ];
     /* TASK_DATA_END */

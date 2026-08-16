@@ -9,7 +9,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
 /**
  * The frozen browser-diagnostic contract, locked in the fast lane.
  *
- * Seven `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
+ * Eight `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
  * observation roughly 25 Playwright gates make about the running game. They are
  * read from `page.evaluate` callbacks by property name, so TypeScript never sees
  * those reads and a dropped or renamed field surfaces — if at all — as a failure
@@ -18,7 +18,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
  * is the only one that pins a whole shape (`RuntimeResourceCounts`, twice, with
  * `deepEqual`).
  *
- * This test is the whole-shape gate for all seven, and it is deliberately
+ * This test is the whole-shape gate for all eight, and it is deliberately
  * location-independent: it scans `src/` rather than naming the file that happens
  * to own the contract today, so moving the definitions (T0113 moves them out of
  * `main.ts`) does not require editing it. Extend it when a diagnostic gains a
@@ -35,6 +35,7 @@ const SOURCE_ROOT = join(process.cwd(), 'src');
 const DIAGNOSTIC_PROPERTIES = [
   'solarVoyagerBurnLog',
   'solarVoyagerCamera',
+  'solarVoyagerExposure',
   'solarVoyagerRuntimeResources',
   'solarVoyagerShip',
   'solarVoyagerStartup',
@@ -115,6 +116,15 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     shakeEnabled: 'readonly boolean',
     shipDistanceKm: 'readonly number',
     transitioning: 'readonly boolean',
+  },
+  // canvas.solarVoyagerExposure
+  ExposureRuntimeDiagnostics: {
+    exposure: 'readonly number',
+    governorMode: 'readonly string',
+    mode: 'readonly string',
+    sceneLuminance: 'readonly number',
+    targetExposure: 'readonly number',
+    userMode: 'readonly string',
   },
   // canvas.solarVoyagerSystemMap
   SystemMapRuntimeDiagnostics: {

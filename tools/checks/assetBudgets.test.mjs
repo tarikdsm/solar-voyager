@@ -66,12 +66,31 @@ describe('measureBudgets', () => {
         'coverage',
         '.superpowers',
         'output',
+        '.texture-cache',
       ]) {
         await writeSparseFile(root, `${directory}/ignored.bin`, BUDGET_LIMITS.repoBytes);
       }
 
       const measurements = await measureBudgets(root);
       expect(measurements.repoBytes).toBe(17);
+    });
+  });
+
+  // ADR-039: fetched source imagery is cached, never committed. A cache holding
+  // every V2M4 body would exceed the repo budget on its own, so the budget must
+  // measure what a clone costs, not what this machine has fetched.
+  it('keeps a full ADR-039 source cache out of the repository budget', async () => {
+    await withRepository(async (root) => {
+      await writeSparseFile(root, 'assets/textures-src/earth/SOURCES.md', 512);
+      await writeSparseFile(
+        root,
+        '.texture-cache/88/88ab060b6e7d241cfc590c69f528fab2b3247b738d40124cb590999a6fe44abc',
+        2 * BUDGET_LIMITS.repoBytes,
+      );
+
+      const measurements = await measureBudgets(root);
+      expect(measurements.repoBytes).toBe(512);
+      expect(validateBudgets(measurements)).toEqual([]);
     });
   });
 

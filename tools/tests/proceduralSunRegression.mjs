@@ -5,9 +5,10 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4180;
+const PORT = resolveHarnessPort(4180);
 const VIEWPORT_SIZE = 512;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/proceduralSun.html`;
 const ANALYSIS_RADIUS_PX = 110;

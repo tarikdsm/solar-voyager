@@ -38,6 +38,7 @@ import { TutorialController } from '../game/tutorialController.js';
 import { createEpochWorld, type EpochWorldMilestone } from '../render/createEpochWorld.js';
 import { createRenderer, type RendererBootstrap } from '../render/createRenderer.js';
 import { calculateDrawingBufferDimension } from '../render/drawingBufferSize.js';
+import { ExposureController } from '../render/exposureController.js';
 import { LightingPostPipeline } from '../render/lightingPostPipeline.js';
 import { PerfGovernor, createPerfQualityState } from '../render/perfGovernor.js';
 import { RelativisticVisualController } from '../render/relativisticVisualController.js';
@@ -71,6 +72,7 @@ import {
   copyDiagnosticEntry,
   createBurnLogRuntimeDiagnostics,
   createCameraRuntimeDiagnostics,
+  createExposureRuntimeDiagnostics,
   createRuntimeResourceCounts,
   createShipRuntimeDiagnostics,
   createSystemMapRuntimeDiagnostics,
@@ -396,6 +398,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       runtime.world?.cameraDirector.applyCameraSettings(settings.camera);
       hudPresetStore.setPreset(settings.hud.preset);
       hudPresetStore.setBodyLabels(settings.hud.bodyLabels);
+      runtime.exposureController?.setUserMode(settings.render.exposureMode);
       runtime.perfGovernor?.setLock(settings.qualityLock, performance.now());
     },
   });
@@ -815,6 +818,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
   const runtime: FrameLoopRuntime = {
     burnLogStore,
     canvas,
+    exposureController: null,
     hudPresetStore,
     hudStore,
     impactStore,
@@ -1121,12 +1125,27 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       createStateVectorScales(session.simulation.vessel.restMassKg),
     );
     runtime.stateVectorWidget = stateVectorWidget;
+    // T0127 — the direct path's compensating gain moves into the pipeline, so
+    // `ExposureController` is the only writer of `toneMappingExposure` and its
+    // `fixed` mode still reproduces both pre-T0127 paths exactly.
     const postPipeline = new LightingPostPipeline(
       renderer,
       world.spaceScene.scene,
       world.spaceScene.camera,
+      undefined,
+      postProcessingEnabled ? 1 : SOFTWARE_FALLBACK_EXPOSURE,
     );
     runtime.postPipeline = postPipeline;
+    const exposureController = new ExposureController({
+      sink: postPipeline,
+      positionsKm: world.positionsKm,
+      sunIndex: world.sunIndex,
+      bodyRadiiKm: world.bodyRadiiKm,
+      bodyGeometricAlbedos: world.bodyGeometricAlbedos,
+      mode: session.settings.render.exposureMode,
+    });
+    runtime.exposureController = exposureController;
+    createExposureRuntimeDiagnostics(canvas, exposureController);
     const relativisticVisuals = new RelativisticVisualController({
       postPass: postPipeline.relativisticPass,
       spaceScene: world.spaceScene,
@@ -1135,6 +1154,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     runtime.relativisticVisuals = relativisticVisuals;
     const qualityController = new RenderQualityController({
       assetLoader: world.visualSystem,
+      exposure: exposureController,
       pipeline: postPipeline,
       postProcessingAvailable: postProcessingEnabled,
       proceduralSun: world.proceduralSun,
@@ -1150,7 +1170,8 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       state: perfQualityState,
       telemetry,
     });
-    if (!postProcessingEnabled) renderer.toneMappingExposure = SOFTWARE_FALLBACK_EXPOSURE;
+    // Snap rather than fade: there is no previous frame to have adapted from.
+    exposureController.reset(world.cameraPositionKm, session.simulation.snapshot.dominantBodyIndex);
     resizeRenderer();
     world.lighting.update();
     world.spaceScene.updateCameraRelative(world.cameraPositionKm);

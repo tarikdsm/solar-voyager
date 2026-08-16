@@ -34,6 +34,8 @@ src/
 │   ├── propagation/            # rails.ts, nbodyForces.ts, dp54.ts
 │   ├── ship/                   # initialState.ts, attitude.ts, thrust.ts, relativity.ts, ledger.ts (energy ledger),
 │                               # vessel.ts (VesselConfig: rest mass + drive/slew limits)
+│   ├── guidance/               # constantAccelIntercept.ts (physics-spec §8 solver),
+│                               # brakingEnvelope.ts (exact relativistic stop distance)
 │   ├── launch/                 # [deferred, post-v1] atmosphere.ts, launchSim.ts, handoff.ts
 │   ├── analysis/               # osculating.ts, dominantBody.ts, barycenter.ts, trajectoryImpact.ts
 │   └── simulation.ts           # SimulationCore
@@ -65,8 +67,8 @@ src/
 │   ├── ship/vessel.ts                      # LANDED VesselConfig + defaults (T0104)
 │   ├── ship/attitude.ts                    # LANDED slew-limited hold pursuit (T0107)
 │   ├── ship/collision.ts                   # NEW  surface-crossing detection (T0111)
-│   ├── guidance/constantAccelIntercept.ts  # NEW  physics-spec §8 solver (T0114)
-│   ├── guidance/brakingEnvelope.ts         # NEW  relativistic stop-distance (T0114)
+│   ├── guidance/constantAccelIntercept.ts  # LANDED physics-spec §8 solver (T0114)
+│   ├── guidance/brakingEnvelope.ts         # LANDED relativistic stop-distance (T0114)
 │   ├── simulation.ts                       # MOD  vessel (T0104) + slew (T0107) LANDED; collision (T0111)
 │   └── simulationSnapshot.ts               # MOD  manual-rotation lockout LANDED (T0107); impact fields (T0111)
 ├── core/time.ts                            # MOD  MANUAL_ATTITUDE_MAX_WARP LANDED (T0107); MAX_THRUST_WARP retune (T0115)
@@ -85,10 +87,11 @@ src/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
 │   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
-│   ├── planetshine.ts, milkyWay.ts, exposureController.ts, bodySpin.ts  # NEW (T0123/26/27/28)
+│   ├── exposureController.ts               # LANDED single toneMappingExposure owner (T0127)
+│   ├── planetshine.ts, milkyWay.ts, bodySpin.ts  # NEW (T0123/26/28)
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
-│   ├── lightingPostPipeline.ts             # MOD  pass-insertion API (T0127)
+│   ├── lightingPostPipeline.ts             # LANDED pass-insertion API + exposure sink (T0127)
 │   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
 ├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
 │   ├── hud/presets.ts, hud/WorldMarkers.tsx, hud/CruiseStrip.tsx  # NEW (T0112/17/19)
@@ -155,6 +158,25 @@ disconnect gates every `getGamepads()` call, so an unconnected pad costs nothing
 stays behind structural ports; `bootstrap/composition.ts` supplies the adapters. Design:
 `docs/superpowers/specs/2026-08-14-input-engine-design.md`,
 `docs/superpowers/specs/2026-08-15-gamepad-design.md`.
+
+## Cruise guidance (`sim/guidance/`)
+
+`sim/guidance/constantAccelIntercept.ts` solves the constant-proper-acceleration
+boost–flip–brake intercept of a rails target (physics-spec §8, ADR-037), and
+`brakingEnvelope.ts` is the exact relativistic stop distance `(c²/α)(γ−1)` shared by
+the cruise brake phase and the approach-brake assist, so a warning threshold and the
+flown brake can never drift apart. Both are pure, float64 and allocation-free via
+out-params; the catalog is consumed read-only and the module holds no state.
+
+The 1D profile is relativistically exact in closed form; the vector correction is a
+first-order drift subtraction iterated to a fixed point on the coordinate time of
+flight. Two properties bind every caller. The solve is **thrust-only** — gravity is
+absent by design and the CruiseDirector's mid-course re-solve is the closed loop. And
+it is a **departure** solver: it arrives at rest in the ship's initial drift frame,
+not relative to the target, and it returns `ok = false` (all fields NaN) whenever the
+arrival closing speed exceeds a tenth of the profile's own peak, which is what a
+mid-cruise re-solve does. `ok = false` is a routing decision, not an error: it selects
+the physics-spec §8.7 pursuit rule, implemented by T0116.
 
 ## Flight control (`game/flight/`)
 

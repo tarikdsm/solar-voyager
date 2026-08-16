@@ -6,6 +6,7 @@ import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 import {
   disableUnrelatedTrajectoryPrediction,
   installTrajectoryPredictionTestHorizon,
@@ -13,7 +14,7 @@ import {
 } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4196;
+const PORT = resolveHarnessPort(4196);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';
 const EARTH_MEAN_RADIUS_KM = 6_371.0084;
