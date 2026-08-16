@@ -20,9 +20,11 @@ import {
   updateHudBodyLabels,
   updateHudPreset,
   updateHudSettings,
+  updateRenderExposureMode,
   updateTutorialSettings,
+  type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV6,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -69,13 +71,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV5, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV6, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV5;
+  private currentSettings: GameSettingsV6;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -92,7 +94,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV5, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV6, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -112,7 +114,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV5 {
+  get settings(): GameSettingsV6 {
     return this.currentSettings;
   }
 
@@ -389,6 +391,16 @@ export class GameSessionController {
     }
   }
 
+  /** T0127 — adaptive or fixed exposure, persisted in the profile. */
+  setExposureMode(exposureMode: ExposureMode): SessionActionResult {
+    try {
+      const candidate = updateRenderExposureMode(this.currentSettings, exposureMode);
+      return this.commitSettings(candidate, 'Exposure mode updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update exposure mode', detail: describeError(error) };
+    }
+  }
+
   updateTutorial(transition: (current: TutorialProgress) => TutorialProgress): SessionActionResult {
     try {
       const candidate = updateTutorialSettings(
@@ -443,7 +455,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV5,
+    settings: GameSettingsV6,
     successMessage: string,
     publish = true,
   ): SessionActionResult {

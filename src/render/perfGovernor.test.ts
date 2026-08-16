@@ -56,6 +56,25 @@ describe('quality profiles', () => {
       'off',
       'off',
     ]);
+    // T0127 — exposure stops adapting exactly where the ladder reaches tier 1,
+    // the rungs that have already given up octaves, stars and texture size.
+    expect(QUALITY_PROFILES.map((profile) => profile.exposureMode)).toEqual([
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'auto',
+      'fixed',
+      'fixed',
+      'fixed',
+    ]);
     expect(QUALITY_PROFILES.map((profile) => profile.antiAliasing)).toEqual([
       'smaa',
       'smaa',

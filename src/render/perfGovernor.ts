@@ -1,4 +1,4 @@
-import type { QualityLock } from '../game/settings.js';
+import type { ExposureMode, QualityLock } from '../game/settings.js';
 import type { ProceduralSunQuality } from './proceduralSunState.js';
 
 export const AUTO_QUALITY_LOCK: QualityLock = 'auto';
@@ -17,6 +17,15 @@ export interface RenderQualityProfile {
   readonly antiAliasing: AntiAliasingQuality;
   readonly bloom: BloomQuality;
   readonly downAction: string;
+  /**
+   * Exposure policy this rung permits (T0127).
+   *
+   * Derived from `tier`, not passed in: the lowest tier is where a device is
+   * already struggling, and an exposure that keeps re-adapting is the last thing
+   * a struggling frame needs. Deriving it means the ladder cannot drift out of
+   * step with the tier it belongs to.
+   */
+  readonly exposureMode: ExposureMode;
   readonly modelThresholdScale: number;
   readonly proceduralQuality: ProceduralSunQuality;
   readonly renderScale: number;
@@ -46,6 +55,7 @@ function profile(
     antiAliasing,
     bloom,
     downAction,
+    exposureMode: (tier <= 1 ? 'fixed' : 'auto') as ExposureMode,
     modelThresholdScale,
     proceduralQuality,
     renderScale,
