@@ -35,7 +35,7 @@ class FakeCanvas extends FakeEventTarget {
   );
 }
 
-function createFixture(initiallyEnabled = true) {
+function createFixture(initiallyEnabled = true, directFocusEnabled = true) {
   const canvas = new FakeCanvas();
   const keyboard = new FakeEventTarget();
   const label = { textContent: '' };
@@ -44,6 +44,7 @@ function createFixture(initiallyEnabled = true) {
     get focusId() {
       return focusId;
     },
+    directFocusEnabled,
     orbitBy: vi.fn(),
     zoomByWheel: vi.fn(),
     focusBody: vi.fn((id: string) => {
@@ -227,6 +228,24 @@ describe('CameraInputController', () => {
     keyboard.emit('keydown', { ...press, key: 'O' });
     expect(controls.cycleCameraMode).toHaveBeenCalledTimes(2);
     expect(label.textContent).toBe('Focus: Earth');
+  });
+
+  it('stands the direct-focus keys down while the camera says so (T0125)', () => {
+    const { controls, keyboard, label } = createFixture(true, false);
+    const preventDefault = vi.fn();
+    const press = { repeat: false, ctrlKey: false, altKey: false, metaKey: false, preventDefault };
+
+    // E is cinematic's roll-right binding, and every one of these would leave the
+    // mode anyway. The camera decides; this controller only obeys.
+    for (const key of ['e', 'j', '[', ']']) keyboard.emit('keydown', { ...press, key });
+    expect(controls.focusBody).not.toHaveBeenCalled();
+    expect(controls.cycleFocus).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(label.textContent).toBe('Focus: Earth');
+
+    // ...but the way out of the mode stays live.
+    keyboard.emit('keydown', { ...press, key: 'o' });
+    expect(controls.cycleCameraMode).toHaveBeenCalledOnce();
   });
 
   it('ignores modified/repeated keys and removes every listener on dispose', () => {

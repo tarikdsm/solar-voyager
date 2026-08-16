@@ -119,6 +119,10 @@ jobs:
         timeout-minutes: 8
         run: npm run test:camera-controls
 
+      - name: Cinematic and photo mode regression
+        timeout-minutes: 8
+        run: npm run test:cinematic-photo
+
       - name: Ship visual regression
         timeout-minutes: 8
         run: npm run test:ship-visual

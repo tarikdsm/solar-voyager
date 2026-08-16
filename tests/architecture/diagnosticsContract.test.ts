@@ -37,6 +37,7 @@ const DIAGNOSTIC_PROPERTIES = [
   'solarVoyagerBurnLog',
   'solarVoyagerCamera',
   'solarVoyagerExposure',
+  'solarVoyagerPhoto',
   'solarVoyagerRuntimeResources',
   'solarVoyagerShip',
   'solarVoyagerSky',
@@ -128,6 +129,10 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
   // canvas.solarVoyagerCamera
   CameraRuntimeDiagnostics: {
     armDistanceKm: 'readonly number',
+    cinematicDrifting: 'readonly boolean',
+    cinematicFovDeg: 'readonly number',
+    cinematicRollRad: 'readonly number',
+    directFocusEnabled: 'readonly boolean',
     distanceShipLengths: 'readonly number',
     focusId: 'readonly string',
     fovDeg: 'readonly number',
@@ -141,6 +146,21 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     shakeEnabled: 'readonly boolean',
     shipDistanceKm: 'readonly number',
     transitioning: 'readonly boolean',
+  },
+  // canvas.solarVoyagerPhoto
+  PhotoRuntimeDiagnostics: {
+    captureCount: 'readonly number',
+    dropCount: 'readonly number',
+    lastDominantBodyId: 'readonly string | null',
+    lastError: 'readonly string | null',
+    lastFilename: 'readonly string | null',
+    lastGammaMax: 'readonly number',
+    lastPositionXKm: 'readonly number',
+    lastPositionYKm: 'readonly number',
+    lastPositionZKm: 'readonly number',
+    lastSimTimeSec: 'readonly number',
+    lastTauSec: 'readonly number',
+    status: 'readonly CaptureStatus',
   },
   // canvas.solarVoyagerExposure
   ExposureRuntimeDiagnostics: {

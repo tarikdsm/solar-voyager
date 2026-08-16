@@ -9,7 +9,7 @@ describe('App system-map visibility', () => {
   it('hides the non-map HUD from sighted and assistive users through one leaf signal', () => {
     const mapOpen = signal(false);
     const view = SpaceHudSurfaces({
-      mapOpen,
+      hidden: mapOpen,
       children: <section id="regular-hud">Regular HUD</section>,
     });
 

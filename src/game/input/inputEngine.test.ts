@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { isCinematicOnlyAction } from '../cameraInputRouter.js';
 import { DEFAULT_GAME_SETTINGS, DEFAULT_GAMEPAD_SETTINGS, rebindInput } from '../settings.js';
 import {
   GamepadPoller,
@@ -19,6 +20,7 @@ import {
   type InputPointerMotionEvent,
   type PointerLockSurface,
 } from './inputEngine.js';
+import type { InputAction } from './bindings.js';
 
 class FakeKeyboardTarget {
   private readonly keyDown: InputKeyboardListener[] = [];
@@ -226,6 +228,7 @@ function createEngine(
     readonly onPauseRequested?: () => void;
     readonly gamepad?: GamepadPoller;
     readonly isTextEntryActive?: () => boolean;
+    readonly isActionActive?: (action: InputAction) => boolean;
   } = {},
 ) {
   const keyboard = new FakeKeyboardTarget();
@@ -251,6 +254,38 @@ const BUTTON_TARGET = { isContentEditable: false, tagName: 'BUTTON' } as unknown
 const INPUT_TARGET = { isContentEditable: false, tagName: 'INPUT' } as unknown as EventTarget;
 const SUMMARY_TARGET = { isContentEditable: false, tagName: 'SUMMARY' } as unknown as EventTarget;
 const CANVAS_TARGET = { isContentEditable: false, tagName: 'CANVAS' } as unknown as EventTarget;
+
+describe('InputEngine — mode-scoped actions', () => {
+  it('leaves the key of an inactive action entirely alone', () => {
+    let cinematic = false;
+    const { engine, keyboard } = createEngine({
+      isActionActive: (action) => !isCinematicOnlyAction(action) || cinematic,
+    });
+
+    // T0125's landmine: `KeyE` is cinematic roll *and* the camera controller's
+    // hardcoded Earth shortcut. Claiming it while cinematic is not running
+    // calls preventDefault, which the shared focus policy reads as "consumed",
+    // and the Earth shortcut silently dies in every camera mode.
+    const suppressed = keyboard.press('KeyE');
+    expect(suppressed.prevented).toBe(false);
+    expect(engine.poll(1 / 60).held('cameraRollRight')).toBe(false);
+    keyboard.release('KeyE');
+
+    cinematic = true;
+    const claimed = keyboard.press('KeyE');
+    expect(claimed.prevented).toBe(true);
+    expect(engine.poll(1 / 60).held('cameraRollRight')).toBe(true);
+  });
+
+  it('claims every action by default, so an unwired caller is unaffected', () => {
+    const { engine, keyboard } = createEngine();
+    expect(keyboard.press('KeyE').prevented).toBe(true);
+    expect(engine.poll(1 / 60).pressed('cameraRollRight')).toBe(true);
+    // The shutter is deliberately not mode-scoped: a photo is worth taking from
+    // any camera.
+    expect(isCinematicOnlyAction('photoCapture')).toBe(false);
+  });
+});
 
 describe('InputEngine — v1 defect regressions', () => {
   it('still pitches while Shift is held', () => {

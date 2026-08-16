@@ -1,9 +1,11 @@
+import type { CameraInputRouter } from '../game/cameraInputRouter.js';
 import type { CruiseDirector } from '../game/flight/cruiseDirector.js';
 import type { AudioSystem } from '../game/audio/audioSystem.js';
 import type { FlightController } from '../game/flight/flightController.js';
 import type { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import type { HudInputRouter } from '../game/hud/hudInputRouter.js';
 import type { InputEngine } from '../game/input/inputEngine.js';
+import type { PhotoCaptureController } from '../game/photo/photoCapture.js';
 import type { RestorePointRing } from '../game/restorePoints.js';
 import type { SceneManager } from '../game/sceneManager.js';
 import type { GameSessionController } from '../game/sessionController.js';
@@ -69,6 +71,7 @@ export interface FrameLoopRuntime {
   readonly trajectoryPredictionStore: TrajectoryPredictionSignalStore;
   readonly updateBurnLogRuntime: (view: BurnLogView) => void;
 
+  cameraInputRouter: CameraInputRouter | null;
   cruiseDirector: CruiseDirector | null;
   exposureController: ExposureController | null;
   flightController: FlightController | null;
@@ -76,6 +79,7 @@ export interface FrameLoopRuntime {
   hudInputRouter: HudInputRouter | null;
   inputEngine: InputEngine | null;
   perfGovernor: PerfGovernor | null;
+  photoCapture: PhotoCaptureController | null;
   postPipeline: LightingPostPipeline | null;
   relativisticVisuals: RelativisticVisualController | null;
   stateVectorWidget: StateVectorWidget | null;
@@ -164,6 +168,8 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       const inputFrame = inputEngine.poll(deltaSec);
       flightInputRouter.apply(inputFrame);
       runtime.hudInputRouter?.apply(inputFrame);
+      runtime.cameraInputRouter?.apply(inputFrame, deltaSec);
+      flightController.update(deltaSec);
       // T0116 — exactly one owner of attitude and throttle per frame. The
       // director's `update` runs unconditionally because an aborted cruise is
       // still decompressing the warp; `active` is what arbitrates the ship.
@@ -203,6 +209,8 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       burnLogStore.publish();
       updateBurnLogRuntime(session.simulation.burnLog);
       runtime.tutorialFrameObserver?.(snapshot);
+      // T0125 — peak gamma for photo metadata, on the tick that already exists.
+      runtime.photoCapture?.observe(snapshot);
     }
     stateVectorStore.publish(snapshot, nowMs);
     // T0144 — a snapshot consumer, so it belongs in the UI window rather than the
@@ -218,6 +226,11 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
     // reference to that pose, so every camera-relative consumer below sees it.
     cameraDirector.update(simDeltaSec, snapshot);
     applyCameraPose(spaceScene.camera, cameraDirector.pose);
+    // T0125 — photo mode hides the HUD. The DOM overlay was never in a canvas
+    // capture; this is for the player's eye. An unchanged signal write is a
+    // no-op, so no change detection of its own is needed.
+    const hudHidden = cameraDirector.mode === 'cinematic';
+    hudPresetStore.setHudHidden(hudHidden);
     // The one place the in-world markers are published, and it has to be here:
     // the pose for this frame exists only after `cameraDirector.update`, while the
     // HUD sample happened above. Gating on `hudPublished` keeps both halves on the
@@ -271,8 +284,10 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       spaceScene.updateCameraRelative(cameraPositionKm);
       telemetry.beginGpuTimer();
       postPipeline.render(postProcessingEnabled);
-      stateVectorWidget.render(renderer);
-      telemetry.recordStateVectorWidgetMs(stateVectorWidget.lastRenderMs);
+      // The widget draws into the canvas rather than the DOM, so unlike the rest
+      // of the HUD it would appear in a photo. Hiding the HUD hides it too.
+      if (!hudHidden) stateVectorWidget.render(renderer);
+      telemetry.recordStateVectorWidgetMs(hudHidden ? 0 : stateVectorWidget.lastRenderMs);
       telemetry.endGpuTimer();
       if (systemMapRuntimeDiagnostics !== null) systemMapRuntimeDiagnostics.spaceRenderCount += 1;
     }
