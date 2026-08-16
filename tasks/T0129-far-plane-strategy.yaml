@@ -1,6 +1,6 @@
 id: T0129
 title: Extend depth coverage to the full catalog and raise camera range
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0129-far-plane-strategy
 depends_on:
@@ -21,4 +21,31 @@ acceptance:
     bindings degrade with a skipped bind, a one-time console warning and a telemetry flag,
     unit-tested with an injected NaN"
 handoff_notes: |
-  Small but subtle. Touch spaceScene.ts constants and the depth tests together, and do NOT touch the Math.fround boundary contract.
+  THE TELEMETRY FLAG IS NOT YET A BROWSER DIAGNOSTIC. spaceScene.effectBindingTelemetry is scene-owned
+  because no production code binds an effect visual yet, and publishing a canvas.solarVoyager* field
+  with no producer would be contract surface for nothing. T0122 (plume/RCS), T0117-era world markers
+  and T0126 (skybox) SHOULD use bindEffectVisual / bindPackedEffectVisual and surface
+  nonFiniteObserved and degradedBindingCount when they land.
+  GUARD POLICY: the five existing binding families keep the hard RangeError — a NaN in a ship or body
+  position is a real bug and must stay loud. Effect bindings skip the write, hold the last good
+  position, warn once per binding and raise telemetry. Do not blur the two.
+  RESIDUAL, DELIBERATE: the 2.5e10 km far plane does NOT cover an observatory camera parked at the new
+  2e10 km maximum on the far side of the Sun from Eris (3.46e10 km). Covering it costs another 1.4
+  percent of logarithmic depth resolution everywhere. Strictly better than before, where 1e10 clipped
+  the same geometry at 2.46e10.
+  Reversed depth assumes a FLOAT depth buffer. With unorm24 it degrades to eps*L^2/n and cannot resolve
+  the existing 1 km LEO case, so a bad driver fails the OLDEST case first, loudly. Deliberately not
+  probed in code.
+  A Vitest case derives every catalog body's apoapsis from data/bodies.json and asserts SPACE_FAR_KM
+  clears it (max = Eris at 1.4617e10 km), so a future outer body fails there rather than silently
+  vanishing. Keep that test when the constant moves.
+  BENCH FINDING FOR THIS HOST: T0127's bimodal frame pacing reproduces, but the slow run is NOT always
+  run0 — the baseline was slow-then-fast, both feature reports fast-then-slow. Read stability.findings,
+  take the settled run, and take a third report before believing a surviving delta.
+  Verification: 1350 Vitest passed / 3 skipped; render-depth (new eris-1.43e10-km case: was
+  front=0 rear=0 background=65536, now front=11896 rear=9264 stable under both strategies, with LEO and
+  1 AU byte-identical), starfield far-occlusion 0 px, camera-controls, visual-tiers, trajectory-overlay,
+  lighting-post, system-map, ship-visual, relativistic-visuals, main-menu, startup, smoke all exit 0.
+  perf-gates 33 draw calls, 82,429 triangles, heap 27,384 B. Fuzz covered all 1,806 ordered catalog
+  pairs at maximum range (171,570 frames) plus 600 randomized runs. Math.fround boundary untouched.
+  No golden or budget moved.

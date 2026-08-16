@@ -1877,7 +1877,7 @@
   {
     "id": "T0121",
     "title": "Remodel the ship for close-up beauty (build_ship.py v2)",
-    "status": "IN_PROGRESS",
+    "status": "REVIEW",
     "agent": "claude",
     "branch": "task/T0121-ship-remodel",
     "depends_on": [
@@ -2033,7 +2033,7 @@
   {
     "id": "T0129",
     "title": "Extend depth coverage to the full catalog and raise camera range",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0129-far-plane-strategy",
     "depends_on": [
@@ -2047,7 +2047,7 @@
       "Starfield far-pinning stays correct under both depth strategies",
       "Guard policy split: ship and body position bindings keep the hard throw while new effect-visual bindings degrade with a skipped bind, a one-time console warning and a telemetry flag, unit-tested with an injected NaN"
     ],
-    "handoff_notes": "Small but subtle. Touch spaceScene.ts constants and the depth tests together, and do NOT touch the Math.fround boundary contract.\n"
+    "handoff_notes": "THE TELEMETRY FLAG IS NOT YET A BROWSER DIAGNOSTIC. spaceScene.effectBindingTelemetry is scene-owned\nbecause no production code binds an effect visual yet, and publishing a canvas.solarVoyager* field\nwith no producer would be contract surface for nothing. T0122 (plume/RCS), T0117-era world markers\nand T0126 (skybox) SHOULD use bindEffectVisual / bindPackedEffectVisual and surface\nnonFiniteObserved and degradedBindingCount when they land.\nGUARD POLICY: the five existing binding families keep the hard RangeError — a NaN in a ship or body\nposition is a real bug and must stay loud. Effect bindings skip the write, hold the last good\nposition, warn once per binding and raise telemetry. Do not blur the two.\nRESIDUAL, DELIBERATE: the 2.5e10 km far plane does NOT cover an observatory camera parked at the new\n2e10 km maximum on the far side of the Sun from Eris (3.46e10 km). Covering it costs another 1.4\npercent of logarithmic depth resolution everywhere. Strictly better than before, where 1e10 clipped\nthe same geometry at 2.46e10.\nReversed depth assumes a FLOAT depth buffer. With unorm24 it degrades to eps*L^2/n and cannot resolve\nthe existing 1 km LEO case, so a bad driver fails the OLDEST case first, loudly. Deliberately not\nprobed in code.\nA Vitest case derives every catalog body's apoapsis from data/bodies.json and asserts SPACE_FAR_KM\nclears it (max = Eris at 1.4617e10 km), so a future outer body fails there rather than silently\nvanishing. Keep that test when the constant moves.\nBENCH FINDING FOR THIS HOST: T0127's bimodal frame pacing reproduces, but the slow run is NOT always\nrun0 — the baseline was slow-then-fast, both feature reports fast-then-slow. Read stability.findings,\ntake the settled run, and take a third report before believing a surviving delta.\nVerification: 1350 Vitest passed / 3 skipped; render-depth (new eris-1.43e10-km case: was\nfront=0 rear=0 background=65536, now front=11896 rear=9264 stable under both strategies, with LEO and\n1 AU byte-identical), starfield far-occlusion 0 px, camera-controls, visual-tiers, trajectory-overlay,\nlighting-post, system-map, ship-visual, relativistic-visuals, main-menu, startup, smoke all exit 0.\nperf-gates 33 draw calls, 82,429 triangles, heap 27,384 B. Fuzz covered all 1,806 ordered catalog\npairs at maximum range (171,570 frames) plus 600 randomized runs. Math.fround boundary untouched.\nNo golden or budget moved.\n"
   },
   {
     "id": "T0130",
