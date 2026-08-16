@@ -5,6 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const MIB = 1024 * 1024;
 const MANIFEST_RELATIVE_PATH = 'public/assets/manifest.json';
 const INITIAL_PATH_RELATIVE_PATH = 'data/initial-path.json';
+// Directories that exist in a working tree but are not repository content: a
+// clone does not pay for them. `.texture-cache` is the ADR-039 verified-source
+// cache — 8K source imagery is fetched on demand by `tools/fetch_textures.py`,
+// verified against a pinned SHA-256 and cached here instead of being committed,
+// which is what keeps 34 new V2M4 bodies inside the 300 MiB repo budget. The
+// cache is gitignored; measuring it would gate the budget on how many bodies a
+// given machine happens to have fetched.
 const REPO_EXCLUDED_DIRECTORIES = new Set([
   '.git',
   'node_modules',
@@ -13,6 +20,7 @@ const REPO_EXCLUDED_DIRECTORIES = new Set([
   'coverage',
   '.superpowers',
   'output',
+  '.texture-cache',
 ]);
 const CODE_EXTENSIONS = new Set(['.css', '.html', '.js', '.mjs', '.wasm']);
 const CRITICAL_ASSET_PATTERN = /(^|[/_.-])(sun|earth|moon|stars?)(?=$|[/_.-])/i;

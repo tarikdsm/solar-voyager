@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:render-depth": "node tools/tests/renderDepthRegression.mjs",
     "test:starfield": "node tools/tests/starfieldRegression.mjs",
+    "test:milky-way": "node tools/tests/milkyWayRegression.mjs",
     "test:visual-tiers": "node tools/tests/visualTierFlyIn.mjs",
     "test:lighting-post": "node tools/tests/lightingPostRegression.mjs",
     "test:surface-detail": "node tools/tests/surfaceDetailRegression.mjs",

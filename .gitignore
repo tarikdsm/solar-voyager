@@ -19,3 +19,15 @@ output/
 .worktrees/
 tools/blender/_*
 tools/blender/*.bat
+
+# ADR-039 — source imagery is fetched, verified and cached, never committed.
+# The verified-source cache (tools/fetch_textures.py; override with
+# SOLAR_VOYAGER_TEXTURE_CACHE) and every fetched file under the authoring
+# workspace. SOURCES.md stays committed: attribution is the repo's obligation,
+# the pixels are not. Sources committed before ADR-039 are already tracked and
+# are unaffected by these patterns — no history is rewritten.
+.texture-cache/
+assets/textures-src/**
+!assets/textures-src/**/
+!assets/textures-src/**/SOURCES.md
+!assets/textures-src/.gitkeep

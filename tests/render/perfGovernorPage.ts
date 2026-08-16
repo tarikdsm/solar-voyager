@@ -2,6 +2,7 @@ import { WebGLRenderer } from 'three';
 
 import bodiesDocument from '../../data/bodies.json';
 import { createEpochWorld } from '../../src/render/createEpochWorld.js';
+import { ExposureController } from '../../src/render/exposureController.js';
 import { LightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
 import {
   QUALITY_PROFILES,
@@ -99,6 +100,13 @@ const relativisticVisuals = new RelativisticVisualController({
   milkyWaySky: world.milkyWaySky,
   constellationLines: world.constellationLines,
 });
+const exposureController = new ExposureController({
+  sink: pipeline,
+  positionsKm: world.positionsKm,
+  sunIndex: world.sunIndex,
+  bodyRadiiKm: world.bodyRadiiKm,
+  bodyGeometricAlbedos: world.bodyGeometricAlbedos,
+});
 
 function resize(): void {
   const pixelRatio = renderer.getPixelRatio();
@@ -108,6 +116,7 @@ function resize(): void {
 
 const controller = new RenderQualityController({
   assetLoader: world.visualSystem,
+  exposure: exposureController,
   pipeline,
   postProcessingAvailable: true,
   proceduralSun: world.proceduralSun,

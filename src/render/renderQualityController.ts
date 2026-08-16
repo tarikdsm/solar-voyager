@@ -1,5 +1,7 @@
 import type { WebGLRenderer } from 'three';
 
+import type { ExposureMode } from '../game/settings.js';
+
 import type {
   RenderQualityApplicationPort,
   RenderQualityProfile,
@@ -40,8 +42,14 @@ export interface QualitySkyboxPort {
   setSkyboxTier(tier: SkyboxQualityTier): void;
 }
 
+/** T0127 — the governor's half of the exposure mode; the player setting is the other. */
+export interface QualityExposurePort {
+  setGovernorMode(mode: ExposureMode): void;
+}
+
 export interface RenderQualityControllerOptions {
   readonly assetLoader: QualityAssetLoaderPort;
+  readonly exposure: QualityExposurePort;
   readonly pipeline: QualityPostPipelinePort;
   readonly postProcessingAvailable: boolean;
   readonly proceduralSun: QualityProceduralPort;
@@ -56,6 +64,7 @@ export interface RenderQualityControllerOptions {
 export class RenderQualityController implements RenderQualityApplicationPort {
   private readonly assetLoader: QualityAssetLoaderPort;
   private readonly basePixelRatio: number;
+  private readonly exposure: QualityExposurePort;
   private readonly pipeline: QualityPostPipelinePort;
   private readonly postProcessingAvailable: boolean;
   private readonly proceduralSun: QualityProceduralPort;
@@ -67,6 +76,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
 
   constructor(options: RenderQualityControllerOptions) {
     this.assetLoader = options.assetLoader;
+    this.exposure = options.exposure;
     this.pipeline = options.pipeline;
     this.postProcessingAvailable = options.postProcessingAvailable;
     this.proceduralSun = options.proceduralSun;
@@ -93,6 +103,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.visualSystem.setRingParticleCount(profile.ringParticleCount);
     this.relativisticVisuals.setQualityEnabled(this.postProcessingAvailable && profile.tier >= 3);
     this.skybox.setSkyboxTier(profile.skyboxTier);
+    this.exposure.setGovernorMode(profile.exposureMode);
     this.appliedRung = profile.rung;
   }
 }

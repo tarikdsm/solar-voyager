@@ -89,6 +89,9 @@ jobs:
       - name: Starfield regression
         run: npm run test:starfield
 
+      - name: Milky Way regression
+        run: npm run test:milky-way
+
       - name: Visual tier fly-in regression
         run: npm run test:visual-tiers
 

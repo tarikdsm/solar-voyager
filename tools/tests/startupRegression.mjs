@@ -5,9 +5,10 @@ import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installHighQualitySetting } from '../perf/browserSettings.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4202;
+const PORT = resolveHarnessPort(4202);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const FIRST_PLAYABLE_CEILING_MS = 5_000;
 const PLAYWRIGHT_OPERATION_TIMEOUT_MS = 30_000;

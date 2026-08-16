@@ -4,9 +4,10 @@ import { resolve } from 'node:path';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4185;
+const PORT = resolveHarnessPort(4185);
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/ringSystems.html`;
 const BODY_IDS = ['jupiter', 'saturn', 'uranus', 'neptune'];
 

@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 import {
   assertPortAvailable,
@@ -12,7 +13,7 @@ import {
 } from './scaffoldBenchUtils.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4174;
+const PORT = resolveHarnessPort(4174);
 const WARMUP_FRAMES = 120;
 const SAMPLE_FRAMES = 600;
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');

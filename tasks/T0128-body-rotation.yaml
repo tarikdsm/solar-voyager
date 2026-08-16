@@ -1,8 +1,8 @@
 id: T0128
 title: Apply sidereal rotation, axial tilt and tier-2 oblateness; move clouds to sim time
-status: TODO
-agent: ""
-branch: ""
+status: REVIEW
+agent: claude
+branch: task/T0128-body-rotation
 depends_on:
   - T0103
 milestone: V2M3

@@ -4,9 +4,10 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4184;
+const PORT = resolveHarnessPort(4184);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/tests/render/perfPanel.html`;
 
 function parseLeadingNumber(value) {
