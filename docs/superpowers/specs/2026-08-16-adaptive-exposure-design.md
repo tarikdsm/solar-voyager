@@ -258,8 +258,18 @@ should be revisited with the former.
 ## 6. Frame-loop cost
 
 One `update(dtSec, cameraPositionKm, dominantBodyIndex)` per frame: two
-`apparentMagnitude` calls (already-existing allocation-free math over the shared
-packed `Float64Array`), two `Math.pow`, one `Math.exp`, one `Math.log2`. No
-allocation, no branching on strings in the hot path (modes are compared as booleans
-resolved on `set*Mode`). In `fixed` mode the whole update short-circuits after
-writing the constant.
+`apparentMagnitude` calls (existing allocation-free math over the shared packed
+`Float64Array`), three `Math.pow`, one `Math.exp`, one `Math.log2`. No allocation,
+no object churn, no strings.
+
+`fixed` mode does **not** skip the `L_scene` evaluation, deliberately. It costs a
+few hundred nanoseconds against a 16.6 ms budget, and keeping it always-on means
+`sceneLuminance` is a trustworthy diagnostic in every mode and the mode switch
+changes exactly one thing (the target), which is far easier to reason about than a
+controller with two code paths. Pinning `fixed` on a low tier is about not making a
+struggling frame re-adapt, not about saving arithmetic.
+
+`fixed` also *ramps* into place through the same lag rather than snapping, so a
+governor rung change is a 2 s fade instead of a flash. `reset()` is the explicit
+snap, for discontinuities where a fade would be a lie (startup, restore-point
+teleport, cruise insertion).
