@@ -1,6 +1,6 @@
 id: T0155
 title: Isolate browser-harness ports per worktree
-status: IN_PROGRESS
+status: DONE
 agent: claude
 branch: task/T0155-harness-port-isolation
 depends_on: []
@@ -20,4 +20,17 @@ acceptance:
   - Two checkouts under .worktrees with different directory names resolve to different ports, proven
     by a unit test
   - The offset is stable across runs for the same worktree, so a failure is reproducible
-handoff_notes: ""
+handoff_notes: |
+  tools/harnessPort.mjs owns port resolution; all 35 harnesses and benches call
+  resolveHarnessPort(<historical port>). The offset comes from the CHECKOUT PATH, not an environment
+  variable, so no runner has to remember to set anything, and a checkout outside .worktrees resolves to
+  its historical port — that is what keeps CI bit-identical. The offset is a stable FNV-1a hash of the
+  worktree name so a collision stays reproducible instead of becoming a lottery.
+  If you add a harness, call resolveHarnessPort rather than writing a literal, and do not assume your
+  port is free on a developer machine running several worktrees.
+  The first CI run failed on a Windows-literal path fixture: a backslash is a separator on Windows and a
+  legal filename character on Linux, so the test passed locally and failed on ubuntu. Build path fixtures
+  with path.join.
+  Measured: main 4177, .worktrees/T0116 5713, .worktrees/T0127 5969, .worktrees/T0144 4241.
+  Verification: harnessPort.test.mjs 6 passed; lint, typecheck, format clean; proven end to end by
+  running test:render-depth and test:starfield inside a worktree checkout, both green on offset ports.

@@ -2070,7 +2070,7 @@
   {
     "id": "T0131",
     "title": "build_asteroid.py and build_comet.py with shape-model ingest",
-    "status": "REVIEW",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0131-asteroid-comet-builders",
     "depends_on": [
@@ -2084,7 +2084,7 @@
       "Double builds are byte-identical and unit tests land in the Python tool suite with SOURCES.md per body",
       "Asteroid and comet category budget of 5000 tris each is enforced in config.mjs"
     ],
-    "handoff_notes": "Shape model sources are NASA PDS SBN and public domain. Pin URLs and SHA-256 through the T0132 fetch mechanism; T0132 may land first or in the same week.\n"
+    "handoff_notes": "THE SEAM LINES UP WITH T0132. ShapeModelSource maps field-for-field onto TextureRecipe; role=\"shape\"\nis an accepted role; kind=\"file\" is exactly the verified-byte-copy mode a .obj needs. SHAPE_ROOT is\nassets/textures-src (gitignored except SOURCES.md), so shape models are never committed. To enable a\nreal model, T0138/T0139 must: add a RECIPES entry with kind=\"file\", role=\"shape\",\noutput_name=\"\u003cid>_shape.obj\" — NOTE width/height are required __init__ kwargs even for kind=\"file\",\npass 0, 0 because validate() returns before checking them; copy that entry's source_url and sha256\ninto SHAPE_MODEL_SOURCES in tools/blender/small_body_config.py; build with --shape real. Until then\n--shape real EXITS 2 rather than silently shipping a procedural Eros. No URL or checksum was invented.\nPICK A SOURCE TIER \u003c= 5000 FACETS where the archive offers one; the decimator works but a pinned low\ntier is lossless by comparison. common/shape_model.py parses Wavefront OBJ ONLY — a .tab or ICQ source\nneeds a new parser.\nTHE NORMALIZATION CONTRACT UNDER-SIZES ELONGATED BODIES. Ingest requires max radius exactly 1.0 and the\nengine multiplies by meanRadiusKm, so Eros (really about 34 km long, meanRadiusKm 8.42) renders about\n17 km long. Pre-existing MODELING-GUIDE section 3 contract, not introduced here — T0138 should decide\ndeliberately whether to accept it or raise an ADR.\nSHAPE_PARAMETERS axis ratios are authored approximations, deliberately hedged in a comment; refine per\nbody against the published shape models. They live in small_body_config.py, NOT bodies.json — adding\ntriaxial fields to the catalog is a schema change and therefore an ADR.\nGeodesic frequency 15 (4500 tris) replaces Blender's icosphere operator, which only reaches 1280 or\n5120 and would force asteroids to 26 percent of budget. canonicalize_mesh_normals in common/glb.py\ngeneralizes the existing ellipsoid pass for displaced and decimated meshes; decimation is uniform-grid\nvertex clustering, not the DECIMATE modifier, so it cannot drift between Blender versions.\nLANDMINE FIXED: build_all.discover_builders requires every build_\u003cid>.py to name a catalog body, so\nasteroid and comet joined EXCLUDED_BUILDERS. T0138/T0139 add one-line delegating shims if they want\nper-body discovery.\nLANDMINE LEFT FOR T0121: build_ship.py has smooth-shaded objects and never canonicalizes normals, and\ntest:blender only ever built the test sphere, so the committed ship.glb is a latent double-build\ndeterminism hazard. canonicalize_mesh_normals(glb_path) is a one-line fix.\nNEW TOOL: node tools/tests/validateAuthoredAsset.mjs \u003cdir> \u003cid> \u003ccategory> runs only the\nMODELING-GUIDE contract half of ingest, no KTX-Software needed. Each albedo is about 12 s of pure\nPython noise by design, so test:blender is now about 2 minutes.\nVerification: test:tools 60 -> 112 tests OK; 1270 Vitest passed; lint, typecheck, format, build,\ntest:blender, check:budgets (repo 184.96 of 300 MiB), smoke all green. No budget or golden moved.\n"
   },
   {
     "id": "T0132",
@@ -2531,7 +2531,7 @@
   {
     "id": "T0155",
     "title": "Isolate browser-harness ports per worktree",
-    "status": "IN_PROGRESS",
+    "status": "DONE",
     "agent": "claude",
     "branch": "task/T0155-harness-port-isolation",
     "depends_on": [],
@@ -2543,7 +2543,26 @@
       "Two checkouts under .worktrees with different directory names resolve to different ports, proven by a unit test",
       "The offset is stable across runs for the same worktree, so a failure is reproducible"
     ],
-    "handoff_notes": ""
+    "handoff_notes": "tools/harnessPort.mjs owns port resolution; all 35 harnesses and benches call\nresolveHarnessPort(\u003chistorical port>). The offset comes from the CHECKOUT PATH, not an environment\nvariable, so no runner has to remember to set anything, and a checkout outside .worktrees resolves to\nits historical port — that is what keeps CI bit-identical. The offset is a stable FNV-1a hash of the\nworktree name so a collision stays reproducible instead of becoming a lottery.\nIf you add a harness, call resolveHarnessPort rather than writing a literal, and do not assume your\nport is free on a developer machine running several worktrees.\nThe first CI run failed on a Windows-literal path fixture: a backslash is a separator on Windows and a\nlegal filename character on Linux, so the test passed locally and failed on ubuntu. Build path fixtures\nwith path.join.\nMeasured: main 4177, .worktrees/T0116 5713, .worktrees/T0127 5969, .worktrees/T0144 4241.\nVerification: harnessPort.test.mjs 6 passed; lint, typecheck, format clean; proven end to end by\nrunning test:render-depth and test:starfield inside a worktree checkout, both green on offset ports.\n"
+  },
+  {
+    "id": "T0156",
+    "title": "Fix double-counted retrograde rotation for Venus, Uranus and Pluto",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [
+      "T0128"
+    ],
+    "milestone": "V2M4",
+    "spec": "data/bodies.json encodes retrograde rotation twice for three bodies, so they render prograde.\nThe schema's rule is that a negative rotation period means retrograde ABOUT THE DECLARED POLE, but\ntools/bake_ephemerides.py transcribed the NASA fact sheets, which state retrograde twice: once as\nan obliquity above 90 degrees and once as a negative period. venus (177.36 deg, -20997360 s),\nuranus (97.77 deg, -62063.712 s) and pluto (122.53 deg, -551854.08 s) are affected. triton, bennu\nand ryugu encode it once each and are correct.\nFound by T0128, which implements the documented convention verbatim and deliberately left the data\nalone because a bake change carries its own review surface.\n",
+    "acceptance": [
+      "The three periods are corrected in the bake table and regenerated into data/bodies.json, never hand-edited",
+      "Venus, Uranus and Pluto rotate retrograde in the render, asserted against the bodySpin convention",
+      "Bodies that already encoded retrograde once are unchanged, asserted",
+      "A schema-level test rejects a future entry that encodes retrograde twice, so the class of defect cannot return"
+    ],
+    "handoff_notes": "This is a data and bake change, not a render change: bodySpin.ts already implements the documented\nconvention correctly. Decide in the PR whether the catalog rule should be restated in the schema\ndocs so the next transcription cannot repeat it.\n"
   }
 ];
     /* TASK_DATA_END */
