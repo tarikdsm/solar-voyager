@@ -1,6 +1,6 @@
 id: T0117
 title: Select cruise and nav target by clicking bodies in world and in map
-status: IN_PROGRESS
+status: DONE
 agent: claude
 branch: task/T0117-click-to-target
 depends_on:
@@ -18,4 +18,39 @@ acceptance:
   - Zero allocation per click frame; picking math unit-tested from a known camera pose to an
     expected body
 handoff_notes: |
-  Pick in the game layer from f64 positions plus the camera pose. No three.js Raycaster against meshes: bodies are points and spheres at wild scales, and angular-disc math is exact and cheap.
+  THE SELECTION API — T0119 and T0150 must use this, not internals.
+  src/game/targetSelection.ts, TargetSelectionController:
+  selectTarget(bodyId, source: 'world'|'map'|'panel'|'camera'|'api') is the ONLY write point; returns
+  false for an unknown id (the camera ring contains 'ship', which is not a catalog body). It is
+  deliberately NOT idempotent: re-selecting the same body writes again, because the composition facade's
+  setTarget also re-aims the observatory camera and invalidates the prediction, and a tutorial must see
+  a repeat click. Read side: selectedBodyId, selectionSource, selectionCount.
+  subscribe((bodyId, source) => ...) returns an unsubscribe — T0150's intro step 3 is exactly
+  bodyId === 'moon' && source === 'world'; wire it in composition.ts beside handleTutorialSaveSucceeded.
+  adoptTarget(bodyId) records a restored target without writing or notifying; already wired into
+  onSimulationReplaced. tests/architecture/targetWritePoint.test.ts scans src/ and asserts exactly two
+  files match .setTarget( — keep it that way.
+  T0119: read selectedBodyId (it equals the map focus, because a map click sets both) and pass the
+  Engage cruise button as CruiseTargetControl's children. Do NOT read SystemMapController.focusId — that
+  also moves for camera-only focus changes the controller rejected as targets. The space-view instance is
+  #hud-set-cruise-target inside #cruise-status, which T0119 replaces wholesale; inherit the mount point.
+  LANDMINE — THE CRUISE ROW MUST STAY ONE LINE HIGH. #cruise-status sits directly above the navball in a
+  bottom-anchored stack that grows UPWARD. A second line moved the whole HUD cluster 11 px toward the
+  viewport middle and made the T0112 pick gate miss Earth's disc (cluster top 227 px on main, 216 broken,
+  223 fixed). If the strip grows vertically, re-run test:hud-presets — it is the only gate that catches
+  this AND IT CATCHES IT AS A PICKING FAILURE, which reads like a picking bug.
+  T0112 OVER-DELIVERED: bodyPicking.ts, the 8 px floor, nearest-along-ray, the pointer gesture and a
+  browser assertion were already on main. This task added the map counterpart, the single write point and
+  the affordances. Map picking uses a FLAT 8 px radius, not an apparent one, because the map draws a
+  constant-size icon batch.
+  Clicking a focused Jupiter in the map picks a Galilean moon: at that framing all four icons sit inside
+  Jupiter's 8 px radius and nearest-along-ray correctly returns the nearest. Correct behaviour; the gate
+  uses Mercury for its deterministic assertion.
+  .github/workflows/ci.yml is prettier-ignored and MUST stay LF — a Windows text rewrite made it CRLF and
+  broke tools/checks/ciWorkflow.test.mjs. format:check cannot catch this.
+  event.offsetX/offsetY are now load-bearing for picking; they are correct only because the listener
+  target is the canvas with no padding or border. Add a wrapper or padding to #space-canvas and picking
+  silently shifts.
+  Verification: 1282 Vitest passed / 3 skipped / 0 failed; new test:click-to-target gate plus hud-presets,
+  system-map, system-map-panel, hud-signals, smoke, camera-controls all green; perf-gates 33 draw calls
+  and 82,429 triangles, exactly the golden. No budget or golden moved.

@@ -23,7 +23,8 @@ and `SOURCES.md` directly in their category directory. Other categories use the
 
 - **glTF 2.0 Binary (`.glb`)** — the only accepted model format. Blender: File → Export → glTF 2.0, format "glTF Binary".
 - Textures **external** — the ingest pass converts to KTX2. Formats: **JPEG is acceptable (and preferred, for repo size) for photographic maps** (albedo, night lights, clouds — sources are lossy anyway); **PNG required for normal maps** (8- or 16-bit; lossy compression corrupts normals); EXR not accepted. Do NOT embed textures in the .glb, do NOT Draco-compress at authoring (ingest does it).
-- Export settings: +Y up (glTF default), apply modifiers ON, no cameras, no lights, no animations (rotation/tilt are simulated by the engine from `bodies.json`), no vertex colors except asteroids (baked AO).
+- Export settings: +Y up (glTF default), apply modifiers ON, no cameras, no lights, no animations (rotation/tilt are simulated by the engine from `bodies.json`), no vertex colors — small-body relief is carried by geometry and by the albedo map, because a Blender AO bake is a sampled, non-reproducible operator and nothing in `render/` reads `COLOR_0`.
+- Mesh-less nodes are allowed as **named attachment points** for renderer effects (ship `hull_tip`/`engine_nozzle`, comet `coma_anchor`/`tail_anchor`). Their names are API: renaming one breaks the renderer.
 
 ## 3. Units, scale, orientation — the normalization contract
 
@@ -41,9 +42,19 @@ Orientation: **north pole along +Y** (after glTF's +Y-up export), prime meridian
 |---|---|---|
 | Planets, Sun, major moons | Quad sphere (subdivided cube, poles-free UVs preferred) or UV sphere ≥ 128×64 segments | ≤ 50k tris |
 | Dwarfs, small moons | UV sphere 64×32 | ≤ 15k tris |
-| Asteroids/comets | Displaced icosphere (seeded noise + craters) or decimated real shape model (Eros, Bennu, 67P have published meshes) | ≤ 5k tris |
+| Asteroids/comets | Displaced geodesic icosphere, frequency 15 = 4,500 tris (seeded noise + craters) or decimated real shape model (Eros, Bennu, Ryugu, 67P have published meshes). Comets add the `coma_anchor`/`tail_anchor` nodes | ≤ 5k tris |
 | Rings | Flat annulus, 256 angular × 4 radial segments, **double-sided material**; radial structure belongs in texture U | ≤ 5k tris |
-| Ship | Hard-surface model, PBR, named nodes `hull_tip` (+X orientation marker) and `engine_nozzle` (renderer attaches the plume there) | ≤ 30k tris |
+| Ship | Hard-surface model, PBR, named nodes (see below) | 18k–28k tris, budget ≤ 30k |
+
+Ship node names are API — the renderer resolves them by string, so renaming one
+breaks a consumer rather than a preference: `hull_tip` (+X orientation marker,
+origin on the axis through the model origin), `engine_nozzle` (plume attachment,
+origin at the throat, bell left open), `rcs_pod_1`…`rcs_pod_4` (RCS puff
+emitters; 1 forward port, 2 forward starboard, 3 aft port, 4 aft starboard),
+`light_nav_l` / `light_nav_r` / `light_beacon` (running lights), `canopy` (glass
+shell) and `cockpit_eye` (meshless marker at the pilot eye point). The full table
+lives in `tools/blender/ship_config.py` and is regenerated into
+`assets/models/ship/SOURCES.md` on every build.
 
 Normals smooth-shaded; no n-gons in the export; UVs must not stretch at poles (quad sphere solves this — check with a checker texture).
 

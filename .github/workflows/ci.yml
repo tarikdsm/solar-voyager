@@ -79,6 +79,10 @@ jobs:
         timeout-minutes: 6
         run: npm run test:hud-presets
 
+      - name: Click-to-target regression
+        timeout-minutes: 6
+        run: npm run test:click-to-target
+
       - name: Startup quality and loading regression
         timeout-minutes: 8
         run: npm run test:startup
@@ -143,6 +147,10 @@ jobs:
         run: npm run test:perf-panel
       - name: Adaptive quality governor regression
         run: npm run test:perf-governor
+
+      - name: Audio engine regression
+        timeout-minutes: 6
+        run: npm run test:audio
 
       - name: Session settings regression
         run: npm run test:session-settings

@@ -13,6 +13,7 @@ import {
   BLOOM_STRENGTH,
   BLOOM_THRESHOLD,
   LightingPostPipeline,
+  POST_PASS_ANCHORS,
   type AdaptivePostPassPort,
   type FxaaPassPort,
   type LightingPostBackend,
@@ -84,6 +85,9 @@ function createFixture(): Fixture {
     readBuffer: renderTarget(),
     writeBuffer: renderTarget(),
     addPass: vi.fn((candidate: PostPassPort) => passes.push(candidate)),
+    insertPass: vi.fn((candidate: PostPassPort, index: number) => {
+      passes.splice(index, 0, candidate);
+    }),
     setPixelRatio: vi.fn(),
     setSize: vi.fn(),
     render: vi.fn(),
@@ -140,6 +144,10 @@ describe('LightingPostPipeline', () => {
       fixture.fxaaPass,
       fixture.outputPass,
     ]);
+    // The pass-insertion API must be inert until somebody uses it: the frozen
+    // browser gate (`tools/tests/lightingPostRegression.mjs`) compares this exact
+    // list by class name.
+    expect(fixture.composer.insertPass).not.toHaveBeenCalled();
     expect(fixture.composer.readBuffer.texture.type).toBe(HalfFloatType);
     expect(fixture.composer.writeBuffer.texture.type).toBe(HalfFloatType);
     expect(pipeline.renderPass).toBe(fixture.renderPass);
@@ -253,5 +261,143 @@ describe('LightingPostPipeline', () => {
     expect(fixture.outputPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.relativisticPass.dispose).toHaveBeenCalledOnce();
     expect(fixture.composer.dispose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('LightingPostPipeline.insertPass', () => {
+  function createPipeline(fixture: Fixture): LightingPostPipeline {
+    return new LightingPostPipeline(
+      fixture.renderer,
+      new Scene(),
+      new PerspectiveCamera(),
+      fixture.backend,
+    );
+  }
+
+  it('exposes the four documented anchors between the six pipeline-owned passes', () => {
+    expect(POST_PASS_ANCHORS).toEqual(['scene', 'relativistic', 'bloom', 'anti-aliasing']);
+  });
+
+  it('places a pass in the slot its anchor names', () => {
+    const fixture = createFixture();
+    const pipeline = createPipeline(fixture);
+    const scenePass = pass();
+    const relativisticInsert = pass();
+    const bloomInsert = pass();
+    const antiAliasingInsert = pass();
+
+    pipeline.insertPass(scenePass, 'scene');
+    pipeline.insertPass(relativisticInsert, 'relativistic');
+    pipeline.insertPass(bloomInsert, 'bloom');
+    pipeline.insertPass(antiAliasingInsert, 'anti-aliasing');
+
+    expect(fixture.composer.passes).toEqual([
+      fixture.renderPass,
+      scenePass,
+      fixture.relativisticPass,
+      relativisticInsert,
+      fixture.bloomPass,
+      bloomInsert,
+      fixture.smaaPass,
+      fixture.fxaaPass,
+      antiAliasingInsert,
+      fixture.outputPass,
+    ]);
+  });
+
+  it('orders by anchor first and insertion sequence second, whatever the call order', () => {
+    const fixture = createFixture();
+    const pipeline = createPipeline(fixture);
+    const lateAnchorFirst = pass();
+    const earlyAnchorSecond = pass();
+    const sameAnchorAfter = pass();
+
+    pipeline.insertPass(lateAnchorFirst, 'anti-aliasing');
+    pipeline.insertPass(earlyAnchorSecond, 'scene');
+    pipeline.insertPass(sameAnchorAfter, 'scene');
+
+    expect(fixture.composer.passes).toEqual([
+      fixture.renderPass,
+      earlyAnchorSecond,
+      sameAnchorAfter,
+      fixture.relativisticPass,
+      fixture.bloomPass,
+      fixture.smaaPass,
+      fixture.fxaaPass,
+      lateAnchorFirst,
+      fixture.outputPass,
+    ]);
+  });
+
+  it('rejects an unknown anchor and a pass inserted twice', () => {
+    const fixture = createFixture();
+    const pipeline = createPipeline(fixture);
+    const inserted = pass();
+
+    expect(() => pipeline.insertPass(inserted, 'output' as never)).toThrow(/anchor/iu);
+    pipeline.insertPass(inserted, 'bloom');
+    expect(() => pipeline.insertPass(inserted, 'scene')).toThrow(/already/iu);
+    expect(() => pipeline.insertPass(fixture.bloomPass, 'scene')).toThrow(/already/iu);
+  });
+
+  it('adopts inserted passes into render scaling, warm-up and disposal', () => {
+    const fixture = createFixture();
+    const pipeline = createPipeline(fixture);
+    const adaptiveInsert = adaptivePass();
+    const plainInsert = pass();
+    plainInsert.enabled = false;
+
+    pipeline.selectQuality(QUALITY_PROFILES[4] as (typeof QUALITY_PROFILES)[number]);
+    pipeline.insertPass(adaptiveInsert, 'relativistic');
+    pipeline.insertPass(plainInsert, 'bloom');
+    // The current scale reaches a pass that arrives after the governor acted.
+    expect(adaptiveInsert.setRenderScale).toHaveBeenLastCalledWith(0.55);
+
+    pipeline.selectQuality(QUALITY_PROFILES[0] as (typeof QUALITY_PROFILES)[number]);
+    expect(adaptiveInsert.setRenderScale).toHaveBeenLastCalledWith(1);
+
+    // Warm-up compiles every inserted program and restores the caller's state.
+    pipeline.warmUp();
+    expect(adaptiveInsert.enabled).toBe(true);
+    expect(plainInsert.enabled).toBe(false);
+
+    pipeline.dispose();
+    expect(plainInsert.dispose).toHaveBeenCalledOnce();
+    expect(adaptiveInsert.dispose).toHaveBeenCalledOnce();
+  });
+});
+
+describe('LightingPostPipeline exposure sink', () => {
+  it('scales the requested exposure by the base exposure of the active render path', () => {
+    const fixture = createFixture();
+    const pipeline = new LightingPostPipeline(
+      fixture.renderer,
+      new Scene(),
+      new PerspectiveCamera(),
+      fixture.backend,
+    );
+
+    expect(fixture.renderer.toneMappingExposure).toBe(1);
+    pipeline.setExposure(0.25);
+    expect(fixture.renderer.toneMappingExposure).toBe(0.25);
+
+    const fallbackFixture = createFixture();
+    const fallback = new LightingPostPipeline(
+      fallbackFixture.renderer,
+      new Scene(),
+      new PerspectiveCamera(),
+      fallbackFixture.backend,
+      3,
+    );
+    // The software-render fallback keeps its compensating gain, so exposure 1 is
+    // still byte-for-byte the pre-T0127 behaviour on both paths.
+    expect(fallbackFixture.renderer.toneMappingExposure).toBe(3);
+    fallback.setExposure(1);
+    expect(fallbackFixture.renderer.toneMappingExposure).toBe(3);
+    fallback.setExposure(2);
+    expect(fallbackFixture.renderer.toneMappingExposure).toBe(6);
+
+    expect(() => pipeline.setExposure(0)).toThrow(/exposure/iu);
+    expect(() => pipeline.setExposure(Number.NaN)).toThrow(/exposure/iu);
   });
 });

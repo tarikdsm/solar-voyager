@@ -20,7 +20,7 @@ core  ←  sim  ←  game  ←  render / ui
   (T0113 verified this: `src/game/bootstrap/` cannot import `render/`). `main.ts` resolves the
   document contract and calls `bootstrap/composition.ts`; `bootstrap/frameLoop.ts` owns the
   animation-frame callback and the state it shares with composition; `bootstrap/diagnostics.ts`
-  owns the seven frozen `canvas.solarVoyager*` browser-diagnostic objects.
+  owns the eight frozen `canvas.solarVoyager*` browser-diagnostic objects.
 
 ## Directory layout
 
@@ -79,18 +79,21 @@ src/
 │   ├── chaseCameraController.ts            # LANDED spring-arm f64 controller (T0110)
 │   ├── cameraTransition.ts                 # LANDED shared blend primitives (T0110)
 │   ├── diary/                              # NEW  milestones, diaryStore, album (T0146/47)
-│   ├── audio/audioDirector.ts              # NEW  snapshot→audio state (T0144)
+│   ├── audio/                              # LANDED director + Web Audio engine + system (T0144)
 │   ├── restorePoints.ts                    # NEW  10 s autosave ring (T0111)
+│   ├── targetSelection.ts                  # LANDED one write point for Commands.setTarget (T0117)
 │   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
 ├── render/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
 │   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
-│   ├── planetshine.ts, milkyWay.ts, exposureController.ts, bodySpin.ts  # NEW (T0123/26/27/28)
+│   ├── exposureController.ts               # LANDED single toneMappingExposure owner (T0127)
+│   ├── planetshine.ts, milkyWay.ts, bodySpin.ts  # NEW (T0123/26/28)
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
-│   ├── lightingPostPipeline.ts             # MOD  pass-insertion API (T0127)
-│   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
+│   ├── lightingPostPipeline.ts             # LANDED pass-insertion API + exposure sink (T0127)
+│   ├── effectBindingGuard.ts               # LANDED effect-binding degrade policy (T0129)
+│   └── spaceScene.ts                       # LANDED far plane 2.5e10 + effect bindings (T0129)
 ├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
 │   ├── hud/presets.ts, hud/WorldMarkers.tsx, hud/CruiseStrip.tsx  # NEW (T0112/17/19)
 │   └── PauseMenu.tsx, DiaryPanel.tsx, AlbumGrid.tsx                # NEW (T0112/46/47)
@@ -126,6 +129,17 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 
 **`Commands`** (the ONLY way player intent enters the sim; changes require an ADR):
 - `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`; (deferred launch phase adds `setPitchRate(r)`, `stage()` via ADR when built)
+
+The navigation target has exactly one writer: `game/targetSelection.ts`
+(`TargetSelectionController`, T0117). The space-view click, the system-map
+click, both target dropdowns and the camera focus ring call `selectTarget`,
+which validates the id against the catalog and notifies subscribers;
+`tests/architecture/targetWritePoint.test.ts` scans `src/` and fails if any file
+other than that controller and the composition-root `Commands` facade calls
+`setTarget`. Picking for both views is `game/hud/bodyPicking.ts`: float64
+angular-disc math against the published camera pose, never a three.js
+`Raycaster` (bodies are points and spheres at wildly different tiers, and the
+scene is camera-relative float32).
 
 `render/` and `ui/` are pure consumers of `SimSnapshot`. They never mutate sim state. UI agents and physics agents meet ONLY at these two interfaces — this is what makes parallel multi-agent work safe.
 
@@ -183,6 +197,33 @@ flight at the vessel's `alphaManualMaxMS2`. `game/flight/flightInputRouter.ts` i
 covered by `bench:sim`. Design:
 `docs/superpowers/specs/2026-08-14-flight-controller-design.md`.
 
+## Audio (`game/audio/`, ADR-041)
+
+Three modules and one seam. `game/audio/audioDirector.ts` is a **pure decision
+module**: it maps snapshot facts (throttle, warp tier, gamma, dominant body class,
+impact warning), camera mode and the pause flag to a preallocated `AudioMixState`,
+with no `AudioContext`, no DOM and no clock, so every threshold, curve and hold
+timer in the subsystem is unit-testable in Node. `game/audio/audioEngine.ts` owns
+the four-bus graph (music + sfx + ui into master), the synthesized drive hum (two
+detuned sawtooths plus a looped noise buffer through a throttle-keyed lowpass) and
+the context lifecycle, and decides nothing — it moves `AudioParam`s towards the
+mix state and skips any write below an audible epsilon, so a frame that changes
+nothing costs nothing. `game/audio/audioSystem.ts` joins them into the one handle
+the frame loop holds.
+
+**The `AudioContext` is not constructed until a real user gesture** — not
+constructed suspended and resumed later. A context that does not exist cannot be
+blocked by the autoplay policy and cannot warn, which is what keeps the
+`?autostart=1` harnesses both silent and clean. `bootstrap/composition.ts` supplies
+the one-shot gesture listener, the `visibilitychange` suspend/resume adapter and
+`createContext()`, exactly as it supplies `PointerLockSurface` and `GamepadHost`;
+`game/` never touches `window` or `document`. **Kubrick mode:** cockpit and chase
+are the interior mix, cinematic and observatory zero the sfx bus (the hum rides
+that bus) while music follows its own setting and the UI bus is never silenced.
+The frame loop feeds it the **wall** delta, never the sim delta, so a paused game
+still finishes its crossfade. Design:
+`docs/superpowers/specs/2026-08-16-audio-engine-design.md`.
+
 ## Scene state machine (`game/sceneManager.ts`)
 
 ```
@@ -211,7 +252,7 @@ simulation, renderer, or runtime GPU resource.
 
 ## State & persistence
 
-- The canonical save slot is `solar-voyager.save.v2` in `localStorage` (the key names the slot, not the document version — ADR-034 kept it while bumping the document to v3 so already-deployed saves stay reachable, since the save slot has no fallback-read tier below it and renaming it would orphan deployed data); the same document is available through JSON export/import. Independent profile settings take the opposite approach on purpose: **each schema-incompatible profile generation gets its own key** (`solar-voyager.settings.v4` current, `.v3` T0106-era, `.v2` T0108-era, `.v1` pre-T0108), because the profile document already has a fallback-read/migrate/write-forward mechanism a shared key would not need but also must not risk — a downgraded build silently overwriting a newer document it can't parse with a fresh older-schema one (T0106's design doc, "Storage key" section, has the full reasoning). `SettingsRepository.load()` checks the current key first, then each older key in turn, migrating forward (and persisting to the current key, never back to an older one) on the first match; a present-but-invalid document at any one key fails closed there and does not cascade to older keys. Quality, input bindings, gamepad calibration, camera preferences (chase field-of-view widening and shake, T0110) and tutorial progress all live in this one document and survive without requiring a game save. A missing profile starts tutorial status `unoffered`; a profile migrated up from the v1 or v2 generation starts `skipped`.
+- The canonical save slot is `solar-voyager.save.v2` in `localStorage` (the key names the slot, not the document version — ADR-034 kept it while bumping the document to v3 so already-deployed saves stay reachable, since the save slot has no fallback-read tier below it and renaming it would orphan deployed data); the same document is available through JSON export/import. Independent profile settings take the opposite approach on purpose: **each schema-incompatible profile generation gets its own key** (`solar-voyager.settings.v7` current, `.v6` T0127-era, `.v5` T0112-era, `.v4` T0110-era, `.v3` T0106-era, `.v2` T0108-era, `.v1` pre-T0108), because the profile document already has a fallback-read/migrate/write-forward mechanism a shared key would not need but also must not risk — a downgraded build silently overwriting a newer document it can't parse with a fresh older-schema one (T0106's design doc, "Storage key" section, has the full reasoning). `SettingsRepository.load()` checks the current key first, then each older key in turn, migrating forward (and persisting to the current key, never back to an older one) on the first match; a present-but-invalid document at any one key fails closed there and does not cascade to older keys. Quality, input bindings, gamepad calibration, camera preferences (chase field-of-view widening and shake, T0110), HUD preset preferences (T0112), audio mixer levels and the Kubrick-mode music policy (T0144) and tutorial progress all live in this one document and survive without requiring a game save. A missing profile starts tutorial status `unoffered`; a profile migrated up from the v1 or v2 generation starts `skipped`.
 - Save v3 = `{version: 3, phase: "space", simulation, settings}`. `simulation` contains the float64 ship/ledger state, simulation time, the `VesselConfig` that priced that ledger (rest mass, absolute and manual proper-acceleration limits, hold slew rate — ADR-034), attitude, throttle, rotation rates, requested/effective warp, clamp reason, navigation target, kinetic-energy baseline and complete burn-log continuation state. Its embedded `settings` deliberately remains the strict `GameSettingsV1` preferences DTO containing only the quality governor lock (`auto | low | medium | high`) and rebindable `KeyboardEvent.code` map. Save/load and export/import project or merge that DTO through `GameSessionController`; they never overwrite profile-only tutorial progress.
 - Imported and stored documents are treated as untrusted: parsers reject unknown/missing fields and non-finite or inconsistent simulation values before construction. Loading is atomic — validation and creation of a fresh `SimulationCore` complete before the live session reference and input command target are replaced.
 - Version migrations are explicit and each is covered by a committed fixture (`tests/fixtures/save-v1.json`, `tests/fixtures/save-v2.json`, `tests/fixtures/save-v2-midburn.json`). A migrated document adopts the running vessel, but only if that vessel carries the 10 000 kg rest mass that priced every pre-v3 ledger; any other mass fails the load closed, because no downstream check can detect a mass substitution (ADR-034). Rails bodies are never serialized because their positions and velocities are deterministically derived from `simTimeSec`.

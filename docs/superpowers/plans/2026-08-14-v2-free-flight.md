@@ -101,7 +101,8 @@ src/
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
 │   ├── godRaysPass.ts                      # NEW  post pass (T0142)
 │   ├── lightingPostPipeline.ts             # MOD  pass-insertion API (T0127)
-│   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
+│   ├── effectBindingGuard.ts               # LANDED effect-binding degrade policy (T0129)
+│   └── spaceScene.ts                       # LANDED far plane 2.5e10 + effect bindings (T0129)
 ├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
 │   ├── hud/presets.ts                      # NEW  Clean/Pilot/Engineer state (T0112)
 │   ├── hud/WorldMarkers.tsx                # NEW  target diamond, prograde markers (T0112/17)

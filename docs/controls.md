@@ -128,6 +128,22 @@ throttle, and vibrates very slightly under heavy acceleration (0.15° at 5 g).
 Both are on by default and both can be turned off in **Session & settings →
 Camera**.
 
+## Audio
+
+Sound starts the first time you click or press a key inside the game, and never
+before: nothing is loaded, started or unmuted while the page is merely open.
+
+**Session & settings → Audio** carries four independent levels — master, music,
+ship and effects, interface — and they persist with the rest of your profile. The
+ship and effects channel covers the drive hum, which follows the throttle.
+
+Exterior cameras are **silent**, and that is the physics rather than a missing
+feature: cinematic and observatory put you outside the hull, where there is no
+medium to carry the ship's sound. Cockpit and chase are inside it and hear
+everything. The score is not part of the ship, so it can follow you outside —
+"Keep music on exterior cameras" is on by default; turn it off for total vacuum.
+Interface sounds are never silenced by the camera.
+
 ## Panels and session
 
 | Action                   | Control                 |

@@ -1,6 +1,6 @@
 id: T0131
 title: build_asteroid.py and build_comet.py with shape-model ingest
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0131-asteroid-comet-builders
 depends_on:
@@ -19,4 +19,36 @@ acceptance:
     per body
   - Asteroid and comet category budget of 5000 tris each is enforced in config.mjs
 handoff_notes: |
-  Shape model sources are NASA PDS SBN and public domain. Pin URLs and SHA-256 through the T0132 fetch mechanism; T0132 may land first or in the same week.
+  THE SEAM LINES UP WITH T0132. ShapeModelSource maps field-for-field onto TextureRecipe; role="shape"
+  is an accepted role; kind="file" is exactly the verified-byte-copy mode a .obj needs. SHAPE_ROOT is
+  assets/textures-src (gitignored except SOURCES.md), so shape models are never committed. To enable a
+  real model, T0138/T0139 must: add a RECIPES entry with kind="file", role="shape",
+  output_name="<id>_shape.obj" — NOTE width/height are required __init__ kwargs even for kind="file",
+  pass 0, 0 because validate() returns before checking them; copy that entry's source_url and sha256
+  into SHAPE_MODEL_SOURCES in tools/blender/small_body_config.py; build with --shape real. Until then
+  --shape real EXITS 2 rather than silently shipping a procedural Eros. No URL or checksum was invented.
+  PICK A SOURCE TIER <= 5000 FACETS where the archive offers one; the decimator works but a pinned low
+  tier is lossless by comparison. common/shape_model.py parses Wavefront OBJ ONLY — a .tab or ICQ source
+  needs a new parser.
+  THE NORMALIZATION CONTRACT UNDER-SIZES ELONGATED BODIES. Ingest requires max radius exactly 1.0 and the
+  engine multiplies by meanRadiusKm, so Eros (really about 34 km long, meanRadiusKm 8.42) renders about
+  17 km long. Pre-existing MODELING-GUIDE section 3 contract, not introduced here — T0138 should decide
+  deliberately whether to accept it or raise an ADR.
+  SHAPE_PARAMETERS axis ratios are authored approximations, deliberately hedged in a comment; refine per
+  body against the published shape models. They live in small_body_config.py, NOT bodies.json — adding
+  triaxial fields to the catalog is a schema change and therefore an ADR.
+  Geodesic frequency 15 (4500 tris) replaces Blender's icosphere operator, which only reaches 1280 or
+  5120 and would force asteroids to 26 percent of budget. canonicalize_mesh_normals in common/glb.py
+  generalizes the existing ellipsoid pass for displaced and decimated meshes; decimation is uniform-grid
+  vertex clustering, not the DECIMATE modifier, so it cannot drift between Blender versions.
+  LANDMINE FIXED: build_all.discover_builders requires every build_<id>.py to name a catalog body, so
+  asteroid and comet joined EXCLUDED_BUILDERS. T0138/T0139 add one-line delegating shims if they want
+  per-body discovery.
+  LANDMINE LEFT FOR T0121: build_ship.py has smooth-shaded objects and never canonicalizes normals, and
+  test:blender only ever built the test sphere, so the committed ship.glb is a latent double-build
+  determinism hazard. canonicalize_mesh_normals(glb_path) is a one-line fix.
+  NEW TOOL: node tools/tests/validateAuthoredAsset.mjs <dir> <id> <category> runs only the
+  MODELING-GUIDE contract half of ingest, no KTX-Software needed. Each albedo is about 12 s of pure
+  Python noise by design, so test:blender is now about 2 minutes.
+  Verification: test:tools 60 -> 112 tests OK; 1270 Vitest passed; lint, typecheck, format, build,
+  test:blender, check:budgets (repo 184.96 of 300 MiB), smoke all green. No budget or golden moved.

@@ -11,6 +11,7 @@ import {
 import bodiesDocument from '../../data/bodies.json';
 import { loadAssetManifest } from '../../src/render/assetManifest.js';
 import { BodyAssetLoader } from '../../src/render/bodyAssetLoader.js';
+import { writeBodyAttitudeInto } from '../../src/render/bodySpin.js';
 import { ringDefinitionFor } from '../../src/render/ringCatalog.js';
 import { prepareRingSystem } from '../../src/render/ringSystem.js';
 
@@ -94,6 +95,16 @@ model.root.traverse((object) => {
   if (object instanceof Mesh && object !== particleMesh) authoredMeshes.push(object);
 });
 model.root.scale.setScalar(definition.referenceRadiusKm);
+// T0128: `bodySpin.ts` owns the axial tilt now, so the fixture writes the root
+// attitude itself instead of relying on `prepareRingSystem` to tilt the root.
+const attitudeScratch = new Float64Array(4);
+writeBodyAttitudeInto(attitudeScratch, 0, body.axialTiltRad, 0);
+model.root.quaternion.set(
+  attitudeScratch[0] as number,
+  attitudeScratch[1] as number,
+  attitudeScratch[2] as number,
+  attitudeScratch[3] as number,
+);
 model.root.updateMatrix();
 scene.add(model.root);
 const cosine = Math.cos(body.axialTiltRad);
@@ -102,8 +113,9 @@ const transformed = new Vector3();
 const target = new Vector3();
 const middleRadiusKm = (definition.innerRadiusKm + definition.outerRadiusKm) / 2;
 
+/** Ring-local (plane `XZ`, pole `+Y`) into world ecliptic coordinates. */
 function localToGlobal(output: Vector3, x: number, y: number, z: number): void {
-  output.set(cosine * x - sine * y, sine * x + cosine * y, z);
+  output.set(x, y * sine - z * cosine, y * cosine + z * sine);
 }
 
 function pixelSnapshot(): Pick<
@@ -185,6 +197,7 @@ function sample(
     transformed.y,
     transformed.z,
     simTimeSec,
+    0,
   );
   for (const mesh of authoredMeshes) mesh.visible = view !== 'particles';
   particleMesh.visible = view !== 'annulus';
@@ -278,6 +291,7 @@ globalThis.__ringFlythroughTest = {
         transformed.y,
         transformed.z,
         index * 0.125,
+        0,
       );
     }
     collectGarbage?.();

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4178;
+const PORT = resolveHarnessPort(4178);
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/starfield.html`;
 const ORIGIN = { x: 0, y: 0, z: 0 };
 const WARP_POSITION = { x: 8.4e12, y: -3.2e12, z: 1.7e13 };
@@ -94,6 +95,26 @@ async function runDepthMode(page, depthMode) {
   assert.equal(alnilam.litPixels, 0, `${depthMode}: foreground body did not occlude Alnilam`);
   assert.equal(occluded.drawCalls, 2, `${depthMode}: occlusion control draw count changed`);
 
+  // T0129 — far-pinning. The same occlusion, by a body at Eris's distance:
+  // 1.429e10 km, fourteen times beyond the 1e9 km star sphere and past the
+  // pre-T0129 1e10 km far plane. Stars are pinned to the far plane in both
+  // strategies, so a body out there must still hide the star behind it.
+  const farOccluded = await page.evaluate(() =>
+    globalThis.__starfieldHarness.renderFarOcclusionControl(),
+  );
+  const farAlnilam = farOccluded.samples.find((sample) => sample.name === 'Alnilam');
+  assert.ok(farAlnilam, `${depthMode}: missing far Alnilam occlusion sample`);
+  assert.equal(
+    farAlnilam.litPixels,
+    0,
+    `${depthMode}: body at 1.43e10 km did not occlude Alnilam; starfield far-pinning regressed`,
+  );
+  assert.equal(farOccluded.drawCalls, 2, `${depthMode}: far occlusion control draw count changed`);
+  assert.ok(
+    farOccluded.totalLitPixels > 0 && farOccluded.totalLitPixels < occluded.totalLitPixels + 1,
+    `${depthMode}: far occlusion control lost the rest of the starfield`,
+  );
+
   const warped = await page.evaluate(
     ([fov, position]) => globalThis.__starfieldHarness.render(fov, position),
     [60, WARP_POSITION],
@@ -118,6 +139,8 @@ async function runDepthMode(page, depthMode) {
     baselineLitPixels: baseline.totalLitPixels,
     zoomedLitPixels: zoomed.totalLitPixels,
     occludedAlnilamPixels: alnilam.litPixels,
+    farOccludedAlnilamPixels: farAlnilam.litPixels,
+    farOccludedLitPixels: farOccluded.totalLitPixels,
     isolatedPeakRgb: Object.fromEntries(
       isolatedOrion.map((sample) => [sample.name, sample.peakRgb]),
     ),

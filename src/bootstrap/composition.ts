@@ -1,5 +1,7 @@
 import { h, render } from 'preact';
 
+import { createAudioBodyClasses } from '../game/audio/audioBodyClasses.js';
+import { AudioSystem } from '../game/audio/audioSystem.js';
 import {
   createGameSimulationFromPersistentState,
   compileCanonicalCatalog,
@@ -10,7 +12,7 @@ import { CruiseDirector } from '../game/flight/cruiseDirector.js';
 import { FlightController } from '../game/flight/flightController.js';
 import { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import { createBodyRadiiKm } from '../game/hud/bodyMarkerCatalog.js';
-import { pickBodyIndexAtPixel } from '../game/hud/bodyPicking.js';
+import { pickBodyIndexAtPixel, pickMapBodyIndexAtPixel } from '../game/hud/bodyPicking.js';
 import { HudInputRouter } from '../game/hud/hudInputRouter.js';
 import { isEditableTarget } from '../game/input/bindings.js';
 import { GamepadPoller, type GamepadHost } from '../game/input/gamepad.js';
@@ -27,6 +29,7 @@ import { GameSessionController } from '../game/sessionController.js';
 import { SettingsRepository, type KeyValueStorage } from '../game/settings.js';
 import { StartupTracker } from '../game/startupTracker.js';
 import { SystemMapController, type SystemMapMode } from '../game/systemMapController.js';
+import { TargetSelectionController } from '../game/targetSelection.js';
 import { readTrajectoryEventSummary } from '../game/trajectoryPredictionModel.js';
 import { TrajectoryPredictionRefresh } from '../game/trajectoryPredictionRefresh.js';
 import {
@@ -39,6 +42,7 @@ import { TutorialController } from '../game/tutorialController.js';
 import { createEpochWorld, type EpochWorldMilestone } from '../render/createEpochWorld.js';
 import { createRenderer, type RendererBootstrap } from '../render/createRenderer.js';
 import { calculateDrawingBufferDimension } from '../render/drawingBufferSize.js';
+import { ExposureController } from '../render/exposureController.js';
 import { LightingPostPipeline } from '../render/lightingPostPipeline.js';
 import { PerfGovernor, createPerfQualityState } from '../render/perfGovernor.js';
 import { RelativisticVisualController } from '../render/relativisticVisualController.js';
@@ -70,8 +74,10 @@ import { createTrajectoryPredictionSignalStore } from '../ui/trajectoryPredictio
 
 import {
   copyDiagnosticEntry,
+  createAudioRuntimeDiagnostics,
   createBurnLogRuntimeDiagnostics,
   createCameraRuntimeDiagnostics,
+  createExposureRuntimeDiagnostics,
   createRuntimeResourceCounts,
   createShipRuntimeDiagnostics,
   createSystemMapRuntimeDiagnostics,
@@ -160,6 +166,36 @@ function createBrowserGamepadHost(): GamepadHost {
       window.removeEventListener(type, listener);
     },
   };
+}
+
+/**
+ * One-shot user-gesture port for the audio engine (T0144, ADR-041).
+ *
+ * `pointerdown` and `keydown` in the capture phase, both `once`, both removed as
+ * soon as either fires: the engine constructs its `AudioContext` inside this
+ * callback and never before, which is what keeps the autoplay warning off the
+ * console on the six harnesses that reach gameplay through `?autostart=1` with
+ * no human present.
+ *
+ * Passive and non-preventing — it observes a gesture the player made for another
+ * reason (starting the game, steering the ship) rather than asking for one.
+ */
+function observeFirstUserGesture(target: Window, onGesture: () => void): () => void {
+  const options: AddEventListenerOptions = { capture: true, passive: true };
+  let disposed = false;
+  const handle = (): void => {
+    dispose();
+    onGesture();
+  };
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    target.removeEventListener('pointerdown', handle, options);
+    target.removeEventListener('keydown', handle, options);
+  };
+  target.addEventListener('pointerdown', handle, options);
+  target.addEventListener('keydown', handle, options);
+  return dispose;
 }
 
 function writeCameraFocusLabel(bodyId: string): void {
@@ -376,7 +412,14 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       if (replacement.snapshot.targetBodyIndex >= 0) {
         const replacementTargetId =
           replacement.snapshot.bodyIds[replacement.snapshot.targetBodyIndex];
-        if (replacementTargetId !== undefined) systemMapController.focusBody(replacementTargetId);
+        if (replacementTargetId !== undefined) {
+          systemMapController.focusBody(replacementTargetId);
+          // Adopt, do not select: a restore is not a player selection and must
+          // not fire the listeners a tutorial step is watching.
+          targetSelection.adoptTarget(replacementTargetId);
+        }
+      } else {
+        targetSelection.adoptTarget(null);
       }
       trajectoryPredictionRefresh.clear();
       invalidateTrajectoryPrediction();
@@ -390,11 +433,31 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       if (origin === 'restore') runtime.flightController?.resetAxes();
       else runtime.flightController?.releaseAxes();
       runtime.world?.cameraDirector.applyCameraSettings(settings.camera);
+      audio.setLevels(settings.audio);
       hudPresetStore.setPreset(settings.hud.preset);
       hudPresetStore.setBodyLabels(settings.hud.bodyLabels);
+      runtime.exposureController?.setUserMode(settings.render.exposureMode);
       runtime.perfGovernor?.setLock(settings.qualityLock, performance.now());
     },
   });
+  // T0144 — built here because it needs the loaded profile, and before the frame
+  // loop because the loop holds it as a readonly field. Constructing this object
+  // creates no AudioContext: `observeFirstUserGesture` below is the only thing
+  // that can, and only from a real gesture.
+  const audio = new AudioSystem({
+    bodyClasses: createAudioBodyClasses(),
+    levels: session.settings.audio,
+    createContext: () => new AudioContext(),
+  });
+  createAudioRuntimeDiagnostics(canvas, audio);
+  const disposeAudioGestureObserver = observeFirstUserGesture(window, () => {
+    audio.unlock();
+  });
+  const handleVisibilityChange = (): void => {
+    audio.setPageHidden(document.hidden);
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  audio.setPageHidden(document.hidden);
   startupTracker.advance('context');
   updateStartupLoadingView(startupLoadingElements, startupTracker);
   canvas.dataset.startupStage = startupTracker.stage;
@@ -510,6 +573,9 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     disposeStateVectorLayoutObservation?.();
     runtime.world?.systemMap.dispose();
     runtime.postPipeline?.dispose();
+    disposeAudioGestureObserver();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    audio.dispose();
   }
 
   function currentInputSnapshot() {
@@ -617,6 +683,27 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     setThrottle: (fraction) => session.simulation.commands.setThrottle(fraction),
     setWarp: (warp) => session.simulation.commands.setWarp(warp),
   };
+
+  /**
+   * T0117 — the single write point for the navigation target.
+   *
+   * Constructed over `sessionCommands` (not the raw core) so every selection
+   * also re-aims the observatory camera, moves the map focus and invalidates the
+   * trajectory prediction, exactly as the target dropdown always did. The world
+   * click, the map click, the map `<select>`, the target panel `<select>` and the
+   * camera focus ring all go through it; `tests/architecture/targetWritePoint.test.ts`
+   * asserts nothing else calls `Commands.setTarget`.
+   */
+  const targetSelection = new TargetSelectionController({
+    commands: sessionCommands,
+    bodyIds: session.simulation.snapshot.bodyIds,
+  });
+  {
+    const initialTargetIndex = session.simulation.snapshot.targetBodyIndex;
+    if (initialTargetIndex >= 0) {
+      targetSelection.adoptTarget(session.simulation.snapshot.bodyIds[initialTargetIndex] ?? null);
+    }
+  }
 
   const initialSystemMapFocusId = 'earth';
   const systemMapSignals = createSystemMapSignalStore(
@@ -788,8 +875,10 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
    * *call* one of the hoisted functions that read it.
    */
   const runtime: FrameLoopRuntime = {
+    audio,
     burnLogStore,
     canvas,
+    exposureController: null,
     hudPresetStore,
     hudStore,
     impactStore,
@@ -872,13 +961,17 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
   }
 
   /**
-   * Click-to-target (spec section 7).
+   * Click-to-target, in both views (T0117, spec section 7).
    *
-   * `CameraInputController` owns orbit-drag on the same canvas, so a release is
-   * only a click if the pointer barely moved and the press was brief — otherwise
-   * letting go of a drag over Jupiter would silently re-target. A miss clears
-   * nothing: deselecting stays the dropdown's job, which remains the documented
-   * fallback.
+   * `CameraInputController` owns orbit-drag on the same canvas in both views, so
+   * a release is only a click if the pointer barely moved and the press was
+   * brief — otherwise letting go of a drag over Jupiter would silently
+   * re-target. A miss clears nothing: deselecting stays the dropdown's job,
+   * which remains the documented fallback.
+   *
+   * Allocation-free: `offsetX`/`offsetY` are CSS pixels relative to the
+   * listener target's padding box, which is this canvas, so the handler needs
+   * neither a `DOMRect` nor the forced layout that producing one costs.
    */
   function handleCanvasPickPointerUp(event: PointerEvent): void {
     const pointerId = pickPointerId;
@@ -886,7 +979,6 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     if (event.pointerId !== pointerId || event.button !== 0) return;
     const world = runtime.world;
     if (world === null || sceneHalted) return;
-    if (systemMapController.mode !== 'space') return;
     if (runtime.inputEngine?.pointerLocked === true) return;
     if (event.timeStamp - pickPointerDownMs > CLICK_PICK_MAX_DURATION_MS) return;
     if (
@@ -895,28 +987,47 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     ) {
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
+    const widthPx = canvas.clientWidth;
+    const heightPx = canvas.clientHeight;
+    if (widthPx <= 0 || heightPx <= 0) return;
+    const mapOpen = systemMapController.mode === 'system-map';
     // Counted before the hit test, so a browser gate can tell "the gesture was
     // recognised and hit empty sky" from "the gesture never got here" — the two
     // failure modes look identical from `pickedBodyId` alone.
     pickAttemptCount += 1;
     canvas.dataset.pickAttempts = String(pickAttemptCount);
     const snapshot = session.simulation.snapshot;
-    const bodyIndex = pickBodyIndexAtPixel(
-      snapshot,
-      world.cameraDirector.pose,
-      bodyRadiiKm,
-      rect.width,
-      rect.height,
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-    );
+    // Two rules, one projection. The space view picks angular discs because that
+    // is what it draws; the map picks constant-size icons because that is what
+    // *it* draws. Both exclude the ship structurally — `bodyPositionsKm` is the
+    // catalog-only array.
+    const bodyIndex = mapOpen
+      ? pickMapBodyIndexAtPixel(
+          snapshot,
+          world.systemMap.cameraController.cameraPositionKm,
+          world.systemMap.cameraController.lookDirection,
+          widthPx,
+          heightPx,
+          event.offsetX,
+          event.offsetY,
+        )
+      : pickBodyIndexAtPixel(
+          snapshot,
+          world.cameraDirector.pose,
+          bodyRadiiKm,
+          widthPx,
+          heightPx,
+          event.offsetX,
+          event.offsetY,
+        );
     if (bodyIndex < 0) return;
     const bodyId = snapshot.bodyIds[bodyIndex];
     if (bodyId === undefined) return;
     canvas.dataset.pickedBodyId = bodyId;
-    sessionCommands.setTarget(bodyId);
+    canvas.dataset.pickView = mapOpen ? 'map' : 'space';
+    // In the map a click sets focus *and* target; `sessionCommands.setTarget`
+    // moves the focus, so selecting is the whole gesture.
+    targetSelection.selectTarget(bodyId, mapOpen ? 'map' : 'world');
   }
 
   const autostart = new URLSearchParams(window.location.search).get('autostart') === '1';
@@ -975,6 +1086,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
           controller: systemMapController,
           signals: systemMapSignals,
         },
+        targetSelection,
         trajectoryPrediction: trajectoryPredictionStore,
         tutorial: tutorialController,
         onBurnLogExpandedChange: handleTutorialBurnLogExpanded,
@@ -1074,12 +1186,27 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       createStateVectorScales(session.simulation.vessel.restMassKg),
     );
     runtime.stateVectorWidget = stateVectorWidget;
+    // T0127 — the direct path's compensating gain moves into the pipeline, so
+    // `ExposureController` is the only writer of `toneMappingExposure` and its
+    // `fixed` mode still reproduces both pre-T0127 paths exactly.
     const postPipeline = new LightingPostPipeline(
       renderer,
       world.spaceScene.scene,
       world.spaceScene.camera,
+      undefined,
+      postProcessingEnabled ? 1 : SOFTWARE_FALLBACK_EXPOSURE,
     );
     runtime.postPipeline = postPipeline;
+    const exposureController = new ExposureController({
+      sink: postPipeline,
+      positionsKm: world.positionsKm,
+      sunIndex: world.sunIndex,
+      bodyRadiiKm: world.bodyRadiiKm,
+      bodyGeometricAlbedos: world.bodyGeometricAlbedos,
+      mode: session.settings.render.exposureMode,
+    });
+    runtime.exposureController = exposureController;
+    createExposureRuntimeDiagnostics(canvas, exposureController);
     const relativisticVisuals = new RelativisticVisualController({
       postPass: postPipeline.relativisticPass,
       spaceScene: world.spaceScene,
@@ -1088,6 +1215,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     runtime.relativisticVisuals = relativisticVisuals;
     const qualityController = new RenderQualityController({
       assetLoader: world.visualSystem,
+      exposure: exposureController,
       pipeline: postPipeline,
       postProcessingAvailable: postProcessingEnabled,
       proceduralSun: world.proceduralSun,
@@ -1103,7 +1231,8 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       state: perfQualityState,
       telemetry,
     });
-    if (!postProcessingEnabled) renderer.toneMappingExposure = SOFTWARE_FALLBACK_EXPOSURE;
+    // Snap rather than fade: there is no previous frame to have adapted from.
+    exposureController.reset(world.cameraPositionKm, session.simulation.snapshot.dominantBodyIndex);
     resizeRenderer();
     world.lighting.update();
     world.spaceScene.updateCameraRelative(world.cameraPositionKm);
@@ -1203,18 +1332,15 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     // Frozen CI contract field: it counts one input owner per space-phase
     // activation, which is now the input engine rather than v1's mapper.
     runtimeResources.keyboardCommandMappers += 1;
-    const catalogBodyIds = session.simulation.snapshot.bodyIds;
     const spaceCameraControls = new SharedCameraControls(
       activeWorld.cameraDirector,
       systemMapController,
-      sessionCommands,
-      catalogBodyIds,
+      targetSelection,
     );
     const mapCameraControls = new SharedCameraControls(
       activeWorld.systemMap.cameraController,
       systemMapController,
-      sessionCommands,
-      catalogBodyIds,
+      targetSelection,
     );
     cameraInput = new CameraInputController(
       canvas,

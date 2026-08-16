@@ -11,6 +11,8 @@ import {
   parseProfileSettings,
   projectGameSettingsV1,
   rebindInput,
+  updateAudioExteriorMusic,
+  updateAudioLevel,
   updateCameraFovWidening,
   updateCameraShake,
   updateGamepadAxisInvert,
@@ -20,9 +22,12 @@ import {
   updateHudBodyLabels,
   updateHudPreset,
   updateHudSettings,
+  updateRenderExposureMode,
   updateTutorialSettings,
+  type AudioBus,
+  type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV5,
+  type GameSettingsV7,
   type HudPreset,
   type InputAction,
   type QualityLock,
@@ -69,13 +74,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV5, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV7, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV5;
+  private currentSettings: GameSettingsV7;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -92,7 +97,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV5, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV7, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -112,7 +117,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV5 {
+  get settings(): GameSettingsV7 {
     return this.currentSettings;
   }
 
@@ -379,6 +384,30 @@ export class GameSessionController {
     }
   }
 
+  /** T0144 — one mixer bus level, persisted in the profile (ADR-041). */
+  setAudioLevel(bus: AudioBus, level: number): SessionActionResult {
+    try {
+      const candidate = updateAudioLevel(this.currentSettings, bus, level);
+      return this.commitSettings(candidate, 'Audio level updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update audio level', detail: describeError(error) };
+    }
+  }
+
+  /** T0144 — whether the score survives an exterior camera (Kubrick mode). */
+  setAudioExteriorMusic(exteriorMusic: boolean): SessionActionResult {
+    try {
+      const candidate = updateAudioExteriorMusic(this.currentSettings, exteriorMusic);
+      return this.commitSettings(candidate, 'Exterior music updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update exterior music',
+        detail: describeError(error),
+      };
+    }
+  }
+
   /** T0112 — in-world body labels on or off. */
   setHudBodyLabels(bodyLabels: boolean): SessionActionResult {
     try {
@@ -386,6 +415,16 @@ export class GameSessionController {
       return this.commitSettings(candidate, 'Body labels updated');
     } catch (error: unknown) {
       return { ok: false, message: 'Unable to update body labels', detail: describeError(error) };
+    }
+  }
+
+  /** T0127 — adaptive or fixed exposure, persisted in the profile. */
+  setExposureMode(exposureMode: ExposureMode): SessionActionResult {
+    try {
+      const candidate = updateRenderExposureMode(this.currentSettings, exposureMode);
+      return this.commitSettings(candidate, 'Exposure mode updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update exposure mode', detail: describeError(error) };
     }
   }
 
@@ -443,7 +482,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV5,
+    settings: GameSettingsV7,
     successMessage: string,
     publish = true,
   ): SessionActionResult {

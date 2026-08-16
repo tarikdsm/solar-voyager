@@ -65,6 +65,12 @@ export interface EpochWorld {
   readonly positionsKm: Float64Array;
   /** Component offset of the ship's triple in `positionsKm`, and its camera-target offset. */
   readonly shipPositionOffset: number;
+  /** Body index of the Sun in `positionsKm` — the zero point of every magnitude. */
+  readonly sunIndex: number;
+  /** Body-major mean radii, shared with the chase arm (T0110) and exposure (T0127). */
+  readonly bodyRadiiKm: Float64Array;
+  /** Body-major geometric albedos, for the reflected term of the exposure key (T0127). */
+  readonly bodyGeometricAlbedos: Float64Array;
 }
 
 export interface CreateEpochWorldOptions {
@@ -134,6 +140,7 @@ export async function createEpochWorld(
   // Body-major radii, so the chase arm can keep itself outside whichever body it
   // is near without carrying a copy of the catalog.
   const bodyRadiiKm = new Float64Array(bodyCount);
+  const bodyGeometricAlbedos = new Float64Array(bodyCount);
   const definitions: BodyVisualDefinition[] = [];
   const systemMapDefinitions: SystemMapBodyDefinition[] = [];
   const cameraTargets: CameraFocusTarget[] = [];
@@ -148,6 +155,7 @@ export async function createEpochWorld(
       id: body.id,
       category: runtimeCategory(body.kind),
       axialTiltRad: body.axialTiltRad,
+      siderealRotationPeriodSec: body.siderealRotationPeriodSec,
       meanRadiusKm: body.meanRadiusKm,
       muKm3S2: body.muKm3S2,
       polarRadiusRatio: body.polarRadiusRatio,
@@ -186,6 +194,7 @@ export async function createEpochWorld(
     }
     if (body.id === 'earth') earthIndex = index;
     bodyRadiiKm[index] = body.meanRadiusKm;
+    bodyGeometricAlbedos[index] = body.geometricAlbedo;
     cameraTargets.push({
       id: body.id,
       positionOffset: index * 3,
@@ -361,5 +370,8 @@ export async function createEpochWorld(
     cameraPositionKm,
     positionsKm,
     shipPositionOffset,
+    sunIndex,
+    bodyRadiiKm,
+    bodyGeometricAlbedos,
   };
 }

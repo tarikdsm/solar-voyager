@@ -1042,6 +1042,75 @@
   line-height: 1.45;
 }
 
+.audio-settings-hint {
+  margin: 0 0 0.6rem;
+  color: rgb(186 230 253 / 62%);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.audio-mixer-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+/*
+ * Name / slider / readout. `minmax(0, 1fr)` on the slider is load-bearing: a
+ * range input has an intrinsic minimum width that would otherwise push the row
+ * past the 390 px compact viewport the session-settings gate asserts against.
+ */
+.audio-mixer-grid > label {
+  display: grid;
+  grid-template-columns: minmax(4.4rem, auto) minmax(0, 1fr) minmax(2.2rem, auto);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgb(125 211 252 / 14%);
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 46%);
+  color: rgb(224 242 254 / 84%);
+  font-size: 0.6rem;
+}
+
+.audio-mixer-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-mixer-grid input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.85rem;
+  accent-color: #5eead4;
+}
+
+.audio-mixer-grid input[type='range']:focus-visible {
+  outline: 2px solid rgb(94 234 212 / 42%);
+  outline-offset: 1px;
+}
+
+.audio-mixer-value {
+  color: rgb(186 230 253 / 72%);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.audio-mixer-grid > label.audio-mixer-toggle {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+}
+
+.audio-mixer-toggle input[type='checkbox'] {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: #5eead4;
+}
+
 .camera-settings-grid {
   display: grid;
   gap: 0.35rem;
@@ -2030,15 +2099,91 @@
   transform-origin: left center;
 }
 
+/*
+ * One line, always. The section is stacked directly above the navball and grows
+ * *upward*, so a second line moves the whole bottom cluster over the middle of
+ * the viewport — over the planet the player is looking at, and over the pixels
+ * click-to-target needs. `nowrap` plus an ellipsising detail line keeps the
+ * height T0112 laid out, whatever the affordance's button label says.
+ */
 .cruise-status {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0.25rem 0.5rem;
   align-items: baseline;
   padding: 0.25rem 0.75rem;
   border-radius: 0.5rem;
   background: rgb(2 6 23 / 48%);
   color: var(--sv-text-dim);
   font-size: 0.7rem;
+}
+
+/*
+ * `display: contents`, so the phase text and the affordance share one flex row.
+ * The cruise section is anchored at the bottom centre and grows upward: an extra
+ * line here moves the navball and the whole cluster over the middle of the
+ * viewport, which is exactly what the player is trying to look at.
+ */
+.cruise-status-line {
+  display: contents;
+}
+
+/*
+ * T0117 — the "set as cruise target" affordance, mounted in the space HUD and
+ * in the system map panel. T0119 drops its "Engage cruise" button in beside
+ * this one, so the row is a wrapping flex line rather than a two-column grid.
+ */
+.cruise-target-control {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.cruise-target-current {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+/*
+ * Sized to fit *inside* the cruise row's existing line box. The section is
+ * stacked above the navball and grows upward, so every pixel the button is
+ * taller than the text beside it moves the whole HUD cluster further over the
+ * middle of the viewport.
+ */
+.cruise-target-button {
+  padding: 0 0.45rem;
+  border: 1px solid rgb(148 163 184 / 38%);
+  line-height: 1.3;
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 72%);
+  color: var(--sv-text-strong);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.cruise-target-button:hover:not(:disabled),
+.cruise-target-button:focus-visible {
+  border-color: rgb(148 163 184 / 72%);
+  background: rgb(30 41 59 / 88%);
+}
+
+.cruise-target-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cruise-target-control[data-view='map'] {
+  margin-top: 0.35rem;
+}
+
+.cruise-target-control[data-view='hud'] {
+  align-items: baseline;
 }
 
 .cruise-status[hidden] {
@@ -2052,8 +2197,12 @@
 }
 
 .cruise-status-detail {
+  min-width: 0;
+  overflow: hidden;
   color: rgb(203 213 225 / 52%);
   font-size: 0.62rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .flight-warning {

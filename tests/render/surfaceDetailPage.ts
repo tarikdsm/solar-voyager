@@ -29,7 +29,7 @@ interface SurfaceDetailHarness {
   renderLeo(enabled: boolean): RenderSnapshot;
   renderFar(enabled: boolean): RenderSnapshot;
   renderAtmosphere(): RenderSnapshot;
-  advanceClouds(nowMs: number): readonly number[];
+  advanceClouds(simTimeSec: number, nowMs: number): readonly number[];
   programSnapshot(): ProgramSnapshot;
 }
 
@@ -76,7 +76,7 @@ function cameraPosition(distanceKm: number): { x: number; y: number; z: number }
   };
 }
 
-function updateView(distanceKm: number, nowMs: number): void {
+function updateView(distanceKm: number, nowMs: number, simTimeSec = 0): void {
   const position = cameraPosition(distanceKm);
   // `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is
   // the ship's, so `lookAt` alone no longer reproduces this fixture's framing —
@@ -90,6 +90,7 @@ function updateView(distanceKm: number, nowMs: number): void {
     VIEWPORT_SIZE,
     world.spaceScene.camera.fov * (Math.PI / 180),
     nowMs,
+    simTimeSec,
   );
   world.lighting.update();
   world.spaceScene.updateCameraRelative(position);
@@ -157,8 +158,9 @@ globalThis.__surfaceDetailHarness = {
   renderAtmosphere() {
     return renderAt(earthDefinition.meanRadiusKm * 3, MODEL_READY_FADE_END_MS, true);
   },
-  advanceClouds(nowMs) {
-    updateView(earthDefinition.meanRadiusKm * 3, nowMs);
+  /** T0128: the shell drifts on simulation time, so both clocks are explicit. */
+  advanceClouds(simTimeSec, nowMs) {
+    updateView(earthDefinition.meanRadiusKm * 3, nowMs, simTimeSec);
     return cloudMatrix();
   },
   programSnapshot() {

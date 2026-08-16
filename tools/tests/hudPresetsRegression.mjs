@@ -6,6 +6,7 @@ import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 /**
  * T0112 browser regression: HUD presets, the real pause, and world markers.
@@ -16,9 +17,9 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
  */
 
 const HOST = '127.0.0.1';
-const PORT = 4207;
+const PORT = resolveHarnessPort(4207);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
 const SCREENSHOT_DIRECTORY = path.resolve('docs/bench');
 
 /** Engineer-only panels: present exactly when the preset says so. */
@@ -82,7 +83,7 @@ async function readHudState(page) {
       navball: globalThis.document.querySelectorAll('.navball').length,
       simTimeSec: canvas?.solarVoyagerSystemMap?.simulationTimeSec ?? null,
       storedPreset: (() => {
-        const raw = globalThis.localStorage.getItem('solar-voyager.settings.v5');
+        const raw = globalThis.localStorage.getItem('solar-voyager.settings.v7');
         if (raw === null) return null;
         try {
           return JSON.parse(raw).hud.preset;

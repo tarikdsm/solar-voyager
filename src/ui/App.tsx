@@ -16,6 +16,7 @@ import type { HudPresetStore } from './hudPresetSignals.js';
 import { PauseMenu, type PauseMenuActions } from './PauseMenu.js';
 import { WorldMarkerLayer } from './WorldMarkers.js';
 import type { SystemMapController } from '../game/systemMapController.js';
+import { TargetSelectionController, type TargetSelectionPort } from '../game/targetSelection.js';
 import type { TutorialController } from '../game/tutorialController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
 import './app.css';
@@ -74,6 +75,12 @@ export interface AppProps {
   readonly stateVectors?: StateVectorSignalStore | null;
   readonly stateVectorViewportRef?: ((element: HTMLDivElement | null) => void) | null;
   readonly systemMap?: SystemMapUiPort | null;
+  /**
+   * T0117's single write point for the navigation target. Optional so component
+   * harnesses keep working; `App` then builds its own over `commands`, which is
+   * still the only route into `Commands.setTarget`.
+   */
+  readonly targetSelection?: TargetSelectionPort | null;
   readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
   readonly tutorial?: TutorialController | null;
 }
@@ -254,15 +261,15 @@ export function EnergyPanel({ hud }: { readonly hud: HudDisplaySignals }) {
 
 export function TargetPanel({
   bodyIds,
-  commands,
   hud,
   hudState,
+  targetSelection,
   trajectoryPrediction = null,
 }: {
   readonly bodyIds: readonly string[];
-  readonly commands: Commands;
   readonly hud: HudDisplaySignals;
   readonly hudState: HudSignals;
+  readonly targetSelection: TargetSelectionPort;
   readonly trajectoryPrediction?: TrajectoryPredictionSignalStore | null;
 }) {
   const selectedTarget = useComputed(() => hudState.targetBodyId.value ?? '');
@@ -274,7 +281,11 @@ export function TargetPanel({
       <select
         id="target-selector"
         value={selectedTarget}
-        onChange={(event) => commands.setTarget(event.currentTarget.value || null)}
+        onChange={(event) => {
+          // The documented fallback for the two click paths (spec section 7),
+          // deliberately on the same write point rather than beside it.
+          targetSelection.selectTarget(event.currentTarget.value || null, 'panel');
+        }}
       >
         <option value="">None</option>
         {bodyIds.map((bodyId) => (
@@ -352,10 +363,17 @@ export function App({
   stateVectors = null,
   stateVectorViewportRef = null,
   systemMap = null,
+  targetSelection = null,
   trajectoryPrediction = null,
   tutorial = null,
 }: AppProps) {
   const startingPhase = initialPhase ?? sceneManager?.phase ?? 'space';
+  // One controller for the lifetime of the tree. `??=` inside the ref keeps the
+  // fallback construction to the first render without a `useMemo` whose
+  // dependency list would be a lie (`commands` is a stable facade).
+  const selectionRef = useRef<TargetSelectionPort | null>(null);
+  selectionRef.current ??= targetSelection ?? new TargetSelectionController({ bodyIds, commands });
+  const selection = selectionRef.current;
   const [phase, setPhase] = useState<GamePhase>(startingPhase);
   const [paused, setPaused] = useState(sceneManager?.paused ?? false);
   const settingsHostRef = useRef<HTMLDivElement | null>(null);
@@ -432,6 +450,12 @@ export function App({
           },
         };
 
+  /**
+   * What the space-view affordance would commit: the body the player last
+   * selected, which is the simulation's target. Clicking a body already targets
+   * it, so this is the keyboard-reachable equivalent rather than a second state.
+   */
+  const selectedTargetId = useComputed(() => hudState.targetBodyId.value ?? '');
   const activePreset = hudPreset?.signals.preset.value ?? 'engineer';
   // Reading the preset signal inside the render subscribes `App` to it, so a
   // preset change re-renders exactly once and the Engineer panels are genuinely
@@ -485,11 +509,11 @@ export function App({
         {systemMap === null || trajectoryPrediction === null ? null : (
           <SystemMapPanel
             bodyIds={bodyIds}
-            commands={commands}
             controller={systemMap.controller}
             map={systemMap.signals}
             suspended={paused}
             targetBody={hud.targetBody}
+            targetSelection={selection}
             trajectoryPrediction={trajectoryPrediction.display}
           />
         )}
@@ -526,9 +550,9 @@ export function App({
               {shows('targetPanel') ? (
                 <TargetPanel
                   bodyIds={bodyIds}
-                  commands={commands}
                   hud={hud}
                   hudState={hudState}
+                  targetSelection={selection}
                   trajectoryPrediction={trajectoryPrediction}
                 />
               ) : null}
@@ -545,7 +569,17 @@ export function App({
             </div>
             <div class="hud-area hud-area-bottom-center">
               <FlightWarnings hud={hud} show={shows('warnings')} />
-              <CruiseStatus show={shows('cruiseStatus')} />
+              <CruiseStatus
+                show={shows('cruiseStatus')}
+                cruiseTarget={{
+                  view: 'hud',
+                  selectedBodyId: selectedTargetId,
+                  targetLabel: hud.targetBody,
+                  onSetCruiseTarget: (bodyId) => {
+                    selection.selectTarget(bodyId, 'world');
+                  },
+                }}
+              />
               {shows('navball') ? <Navball hud={hud} hudState={hudState} /> : null}
               <ThrottleSpeedStrip
                 hud={hud}
