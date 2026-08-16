@@ -193,11 +193,39 @@ describe('apparent radius and edge clamping - T0112', () => {
     expect(out[1]).toBeCloseTo(HEIGHT_PX / 2, 9);
   });
 
-  it('mirrors a behind-camera point and always pins it, even mid-screen', () => {
-    // Astern and to the right: the arrow belongs on the *right* edge, and it must
-    // be pinned rather than drawn floating in the middle of the view.
-    const out = Float64Array.from([WIDTH_PX / 2 - 100, HEIGHT_PX / 2, 1]);
+  /**
+   * `clampToViewportEdge` must not mirror. `projectPointInto` already divides by
+   * `|depth|`, so a behind-camera point arrives on the side the player has to
+   * turn towards; mirroring here composed into a double flip that sent the arrow
+   * to the opposite edge and made it jump across the screen as the player turned.
+   */
+  it('pins a behind-camera point without changing the side it is on', () => {
+    const out = Float64Array.from([WIDTH_PX / 2 + 100, HEIGHT_PX / 2, -1]);
     expect(clampToViewportEdge(out, WIDTH_PX, HEIGHT_PX, 28, true)).toBe(true);
     expect(out[0]).toBeCloseTo(WIDTH_PX - 28, 9);
+
+    const left = Float64Array.from([WIDTH_PX / 2 - 100, HEIGHT_PX / 2, -1]);
+    expect(clampToViewportEdge(left, WIDTH_PX, HEIGHT_PX, 28, true)).toBe(true);
+    expect(left[0]).toBeCloseTo(28, 9);
+  });
+
+  /**
+   * The composition, which is what the marker model actually runs and what no
+   * test covered before: project, then clamp.
+   */
+  it('sends an astern-and-right target to the right edge end to end', () => {
+    const basis = new Float64Array(CAMERA_BASIS_COMPONENTS);
+    expect(writeCameraBasisInto(basis, pose())).toBe(true);
+    const out = new Float64Array(PROJECTED_POINT_COMPONENTS);
+    // +X is camera-right, +Z is astern for a camera looking down -Z.
+    projectPointInto(out, basis, 0, 0, 0, 5_000, 0, 10_000, WIDTH_PX, HEIGHT_PX);
+    expect(out[2]).toBeLessThan(0);
+    expect(clampToViewportEdge(out, WIDTH_PX, HEIGHT_PX, 28, true)).toBe(true);
+    expect(out[0]).toBeGreaterThan(WIDTH_PX / 2);
+
+    projectPointInto(out, basis, 0, 0, 0, 0, 5_000, 10_000, WIDTH_PX, HEIGHT_PX);
+    expect(clampToViewportEdge(out, WIDTH_PX, HEIGHT_PX, 28, true)).toBe(true);
+    // Astern and above belongs at the top, where +Y is up and y grows downward.
+    expect(out[1]).toBeLessThan(HEIGHT_PX / 2);
   });
 });

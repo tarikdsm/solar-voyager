@@ -42,6 +42,22 @@ function collectBrowserErrors(page) {
   return errors;
 }
 
+/**
+ * Acknowledges the software-rendering warning, if it is up.
+ *
+ * CI always raises it, it deliberately sits *above* the pause layers (it is a
+ * mandatory alert), and it comes back on every navigation because the
+ * acknowledgement is component state rather than a preference. Called after each
+ * load so this gate measures the HUD and not the banner — and so the committed
+ * Clean-preset screenshot is free of an environment artifact.
+ */
+async function dismissHardwareWarning(page) {
+  const warning = page.locator('#hardware-acceleration-warning');
+  if (!(await warning.isVisible())) return;
+  await warning.getByRole('button', { name: 'I understand' }).click();
+  await warning.waitFor({ state: 'detached', timeout: 10_000 });
+}
+
 function logPhase(phase) {
   process.stdout.write(`[hud-presets] ${phase}\n`);
 }
@@ -109,6 +125,7 @@ try {
     undefined,
     { timeout: 60_000 },
   );
+  await dismissHardwareWarning(page);
   logPhase('space phase ready');
 
   // ---------------------------------------------------------------- Clean
@@ -167,11 +184,13 @@ try {
   // The choice survives a reload: it is profile state, not session state.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#flight-strip', { state: 'visible', timeout: 60_000 });
+  await dismissHardwareWarning(page);
   await page.keyboard.press('KeyH');
   await page.keyboard.press('KeyH');
   await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 10_000 });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 60_000 });
+  await dismissHardwareWarning(page);
   assert.equal(
     await page.evaluate(
       (key) => JSON.parse(globalThis.localStorage.getItem(key) ?? '{}').hud?.preset ?? null,
@@ -381,6 +400,127 @@ try {
   );
   logPhase('simulation halted, frame loop alive');
 
+  /*
+   * Settings is one of the four named pause actions, and the z-ladder that puts
+   * the panel above the backdrop is exactly the kind of thing that can be
+   * reasoned about correctly and still be wrong: `.hud-grid` is a stacking
+   * context, so a descendant's z-index cannot escape it. Clicking is the only
+   * assertion that catches that, so the gate clicks.
+   */
+  await page.locator('#pause-settings').click();
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#session-settings')?.hasAttribute('open') === true,
+    undefined,
+    { timeout: 5_000 },
+  );
+  const settingsHit = await page.evaluate(() => {
+    const summary = globalThis.document.querySelector('#session-settings > summary');
+    if (summary === null) return { hit: null, inPanel: false };
+    const rect = summary.getBoundingClientRect();
+    const hit = globalThis.document.elementFromPoint(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+    return {
+      hit: hit === null ? null : `${hit.tagName}#${hit.id}`,
+      inPanel: hit !== null && globalThis.document.querySelector('#session-settings').contains(hit),
+    };
+  });
+  assert.ok(
+    settingsHit.inPanel,
+    `the paused settings panel is buried under the backdrop: ${JSON.stringify(settingsHit)}`,
+  );
+  // Actionability, not just hit-testing: Playwright refuses to click an
+  // intercepted element, so these two are the real proof.
+  await page.locator('#session-settings > summary').click({ timeout: 5_000 });
+  await page.locator('#session-settings > summary').click({ timeout: 5_000 });
+  await page.locator('#quality-lock').click({ timeout: 5_000 });
+  // Leave the panel as it was found: a native select keeps focus, and a focused
+  // form control legitimately blocks every game key (`blocksGameKey`), which
+  // would make the later map and camera checks measure the wrong thing.
+  await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    if (active instanceof globalThis.HTMLElement) active.blur();
+    const details = globalThis.document.querySelector('#session-settings');
+    if (details instanceof globalThis.HTMLDetailsElement) details.open = false;
+  });
+  logPhase('paused settings panel is visible and clickable');
+
+  /*
+   * `aria-modal="true"` is a claim about the rest of the document; `inert` on the
+   * HUD layer is what makes it true. Without it Tab walks out of the dialog into
+   * the tutorial overlay and the state-vector controls.
+   */
+  const modalBacking = await page.evaluate(() => {
+    const layer = globalThis.document.querySelector('.hud-layer');
+    return {
+      ariaModal: globalThis.document.querySelector('#pause-menu')?.getAttribute('aria-modal'),
+      hudInert: layer === null ? null : layer.inert,
+      reachable: globalThis.document
+        .querySelector('#orbit-readout')
+        ?.checkVisibility?.({ checkVisibilityCSS: true }),
+    };
+  });
+  assert.equal(modalBacking.ariaModal, 'true');
+  assert.equal(modalBacking.hudInert, true, 'aria-modal is not backed by an inert HUD');
+
+  await page.locator('#pause-exit').focus();
+  await page.keyboard.press('Tab');
+  const forwardTab = await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    return {
+      id: active?.id ?? null,
+      inPauseLayer: globalThis.document.querySelector('.pause-layer')?.contains(active) ?? false,
+    };
+  });
+  assert.ok(
+    forwardTab.inPauseLayer,
+    `Tab escaped the pause layer to ${JSON.stringify(forwardTab)}`,
+  );
+  await page.locator('#pause-resume').focus();
+  await page.keyboard.press('Shift+Tab');
+  const backwardTab = await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    return {
+      id: active?.id ?? null,
+      inPauseLayer: globalThis.document.querySelector('.pause-layer')?.contains(active) ?? false,
+    };
+  });
+  assert.ok(
+    backwardTab.inPauseLayer,
+    `Shift+Tab escaped the pause layer to ${JSON.stringify(backwardTab)}`,
+  );
+  logPhase('modal claim backed and focus trapped in both directions');
+
+  /*
+   * The keyboard the frame loop does not own. `SystemMapPanel` and
+   * `CameraInputController` hold their own window listeners, so without an
+   * explicit gate `M` opened the map underneath the backdrop and `O`/`J` re-aimed
+   * a camera whose director is being fed a zero delta.
+   */
+  const cameraBefore = await page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return { focusId: canvas?.solarVoyagerCamera?.focusId, mode: canvas?.solarVoyagerCamera?.mode };
+  });
+  await page.keyboard.press('KeyM');
+  await page.keyboard.press('KeyO');
+  await page.keyboard.press('j');
+  await page.waitForTimeout(400);
+  const whilePaused = await page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return {
+      focusId: canvas?.solarVoyagerCamera?.focusId,
+      mapMode: canvas?.dataset.systemMapMode ?? null,
+      mode: canvas?.solarVoyagerCamera?.mode,
+      sceneState: canvas?.dataset.sceneState ?? null,
+    };
+  });
+  assert.equal(whilePaused.mapMode, 'space', 'M opened the system map underneath the pause menu');
+  assert.equal(whilePaused.mode, cameraBefore.mode, 'the camera mode changed while paused');
+  assert.equal(whilePaused.focusId, cameraBefore.focusId, 'the camera focus changed while paused');
+  assert.equal(whilePaused.sceneState, 'paused', 'a stray key left the pause state');
+  logPhase('paused keyboard is owned by the dialog');
+
   // Escape resumes and time moves again.
   await page.keyboard.press('Escape');
   await page.waitForSelector('#pause-menu', { state: 'hidden', timeout: 10_000 });
@@ -392,6 +532,10 @@ try {
     { timeout: 10_000 },
   );
   assert.equal((await readHudState(page)).sceneState, 'space');
+  await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    if (active instanceof globalThis.HTMLElement) active.blur();
+  });
   logPhase('resume verified');
 
   // ---------------------------------------------------------------- map owns Escape

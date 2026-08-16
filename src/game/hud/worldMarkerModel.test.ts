@@ -108,6 +108,41 @@ describe('world marker model - T0112', () => {
     expect(target.xPx).toBeLessThanOrEqual(WIDTH_PX);
   });
 
+  /**
+   * The bearing a behind-camera arrow points at, through the real composition.
+   * A double mirror here would send the player the wrong way *and* flip the
+   * arrow across the screen as they turned toward it, so it never converged.
+   */
+  it('pins an astern target on the side the player must turn towards', () => {
+    const snapshot = scene();
+    // Astern (+z, camera looks down -z) and to the camera's right (+x).
+    setBody(snapshot, 3, [5_000, 0, 10_000]);
+    snapshot.targetBodyIndex = 3;
+    const right = writeWorldMarkersInto(
+      createWorldMarkerBuffer(),
+      snapshot,
+      pose(),
+      WIDTH_PX,
+      HEIGHT_PX,
+      false,
+    );
+    const rightMarker = marker(right, WorldMarkerIndex.TARGET);
+    expect(rightMarker.behind).toBe(true);
+    expect(rightMarker.offscreen).toBe(true);
+    expect(rightMarker.xPx).toBeGreaterThan(WIDTH_PX / 2);
+
+    setBody(snapshot, 3, [-5_000, 0, 10_000]);
+    const left = writeWorldMarkersInto(
+      createWorldMarkerBuffer(),
+      snapshot,
+      pose(),
+      WIDTH_PX,
+      HEIGHT_PX,
+      false,
+    );
+    expect(marker(left, WorldMarkerIndex.TARGET).xPx).toBeLessThan(WIDTH_PX / 2);
+  });
+
   it('hides every marker when no target is selected', () => {
     const snapshot = scene();
     snapshot.targetBodyIndex = -1;

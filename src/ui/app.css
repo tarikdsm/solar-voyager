@@ -380,7 +380,19 @@
   min-height: 0;
   overflow-y: auto;
   pointer-events: none;
-  scrollbar-width: thin;
+  /*
+   * No scrollbar. The rail is `pointer-events: none` so the canvas stays
+   * draggable through the gaps between panels, which also makes a rendered
+   * scrollbar impossible to grab — a control that looks interactive and is not.
+   * Wheel and focus scrolling still work: the panels inside are
+   * `pointer-events: auto`, so a wheel event over one bubbles and scrolls this
+   * ancestor.
+   */
+  scrollbar-width: none;
+}
+
+.hud-area::-webkit-scrollbar {
+  display: none;
 }
 
 .hud-area > * {
@@ -2172,9 +2184,27 @@
 }
 
 /*
+ * The two wrappers that split the overlay into "inert while paused" and "the
+ * paused surface". Neither may produce a box: the HUD layout is the grid's job
+ * and the settings panel is absolutely positioned.
+ */
+.hud-layer,
+.pause-layer,
+.hud-settings-host {
+  display: contents;
+}
+
+/*
  * While paused the settings panel has to sit above the backdrop, or the pause
- * menu's Settings button would expand a panel nobody can see or click. One rule
- * instead of a second copy of the whole settings UI inside the dialog.
+ * menu's Settings button expands a panel nobody can see or click.
+ *
+ * This rule is only load-bearing because `.hud-settings-host` renders the panel
+ * *outside* `.hud-grid`. The grid sets `position: absolute` **and** a `z-index`,
+ * which makes it a stacking context, and a descendant's `z-index: 31` is then
+ * scoped inside a context that is itself at 5 — so the panel stayed under the
+ * z-30 backdrop no matter how high its own value went. Reading the ladder was
+ * not enough to catch that; clicking it was. `tools/tests/hudPresetsRegression.mjs`
+ * now clicks through the pause menu's Settings button so it cannot come back.
  */
 .app-overlay[data-paused='true'] .session-settings {
   z-index: var(--sv-z-pause-settings);

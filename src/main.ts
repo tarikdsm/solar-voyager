@@ -816,10 +816,33 @@ function refreshCameraFocusLabel(): void {
   if (director !== undefined) writeCameraFocusLabel(director.focusId);
 }
 
+/**
+ * True while the simulation is held: paused, or back at the main menu.
+ *
+ * A module-level mirror of `SceneManager.state` rather than a read through the
+ * manager, because `handleSystemMapModeChange` is handed to the
+ * `SystemMapController` constructor and `sceneManager` is created later — a
+ * direct read would be a temporal-dead-zone hazard for no benefit.
+ */
+let sceneHalted = false;
+
+/**
+ * Applies camera-input enablement from the map mode and the halt together.
+ *
+ * The frame loop gates the flight input it owns, but `CameraInputController`
+ * holds its own `keydown`, pointer and wheel listeners, so without this the
+ * player could re-aim the camera and cycle focus with the pause dialog on
+ * screen — against a director whose `update` is being fed a zero delta, so the
+ * pose freezes mid-transition.
+ */
+function applyCameraInputEnablement(mode: SystemMapMode): void {
+  cameraInput?.setEnabled(!sceneHalted && mode === 'space');
+  systemMapCameraInput?.setEnabled(!sceneHalted && mode === 'system-map');
+}
+
 function handleSystemMapModeChange(mode: SystemMapMode): void {
   systemMapSignals.publishMode(mode);
-  cameraInput?.setEnabled(mode === 'space');
-  systemMapCameraInput?.setEnabled(mode === 'system-map');
+  applyCameraInputEnablement(mode);
   canvas.dataset.systemMapMode = mode;
   if (systemMapRuntimeDiagnostics !== null) {
     systemMapRuntimeDiagnostics.mode = mode;
@@ -1094,6 +1117,8 @@ function persistHudPreferences(): void {
 
 sceneManager.subscribe((state) => {
   canvas.dataset.sceneState = state;
+  sceneHalted = state !== 'space';
+  applyCameraInputEnablement(systemMapController.mode);
   // Drop every latched key on both edges: a key held while clicking a menu
   // button must not fire into the ship on resume, and a key held at the moment
   // of pausing must not stay down for the whole menu visit. `resetAxes`, not
@@ -1134,7 +1159,7 @@ function handleCanvasPickPointerUp(event: PointerEvent): void {
   const pointerId = pickPointerId;
   pickPointerId = -1;
   if (event.pointerId !== pointerId || event.button !== 0) return;
-  if (world === null || sceneManager.state !== 'space') return;
+  if (world === null || sceneHalted) return;
   if (systemMapController.mode !== 'space') return;
   if (inputEngine?.pointerLocked === true) return;
   if (event.timeStamp - pickPointerDownMs > CLICK_PICK_MAX_DURATION_MS) return;
@@ -1580,7 +1605,7 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     window,
     focusLabel,
     spaceCameraControls,
-    true,
+    !sceneHalted && systemMapController.mode === 'space',
     handleTutorialCameraInteraction,
   );
   systemMapCameraInput = new CameraInputController(

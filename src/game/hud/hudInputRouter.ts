@@ -8,9 +8,11 @@ import type { InputFrame } from '../input/inputEngine.js';
  * maps onto a subsystem's API. The flight router must not learn about the HUD,
  * and `main.ts` must not grow a second `frame.pressed(...)` switch.
  *
- * Allocation-free, and safe to call on a paused frame: nothing here touches the
- * simulation, and the preset key is deliberately live while paused so the pause
- * menu can be read at any instrumentation level.
+ * Allocation-free and free of simulation contact, but `main.ts` still only calls
+ * `apply()` on unpaused frames: the pause dialog is modal, so while it is up the
+ * keyboard belongs to it and not to the HUD. (An earlier draft of this comment
+ * claimed the preset key stayed live while paused; the frame loop never did that,
+ * and the modal reading is the correct one.)
  */
 export interface HudInputPorts {
   cyclePreset(): void;

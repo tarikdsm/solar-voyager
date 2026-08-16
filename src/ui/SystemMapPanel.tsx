@@ -32,6 +32,7 @@ export class SystemMapPanelModel {
   private readonly commands: Commands;
   private readonly controller: SystemMapController;
   private toggleElement: FocusableElement | null = null;
+  private suspended = false;
   private bodySelectElement: FocusableElement | null = null;
   private panelElement: HideableElement | null = null;
 
@@ -40,6 +41,18 @@ export class SystemMapPanelModel {
     this.commands = commands;
     this.controller = controller;
   }
+
+  /**
+   * Suspends the panel's own keyboard shortcuts (T0112).
+   *
+   * The listener is on `window`, so `inert` on the panel cannot reach it: while
+   * the pause dialog is up, `M` would still open the map *underneath* the
+   * backdrop and Escape would need pressing twice to get out again. The frame
+   * loop gates the flight input it owns; this gates the input it does not.
+   */
+  readonly setSuspended = (suspended: boolean): void => {
+    this.suspended = suspended;
+  };
 
   readonly setToggleElement = (element: FocusableElement | null): void => {
     this.toggleElement = element;
@@ -75,7 +88,7 @@ export class SystemMapPanelModel {
   };
 
   readonly handleKeyDown = (event: SystemMapKeyboardEvent): void => {
-    if (event.repeat === true) return;
+    if (event.repeat === true || this.suspended) return;
     if (event.code === 'KeyM') {
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
@@ -216,6 +229,8 @@ export interface SystemMapPanelProps {
   readonly commands: Commands;
   readonly controller: SystemMapController;
   readonly map: SystemMapSignalStore;
+  /** True while the pause dialog owns the keyboard (T0112). */
+  readonly suspended?: boolean;
   readonly targetBody: ReadonlySignal<string>;
   readonly trajectoryPrediction: TrajectoryPredictionDisplaySignals;
 }
@@ -236,6 +251,7 @@ export function SystemMapPanel(props: SystemMapPanelProps) {
     binding.attach(window as unknown as SystemMapKeyboardTarget);
     return () => binding.dispose();
   }, [binding]);
+  model.setSuspended(props.suspended === true);
   return (
     <SystemMapPanelView
       bodyIds={props.bodyIds}

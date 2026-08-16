@@ -156,9 +156,16 @@ export function projectPointInto(
     deltaX * (basis[6] as number) + deltaY * (basis[7] as number) + deltaZ * (basis[8] as number);
   const tanHalfFov = basis[9] as number;
   // Behind the camera the perspective divide flips both axes, which would put a
-  // target that is directly astern in the centre of the screen. Dividing by the
-  // magnitude instead keeps the direction honest, and `depthKm` still carries the
-  // sign so the caller can render an arrow rather than a diamond.
+  // target that is directly astern in the centre of the screen and send a
+  // behind-and-right target to the left. Dividing by the magnitude instead keeps
+  // the bearing honest — a target astern and to the right stays right of centre,
+  // which is the way the player must turn — and `depthKm` keeps the sign so the
+  // caller can render an arrow rather than a diamond.
+  //
+  // This is the *only* place the behind-camera sign is handled.
+  // `clampToViewportEdge` used to mirror as well, which composed into a double
+  // flip: the arrow pointed at the opposite edge and, worse, jumped across the
+  // screen as the player turned toward it, so it never converged.
   const divisor = depthKm > 0 ? depthKm : -depthKm;
   if (!Number.isFinite(divisor) || divisor === 0 || !Number.isFinite(upKm)) {
     out[0] = Number.NaN;
@@ -196,10 +203,16 @@ export function apparentRadiusPx(
  * Clamps a projected pixel onto the viewport edge, keeping its direction.
  *
  * Writes the clamped pair back into `out[0]`/`out[1]` and returns true when the
- * point was outside the inset rectangle (so the view can swap a diamond for an
- * edge arrow). Direction is measured from the viewport centre, so a marker slides
- * around the border towards the thing it points at instead of snapping to a
- * corner.
+ * point was pinned (so the view can swap a diamond for an edge arrow). Direction
+ * is measured from the viewport centre, so a marker slides around the border
+ * towards the thing it points at instead of snapping to a corner.
+ *
+ * `behind` forces the pin and nothing else. It deliberately does **not** mirror:
+ * `projectPointInto` already divides by `|depth|`, so the incoming pixel is on
+ * the side the player must turn towards, and mirroring here would undo that.
+ * A behind-camera point is always pinned even when it lands inside the
+ * rectangle, because a diamond floating mid-screen would read as "straight
+ * ahead".
  */
 export function clampToViewportEdge(
   out: Float64Array,
@@ -214,14 +227,8 @@ export function clampToViewportEdge(
   const maxX = Math.max(insetPx, widthPx - insetPx);
   const minY = insetPx;
   const maxY = Math.max(insetPx, heightPx - insetPx);
-  let x = out[0] as number;
-  let y = out[1] as number;
-  if (behind) {
-    // A behind-camera point projects to where its mirror image would be; the
-    // player needs the opposite bearing.
-    x = 2 * centerX - x;
-    y = 2 * centerY - y;
-  }
+  const x = out[0] as number;
+  const y = out[1] as number;
   if (!behind && x >= minX && x <= maxX && y >= minY && y <= maxY) {
     out[0] = x;
     out[1] = y;

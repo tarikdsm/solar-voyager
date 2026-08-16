@@ -119,10 +119,18 @@ ndcX = cx / (cz · t · aspect) ;  ndcY = cy / (cz · t)
 xPx  = (ndcX + 1)/2 · widthPx ;  yPx = (1 − ndcY)/2 · heightPx
 ```
 
-`cz ≤ 0` is *behind*, not invisible: the target marker still has to tell you which way to turn. A
-behind-camera target is projected from the mirrored direction (`cx, cy` negated) and then clamped to
-the viewport edge, and the marker carries `behind = 1` so the view can render an arrow instead of a
-diamond. Points in front but outside the frustum are clamped the same way with `behind = 0`.
+`cz ≤ 0` is *behind*, not invisible: the target marker still has to tell you which way to turn.
+Dividing by `|cz|` keeps the bearing honest — a target astern and to the right stays right of centre,
+which is the way the player must rotate — and the marker carries `behind = 1` so the view can render
+an arrow instead of a diamond. Points in front but outside the frustum are clamped the same way with
+`behind = 0`.
+
+**The sign is handled in exactly one place.** `clampToViewportEdge` originally mirrored as well,
+which composed into a double flip: the arrow pointed at the opposite edge, and — worse than a static
+180° error — jumped to the other side as the player turned toward it, so it never converged. Neither
+unit test caught it because neither composed the two functions, and the two disagreed about the
+premise. There is now a composed test in `markerProjection.test.ts` and another in
+`worldMarkerModel.test.ts` driving the real `writeMarker` path.
 
 Everything writes into caller-owned `Float64Array`s. No allocation, no `Vector3`.
 
@@ -275,8 +283,37 @@ layered on top of it rather than replacing it. The new observable is `canvas.dat
 
 ### 6.4 The menu itself
 
-`ui/PauseMenu.tsx`: `role="dialog" aria-modal="true"`, focus moves to **Resume** on open and returns
-to the canvas on close, Escape closes it, Tab is trapped inside. Four actions: Resume, Settings
+`ui/PauseMenu.tsx`: `role="dialog" aria-modal="true"`, focus moves to **Resume** on open, Escape
+closes it, Tab is trapped.
+
+Three details that the first implementation got wrong and that are load-bearing:
+
+- **The listener is armed in a layout effect, not a passive one.** Focus moved in a layout effect
+  while the Escape/Tab handler attached in a passive one, so for one frame the dialog was visible and
+  unguarded — and a Tab arriving in that gap escaped into the HUD behind it, four times out of four
+  in the production build and never in a slower sequence. Both now run before paint.
+- **The listener depends only on `open`.** `App` rebuilds the `actions` object every render, so
+  listing it in the dependencies tore the listener down and re-added it continuously, which is what
+  made the race observable at all. The handler lives in a ref; the effect does not depend on it.
+- **`aria-modal="true"` is backed by `inert`.** The claim is about the rest of the document, and
+  until the HUD was actually inert it was a claim the DOM did not support: Tab reached the tutorial
+  overlay and the state-vector controls. `App` wraps the perf panel, the system map, the HUD surfaces
+  and the tutorial overlay in one `.hud-layer` that takes `inert={paused}`. Excluded on purpose: the
+  hardware-acceleration warning (a mandatory alert that outranks the pause), the pause layer, and the
+  impact overlay.
+
+The Tab cycle is confined to a **trap root** that is the pause *layer*, not the dialog: Settings
+expands the session panel, which sits beside the dialog rather than inside it, and a card-only trap
+would make it unreachable by keyboard. The wrapping arithmetic is extracted as
+`resolveFocusTrapStep`, which is unit-testable in a repo whose Vitest has no DOM; the browser gate
+covers the DOM half.
+
+**Pause also gates the keyboard the frame loop does not own.** Skipping `inputEngine.poll` stops
+flight input, but `SystemMapPanel` and `CameraInputController` hold their own `window` listeners, and
+`inert` cannot reach a window listener. Without an explicit gate, `M` opened the system map
+*underneath* the backdrop and `O`/`J` re-aimed a camera whose director is being fed a zero delta, so
+the pose froze mid-transition and recovery took two Escapes. `SystemMapPanelModel.setSuspended` and
+`applyCameraInputEnablement` close both. Four actions: Resume, Settings
 (expands the existing `SessionSettingsPanel` — one settings UI, not two), Save (`session.saveLocal()`
 with the existing status line), Exit to menu. Backdrop at z-index 30, card at 32, with the settings
 panel lifted to 31 while paused so the Settings button opens something the player can actually see.
@@ -319,8 +356,28 @@ out of room; the rail scrolls instead of crushing its contents.
 One more sharp edge, from the same family: `SessionSettingsPanel` is keyed on tutorial status, so it
 remounts whenever the tutorial advances. Placing it as a direct sibling of the other panels made
 Preact recreate the nodes after it, and `BurnLogPanel` keeps its expanded flag in a per-instance
-signal — so finishing the tutorial silently collapsed a burn log the player had open. It lives in its
-own `.hud-rail-head` wrapper now, which contains the churn.
+signal — so finishing the tutorial silently collapsed a burn log the player had open.
+
+**And a third, which is the same defect class as the collapsed row: `.hud-grid` sets
+`position: absolute` *and* a `z-index`, so it is a stacking context.** Anything inside it is clamped
+to layer 5 no matter what its own `z-index` says — which meant the rule lifting `.session-settings`
+to 31 while paused could not possibly work, and the pause menu's **Settings** button expanded a panel
+sitting under a 72%-opaque backdrop: `details.open` became true, focus landed on the summary, and the
+player saw and could click nothing. Invisible, silent, and findable only by clicking.
+
+The fix is structural, not another z-index: the settings panel is rendered in `.pause-layer`, a
+`display: contents` wrapper that is a sibling of `.hud-grid` and holds both the panel and the dialog.
+Same stacking context as the backdrop, so 31 beats 30. The lesson is the one the collapsed row taught
+and this repeated: **a z-ladder that is reasoned about is not verified.**
+`tools/tests/hudPresetsRegression.mjs` now clicks `#pause-settings`, hit-tests the summary's centre,
+and clicks the summary and the quality selector with Playwright's actionability checks, which refuse
+an intercepted element.
+
+The scrollbar on `.hud-area` is hidden (`scrollbar-width: none` plus the WebKit pseudo-element). The
+rail is `pointer-events: none` so the canvas stays draggable through the gaps between panels, which
+also makes a rendered scrollbar impossible to grab; wheel and focus scrolling still work, because the
+panels inside are `pointer-events: auto` and a wheel event over one bubbles to the rail. A control
+that looks interactive and is not is worse than no control.
 
 The compact-viewport media query and the `prefers-reduced-motion` block are preserved verbatim for
 the deferred panels; `src/ui/App.test.tsx` asserts three regexes over this file
@@ -355,12 +412,16 @@ Adding a preference means a v5 tier, following the precedent already in `setting
 
 ### 9.1 T0111 → invert `replacementInvalidatesRestorePoints` — **already done**
 
-T0110 landed it. `src/game/restorePoints.ts` allowlists the safe pair (`restore`, `respawn`) and
-`replacementInvalidatesRestorePoints` returns `!MISSION_PRESERVING_ORIGINS.includes(origin)`, so an
-unrecognised future origin clears the ring — fails closed. The second half ("pin `import`'s
-ring-clearing directly") was **not** covered: the existing test exercises the rule through
-`new-game`/`load`/`restore`/`respawn` only. This task adds the direct `import` case and a
-"an origin nobody has thought of clears the ring" case.
+T0110 landed **both halves**, and this task adds nothing. `src/game/restorePoints.ts` allowlists the
+safe pair (`restore`, `respawn`) and `replacementInvalidatesRestorePoints` returns
+`!MISSION_PRESERVING_ORIGINS.includes(origin)`, so an unrecognised future origin clears the ring —
+it fails closed. The second half is covered too: `collisionRecovery.test.ts` already contains
+"clears the ring on an import, which lands in another timeline entirely" (driving the wired session
+controller, not just the predicate) and "fails closed for an origin nobody has added yet".
+
+An earlier draft of this section said T0112 would add those two cases. It was written before the
+branch base was read properly; they predate the branch and `collisionRecovery.test.ts` is untouched
+by this task. Nothing to do — verified, not assumed.
 
 ### 9.2 T0108 → body rates in `SimSnapshot` — **declined, with reasons**
 
