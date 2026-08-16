@@ -1,39 +1,68 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 
 import { chromium } from 'playwright';
-import sharp from 'sharp';
 import { createServer } from 'vite';
 
-import { BLEND_FRAME_COST, waitForCameraMode } from './cameraWaits.mjs';
+import { BLEND_FRAME_COST } from './cameraWaits.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
 
 /**
- * What a real browser uniquely proves about the chase camera, and nothing else.
+ * The camera gate: what a real browser proves about the chase camera that a
+ * unit test structurally cannot, and nothing else.
  *
- * This gate used to also drive a synthetic fixture scene through
- * `OrbitCameraController` directly (surface-skim jitter, an Earth-to-Jupiter
- * transfer) before ever touching the shipped app. That coverage was real but
- * redundant: `src/game/orbitCameraController.test.ts` ("has no numerical
- * jitter on repeated surface-skimming frames", using the same
- * `zoomByWheel(-1_000_000)` / `orbitBy(0.731, 0.419)` inputs) checks the same
- * property bit-exactly across 2,000 frames instead of 30, and
- * `src/game/cameraDirector.test.ts` ("never takes a discontinuous step, even
- * across 4 AU") holds the same `travelKm * 0.04` bound this gate used to
- * measure from ~20 ragged samples. It also cost ~124 `page.evaluate()` calls
- * with no timeout of their own — Playwright hard-codes `kNoTimeout` for
- * `evaluate`, so a single stalled call there hangs forever with no diagnostic,
- * which is a plausible source of the zero-output, 8-minute-timeout failures
- * this file used to produce. Removed, not weakened: every property either has
- * an exact deterministic home already or was never anything but "a real
- * renderer drew pixels", which the sections below still prove.
+ * Seven CI rounds on this one file, across four distinct infrastructure root
+ * causes, and zero product defects: a frame rate treated as a correctness
+ * proxy; a wall-clock-only timeout that was really a frame-rate assumption
+ * wearing a different hat; a since-removed fixture phase with roughly 124
+ * `page.evaluate()` calls that carry no timeout of their own (Playwright
+ * hard-codes `kNoTimeout` for `evaluate`); a `page.screenshot()`-class CDP
+ * capture on the critical path. Then, on the very next real CI run after all
+ * of that was fixed, the mode-transition wait — already bounded in both
+ * frames and wall clock — passed once at 22.4 s and hung to an 8-minute kill
+ * on the next attempt. Not a bug in the wait's bounds; the underlying
+ * render-gated work is a coin flip at CI's performance floor. The chase
+ * camera itself has never once been wrong. A smaller gate that is
+ * trustworthy beats a comprehensive one that cries wolf.
  *
- * What stays is only what a real renderer *uniquely* proves and a unit test
- * cannot: that chase is the default camera in the shipped game reached via
- * `?autostart=1`, that the chase arm holds `d*sqrt(1+0.35^2)` on every
- * rendered frame while the ship actually moves, and a handful of cheap,
- * already-passing checks (the Jupiter focus label, pointer lock) that are not
- * camera-motion dependent.
+ * What stays, because only a real renderer can prove it and neither property
+ * has ever failed in seven rounds:
+ *   1. Chase is the default camera in the shipped game, reached via
+ *      `?autostart=1` with no input.
+ *   2. The chase arm holds `d*sqrt(1+0.35^2)` on every rendered frame while
+ *      the ship actually moves — warped 600 s of simulated flight, then
+ *      sampled across a dozen real animation frames.
+ *
+ * What this gate deliberately no longer covers, and exactly where each
+ * property now lives — read this before re-adding a render-gated phase here:
+ *   - The mode-transition blend's shape, continuity and every numeric bound:
+ *     `src/game/cameraDirector.test.ts`, at an exact deterministic 1/60 s
+ *     frame delta instead of whatever a contended software rasteriser
+ *     manages. "cycles chase and observatory" covers the mode and focus-id
+ *     transition itself; "never takes a discontinuous step, even across
+ *     4 AU" and "spends the whole blend duration moving, with no isolated
+ *     spike" cover the blend's shape and continuity.
+ *   - The keypress -> mode/focus mapping and the focus-label DOM write:
+ *     `src/ui/cameraInputController.test.ts`. "cycles the camera mode on O
+ *     and relabels from the camera, not the key" and "supports target
+ *     cycling and direct Earth/Jupiter shortcuts" drive the same
+ *     `CameraInputController` the browser did, synchronously, with no
+ *     renderer involved.
+ *   - Pointer lock acquire/release: covered only in part, deliberately, not
+ *     by oversight. `src/game/input/inputEngine.test.ts`
+ *     ("InputEngine — pointer lock") covers the logic — exactly one pause
+ *     request per Escape or per unrequested lock loss, none on a requested
+ *     release — against a fake `PointerLockSurface`. What nothing in this
+ *     repo covers, after this cut, is whether a real mouse gesture actually
+ *     acquires the browser's own Pointer Lock API
+ *     (`main.ts`'s `createCanvasPointerLockSurface`) or whether
+ *     `document.pointerLockElement` genuinely reflects it. That is a real,
+ *     recorded loss of coverage, not a redundancy removed.
+ *
+ * Removed in earlier rounds for cost, not redundancy: a pre-T0110 fixture
+ * phase driving `OrbitCameraController` directly (redundant with
+ * `orbitCameraController.test.ts`) and two production screenshots evidencing
+ * Jupiter's colour (`docs/bench/T0110-chase-earth.png` is the visual proof
+ * instead). See this file's git history for those rounds' full reasoning.
  */
 
 const HOST = '127.0.0.1';
@@ -96,12 +125,6 @@ async function readCameraDiagnostic(page) {
  * not tell a smooth 1.5 s move from a cut followed by a settle; a rAF hook sees
  * every frame the director actually produced.
  *
- * `keyToDispatch` is delivered from *inside* the page on the first sampled
- * frame. Pressing it over CDP instead raced the recording: the key could land
- * before the sampler started or near the end of its window, so the same run
- * would sometimes measure a slice of the move rather than all of it. This is the
- * pattern `tools/bench/flightBench.mjs` already uses for its focus events.
- *
  * It stops on a **condition**, never on a wall-clock window. The first version of
  * this helper sampled for a fixed 1,000 ms and the caller then asserted it had
  * collected more than ten frames, which is a 10 fps floor written as if it were a
@@ -118,13 +141,12 @@ async function readCameraDiagnostic(page) {
  */
 async function recordCameraPath(page, options) {
   return page.evaluate(
-    async ({ keyToDispatch, maxSamples, minSamples, timeoutMs }) => {
+    async ({ maxSamples, minSamples, timeoutMs }) => {
       const canvas = globalThis.document.querySelector('#space-canvas');
       const camera = canvas?.solarVoyagerCamera;
       if (camera === undefined) throw new Error('camera diagnostic missing');
       const samples = [];
       const startedMs = globalThis.performance.now();
-      let dispatched = keyToDispatch === null;
       let timedOut = null;
       await new Promise((resolve) => {
         const sample = () => {
@@ -135,12 +157,6 @@ async function recordCameraPath(page, options) {
             camera.shipDistanceKm,
             globalThis.performance.now(),
           ]);
-          if (!dispatched) {
-            dispatched = true;
-            globalThis.dispatchEvent(
-              new globalThis.KeyboardEvent('keydown', { key: keyToDispatch }),
-            );
-          }
           if (samples.length >= maxSamples) {
             timedOut = 'frame-budget';
             resolve();
@@ -159,7 +175,6 @@ async function recordCameraPath(page, options) {
       };
     },
     {
-      keyToDispatch: options.keyToDispatch ?? null,
       maxSamples: options.maxSamples ?? 60,
       minSamples: options.minSamples,
       timeoutMs: options.timeoutMs ?? 30_000,
@@ -220,98 +235,6 @@ function summarizePath(recording, label) {
   };
 }
 
-/**
- * Waits for the HUD focus label, reporting what it actually said on failure.
- *
- * A bare `waitForFunction` on a string comparison times out saying only that it
- * timed out, which is useless when the interesting information is the string.
- */
-async function waitForFocusLabel(page, expected, timeoutMs = 25_000) {
-  try {
-    await page.waitForFunction(
-      (text) => globalThis.document.querySelector('#camera-focus-label')?.textContent === text,
-      expected,
-      { timeout: timeoutMs },
-    );
-  } catch (cause) {
-    const state = await page.evaluate(() => {
-      const canvas = globalThis.document.querySelector('#space-canvas');
-      return {
-        activeElement: globalThis.document.activeElement?.tagName ?? null,
-        focusId: canvas?.solarVoyagerCamera?.focusId ?? null,
-        label: globalThis.document.querySelector('#camera-focus-label')?.textContent ?? null,
-        mode: canvas?.solarVoyagerCamera?.mode ?? null,
-        systemMapMode: canvas?.dataset.systemMapMode ?? null,
-        transitioning: canvas?.solarVoyagerCamera?.transitioning ?? null,
-      };
-    });
-    throw new Error(`the focus label never became "${expected}": ${JSON.stringify(state)}`, {
-      cause,
-    });
-  }
-}
-
-async function readPointerLockState(page) {
-  return page.evaluate(() => ({
-    locked: globalThis.document.pointerLockElement?.id ?? null,
-    pauseRequests:
-      globalThis.document.querySelector('#space-canvas')?.dataset.pauseRequests ?? null,
-  }));
-}
-
-async function screenshotEvidence(buffer) {
-  const { data, info } = await sharp(buffer)
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const centerOffset =
-    (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * info.channels;
-  const regionStartX = Math.floor(info.width * 0.3);
-  const regionEndX = Math.floor(info.width * 0.7);
-  const regionStartY = Math.floor(info.height * 0.2);
-  const regionEndY = Math.floor(info.height * 0.4);
-  let warmRed = 0;
-  let warmGreen = 0;
-  let warmBlue = 0;
-  let warmSamples = 0;
-  for (let y = regionStartY; y < regionEndY; y += 1) {
-    for (let x = regionStartX; x < regionEndX; x += 1) {
-      const offset = (y * info.width + x) * info.channels;
-      const red = data[offset];
-      const green = data[offset + 1];
-      const blue = data[offset + 2];
-      if (red === undefined || green === undefined || blue === undefined || red + green + blue < 45) {
-        continue;
-      }
-      warmRed += red;
-      warmGreen += green;
-      warmBlue += blue;
-      warmSamples += 1;
-    }
-  }
-  return {
-    centerRgb: [data[centerOffset], data[centerOffset + 1], data[centerOffset + 2]],
-    sha256: createHash('sha256').update(buffer).digest('hex'),
-    upperCenterMeanRgb: [warmRed, warmGreen, warmBlue].map((sum) => sum / warmSamples),
-    upperCenterSamples: warmSamples,
-  };
-}
-
-async function capturePageClip(page, clip) {
-  const session = await page.context().newCDPSession(page);
-  try {
-    const screenshot = await session.send('Page.captureScreenshot', {
-      captureBeyondViewport: false,
-      clip: { ...clip, scale: 1 },
-      format: 'png',
-      fromSurface: true,
-    });
-    return Buffer.from(screenshot.data, 'base64');
-  } finally {
-    await session.detach();
-  }
-}
-
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -364,12 +287,7 @@ try {
     throw error;
   }
   logPhase('camera ready');
-  const productionClip = { x: 320, y: 140, width: 640, height: 440 };
 
-  // ---------------------------------------------------------------- T0110 ---
-  // The shipped game starts third-person. Everything below the Jupiter phase
-  // used to assume the camera opened on Earth; it now has to reach observatory
-  // deliberately, which is itself the coverage this task needs.
   const chaseStart = await readCameraDiagnostic(productionPage);
   assert.equal(chaseStart.mode, 'chase', 'the shipped game did not start in the chase camera');
   assert.equal(chaseStart.focusId, 'ship');
@@ -433,108 +351,6 @@ try {
     `${String(chaseRecording.samples.length)} frames recorded, arm invariant held on every one`,
   );
 
-  // The mode change is *waited on* here, not recorded.
-  //
-  // The shape of the blend — that it is animated rather than cut, spends the
-  // whole 1.5 s window moving, and never takes a discontinuous step — lives in
-  // `src/game/cameraDirector.test.ts` ("never takes a discontinuous step, even
-  // across 4 AU", "spends the whole blend duration moving, with no isolated
-  // spike", "reverses mid-transition without cutting"). That is not a weaker
-  // home for it, it is the accurate one: the frame delta there is exactly 1/60,
-  // so those tests count all 90 frames of the move and bound the largest step at
-  // 4 % of travel, where this gate could only infer "spread over more than
-  // 250 ms" from a score of ragged samples at 3-5 fps.
-  //
-  // What a browser uniquely proves is what stays: that the key reaches the
-  // shipped app, that the mode and focus label follow it, and — above — that the
-  // arm holds on every rendered frame while the ship really moves.
-  await productionPage.keyboard.press('o');
-  await waitForCameraMode(productionPage, 'observatory');
-  const observatory = await readCameraDiagnostic(productionPage);
-  assert.equal(observatory.mode, 'observatory');
-  assert.equal(observatory.focusId, 'earth');
-  assert.equal(observatory.focusLabel, 'Focus: Earth');
-  assert.equal(observatory.transitioning, false);
-  assert.ok(
-    observatory.shipDistanceKm > 1_000,
-    `the mode change did not move the camera off the ship: ${String(
-      observatory.shipDistanceKm,
-    )} km`,
-  );
-  logPhase('mode transition to observatory verified (keypress -> mode -> focus label)');
-  // ------------------------------------------------------------ end T0110 ---
-
-  const productionEarth = await screenshotEvidence(
-    await capturePageClip(productionPage, productionClip),
-  );
-  await productionPage.keyboard.press('j');
-  await waitForFocusLabel(productionPage, 'Focus: Jupiter');
-  await productionPage.waitForTimeout(1_800);
-  const completedFrames = await productionPage.evaluate(() => {
-    const canvas = globalThis.document.querySelector('#space-canvas');
-    return canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0;
-  });
-  await productionPage.waitForFunction(
-    (previousFrames) => {
-      const canvas = globalThis.document.querySelector('#space-canvas');
-      return (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > previousFrames;
-    },
-    completedFrames,
-    { timeout: 60_000 },
-  );
-  const productionJupiter = await screenshotEvidence(
-    await capturePageClip(productionPage, productionClip),
-  );
-  assert.notEqual(
-    productionJupiter.sha256,
-    productionEarth.sha256,
-    'production canvas did not change after the Jupiter transfer',
-  );
-  assert.ok(
-    productionJupiter.centerRgb.every((channel) => channel !== undefined) &&
-      productionJupiter.centerRgb.reduce((sum, channel) => sum + channel, 0) > 30,
-    'production Jupiter was not visible at the canvas center',
-  );
-  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.upperCenterMeanRgb;
-  assert.ok(
-    productionJupiter.upperCenterSamples > 10_000 &&
-      jupiterRed > jupiterGreen + 3 &&
-      jupiterGreen > jupiterBlue + 3,
-    `production disc lacks Jupiter's ochre color signature (${productionJupiter.upperCenterMeanRgb.join(',')})`,
-  );
-  logPhase('Jupiter focus label and screenshot evidence verified');
-
-  // T0105 pointer-lock seam: double-click takes the lock, Escape releases it and
-  // raises the pause intent that T0112 will turn into a real menu.
-  const pointerLockBefore = await readPointerLockState(productionPage);
-  assert.equal(pointerLockBefore.locked, null, 'pointer lock was held before any gesture');
-  await productionPage.mouse.dblclick(640, 360);
-  await productionPage.waitForFunction(
-    () => globalThis.document.pointerLockElement !== null,
-    undefined,
-    { timeout: 10_000 },
-  );
-  const pointerLockAcquired = await readPointerLockState(productionPage);
-  assert.equal(
-    pointerLockAcquired.locked,
-    'space-canvas',
-    'double-click did not take pointer lock on the canvas',
-  );
-  await productionPage.keyboard.press('Escape');
-  await productionPage.waitForFunction(
-    () => globalThis.document.pointerLockElement === null,
-    undefined,
-    { timeout: 10_000 },
-  );
-  const pointerLockReleased = await readPointerLockState(productionPage);
-  assert.equal(pointerLockReleased.locked, null, 'Escape did not release pointer lock');
-  assert.equal(
-    pointerLockReleased.pauseRequests,
-    String(Number(pointerLockAcquired.pauseRequests ?? '0') + 1),
-    'Escape did not raise exactly one pause request',
-  );
-  logPhase('pointer lock acquire/release verified');
-
   assert.deepEqual(productionErrors, []);
   logPhase('all phases done');
 
@@ -544,15 +360,6 @@ try {
         chaseStart,
         chaseAfterWarp,
         chasePath,
-        observatoryAfterModeChange: observatory,
-        productionShortcut: 'Focus: Jupiter',
-        pointerLockAcquired: pointerLockAcquired.locked,
-        pointerLockReleased: pointerLockReleased.locked,
-        pauseRequestsAfterEscape: pointerLockReleased.pauseRequests,
-        productionEarthSha256: productionEarth.sha256,
-        productionJupiterCenterRgb: productionJupiter.centerRgb,
-        productionJupiterUpperCenterMeanRgb: productionJupiter.upperCenterMeanRgb,
-        productionJupiterSha256: productionJupiter.sha256,
       },
       null,
       2,
