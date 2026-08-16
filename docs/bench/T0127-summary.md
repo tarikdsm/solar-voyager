@@ -31,22 +31,22 @@ from a working-tree swap, not a checkout.
 
 ## Results
 
-| Metric | Baseline run0 / run1 | Feature run0 / run1 |
-|---|---|---|
-| Frame median (ms) | 6.1 / 6.1 | 6.1 / 6.1 |
-| Frame p75 (ms) | 6.1 / 6.1 | 12.1 / **6.1** |
-| Frame p99 (ms) | 12.101 / 12.201 | 48.104 / **12.1** |
-| Main-thread work median (ms) | 1.7 / 2.0 | 4.5 / **1.9** |
-| Main-thread work p75 (ms) | 2.2 / 2.7 | 8.2 / **2.3** |
-| Max draw calls | 49 / 49 | 49 / 49 |
-| Max triangles | 70,452 / 70,452 | 70,452 / 70,452 |
-| Steady-window heap delta (B) | 92,764 / 94,572 | 90,676 / **81,944** |
-| Route errors | 0 | 0 |
+| Metric                       | Baseline run0 / run1 | Feature run0 / run1 |
+| ---------------------------- | -------------------- | ------------------- |
+| Frame median (ms)            | 6.1 / 6.1            | 6.1 / 6.1           |
+| Frame p75 (ms)               | 6.1 / 6.1            | 12.1 / **6.1**      |
+| Frame p99 (ms)               | 12.101 / 12.201      | 48.104 / **12.1**   |
+| Main-thread work median (ms) | 1.7 / 2.0            | 4.5 / **1.9**       |
+| Main-thread work p75 (ms)    | 2.2 / 2.7            | 8.2 / **2.3**       |
+| Max draw calls               | 49 / 49              | 49 / 49             |
+| Max triangles                | 70,452 / 70,452      | 70,452 / 70,452     |
+| Steady-window heap delta (B) | 92,764 / 94,572      | 90,676 / **81,944** |
+| Route errors                 | 0                    | 0                   |
 
-| Bundle (gzip) | Baseline | Feature | Δ |
-|---|---|---|---|
-| Entry | 150,616 B | 152,642 B | +2,026 B (+1.3%) |
-| Total | 582,872 B | 584,898 B | +2,026 B (+0.3%) |
+| Bundle (gzip) | Baseline  | Feature   | Δ                |
+| ------------- | --------- | --------- | ---------------- |
+| Entry         | 150,616 B | 152,642 B | +2,026 B (+1.3%) |
+| Total         | 582,872 B | 584,898 B | +2,026 B (+0.3%) |
 
 Budgets: entry ≤ 400,000 B, total ≤ 1,000,000 B, heap growth ≤ 196,608 B. All well inside.
 
@@ -69,12 +69,12 @@ fast.** Both `--runs 2` invocations produced run0 = 12.1–12.2 ms p75 and run1 
 The decisive point is arithmetic, not judgement: a deterministic per-frame cost cannot be 4.5 ms in
 run0 and 1.9 ms in run1 of the same binary. Feature run1 reproduces the baseline to the digit —
 p75 6.1 ms, p99 12.1 ms, work median 1.9 ms against the baseline's 1.7–2.0 ms — and its steady-window
-heap delta is *lower* than either baseline run. The divergence therefore belongs to the host
+heap delta is _lower_ than either baseline run. The divergence therefore belongs to the host
 (thermal/DVFS state on an Intel UHD laptop), not to T0127.
 
 An earlier pairing on this host was thrown away rather than reported: the first before/after pair was
 taken while `check:tasks`/`check:release`/`check:dashboard` and file edits were running on the same
-machine, which put *both* configurations into the slow mode (12.2 / 12.1 ms p75). Those numbers are
+machine, which put _both_ configurations into the slow mode (12.2 / 12.1 ms p75). Those numbers are
 not in this document because they measure the author, not the code.
 
 ## Conclusion
