@@ -401,6 +401,18 @@
   justify-content: flex-start;
 }
 
+.hud-rail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sv-gap-sm);
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.hud-rail-head > * {
+  pointer-events: auto;
+}
+
 .hud-area-bottom-center {
   grid-area: bottom-center;
   align-items: center;

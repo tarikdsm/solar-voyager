@@ -497,18 +497,29 @@ export function App({
               <WarpControl commands={commands} hud={hud} hudState={hudState} />
             ) : null}
           </div>
-          <div class="hud-area hud-area-right" ref={settingsHostRef}>
-            {session === null ? null : (
-              <SessionSettingsPanel
-                key={tutorialProgress?.status}
-                session={session}
-                onSaveSucceeded={onSaveSucceeded}
-                tutorial={tutorial}
-              />
-            )}
-            {hudPreset === null ? null : (
-              <HudPresetIndicator label={hudPreset.display.presetLabel} />
-            )}
+          <div class="hud-area hud-area-right">
+            {/*
+              The settings panel is keyed on tutorial status, so it remounts every
+              time the tutorial advances. That key must not be a direct sibling of
+              the other panels: a keyed child among unkeyed ones makes Preact
+              recreate the nodes after it, and `BurnLogPanel` keeps its expanded
+              flag in a per-instance signal — so finishing the tutorial silently
+              collapsed a burn log the player had open. One wrapper contains the
+              churn.
+            */}
+            <div class="hud-rail-head" ref={settingsHostRef}>
+              {session === null ? null : (
+                <SessionSettingsPanel
+                  key={tutorialProgress?.status}
+                  session={session}
+                  onSaveSucceeded={onSaveSucceeded}
+                  tutorial={tutorial}
+                />
+              )}
+              {hudPreset === null ? null : (
+                <HudPresetIndicator label={hudPreset.display.presetLabel} />
+              )}
+            </div>
             {shows('energyPanel') ? <EnergyPanel hud={hud} /> : null}
             {burnLog === null || BurnLogPanelComponent === null || !shows('burnLog') ? null : (
               <BurnLogPanelComponent store={burnLog} onExpandedChange={onBurnLogExpandedChange} />

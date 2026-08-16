@@ -625,11 +625,17 @@ function currentInputSnapshot() {
  * one increment per Escape — and it is raised *before* the suppressions below, so
  * "the intent was heard" and "a menu opened" stay separately observable.
  *
- * Two things outrank pause and neither can be detected through `preventDefault`,
- * which is how the system map and the burn-log rows already suppress it
- * (`blocksGameKey` honours `defaultPrevented`, and both attach their listeners
- * before the input engine exists):
+ * Two things outrank pause:
  *
+ *  - the system map, while it is open. `SystemMapPanelModel` already calls
+ *    `preventDefault()` on that Escape, and `blocksGameKey` honours it — but only
+ *    if the map's `window` listener runs first, and it does not always. Entering
+ *    from the main menu mounts `SystemMapPanel` in a Preact microtask that races
+ *    the `InputEngine` construction in `activateSpacePhaseRuntime`, so with
+ *    `?autostart=1` the map wins and from the menu the engine wins, and the same
+ *    keypress then closed the map *and* paused the game. The rule is stated here
+ *    instead of inferred from listener order; either ordering now gives the same
+ *    result.
  *  - a surface-contact freeze: the core is already inert and `ImpactOverlay` is
  *    the only way out, so a pause dialog on top of it would hide recovery.
  *
@@ -644,6 +650,7 @@ function handlePauseRequested(): void {
   pauseRequestCount += 1;
   canvas.dataset.pauseRequests = String(pauseRequestCount);
   if (sceneManager.phase !== 'space') return;
+  if (systemMapController.mode !== 'space') return;
   if (session.simulation.snapshot.impactOccurred === 1) return;
   sceneManager.togglePause();
 }
