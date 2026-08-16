@@ -212,15 +212,33 @@ export class FlightInputRouter {
   updatePorts(ports: { commands: Commands; snapshot(): SimSnapshot }): void;
 }
 
-// game/flight/cruiseDirector.ts (T0116)
+// game/flight/cruiseDirector.ts (T0116 — as shipped)
 export type CruisePhase = 'idle'|'align'|'boost'|'flip'|'brake'|'insert'|'done'|'aborted';
 export class CruiseDirector {
+  constructor(ports: { commands: Commands; snapshot(): SimSnapshot; vessel: VesselConfig;
+    catalog: CompiledRailsCatalog; controller: FlightController });
   engage(targetBodyId: string, arrival: 'orbit'|'flyby', arrivalAltitudeKm?: number): boolean;
   abort(): void;                                             // ≤1 s wall to ≤100× warp
   readonly phase: CruisePhase;
   readonly etaCoordSec: number; readonly etaProperSec: number;
-  update(wallDtSec: number): void;
+  update(wallDtSec: number): void;                           // call every frame, even when idle
+  // Added by T0116 (this block updated per the naming rule below). Rationale in
+  // docs/superpowers/specs/2026-08-16-cruise-director-design.md §2 and ADR-043.
+  readonly active: boolean;             // frame-loop arbitration: exactly one owner of the ship
+  readonly guidanceMode: 'profile'|'pursuit';   // orthogonal to phase; no 9th phase (design §2)
+  readonly insertionStage: 'kill'|'circularize'|'trim';
+  readonly targetBodyId: string | null; readonly arrivalRadiusKm: number;
+  readonly profileCoordSec: number; readonly profilePeakBeta: number;
+  readonly closingSpeedKmS: number; readonly approachSpeedLimitKmS: number;
+  readonly pursuitCommandKmS: number;   // outstanding §8.7 command, HUD + gates
+  readonly achievedEccentricity: number; readonly resolveFailures: number;
+  notifyPlayerInput(): void;            // any input pauses cruise (design §4.3)
+  setVessel(vessel: VesselConfig): void;         // restore replaces the core (ADR-034 §4)
 }
+// game/flight/flightInputRouter.ts gains, for the same reason FlightController has setters:
+//   setCruiseDirector(director: CruiseDirector | null): void;
+// It is the only module that sees an InputFrame, so it is the only one that can report
+// player input to the director.
 
 // game/cameraDirector.ts (T0110, extended T0124/25)
 export type CameraMode = 'chase'|'cockpit'|'cinematic'|'observatory';
@@ -367,6 +385,7 @@ The photon drive exhausts collimated light: render as (a) a narrow emissive beam
 | ADR-040 | Atmosphere data contract (`data/atmospheres.json`) | T0140 | schema; per-body params; scattering model summary |
 | ADR-041 | Audio architecture & licensing intake | T0144 | Web Audio graph; manifest; Kubrick-mode honesty labeling |
 | ADR-042 | Diary storage & album export | T0146 | IndexedDB layout; quota policy; export format v1 |
+| ADR-043 | Cruise pursuit endgame — rendezvous form of physics-spec §8.7 | T0116 | §8.7's two-branch rule does not fly (wrong frame for the lead, sign-flipping repair, unreachable settle, body-blind departure); replaced by one rendezvous law. Written after the fact, from measurements. |
 
 (Numbers indicative — actual next-ADR number checked at execution time; keep this order.)
 
