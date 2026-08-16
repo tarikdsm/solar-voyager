@@ -98,6 +98,10 @@ let nowMs = MODEL_LOAD_START_MS;
 
 function updateView(distanceKm: number, simTimeSec: number): void {
   const cameraPositionKm = { x: sunX + distanceKm, y: sunY, z: sunZ };
+  // `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is
+  // the ship's, so `lookAt` alone no longer reproduces this fixture's framing.
+  // State the world-frame up this measurement has always assumed.
+  world.spaceScene.camera.up.set(0, 1, 0);
   world.spaceScene.camera.lookAt(-1, 0, 0);
   world.spaceScene.camera.updateMatrix();
   world.proceduralSun.update(simTimeSec);

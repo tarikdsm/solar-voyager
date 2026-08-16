@@ -35,10 +35,10 @@ All flight bindings can be changed before launch or during a session. See the co
 The game automatically stores data only in this browser profile:
 
 - `solar-voyager.save.v2` — the current flight envelope;
-- `solar-voyager.settings.v3` — quality, bindings, gamepad calibration, and tutorial progress (the
-  current profile format);
-- `solar-voyager.settings.v2` / `solar-voyager.settings.v1` — read only, each to migrate an older
-  profile forward one generation.
+- `solar-voyager.settings.v4` — quality, bindings, gamepad calibration, camera preferences, and
+  tutorial progress (the current profile format);
+- `solar-voyager.settings.v3` / `.v2` / `.v1` — read only, each to migrate an older profile forward
+  one generation.
 
 Use **Session & settings → Export** to download `solar-voyager-save.json` before clearing site data or
 moving to another browser. **Import** validates the entire v2 envelope before activating it. Older or

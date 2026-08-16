@@ -169,6 +169,10 @@ globalThis.__lightingPostHarness = {
     };
   },
   renderEarthNight(emissionEnabled) {
+    // `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is
+    // the ship's, so `lookAt` alone no longer reproduces this fixture's framing.
+    // State the world-frame up this measurement has always assumed.
+    world.spaceScene.camera.up.set(0, 1, 0);
     world.spaceScene.camera.lookAt(-outwardX, -outwardY, -outwardZ);
     world.spaceScene.camera.updateMatrix();
     world.visualSystem.update(
@@ -197,6 +201,7 @@ globalThis.__lightingPostHarness = {
     };
   },
   renderProductionSun(bloomEnabled, glareEnabled) {
+    world.spaceScene.camera.up.set(0, 1, 0);
     world.spaceScene.camera.lookAt(-1, 0, 0);
     world.spaceScene.camera.updateMatrix();
     world.visualSystem.update(

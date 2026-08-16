@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { createServer, preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { waitForCameraMode } from './cameraWaits.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
@@ -16,9 +17,9 @@ const PRODUCTION_URL = `http://${HOST}:${String(PRODUCTION_PORT)}/solar-voyager/
 const CAPTURE_FLAG_INDEX = process.argv.indexOf('--capture');
 const CAPTURE_PATH =
   CAPTURE_FLAG_INDEX < 0 ? null : path.resolve(process.argv[CAPTURE_FLAG_INDEX + 1] ?? '');
-// Earth is the fourth catalog target and the ship is the last, so cycling
-// backwards past the Sun wraps straight onto it.
-const FOCUS_CYCLE_BACKWARD_PRESSES = 4;
+// The ship is the last catalog target, so `]` from it wraps onto the Sun (index
+// 0) and a single `[` wraps straight back onto the ship.
+const FOCUS_CYCLE_BACKWARD_PRESSES = 1;
 const NOSE_ALIGNMENT_TOLERANCE = 1e-6;
 // WARP_LADDER = [1, 5, 10, 50, 100, 1e3, ...]; five rungs reaches 1000x.
 const WARP_RUNGS_FOR_CAPTURE = 5;
@@ -162,7 +163,17 @@ async function runFixturePhase(browser) {
   }
 }
 
-/** Production phase: `[`/`]` cycling reaches the ship in the shipped game. */
+/**
+ * Production phase: the shipped game opens on the ship and the focus ring still
+ * walks off it and back.
+ *
+ * T0109 shipped this phase against a camera that started on Earth with the ship
+ * sub-pixel, and cycled backwards four times to reach it. T0110 made chase the
+ * default, so the arrangement is inverted: the ship is focused and resolved from
+ * frame one, and it is *leaving* the ship that has to be driven. The tier-ladder
+ * coverage the old ordering gave (an unresolved, point-rendered ship at range)
+ * is preserved by asserting it on the Sun-focused observatory view instead.
+ */
 async function runProductionPhase(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
@@ -207,26 +218,15 @@ async function runProductionPhase(browser) {
 
     const initial = await readShip();
     assert.equal(initial.shipVisualCreations, 1);
-    assert.equal(initial.focused, false);
-    assert.equal(initial.loadState, 'idle', 'the ship model loaded before it was ever resolved');
-    assert.equal(initial.resolved, false, 'the ship resolves from the initial LEO camera');
-    assert.equal(initial.pointOpacity, 1);
-    assert.ok(
-      initial.diameterPx > 0 && initial.diameterPx < 1.8,
-      `unexpected initial ship angular size: ${String(initial.diameterPx)}`,
-    );
+    // T0110 — third-person from the first frame.
+    assert.equal(initial.focused, true, 'the shipped game did not open on the ship');
+    assert.equal(initial.focusLabel, 'Focus: Ship');
+    assert.equal(initial.resolved, true, 'the chased ship is not resolved');
     assertAligned(initial.noseAlignment, 'production initial attitude');
 
-    await page.locator('#space-canvas').click({ position: { x: 8, y: 8 } });
-    for (let press = 0; press < FOCUS_CYCLE_BACKWARD_PRESSES; press += 1) {
-      await page.keyboard.press('[');
-    }
-    await page.waitForFunction(
-      () =>
-        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.focused === true,
-      undefined,
-      { timeout: 10_000 },
-    );
+    // The model is fetched lazily *after* space-phase activation, never on the
+    // startup critical path, so the first frames legitimately show the additive
+    // point until the mesh arrives and cross-fades in.
     await page.waitForFunction(
       () =>
         globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.modelOpacity === 1,
@@ -241,14 +241,15 @@ async function runProductionPhase(browser) {
     assert.equal(focused.pointOpacity, 0);
     assert.equal(focused.focusLabel, 'Focus: Ship');
     assert.ok(
-      focused.diameterPx > 100,
-      `the focused ship is too small to see: ${String(focused.diameterPx)}`,
+      focused.diameterPx > 60,
+      `the chased ship is too small to see: ${String(focused.diameterPx)}`,
     );
     assertAligned(focused.noseAlignment, 'production focused composed');
     assertAligned(focused.noseNodeAlignment, 'production focused asset node');
 
     // Cycling forward must leave the ship and land back on a catalog body
     // without `Commands.setTarget` ever seeing the non-catalog id.
+    await page.locator('#space-canvas').click({ position: { x: 8, y: 8 } });
     await page.keyboard.press(']');
     await page.waitForFunction(
       () =>
@@ -256,34 +257,77 @@ async function runProductionPhase(browser) {
       undefined,
       { timeout: 10_000 },
     );
+    await waitForCameraMode(page, 'observatory');
     const afterCycle = await page.evaluate(
       () => globalThis.document.querySelector('#camera-focus-label')?.textContent ?? null,
     );
     assert.equal(afterCycle, 'Focus: Sun');
 
+    // Tier ladder, from the other end: 1 AU away the 26 m hull is far below the
+    // resolve threshold and falls back to its slot in the shared point cloud.
+    // Waited for, not slept for: dropping back to the point sprite runs the same
+    // hysteresis and cross-fade the resolve does.
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.modelOpacity === 0,
+      undefined,
+      { timeout: 60_000 },
+    );
+    const distant = await readShip();
+    assert.equal(distant.resolved, false, 'the ship still resolves from a Sun-focused camera');
+    assert.equal(distant.pointOpacity, 1);
+    assert.equal(distant.modelOpacity, 0);
+    assert.ok(
+      distant.diameterPx > 0 && distant.diameterPx < 1.8,
+      `unexpected distant ship angular size: ${String(distant.diameterPx)}`,
+    );
+
+    // ...and stepping the ring back onto the ship returns to the chase camera.
+    for (let press = 0; press < FOCUS_CYCLE_BACKWARD_PRESSES; press += 1) {
+      await page.keyboard.press('[');
+    }
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.focused === true,
+      undefined,
+      { timeout: 10_000 },
+    );
+    await waitForCameraMode(page, 'chase');
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.modelOpacity === 1,
+      undefined,
+      { timeout: 60_000 },
+    );
+    const returned = await readShip();
+    assert.equal(returned.focusLabel, 'Focus: Ship');
+    assert.equal(returned.resolved, true);
+
     let capture = null;
     if (CAPTURE_PATH !== null) capture = await captureLeoProof(page, readShip);
 
     assert.deepEqual(browserErrors, []);
-    return { afterCycle, capture, focused, initial };
+    return { afterCycle, capture, distant, focused, initial, returned };
   } finally {
     await context.close();
   }
 }
 
 /**
- * Opt-in proof shot. The ship starts at local midnight, so half an orbit of
- * time warp carries it to Earth's daylit side; the camera keeps its inertial
- * bearing, which by then puts the Sun behind it and a full Earth behind the
- * ship. Not asserted in CI — it is evidence for the pull request.
+ * Opt-in third-person proof shot: the ship on its chase arm with a daylit Earth
+ * behind it.
+ *
+ * The ship starts at local midnight, so half an orbit of time warp carries it to
+ * Earth's daylit side. The composition is then the radial-in attitude hold: it
+ * aims the nose at Earth, and because the chase arm hangs behind the nose the
+ * camera ends up looking down the same line — ship centred, planet filling the
+ * frame behind it. The hold turns at 15 deg/s of *simulated* time (ADR-035), so
+ * a half turn costs 12 s of simulation; warp pays for that without costing
+ * twelve seconds of wall clock.
+ *
+ * Not asserted in CI — it is evidence for the pull request.
  */
 async function captureLeoProof(page, readShip) {
-  await page.keyboard.press('[');
-  await page.waitForFunction(
-    () => globalThis.document.querySelector('#space-canvas')?.solarVoyagerShip?.focused === true,
-    undefined,
-    { timeout: 10_000 },
-  );
   const startSimTimeSec = await page.evaluate(
     () =>
       globalThis.document.querySelector('#space-canvas')?.solarVoyagerSystemMap
@@ -303,11 +347,20 @@ async function captureLeoProof(page, readShip) {
     await page.keyboard.press('Minus');
   }
   await page.waitForTimeout(1_500);
-  // A three-quarter view reads better than the dead-on bearing the camera keeps
-  // through the warp.
-  for (let press = 0; press < 4; press += 1) await page.keyboard.press('Shift+ArrowLeft');
+  // Prograde hold, slewed under moderate warp, then back to 1x to settle: the
+  // nose runs along track, so the chase arm looks forward over a daylit Earth
+  // rather than straight down into it.
+  await page.keyboard.press('Digit2');
+  for (let press = 0; press < 3; press += 1) await page.keyboard.press('Equal');
+  await page.waitForTimeout(4_000);
+  for (let press = 0; press < 3; press += 1) await page.keyboard.press('Minus');
+  await page.waitForTimeout(1_500);
+  // Swing the arm up and round: a three-quarter view with the limb below reads
+  // better than dead astern, and it puts the Sun across the hull instead of
+  // behind it.
   for (let press = 0; press < 3; press += 1) await page.keyboard.press('Shift+ArrowUp');
-  await page.waitForTimeout(1_000);
+  for (let press = 0; press < 4; press += 1) await page.keyboard.press('Shift+ArrowLeft');
+  await page.waitForTimeout(1_500);
   // `display: none` (not `visibility`) so the state-vector widget's viewport
   // collapses to zero and stops drawing its panel into the WebGL canvas.
   await page.evaluate(() => {
@@ -318,7 +371,20 @@ async function captureLeoProof(page, readShip) {
   await page.waitForTimeout(1_000);
   await mkdir(path.dirname(CAPTURE_PATH), { recursive: true });
   await page.screenshot({ path: CAPTURE_PATH });
-  const state = await readShip();
+  const state = {
+    ...(await readShip()),
+    camera: await page.evaluate(() => {
+      const camera = globalThis.document.querySelector('#space-canvas')?.solarVoyagerCamera;
+      return camera === undefined
+        ? null
+        : {
+            armDistanceKm: camera.armDistanceKm,
+            focusId: camera.focusId,
+            mode: camera.mode,
+            shipDistanceKm: camera.shipDistanceKm,
+          };
+    }),
+  };
   await page.evaluate(() => {
     const overlay = globalThis.document.querySelector('.app-overlay');
     if (overlay instanceof globalThis.HTMLElement) overlay.style.display = '';

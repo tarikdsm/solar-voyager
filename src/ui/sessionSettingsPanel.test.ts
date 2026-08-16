@@ -6,12 +6,14 @@ import {
   DEFAULT_GAME_SETTINGS,
   parseProfileSettings,
   rebindInput,
+  updateCameraFovWidening,
+  updateCameraShake,
   updateGamepadAxisInvert,
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
   updateGamepadDeadzone,
   type GamepadAxisId,
-  type GameSettingsV3,
+  type GameSettingsV4,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
@@ -23,7 +25,7 @@ import {
 
 class FakeSession implements SessionSettingsPort {
   initializationWarning: string | null = null;
-  settings: GameSettingsV3 = DEFAULT_GAME_SETTINGS;
+  settings: GameSettingsV4 = DEFAULT_GAME_SETTINGS;
   importedJson = '';
   importCalls = 0;
   loadCalls = 0;
@@ -61,6 +63,16 @@ class FakeSession implements SessionSettingsPort {
 
   saveLocal(): SessionActionResult {
     return this.saveResult;
+  }
+
+  setCameraFovWidening(fovWidening: boolean): SessionActionResult {
+    this.settings = updateCameraFovWidening(this.settings, fovWidening);
+    return { ok: true, message: 'Camera field of view updated' };
+  }
+
+  setCameraShake(shake: boolean): SessionActionResult {
+    this.settings = updateCameraShake(this.settings, shake);
+    return { ok: true, message: 'Camera shake updated' };
   }
 
   updateQualityLock(qualityLock: QualityLock): SessionActionResult {

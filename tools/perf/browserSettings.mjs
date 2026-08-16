@@ -1,7 +1,9 @@
 // This is `LEGACY_V2_SETTINGS_STORAGE_KEY` in src/game/settings.ts, deliberately
 // hand-written and left at the OLD (pre-T0106) v2 shape rather than updated to
-// v3 or imported from settings.ts. It exercises SettingsRepository.load()'s
-// v2->v3 migration (gamepad defaults backfilled) on every perf-gate/bench run,
+// a later generation or imported from settings.ts. It exercises
+// SettingsRepository.load()'s full migration chain — v2->v3 (gamepad defaults
+// backfilled, T0106) then v3->v4 (camera defaults backfilled, T0110) — on every
+// perf-gate/bench run,
 // exactly as it already exercised the T0108 binding backfill (13 actions here,
 // current registry has more) — see that task's design doc §11 and
 // docs/superpowers/specs/2026-08-15-gamepad-design.md's "Settings" section. If

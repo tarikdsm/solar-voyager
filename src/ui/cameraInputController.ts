@@ -14,6 +14,13 @@ export interface CameraControlPort {
   zoomByWheel(wheelDelta: number): void;
   focusBody(id: string): boolean;
   cycleFocus(step: number): string;
+  /**
+   * Steps the camera mode ring (T0110).
+   *
+   * Optional because only the space camera has modes: the system map is a single
+   * fixed viewpoint, and giving it a no-op method would imply otherwise.
+   */
+  cycleCameraMode?(): void;
 }
 
 function formatFocusLabel(id: string): string {
@@ -118,6 +125,12 @@ export class CameraInputController {
       case 'j':
         this.controls.focusBody('jupiter');
         break;
+      case 'o':
+        // Not rebindable, like every other camera key here. `C` would be the
+        // conventional choice but it is the default roll-right binding, and `V`
+        // is reserved for T0116's cruise abort.
+        this.controls.cycleCameraMode?.();
+        break;
       default:
         handled = false;
     }
@@ -135,7 +148,11 @@ export class CameraInputController {
     private readonly onInteraction: CameraInteractionListener | null = null,
   ) {
     this.enabled = initiallyEnabled;
-    this.updateFocusLabel();
+    // Only the enabled controller owns the shared focus label. Two controllers
+    // share one label element, and the disabled one used to overwrite it during
+    // construction — invisible while the space camera and the map camera were
+    // always on the same body, and wrong the moment T0110 let them diverge.
+    if (initiallyEnabled) this.updateFocusLabel();
     canvas.addEventListener('pointerdown', this.handlePointerDown);
     canvas.addEventListener('pointermove', this.handlePointerMove);
     canvas.addEventListener('pointerup', this.handlePointerEnd);
@@ -151,6 +168,9 @@ export class CameraInputController {
       if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
     }
     this.enabled = enabled;
+    // Taking ownership of the label means restating it: the other controller may
+    // have moved its own camera while this one was switched off.
+    if (enabled) this.updateFocusLabel();
   }
 
   dispose(): void {

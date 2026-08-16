@@ -2,9 +2,12 @@ import type { WebGLRenderer } from 'three';
 
 import bodiesDocument from '../../data/bodies.json';
 import type { ReadonlyVec3 } from '../core/vec3.js';
+import { CameraDirector, type CameraMode } from '../game/cameraDirector.js';
+import { ChaseCameraController } from '../game/chaseCameraController.js';
 import { createEpochState } from '../game/createEpochState.js';
 import { OrbitCameraController, type CameraFocusTarget } from '../game/orbitCameraController.js';
 import { loadAssetManifest } from './assetManifest.js';
+import { applyCameraPose } from './cameraRig.js';
 import { BodyAssetLoader } from './bodyAssetLoader.js';
 import {
   BodyVisualSystem,
@@ -20,6 +23,8 @@ import {
   ShipVisual,
   SHIP_ASSET_ID,
   SHIP_BOUNDING_RADIUS_KM,
+  SHIP_LENGTH_M,
+  SHIP_MODEL_SCALE_KM_PER_UNIT,
   SHIP_POINT_COLOR,
 } from './shipVisual.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
@@ -39,7 +44,17 @@ export interface EpochWorld {
   readonly osculatingConic: OsculatingConicOverlay;
   readonly trajectoryOverlay: TrajectoryOverlay;
   readonly systemMap: SystemMapScene;
+  /**
+   * The v1 orbit camera, now one of two the director drives.
+   *
+   * Still exposed because the system map owns a second, independent instance of
+   * the same class and the two are wired the same way — but the *space* camera
+   * must be driven through {@link cameraDirector}, never directly, or the mode
+   * and the pose fall out of step.
+   */
   readonly cameraController: OrbitCameraController;
+  /** Owns the space camera: mode, cross-fades and focus routing (T0110). */
+  readonly cameraDirector: CameraDirector;
   readonly cameraPositionKm: ReadonlyVec3;
   /**
    * Packed float64 positions: one triple per catalog body, then the ship.
@@ -58,6 +73,17 @@ export interface CreateEpochWorldOptions {
   readonly initialViewportHeightPx?: number;
   readonly onProgress?: ((milestone: EpochWorldMilestone) => void) | null;
   readonly starCatalog?: StarCatalog;
+  /**
+   * Ship attitude used to place the warm-up camera, xyzw; defaults to identity.
+   *
+   * Setup renders and rebases against a real camera position before any
+   * simulation step has run, so the chase arm needs an attitude to hang from.
+   * Passing the session's actual epoch attitude puts the warm-up camera where
+   * the first ordinary frame will be.
+   */
+  readonly initialShipAttitudeQuaternion?: Float64Array;
+  /** Starting camera mode; `chase` unless a fixture wants v1's framing. */
+  readonly initialCameraMode?: CameraMode;
 }
 
 export type EpochWorldMilestone =
@@ -105,6 +131,9 @@ export async function createEpochWorld(
   positionsKm[shipPositionOffset + 1] = epochState.shipPositionKm.y;
   positionsKm[shipPositionOffset + 2] = epochState.shipPositionKm.z;
   const bodyPositionsKm = positionsKm.subarray(0, bodyCount * 3);
+  // Body-major radii, so the chase arm can keep itself outside whichever body it
+  // is near without carrying a copy of the catalog.
+  const bodyRadiiKm = new Float64Array(bodyCount);
   const definitions: BodyVisualDefinition[] = [];
   const systemMapDefinitions: SystemMapBodyDefinition[] = [];
   const cameraTargets: CameraFocusTarget[] = [];
@@ -156,6 +185,7 @@ export async function createEpochWorld(
       sunProceduralSeed = body.proceduralSeed;
     }
     if (body.id === 'earth') earthIndex = index;
+    bodyRadiiKm[index] = body.meanRadiusKm;
     cameraTargets.push({
       id: body.id,
       positionOffset: index * 3,
@@ -185,7 +215,25 @@ export async function createEpochWorld(
     initialCameraPositionKm: epochState.cameraPositionKm,
   });
 
+  const chaseCameraController = new ChaseCameraController({
+    positionsKm,
+    shipPositionOffset,
+    shipLengthKm: SHIP_LENGTH_M * SHIP_MODEL_SCALE_KM_PER_UNIT,
+    bodyRadiiKm,
+  });
+
   const spaceScene = new CameraRelativeSpaceScene();
+  const cameraDirector = new CameraDirector({
+    orbit: cameraController,
+    chase: chaseCameraController,
+    shipFocusId: SHIP_ASSET_ID,
+    shipPositionOffset,
+    baseFovDeg: spaceScene.camera.fov,
+    ...(options.initialCameraMode === undefined ? {} : { initialMode: options.initialCameraMode }),
+    defaultObservatoryFocusId: 'earth',
+  });
+  cameraDirector.prime(options.initialShipAttitudeQuaternion ?? new Float64Array([0, 0, 0, 1]));
+  const cameraPositionKm = cameraDirector.cameraPositionKm;
   const osculatingConic = new OsculatingConicOverlay(spaceScene);
   const trajectoryBodyIds: string[] = [];
   for (let index = 0; index < epochState.bodies.length; index += 1) {
@@ -213,12 +261,7 @@ export async function createEpochWorld(
     viewportHeightPx: initialViewportHeightPx,
     pixelRatio: renderer.getPixelRatio(),
   });
-  spaceScene.camera.lookAt(
-    cameraController.lookDirection.x,
-    cameraController.lookDirection.y,
-    cameraController.lookDirection.z,
-  );
-  spaceScene.camera.updateMatrix();
+  applyCameraPose(spaceScene.camera, cameraDirector.pose);
 
   const lighting = new SolarLighting(
     spaceScene,
@@ -276,24 +319,21 @@ export async function createEpochWorld(
   // Before the first warm-up render: an unwritten point-cloud slot defaults to a
   // fully opaque unit-size dot, and the ship owns slot `shipIndex`.
   shipVisual.update(
-    cameraController.cameraPositionKm,
+    cameraPositionKm,
     initialViewportHeightPx,
     spaceScene.camera.fov * (Math.PI / 180),
     0,
   );
-  spaceScene.updateCameraRelative(cameraController.cameraPositionKm);
+  spaceScene.updateCameraRelative(cameraPositionKm);
   osculatingConic.line.visible = true;
-  trajectoryOverlay.prepareCompilationPass(
-    cameraController.cameraPositionKm,
-    cameraController.lookDirection,
-  );
+  trajectoryOverlay.prepareCompilationPass(cameraPositionKm, cameraDirector.pose.lookDirection);
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   renderer.render(spaceScene.scene, spaceScene.camera);
   options.onProgress?.('flight-shaders');
   osculatingConic.line.visible = false;
   trajectoryOverlay.hide();
   visualSystem.initializeView(
-    cameraController.cameraPositionKm,
+    cameraPositionKm,
     initialViewportHeightPx,
     spaceScene.camera.fov * (Math.PI / 180),
   );
@@ -317,7 +357,8 @@ export async function createEpochWorld(
     trajectoryOverlay,
     systemMap,
     cameraController,
-    cameraPositionKm: cameraController.cameraPositionKm,
+    cameraDirector,
+    cameraPositionKm,
     positionsKm,
     shipPositionOffset,
   };

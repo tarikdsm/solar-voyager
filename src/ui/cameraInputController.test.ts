@@ -54,6 +54,9 @@ function createFixture(initiallyEnabled = true) {
       focusId = step > 0 ? 'jupiter' : 'venus';
       return focusId;
     }),
+    cycleCameraMode: vi.fn(() => {
+      focusId = focusId === 'ship' ? 'earth' : 'ship';
+    }),
   };
   const interactions: string[] = [];
   const input = new CameraInputController(
@@ -192,6 +195,38 @@ describe('CameraInputController', () => {
     expect(controls.focusBody).toHaveBeenNthCalledWith(2, 'jupiter');
     expect(label.textContent).toBe('Focus: Jupiter');
     expect(preventDefault).toHaveBeenCalledTimes(4);
+  });
+
+  it('lets only the enabled controller own the shared focus label', () => {
+    // Two controllers share one label element (space camera and system map).
+    // While both cameras always sat on the same body this could not be seen;
+    // since T0110 the space camera can be on the ship while the map is on Earth,
+    // so a disabled controller writing during construction would mislabel the HUD.
+    const enabled = createFixture(true);
+    const disabled = createFixture(false);
+    expect(enabled.label.textContent).toBe('Focus: Earth');
+    expect(disabled.label.textContent).toBe('');
+
+    disabled.input.setEnabled(true);
+    expect(disabled.label.textContent).toBe('Focus: Earth');
+  });
+
+  it('cycles the camera mode on O and relabels from the camera, not the key', () => {
+    const { controls, keyboard, label } = createFixture();
+    const preventDefault = vi.fn();
+    const press = { repeat: false, ctrlKey: false, altKey: false, metaKey: false, preventDefault };
+
+    keyboard.emit('keydown', { ...press, key: 'o' });
+
+    expect(controls.cycleCameraMode).toHaveBeenCalledOnce();
+    // The label names what the camera is looking at now, which a mode change can
+    // move without any body being requested (T0110).
+    expect(label.textContent).toBe('Focus: Ship');
+    expect(preventDefault).toHaveBeenCalledOnce();
+
+    keyboard.emit('keydown', { ...press, key: 'O' });
+    expect(controls.cycleCameraMode).toHaveBeenCalledTimes(2);
+    expect(label.textContent).toBe('Focus: Earth');
   });
 
   it('ignores modified/repeated keys and removes every listener on dispose', () => {

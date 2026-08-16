@@ -39,6 +39,29 @@ export function writeForwardFromQuaternionInto(
   return outputDirection;
 }
 
+/**
+ * Writes the inertial direction of the ship-local +Z axis.
+ *
+ * ADR-025 §4 makes body `+X` the nose and body `+Z` the vessel's "up" (yaw turns
+ * about it), so this is the third column of the same rotation matrix
+ * {@link writeForwardFromQuaternionInto} reads the first column of. The chase
+ * camera needs it to raise its arm above the hull rather than sitting flat
+ * behind the nose (T0110).
+ */
+export function writeUpFromQuaternionInto(
+  outputDirection: Float64Array,
+  quaternion: Float64Array,
+): Float64Array {
+  const x = quaternion[QUATERNION_X] as number;
+  const y = quaternion[QUATERNION_Y] as number;
+  const z = quaternion[QUATERNION_Z] as number;
+  const w = quaternion[QUATERNION_W] as number;
+  outputDirection[0] = 2 * (x * z + y * w);
+  outputDirection[1] = 2 * (y * z - x * w);
+  outputDirection[2] = 1 - 2 * (x * x + y * y);
+  return outputDirection;
+}
+
 /** Writes the normalized minimum-rotation quaternion from local +X to forward. */
 export function writeQuaternionFromForwardInto(
   outputQuaternion: Float64Array,

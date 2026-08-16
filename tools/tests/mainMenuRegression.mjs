@@ -27,6 +27,10 @@ const LEGACY_V2_SAVE_JSON = readFileSync(
 
 const MENU_RUNTIME_RESOURCES = {
   animationLoopStarts: 0,
+  // Already 1 before the menu is dismissed: the director is built by
+  // `createEpochWorld` during `prepareApplication`, alongside the epoch world and
+  // the ship visual, not at space-phase activation (T0110).
+  cameraDirectors: 1,
   cameraInputControllers: 0,
   canvasBindings: 1,
   epochWorldCreations: 1,
@@ -46,6 +50,8 @@ const MENU_RUNTIME_RESOURCES = {
 
 const ACTIVE_RUNTIME_RESOURCES = {
   animationLoopStarts: 1,
+  // Still 1: one space camera per epoch world, and activation creates neither.
+  cameraDirectors: 1,
   cameraInputControllers: 2,
   canvasBindings: 1,
   epochWorldCreations: 1,

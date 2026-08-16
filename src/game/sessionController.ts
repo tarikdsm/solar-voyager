@@ -11,13 +11,15 @@ import {
   parseProfileSettings,
   projectGameSettingsV1,
   rebindInput,
+  updateCameraFovWidening,
+  updateCameraShake,
   updateGamepadAxisInvert,
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
   updateGamepadDeadzone,
   updateTutorialSettings,
   type GamepadAxisId,
-  type GameSettingsV3,
+  type GameSettingsV4,
   type InputAction,
   type QualityLock,
   type SettingsRepository,
@@ -63,13 +65,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV3, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV4, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV3;
+  private currentSettings: GameSettingsV4;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -86,7 +88,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV3, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV4, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -106,7 +108,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV3 {
+  get settings(): GameSettingsV4 {
     return this.currentSettings;
   }
 
@@ -319,6 +321,30 @@ export class GameSessionController {
     }
   }
 
+  /** T0110 — chase field-of-view widening on or off. */
+  setCameraFovWidening(fovWidening: boolean): SessionActionResult {
+    try {
+      const candidate = updateCameraFovWidening(this.currentSettings, fovWidening);
+      return this.commitSettings(candidate, 'Camera field of view updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update camera field of view',
+        detail: describeError(error),
+      };
+    }
+  }
+
+  /** T0110 — chase camera shake on or off. */
+  setCameraShake(shake: boolean): SessionActionResult {
+    try {
+      const candidate = updateCameraShake(this.currentSettings, shake);
+      return this.commitSettings(candidate, 'Camera shake updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update camera shake', detail: describeError(error) };
+    }
+  }
+
   updateTutorial(transition: (current: TutorialProgress) => TutorialProgress): SessionActionResult {
     try {
       const candidate = updateTutorialSettings(
@@ -373,7 +399,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV3,
+    settings: GameSettingsV4,
     successMessage: string,
     publish = true,
   ): SessionActionResult {

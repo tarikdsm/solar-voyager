@@ -78,6 +78,11 @@ function cameraPosition(distanceKm: number): { x: number; y: number; z: number }
 
 function updateView(distanceKm: number, nowMs: number): void {
   const position = cameraPosition(distanceKm);
+  // `createEpochWorld` leaves the camera on the chase pose (T0110), whose up is
+  // the ship's, so `lookAt` alone no longer reproduces this fixture's framing —
+  // same view direction, arbitrarily different roll. State the world-frame up
+  // this measurement has always assumed instead of inheriting a default.
+  world.spaceScene.camera.up.set(0, 1, 0);
   world.spaceScene.camera.lookAt(outwardX, outwardY, outwardZ);
   world.spaceScene.camera.updateMatrix();
   world.visualSystem.update(

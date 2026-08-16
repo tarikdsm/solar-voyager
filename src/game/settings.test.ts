@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import profileV2Fixture from '../../tests/fixtures/settings-profile-v2.json';
 import {
+  DEFAULT_CAMERA_SETTINGS,
   DEFAULT_GAME_SETTINGS,
   DEFAULT_GAMEPAD_SETTINGS,
   GAMEPAD_AXES,
@@ -9,6 +10,7 @@ import {
   isUnboundInputCode,
   LEGACY_SETTINGS_STORAGE_KEY,
   LEGACY_V2_SETTINGS_STORAGE_KEY,
+  LEGACY_V3_SETTINGS_STORAGE_KEY,
   mergeGameSettingsPreferences,
   parseGameSettings,
   parseProfileSettings,
@@ -16,6 +18,8 @@ import {
   rebindInput,
   SETTINGS_STORAGE_KEY,
   SettingsRepository,
+  updateCameraFovWidening,
+  updateCameraShake,
   updateGamepadAxisInvert,
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
@@ -286,11 +290,12 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 3,
+      version: 4,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
       gamepad: DEFAULT_GAME_SETTINGS.gamepad,
+      camera: DEFAULT_GAME_SETTINGS.camera,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
@@ -449,14 +454,14 @@ describe('game settings', () => {
       expect(merged.gamepad).toEqual(customized.gamepad);
     });
 
-    it('migrates a stored v2 profile (no gamepad field) to v3 and writes it forward to the v3 key', () => {
+    it('migrates a stored v2 profile (no gamepad field) across two generations to the current key', () => {
       const storage = new MemoryStorage();
       storage.values.set(LEGACY_V2_SETTINGS_STORAGE_KEY, JSON.stringify(profileV2Fixture));
 
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(3);
+      expect(result.settings.version).toBe(4);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
@@ -465,7 +470,8 @@ describe('game settings', () => {
       expect(result.settings.inputBindings.cruiseAbort).toBe('KeyV');
       expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
-      // Written forward to the dedicated v3 key, not back into the v2 one —
+      expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+      // Written forward to the dedicated current key, not back into the v2 one —
       // a downgraded build must never see (and clobber) the migrated result.
       expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
       expect(storage.values.get(LEGACY_V2_SETTINGS_STORAGE_KEY)).toEqual(
@@ -473,7 +479,7 @@ describe('game settings', () => {
       );
     });
 
-    it('a wrong-version document at the v3 key fails closed with a v3-specific error', () => {
+    it('a wrong-version document at the current key fails closed with a version-specific error', () => {
       const storage = new MemoryStorage();
       storage.values.set(
         SETTINGS_STORAGE_KEY,
@@ -483,10 +489,10 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 3/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 4/u);
     });
 
-    it('fails closed when writing a migrated v2->v3 profile fails', () => {
+    it('fails closed when writing a migrated legacy profile fails', () => {
       const storage = new MemoryStorage();
       storage.values.set(LEGACY_V2_SETTINGS_STORAGE_KEY, JSON.stringify(profileV2Fixture));
       storage.setError = new Error('quota');
@@ -497,11 +503,11 @@ describe('game settings', () => {
       if (!result.ok) expect(result.error).toMatch(/migrate settings.*quota/iu);
     });
 
-    it('prefers the current v3 key over a stale v2 key present alongside it (downgrade safety)', () => {
+    it('prefers the current key over a stale v2 key present alongside it (downgrade safety)', () => {
       // A player who briefly ran an older, pre-T0106 build would have left a
-      // v2 document sitting at the v2 key without ever writing to the v3 key
-      // it doesn't know about. That document must never be consulted, let
-      // alone allowed to shadow or overwrite the current one, once a v3-aware
+      // v2 document sitting at the v2 key without ever writing to the current
+      // key it doesn't know about. That document must never be consulted, let
+      // alone allowed to shadow or overwrite the current one, once an up-to-date
       // build is running again — the entire point of a dedicated key per
       // generation instead of one shared, version-bumped-in-place key.
       const storage = new MemoryStorage();
@@ -512,10 +518,107 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toEqual({ ok: true, settings: current, source: 'stored' });
-      // Untouched: a v3-key read must not write anywhere, including the stale key.
+      // Untouched: a current-key read must not write anywhere, including stale keys.
       expect(storage.values.get(LEGACY_V2_SETTINGS_STORAGE_KEY)).toBe(
         JSON.stringify(profileV2Fixture),
       );
+    });
+  });
+
+  describe('camera settings (T0110)', () => {
+    function profileV3Document(): Record<string, unknown> {
+      return {
+        version: 3,
+        qualityLock: 'high',
+        inputBindings: { ...DEFAULT_GAME_SETTINGS.inputBindings },
+        tutorial: { status: 'completed', stepId: 'return-to-play' },
+        gamepad: JSON.parse(JSON.stringify(DEFAULT_GAMEPAD_SETTINGS)) as unknown,
+      };
+    }
+
+    it('defaults both chase effects on, because they are sized to be subtle rather than opt-in', () => {
+      expect(DEFAULT_CAMERA_SETTINGS).toEqual({ fovWidening: true, shake: true });
+      expect(DEFAULT_GAME_SETTINGS.camera).toBe(DEFAULT_CAMERA_SETTINGS);
+    });
+
+    it('toggles each effect independently and keeps the document valid', () => {
+      const noFov = updateCameraFovWidening(DEFAULT_GAME_SETTINGS, false);
+      expect(noFov.camera).toEqual({ fovWidening: false, shake: true });
+      const neither = updateCameraShake(noFov, false);
+      expect(neither.camera).toEqual({ fovWidening: false, shake: false });
+      expect(() => parseProfileSettings(neither)).not.toThrow();
+      expect(Object.isFrozen(neither.camera)).toBe(true);
+    });
+
+    it('rejects an incomplete, excess or mistyped camera document', () => {
+      expect(() =>
+        parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, camera: { fovWidening: true } }),
+      ).toThrow(/field is missing: shake/u);
+      expect(() =>
+        parseProfileSettings({
+          ...DEFAULT_GAME_SETTINGS,
+          camera: { ...DEFAULT_CAMERA_SETTINGS, extra: true },
+        }),
+      ).toThrow(/unknown camera settings field/u);
+      expect(() =>
+        parseProfileSettings({
+          ...DEFAULT_GAME_SETTINGS,
+          camera: { fovWidening: 'yes', shake: true },
+        }),
+      ).toThrow(/fovWidening must be a boolean/u);
+      expect(() => parseProfileSettings({ ...DEFAULT_GAME_SETTINGS, camera: null })).toThrow(
+        /camera settings must be an object/u,
+      );
+    });
+
+    it('migrates a stored v3 profile to v4 and writes it forward to the current key', () => {
+      const storage = new MemoryStorage();
+      const document = profileV3Document();
+      storage.values.set(LEGACY_V3_SETTINGS_STORAGE_KEY, JSON.stringify(document));
+
+      const result = new SettingsRepository(storage).load();
+
+      expect(result).toMatchObject({ ok: true, source: 'migrated' });
+      expect(result.settings.version).toBe(4);
+      expect(result.settings.qualityLock).toBe('high');
+      expect(result.settings.tutorial).toEqual({
+        status: 'completed',
+        stepId: 'return-to-play',
+      });
+      expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
+      expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+      expect(JSON.parse(storage.values.get(SETTINGS_STORAGE_KEY) ?? '')).toEqual(result.settings);
+      // The v3 document stays where it is: a rolled-back build reads its own key
+      // and never sees, or clobbers, the newer one.
+      expect(storage.values.get(LEGACY_V3_SETTINGS_STORAGE_KEY)).toBe(JSON.stringify(document));
+    });
+
+    it('prefers the current key over a stale v3 key present alongside it', () => {
+      const storage = new MemoryStorage();
+      const current = updateCameraShake(DEFAULT_GAME_SETTINGS, false);
+      storage.values.set(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+      storage.values.set(LEGACY_V3_SETTINGS_STORAGE_KEY, JSON.stringify(profileV3Document()));
+
+      expect(new SettingsRepository(storage).load()).toEqual({
+        ok: true,
+        settings: current,
+        source: 'stored',
+      });
+    });
+
+    it('preserves camera toggles across a save import, like tutorial and gamepad state', () => {
+      const customized = updateCameraShake(DEFAULT_GAME_SETTINGS, false);
+      const imported = projectGameSettingsV1(DEFAULT_GAME_SETTINGS);
+
+      expect(mergeGameSettingsPreferences(customized, imported).camera).toEqual({
+        fovWidening: true,
+        shake: false,
+      });
+    });
+
+    it('keeps camera toggles out of the save-embedded preferences DTO', () => {
+      const projected = projectGameSettingsV1(updateCameraShake(DEFAULT_GAME_SETTINGS, false));
+      expect(Object.keys(projected)).toEqual(['version', 'qualityLock', 'inputBindings']);
     });
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { OrbitCameraController } from '../game/orbitCameraController.js';
 import { SystemMapController } from '../game/systemMapController.js';
 import type { Commands } from '../sim/simulationSnapshot.js';
-import { SharedCameraControls } from './sharedCameraControls.js';
+import { SharedCameraControls, type SharedCameraTarget } from './sharedCameraControls.js';
 
 const BODY_IDS = ['sun', 'earth', 'mars'] as const;
 const SHIP_ID = 'ship';
@@ -44,7 +44,7 @@ function createRig() {
     setTarget,
   } as unknown as Commands;
   const controls = new SharedCameraControls(camera, map, commands, [...BODY_IDS]);
-  return { camera, controls, map, onFocusChange, setTarget };
+  return { camera, commands, controls, map, onFocusChange, setTarget };
 }
 
 describe('SharedCameraControls', () => {
@@ -96,6 +96,36 @@ describe('SharedCameraControls', () => {
     expect(rig.controls.focusBody('pluto')).toBe(false);
     expect(rig.camera.focusId).toBe('earth');
     expect(rig.map.focusId).toBe('earth');
+    expect(rig.setTarget).not.toHaveBeenCalled();
+  });
+
+  it('forwards a mode cycle to the camera and nowhere else', () => {
+    const rig = createRig();
+    const cycle = vi.fn();
+    const modal: SharedCameraTarget = {
+      focusId: 'ship',
+      orbitBy: vi.fn(),
+      zoomByWheel: vi.fn(),
+      focusBody: vi.fn(() => true),
+      cycleFocus: vi.fn(() => 'ship'),
+      cycle,
+    };
+    const controls = new SharedCameraControls(modal, rig.map, rig.commands, [...BODY_IDS]);
+
+    controls.cycleCameraMode();
+
+    expect(cycle).toHaveBeenCalledOnce();
+    // A view change is not a navigation change: neither the map nor the
+    // simulation target may move behind the player's back.
+    expect(rig.setTarget).not.toHaveBeenCalled();
+    expect(rig.onFocusChange).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for a camera with no modes, like the system map', () => {
+    const rig = createRig();
+    expect(() => {
+      rig.controls.cycleCameraMode();
+    }).not.toThrow();
     expect(rig.setTarget).not.toHaveBeenCalled();
   });
 });

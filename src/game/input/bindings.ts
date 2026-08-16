@@ -136,7 +136,7 @@ export function blocksGameKey(event: GameKeyEvent): boolean {
 /**
  * Resolves `KeyboardEvent.code` to a rebindable action.
  *
- * The persisted `GameSettingsV3.inputBindings` code map stays the storage
+ * The persisted `GameSettingsV4.inputBindings` code map stays the storage
  * format; this table is its runtime index and is rebuilt only when settings
  * change, never per frame.
  */
