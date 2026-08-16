@@ -1,4 +1,6 @@
 import { strict as assert } from 'node:assert';
+import { join } from 'node:path';
+
 import { describe, it } from 'vitest';
 
 import { HARNESS_PORT_SPAN, resolveHarnessPort, worktreeNameFor } from './harnessPort.mjs';
@@ -31,7 +33,13 @@ describe('harness port isolation', () => {
     assert.ok(HARNESS_PORT_SPAN > 4207 - 4174);
   });
 
-  it('recognises the worktree name regardless of separator', () => {
-    assert.equal(worktreeNameFor(String.raw`D:\repo\.worktrees\T0131`), 'T0131');
+  it('recognises the worktree name in the platform separator', () => {
+    // Built with join rather than a literal: a backslash is a path separator on Windows and a
+    // legal filename character on Linux, so a hardcoded Windows path passes locally and fails CI.
+    assert.equal(worktreeNameFor(join('D:', 'repo', '.worktrees', 'T0131')), 'T0131');
+  });
+
+  it('ignores a directory that merely contains the marker in its name', () => {
+    assert.equal(worktreeNameFor(join('D:', 'repo', 'my.worktrees-backup', 'T0131')), null);
   });
 });
