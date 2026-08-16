@@ -9,11 +9,28 @@ function createFixture() {
   const spaceScene = { setRelativisticObserver: vi.fn() };
   const starfield = { setRelativisticObserver: vi.fn() };
   const postPass = { updateObserver: vi.fn() };
-  const controller = new RelativisticVisualController({ postPass, spaceScene, starfield });
+  const milkyWaySky = { setRelativisticObserver: vi.fn() };
+  const constellationLines = { setRelativisticObserver: vi.fn() };
+  const controller = new RelativisticVisualController({
+    postPass,
+    spaceScene,
+    starfield,
+    milkyWaySky,
+    constellationLines,
+  });
   const camera = new PerspectiveCamera();
   camera.updateMatrixWorld(true);
   const snapshot = createSimulationSnapshotBuffer([]);
-  return { camera, controller, postPass, snapshot, spaceScene, starfield };
+  return {
+    camera,
+    constellationLines,
+    controller,
+    milkyWaySky,
+    postPass,
+    snapshot,
+    spaceScene,
+    starfield,
+  };
 }
 
 function setBeta(snapshot: ReturnType<typeof createSimulationSnapshotBuffer>, beta: number): void {

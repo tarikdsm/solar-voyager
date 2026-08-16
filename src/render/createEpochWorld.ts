@@ -27,11 +27,15 @@ import {
   SHIP_MODEL_SCALE_KM_PER_UNIT,
   SHIP_POINT_COLOR,
 } from './shipVisual.js';
+import { ConstellationLines } from './constellationLines.js';
+import { loadConstellationLines } from './constellationCatalog.js';
+import { MilkyWaySky } from './milkyWaySky.js';
 import { loadStarCatalog, type StarCatalog } from './starCatalog.js';
 import { Starfield } from './starfield.js';
 import { TrajectoryOverlay } from './trajectoryOverlay.js';
 import type { SystemMapBodyDefinition, SystemMapScene } from './systemMapScene.js';
 
+import constellationLinesUrl from '../../data/constellations.bin?url';
 import starCatalogUrl from '../../data/stars.bin?url';
 
 export interface EpochWorld {
@@ -39,6 +43,17 @@ export interface EpochWorld {
   readonly visualSystem: BodyVisualSystem;
   readonly shipVisual: ShipVisual;
   readonly starfield: Starfield;
+  /** Panorama sphere plus zodiacal band, behind the star Points (T0126). */
+  readonly milkyWaySky: MilkyWaySky;
+  /**
+   * The 88 IAU figures, off by default (T0126).
+   *
+   * The batch and its program exist from setup so nothing compiles mid-flight,
+   * but its 2.6 kB payload is fetched only when the overlay is first switched on
+   * after activation — and a failed fetch degrades to "no overlay", never to a
+   * failed startup.
+   */
+  readonly constellationLines: ConstellationLines;
   readonly lighting: SolarLighting;
   readonly proceduralSun: ProceduralSun;
   readonly osculatingConic: OsculatingConicOverlay;
@@ -299,6 +314,27 @@ export async function createEpochWorld(
       await loadAssetManifest(`${import.meta.env.BASE_URL}assets/manifest.json`),
     );
   options.onProgress?.('asset-manifest');
+
+  // The sky mesh joins the scene now so its program is compiled by the warm-up
+  // pass below; the panorama texture itself is fetched only after the space
+  // phase activates, which is why it is absent from data/initial-path.json.
+  const milkyWaySky = new MilkyWaySky({
+    positionsKm,
+    sunPositionOffset: sunIndex * 3,
+    effectBindingTelemetry: spaceScene.effectBindingTelemetry,
+    loader: {
+      loadSkyPanorama: async (tier) =>
+        (await assetLoader.loadSkyPanorama?.('milkyway', tier)) ?? null,
+    },
+  });
+  milkyWaySky.update(cameraPositionKm);
+  spaceScene.scene.add(milkyWaySky.mesh);
+
+  const constellationLines = new ConstellationLines(starCatalog, {
+    loader: async () =>
+      loadConstellationLines(constellationLinesUrl, starCatalog.starCount).catch(() => null),
+  });
+  spaceScene.scene.add(constellationLines.lines);
   const compileModel: BodyModelCompiler = async (root) => {
     await renderer.compileAsync(root, spaceScene.camera, spaceScene.scene);
   };
@@ -335,11 +371,15 @@ export async function createEpochWorld(
   );
   spaceScene.updateCameraRelative(cameraPositionKm);
   osculatingConic.line.visible = true;
+  // The compile pass only reaches visible objects and the overlay ships off, so
+  // without this its program would compile on the first frame a player enables it.
+  constellationLines.prepareCompilationPass();
   trajectoryOverlay.prepareCompilationPass(cameraPositionKm, cameraDirector.pose.lookDirection);
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   renderer.render(spaceScene.scene, spaceScene.camera);
   options.onProgress?.('flight-shaders');
   osculatingConic.line.visible = false;
+  constellationLines.hide();
   trajectoryOverlay.hide();
   visualSystem.initializeView(
     cameraPositionKm,
@@ -360,6 +400,8 @@ export async function createEpochWorld(
     visualSystem,
     shipVisual,
     starfield,
+    milkyWaySky,
+    constellationLines,
     lighting,
     proceduralSun,
     osculatingConic,

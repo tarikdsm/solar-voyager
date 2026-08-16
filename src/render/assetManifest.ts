@@ -1,5 +1,14 @@
 export type RuntimeAssetCategory =
-  'asteroid' | 'comet' | 'dwarf' | 'moon' | 'planet' | 'rings' | 'ship' | 'sun';
+  | 'asteroid'
+  | 'comet'
+  | 'dwarf'
+  | 'moon'
+  | 'planet'
+  | 'rings'
+  | 'ship'
+  /** Deep-sky panorama: textures only, no model, no body-catalog entry (T0126). */
+  | 'sky'
+  | 'sun';
 
 export interface RuntimeAssetEntry {
   readonly id: string;
@@ -31,6 +40,7 @@ const CATEGORIES = new Set<RuntimeAssetCategory>([
   'planet',
   'rings',
   'ship',
+  'sky',
   'sun',
 ]);
 

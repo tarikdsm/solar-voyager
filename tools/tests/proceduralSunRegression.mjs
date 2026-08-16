@@ -7,6 +7,20 @@ import sharp from 'sharp';
 import { createServer } from 'vite';
 import { resolveHarnessPort } from '../harnessPort.mjs';
 
+/**
+ * How far the Sun must stay above the sky behind it (T0126).
+ *
+ * Deliberately a ratio, not a byte threshold. The zodiacal band's absolute
+ * budget is 2 nits, and that is proved where it can be proved in physical
+ * units — exhaustively in `src/render/zodiacalLight.test.ts`, and against the
+ * live `solarVoyagerSky.zodiacalPeakNits` diagnostic in `test:milky-way`.
+ * Restating it here as a post-tone-curve byte count would just be a second,
+ * weaker copy that any exposure or tone-mapping change would falsify. What this
+ * gate can say that those cannot is that the Sun still reads as the Sun against
+ * a real sky.
+ */
+const MIN_SOLAR_CONTRAST_OVER_SKY = 10;
+
 const HOST = '127.0.0.1';
 const PORT = resolveHarnessPort(4180);
 const VIEWPORT_SIZE = 512;
@@ -232,16 +246,32 @@ try {
   await page.evaluate(() => globalThis.__proceduralSunHarness.renderClose(0, 'full', false));
   const fallbackBuffer = await page.locator('canvas').screenshot();
 
+  // Each distance is shot twice (T0126). The background-bleed metric this gate
+  // has always asserted on means "how far the Sun's own glow carries across the
+  // frame", which needs a controlled background; the deep sky is a real,
+  // budgeted light source in that annulus and would swamp it. So the sky is
+  // suppressed for the bleed shot and restored for a second shot that asserts
+  // the sky is present and inside its own budget. Neither shot pretends the
+  // other does not exist.
   const distanceBuffers = {};
+  const skyDistanceBuffers = {};
   for (const distance of ['mercury', 'earth', 'neptune']) {
+    await page.evaluate(() => globalThis.__proceduralSunHarness.setSkyVisible(false));
     await page.evaluate((label) => globalThis.__proceduralSunHarness.renderDistance(label, 0), distance);
     distanceBuffers[distance] = await page.locator('canvas').screenshot();
+
+    await page.evaluate(() => globalThis.__proceduralSunHarness.setSkyVisible(true));
+    await page.evaluate((label) => globalThis.__proceduralSunHarness.renderDistance(label, 0), distance);
+    skyDistanceBuffers[distance] = await page.locator('canvas').screenshot();
   }
 
   const close = await pixels(closeBuffer);
   const profile = await pixels(profileBuffer);
   const animated = await pixels(animatedBuffer);
   const fallback = await pixels(fallbackBuffer);
+  const skyMercury = await pixels(skyDistanceBuffers.mercury);
+  const skyEarth = await pixels(skyDistanceBuffers.earth);
+  const skyNeptune = await pixels(skyDistanceBuffers.neptune);
   const mercury = await pixels(distanceBuffers.mercury);
   const earth = await pixels(distanceBuffers.earth);
   const neptune = await pixels(distanceBuffers.neptune);
@@ -286,6 +316,11 @@ try {
       earth: solarRoiMetrics(earth),
       neptune: solarRoiMetrics(neptune),
     },
+    skyDistanceSolarRoi: {
+      mercury: solarRoiMetrics(skyMercury),
+      earth: solarRoiMetrics(skyEarth),
+      neptune: solarRoiMetrics(skyNeptune),
+    },
   };
   process.stdout.write(`${JSON.stringify(metrics, null, 2)}\n`);
 
@@ -327,8 +362,55 @@ try {
   assert.ok(metrics.distanceSolarRoi.neptune.litPixels >= 1);
   for (const distance of Object.values(metrics.distanceSolarRoi)) {
     assert.ok(distance.peakLuminance >= 32);
-    assert.ok(distance.backgroundMeanLuminance < 2);
+    // The Sun's own bleed into the 32-64 px annulus, against a controlled
+    // background. Threshold unchanged since this gate was written; what changed
+    // is that the sky is now explicitly excluded instead of assumed absent.
+    assert.ok(
+      distance.backgroundMeanLuminance < 2,
+      `solar bleed ${distance.backgroundMeanLuminance.toFixed(3)} exceeds 2 with the sky suppressed`,
+    );
   }
+
+  // T0126 — the other half: the sky must actually be there, and must stay inside
+  // the budget rendering-spec.md section 5.2 sets for it. Without both of these,
+  // suppressing the sky above would have quietly turned this gate into a test of
+  // nothing.
+  for (const [label, sky] of Object.entries(metrics.skyDistanceSolarRoi)) {
+    assert.ok(sky.peakLuminance >= 32);
+    assert.ok(
+      sky.peakLuminance > sky.backgroundMeanLuminance * MIN_SOLAR_CONTRAST_OVER_SKY,
+      `${label}: the sky is drowning the Sun — peak ${sky.peakLuminance.toFixed(1)} is under ` +
+        `${MIN_SOLAR_CONTRAST_OVER_SKY}x the background ${sky.backgroundMeanLuminance.toFixed(3)}`,
+    );
+  }
+
+  // Inside the belt the band must actually be there, or suppressing it for the
+  // bleed measurement above would have quietly turned this gate into a test of
+  // nothing.
+  for (const label of ['mercury', 'earth']) {
+    const sky = metrics.skyDistanceSolarRoi[label];
+    const solarOnly = metrics.distanceSolarRoi[label];
+    assert.ok(
+      sky.backgroundMeanLuminance > solarOnly.backgroundMeanLuminance * 4,
+      `${label}: the deep sky did not render — background ${sky.backgroundMeanLuminance.toFixed(3)} ` +
+        `is not meaningfully above the sky-suppressed ${solarOnly.backgroundMeanLuminance.toFixed(3)}`,
+    );
+  }
+
+  // And by Neptune it must be gone: the band is a solar-system phenomenon that
+  // fades as r^-2.3, so at 30 AU the sky-on frame matches the sky-off one.
+  assert.ok(
+    Math.abs(
+      metrics.skyDistanceSolarRoi.neptune.backgroundMeanLuminance -
+        metrics.distanceSolarRoi.neptune.backgroundMeanLuminance,
+    ) < 0.5,
+    'the zodiacal band did not fade out by Neptune',
+  );
+  assert.ok(
+    metrics.skyDistanceSolarRoi.neptune.backgroundMeanLuminance <
+      metrics.skyDistanceSolarRoi.mercury.backgroundMeanLuminance / 10,
+    'the zodiacal band did not fade between Mercury and Neptune',
+  );
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
 } finally {

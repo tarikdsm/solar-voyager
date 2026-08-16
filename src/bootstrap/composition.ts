@@ -86,6 +86,7 @@ import {
   createCameraRuntimeDiagnostics,
   createPhotoRuntimeDiagnostics,
   createExposureRuntimeDiagnostics,
+  createSkyRuntimeDiagnostics,
   createRuntimeResourceCounts,
   createShipRuntimeDiagnostics,
   createSystemMapRuntimeDiagnostics,
@@ -469,6 +470,9 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       hudPresetStore.setPreset(settings.hud.preset);
       hudPresetStore.setBodyLabels(settings.hud.bodyLabels);
       runtime.exposureController?.setUserMode(settings.render.exposureMode);
+      runtime.world?.milkyWaySky.setPanoramaEnabled(settings.sky.panorama);
+      runtime.world?.milkyWaySky.setZodiacalLightEnabled(settings.sky.zodiacalLight);
+      runtime.world?.constellationLines.setEnabled(settings.sky.constellations);
       runtime.perfGovernor?.setLock(settings.qualityLock, performance.now());
     },
   });
@@ -1257,10 +1261,16 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     });
     runtime.exposureController = exposureController;
     createExposureRuntimeDiagnostics(canvas, exposureController);
+    createSkyRuntimeDiagnostics(canvas, world);
+    world.milkyWaySky.setPanoramaEnabled(session.settings.sky.panorama);
+    world.milkyWaySky.setZodiacalLightEnabled(session.settings.sky.zodiacalLight);
+    world.constellationLines.setEnabled(session.settings.sky.constellations);
     const relativisticVisuals = new RelativisticVisualController({
       postPass: postPipeline.relativisticPass,
       spaceScene: world.spaceScene,
       starfield: world.starfield,
+      milkyWaySky: world.milkyWaySky,
+      constellationLines: world.constellationLines,
     });
     runtime.relativisticVisuals = relativisticVisuals;
     const qualityController = new RenderQualityController({
@@ -1271,6 +1281,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       proceduralSun: world.proceduralSun,
       renderer,
       relativisticVisuals,
+      skybox: world.milkyWaySky,
       starfield: world.starfield,
       visualSystem: world.visualSystem,
     });
@@ -1321,6 +1332,10 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     if (activeWorld === null) throw new Error('Solar Voyager epoch world was not prepared.');
     activeWorld.visualSystem.enableLazyLoading();
     activeWorld.shipVisual.enableLazyLoading();
+    // T0126 — the panorama and the constellation payload are fetched only from
+    // here, which is why neither appears in data/initial-path.json.
+    activeWorld.milkyWaySky.enableLazyLoading();
+    activeWorld.constellationLines.enableLazyLoading();
     const focusLabel = document.querySelector('#camera-focus-label');
     if (!(focusLabel instanceof HTMLElement)) {
       throw new Error('Solar Voyager camera focus label was not found.');

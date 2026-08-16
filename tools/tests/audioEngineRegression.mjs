@@ -45,7 +45,7 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
 const HOST = '127.0.0.1';
 const PORT = 4208;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
 /** Chrome's autoplay block, and anything else that mentions the policy. */
 const AUTOPLAY_PATTERN = /autoplay|AudioContext was not allowed|was not allowed to start/iu;
 

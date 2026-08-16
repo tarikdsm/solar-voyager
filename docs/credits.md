@@ -31,6 +31,11 @@ the root of every production build.
 - The visible star catalog is derived from the Yale Bright Star Catalog, catalog V/50 distributed by
   the [CDS](https://cdsarc.cds.unistra.fr/), with its pinned source checksum and bake procedure
   recorded in [tools/README.md](../tools/README.md).
+- The constellation-line figures are derived from
+  [ConstellationLines](https://github.com/MarcvdSluys/ConstellationLines) by Marc van der Sluys,
+  used under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The figure file lists
+  Yale HR numbers; `tools/bake_constellations.py` resolves them against the same pinned Yale catalog
+  into `data/constellations.bin`. Both source checksums are pinned in that script.
 
 ## Textures and models
 
@@ -40,6 +45,10 @@ the root of every production build.
 - Moon color and elevation maps credit NASA Scientific Visualization Studio; LROC data credit
   NASA/GSFC/Arizona State University and LOLA data credit NASA/GSFC/MIT. Processing and derived-map
   details are recorded with the sources.
+- The Milky Way panorama credits **ESO/S. Brunier** and is used under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is the
+  [GigaGalaxy Zoom all-sky panorama](https://www.eso.org/public/images/eso0932a/), downsampled to
+  4096×2048 and re-encoded to KTX2; content is otherwise unchanged.
 - Pluto imagery credits NASA/JHUAPL/SwRI New Horizons. Procedural surfaces, rings, gas detail, Sun,
   spacecraft, and remaining authored geometry use deterministic Solar Voyager generators where the
   corresponding source record says so.
@@ -47,6 +56,7 @@ the root of every production build.
 The per-asset `SOURCES.md` files are the authoritative attribution, license, checksum, modification,
 and generator records:
 
+- [Milky Way panorama sources](../assets/textures-src/milkyway/SOURCES.md)
 - [Earth texture sources](../assets/textures-src/earth/SOURCES.md)
 - [Moon texture sources](../assets/textures-src/moon/SOURCES.md)
 - [Jupiter texture sources](../assets/textures-src/jupiter/SOURCES.md)

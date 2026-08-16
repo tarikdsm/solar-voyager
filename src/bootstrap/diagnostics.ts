@@ -9,6 +9,7 @@ import type { ExposureController } from '../render/exposureController.js';
 import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
 import type { AudioSystem } from '../game/audio/audioSystem.js';
+import { DISPLAY_REFERENCE_WHITE_NITS } from '../render/zodiacalLight.js';
 
 /**
  * The frozen browser-diagnostic contract: ten `canvas.solarVoyager*` objects
@@ -657,5 +658,81 @@ export function createAudioRuntimeDiagnostics(
     ),
   ) as AudioRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerAudio', { value: diagnostics });
+  return diagnostics;
+}
+
+/** T0126 — deep-sky background state for the Milky Way browser gate. */
+export interface SkyRuntimeDiagnostics {
+  readonly panoramaLoadState: string;
+  readonly panoramaEnabled: boolean;
+  readonly panoramaResident: boolean;
+  readonly zodiacalLightEnabled: boolean;
+  readonly zodiacalPeakNits: number;
+  readonly skyboxTier: string;
+  readonly skyVisible: boolean;
+  readonly heliocentricDistanceKm: number;
+  readonly constellationsEnabled: boolean;
+  readonly constellationSegments: number;
+  readonly constellationLoadState: string;
+  /** T0129 effect-binding degrade path, as seen by the sky (T0126). */
+  readonly observerDegraded: boolean;
+  readonly nonFiniteObserved: boolean;
+  readonly degradedBindingCount: number;
+}
+
+export function createSkyRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  world: Pick<EpochWorld, 'milkyWaySky' | 'constellationLines' | 'spaceScene'>,
+): SkyRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get panoramaLoadState() {
+          return world.milkyWaySky.diagnostics.panoramaLoadState;
+        },
+        get panoramaEnabled() {
+          return world.milkyWaySky.diagnostics.panoramaEnabled;
+        },
+        get panoramaResident() {
+          return world.milkyWaySky.diagnostics.panoramaResident;
+        },
+        get zodiacalLightEnabled() {
+          return world.milkyWaySky.diagnostics.zodiacalLightEnabled;
+        },
+        get zodiacalPeakNits() {
+          return world.milkyWaySky.diagnostics.zodiacalPeakNits * DISPLAY_REFERENCE_WHITE_NITS;
+        },
+        get skyboxTier() {
+          return world.milkyWaySky.diagnostics.skyboxTier;
+        },
+        get skyVisible() {
+          return world.milkyWaySky.diagnostics.visible;
+        },
+        get heliocentricDistanceKm() {
+          return world.milkyWaySky.diagnostics.heliocentricDistanceKm;
+        },
+        get constellationsEnabled() {
+          return world.constellationLines.enabled;
+        },
+        get constellationSegments() {
+          return world.constellationLines.segmentCount;
+        },
+        get constellationLoadState() {
+          return world.constellationLines.state;
+        },
+        get observerDegraded() {
+          return world.milkyWaySky.diagnostics.observerDegraded;
+        },
+        get nonFiniteObserved() {
+          return world.spaceScene.effectBindingTelemetry.nonFiniteObserved;
+        },
+        get degradedBindingCount() {
+          return world.spaceScene.effectBindingTelemetry.degradedBindingCount;
+        },
+      },
+      null,
+    ),
+  ) as SkyRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerSky', { value: diagnostics });
   return diagnostics;
 }

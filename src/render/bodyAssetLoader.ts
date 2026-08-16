@@ -12,7 +12,7 @@ import type {
   RuntimeAssetEntry,
   RuntimeAssetManifest,
 } from './assetManifest.js';
-import type { TextureQualityCap } from './perfGovernor.js';
+import type { SkyboxQualityTier, TextureQualityCap } from './perfGovernor.js';
 
 export interface LoadedBodyModel {
   readonly root: Object3D;
@@ -164,6 +164,43 @@ export class BodyAssetLoader {
       .then((backend) => backend.loadTexture(url))
       .catch((error: unknown) => {
         this.reportError(`Failed to load sphere texture ${url}.`, error);
+        return null;
+      });
+    this.spherePromises.set(cacheKey, promise);
+    return promise;
+  }
+
+  /**
+   * Loads the deep-sky panorama for one governor skybox tier (T0126).
+   *
+   * Deliberately not routed through {@link loadSphereAlbedo}: the sky is a `sky`
+   * category asset with no `_albedo` role and no startup-hero path, and its tier
+   * is chosen by the skybox rung rather than by `setTextureTierCap`.
+   */
+  loadSkyPanorama(id: string, tier: SkyboxQualityTier): Promise<Texture | null> {
+    if (tier === 'off') return NULL_TEXTURE_PROMISE;
+    const cacheKey = `sky:${id}:${tier}`;
+    const cached = this.spherePromises.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const entry = this.entries.get(id);
+    if (entry === undefined || entry.category !== 'sky') {
+      this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);
+      return NULL_TEXTURE_PROMISE;
+    }
+    const canonicalFile = findFile(entry, `textures/${id}_panorama.ktx2`);
+    if (canonicalFile === null) {
+      this.spherePromises.set(cacheKey, NULL_TEXTURE_PROMISE);
+      return NULL_TEXTURE_PROMISE;
+    }
+    const cappedFile = tier === 'half' ? findFile(entry, `textures/${id}_panorama_2k.ktx2`) : null;
+    const file = cappedFile ?? canonicalFile;
+
+    const url = `${this.baseUrl}assets/${file}`;
+    const promise = this.getBackend()
+      .then((backend) => backend.loadTexture(url))
+      .catch((error: unknown) => {
+        this.reportError(`Failed to load sky panorama ${url}.`, error);
         return null;
       });
     this.spherePromises.set(cacheKey, promise);

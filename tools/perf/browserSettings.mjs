@@ -2,8 +2,9 @@
 // hand-written and left at the OLD (pre-T0106) v2 shape rather than updated to
 // a later generation or imported from settings.ts. It exercises
 // SettingsRepository.load()'s full migration chain — v2->v3 (gamepad defaults,
-// T0106), v3->v4 (camera defaults, T0110), v4->v5 (HUD defaults, T0112) and
-// v5->v6 (mixer defaults, T0144) — on every perf-gate/bench run,
+// T0106), v3->v4 (camera defaults, T0110), v4->v5 (HUD defaults, T0112),
+// v5->v6 (exposure mode, T0127), v6->v7 (mixer defaults, T0144) and v7->v8
+// (deep-sky toggles, T0126) — on every perf-gate/bench run,
 // exactly as it already exercised the T0108 binding backfill (13 actions here,
 // current registry has more) — see that task's design doc §11 and
 // docs/superpowers/specs/2026-08-15-gamepad-design.md's "Settings" section. If

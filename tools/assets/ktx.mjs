@@ -25,7 +25,11 @@ export function buildKtxArguments(inputPath, outputPath, metadata, options = {})
   const normal = isNormalTexture(inputPath);
   const linear = isLinearTexture(inputPath);
   const usesFourKilopixelTier = /(^|[_-])(clouds?|emissive)([_.-]|$)/i.test(inputPath);
-  const usesMoonStartupAlbedo = /(^|[/\\])moon_albedo\.(jpe?g|png)$/i.test(inputPath);
+  // ETC1S is hardest on sources that are mostly dark with sparse bright detail:
+  // the startup Moon albedo, and the Milky Way panorama's star field (T0126).
+  const usesHighQualityBasis = /(^|[/\\])(moon_albedo|milkyway_panorama)\.(jpe?g|png)$/i.test(
+    inputPath,
+  );
   const args = [
     'create',
     '--format', textureFormat(metadata.channels ?? 4, linear),
@@ -39,7 +43,7 @@ export function buildKtxArguments(inputPath, outputPath, metadata, options = {})
   } else if (usesFourKilopixelTier && (metadata.width ?? 0) > 4096) {
     args.push('--width', '4096', '--height', '2048');
   }
-  if (usesMoonStartupAlbedo) args.push('--qlevel', '90');
+  if (usesHighQualityBasis) args.push('--qlevel', '90');
   if (normal) {
     args.push(
       '--normal-mode', '--normalize', '--uastc-rdo', '--uastc-rdo-l', '0.5',

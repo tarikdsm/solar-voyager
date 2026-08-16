@@ -273,6 +273,9 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       );
       lighting.setFocusPositionOffset(cameraDirector.focusPositionOffset);
       lighting.update();
+      // The zodiacal band needs the observer's own solar elongation and
+      // heliocentric distance, so the sky updates with the lights (T0126).
+      world.milkyWaySky.update(cameraPositionKm);
       // T0127 — display-only, driven by the wall delta because photopic
       // adaptation is a wall-clock phenomenon, and placed after the camera pose
       // so it keys off the position this frame actually renders from.

@@ -70,9 +70,9 @@ describe('complete asset ingest', () => {
   it('publishes a canonical manifest and identical bytes on rerun', async () => {
     const paths = await createSourceTree();
     const encoder = vi.fn(fakeEncode);
-    await ingestAssets({ ...paths, encodeTexture: encoder });
+    await ingestAssets({ ...paths, skyAssets: [], encodeTexture: encoder });
     const first = await hashTree(paths.outputRoot);
-    await ingestAssets({ ...paths, encodeTexture: encoder });
+    await ingestAssets({ ...paths, skyAssets: [], encodeTexture: encoder });
     const second = await hashTree(paths.outputRoot);
 
     expect(second).toEqual(first);
@@ -153,9 +153,9 @@ describe('complete asset ingest', () => {
       ].join('\n'),
     );
 
-    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    await ingestAssets({ ...paths, skyAssets: [], encodeTexture: fakeEncode });
     const first = await hashTree(paths.outputRoot);
-    await ingestAssets({ ...paths, encodeTexture: fakeEncode });
+    await ingestAssets({ ...paths, skyAssets: [], encodeTexture: fakeEncode });
     expect(await hashTree(paths.outputRoot)).toEqual(first);
 
     const manifest = JSON.parse(await readFile(join(paths.outputRoot, 'manifest.json'), 'utf8'));

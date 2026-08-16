@@ -11,6 +11,21 @@ export const CATEGORY_CONFIG = Object.freeze({
   sun: Object.freeze({ manifestCategory: 'sun', triangleLimit: 50_000 }),
 });
 
+/**
+ * Deep-sky panoramas (T0126). These are the one ingest input that is not a body:
+ * no GLB, no `data/bodies.json` entry, no per-body directory walk. The list is
+ * declared rather than discovered precisely because the source tree they live in
+ * (`assets/textures-src`, written by `tools/fetch_textures.py`) is shared with
+ * ordinary body textures that must NOT be ingested a second time.
+ */
+export const SKY_TEXTURE_ASSETS = Object.freeze([
+  Object.freeze({
+    id: 'milkyway',
+    sourceDirectory: 'milkyway',
+    textures: Object.freeze(['milkyway_panorama.jpg']),
+  }),
+]);
+
 export const NORMALIZED_RADIUS_TOLERANCE = 1e-4;
 export const ORIGIN_TOLERANCE = 1e-4;
 const MIB = 1024 * 1024;
@@ -39,6 +54,7 @@ export function assetByteBudget(category, id) {
   if (category === 'asteroids' || category === 'comets') return MIB;
   if (category === 'ship') return 8 * MIB;
   if (category === 'rings') return 2 * MIB;
+  if (category === 'sky') return 4 * MIB;
   return 0;
 }
 

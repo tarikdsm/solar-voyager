@@ -11,6 +11,7 @@ describe('runtime asset manifest', () => {
     expect(manifest.assets.map((asset) => asset.id)).toEqual([
       'earth',
       'jupiter',
+      'milkyway',
       'moon',
       'neptune',
       'pluto',
@@ -25,6 +26,15 @@ describe('runtime asset manifest', () => {
     expect(manifest.assets.find((asset) => asset.id === 'earth')?.files).toContain(
       'textures/earth_albedo_tier2.ktx2',
     );
+    // T0126 — the sky panorama is a textures-only entry with no model.
+    const sky = manifest.assets.find((asset) => asset.id === 'milkyway');
+    expect(sky?.category).toBe('sky');
+    expect(sky?.triangles).toBe(0);
+    expect(sky?.files).toEqual([
+      'textures/milkyway_panorama_1k.ktx2',
+      'textures/milkyway_panorama_2k.ktx2',
+      'textures/milkyway_panorama.ktx2',
+    ]);
   });
 
   it('rejects duplicate ids and unsafe runtime paths', () => {

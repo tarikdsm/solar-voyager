@@ -9,7 +9,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
 /**
  * The frozen browser-diagnostic contract, locked in the fast lane.
  *
- * Nine `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
+ * Ten `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
  * observation roughly 25 Playwright gates make about the running game. They are
  * read from `page.evaluate` callbacks by property name, so TypeScript never sees
  * those reads and a dropped or renamed field surfaces — if at all — as a failure
@@ -18,7 +18,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
  * is the only one that pins a whole shape (`RuntimeResourceCounts`, twice, with
  * `deepEqual`).
  *
- * This test is the whole-shape gate for all nine, and it is deliberately
+ * This test is the whole-shape gate for all ten, and it is deliberately
  * location-independent: it scans `src/` rather than naming the file that happens
  * to own the contract today, so moving the definitions (T0113 moves them out of
  * `main.ts`) does not require editing it. Extend it when a diagnostic gains a
@@ -40,6 +40,7 @@ const DIAGNOSTIC_PROPERTIES = [
   'solarVoyagerPhoto',
   'solarVoyagerRuntimeResources',
   'solarVoyagerShip',
+  'solarVoyagerSky',
   'solarVoyagerStartup',
   'solarVoyagerSystemMap',
   'solarVoyagerTutorial',
@@ -169,6 +170,23 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     sceneLuminance: 'readonly number',
     targetExposure: 'readonly number',
     userMode: 'readonly string',
+  },
+  // canvas.solarVoyagerSky
+  SkyRuntimeDiagnostics: {
+    constellationLoadState: 'readonly string',
+    constellationSegments: 'readonly number',
+    constellationsEnabled: 'readonly boolean',
+    degradedBindingCount: 'readonly number',
+    heliocentricDistanceKm: 'readonly number',
+    nonFiniteObserved: 'readonly boolean',
+    observerDegraded: 'readonly boolean',
+    panoramaEnabled: 'readonly boolean',
+    panoramaLoadState: 'readonly string',
+    panoramaResident: 'readonly boolean',
+    skyVisible: 'readonly boolean',
+    skyboxTier: 'readonly string',
+    zodiacalLightEnabled: 'readonly boolean',
+    zodiacalPeakNits: 'readonly number',
   },
   // canvas.solarVoyagerSystemMap
   SystemMapRuntimeDiagnostics: {
@@ -371,7 +389,7 @@ beforeAll(async () => {
 }, 30_000);
 
 describe('canvas diagnostic definition sites', () => {
-  test('src defines exactly the nine contract properties, once each', () => {
+  test('src defines exactly the ten contract properties, once each', () => {
     const sites = collectDefinitionSites(sources);
     const properties = sites
       .map((site) => site.property)

@@ -41,6 +41,15 @@ interface ProceduralSunHarness {
     enabled: boolean,
   ): SunRenderSnapshot;
   renderDistance(label: SolarDistanceLabel, simTimeSec: number): SunRenderSnapshot;
+  /**
+   * Suppresses or restores the deep-sky background (T0126).
+   *
+   * The sun gate's background-bleed metric is "how far the Sun's own glow
+   * carries across the frame", which needs a controlled background to mean
+   * anything. This does NOT imply the sky is absent in this fixture — the gate
+   * measures both states and asserts on each.
+   */
+  setSkyVisible(visible: boolean): void;
   renderCloseProfile(simTimeSec: number): SunRenderSnapshot;
   measureQualityGpu(quality: ProceduralSunQuality, sampleCount: number): Promise<readonly number[]>;
 }
@@ -112,6 +121,10 @@ function updateView(distanceKm: number, simTimeSec: number): void {
     nowMs,
   );
   world.lighting.update();
+  // The frame loop normally does this; without it the zodiacal band keeps the
+  // solar elongation and heliocentric distance it had at world creation, so a
+  // Neptune-distance shot would still carry a 1 AU sky (T0126).
+  world.milkyWaySky.update(cameraPositionKm);
   world.spaceScene.updateCameraRelative(cameraPositionKm);
 }
 
@@ -156,6 +169,10 @@ function renderAt(distanceKm: number, simTimeSec: number): SunRenderSnapshot {
 }
 
 globalThis.__proceduralSunHarness = {
+  setSkyVisible(visible) {
+    world.milkyWaySky.setPanoramaEnabled(visible);
+    world.milkyWaySky.setZodiacalLightEnabled(visible);
+  },
   programSnapshot() {
     return {
       beforeWarmUp: programsBeforeWarmUp,

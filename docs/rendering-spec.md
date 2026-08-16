@@ -288,6 +288,81 @@ never pull the player out of the chase view.
 - For visual magnitude `m`, setup computes `F = 10^(-0.4m)`, `sizeCssPx = clamp(1, 4, 1 + 1.5 F^0.25)`, and `opacity = clamp(0, 1, 10^(-0.4(m - 1)))`. Point size is multiplied by renderer pixel ratio; unresolved points retain a one-fragment footprint and resolved points use a soft circular profile. Catalog B−V RGB passes through unchanged.
 - Star vertices are forced to the selected depth strategy's far plane (`z=w` for normal/logarithmic, `z=0` for reversed depth). The additive material uses a less-or-equal logical depth test against the cleared far plane but never writes depth, so every opaque near-field body occludes stars regardless of its camera-relative distance while the starfield cannot occlude later transparent effects.
 
+### 5.1 Milky Way panorama (T0126)
+
+- Source: the ESO GigaGalaxy Zoom all-sky panorama `eso0932a` (ESO/S. Brunier,
+  CC BY 4.0), fetched by the pinned `milkyway-panorama` recipe in
+  `tools/fetch_textures.py`, downsampled 6000×3000 → 4096×2048 and encoded to
+  KTX2/ETC1S by `npm run assets:ingest` through the texture-only `sky` category
+  (`tools/assets/skyTextures.mjs`). Attribution: `assets/textures-src/milkyway/SOURCES.md`
+  and `docs/credits.md`.
+- Projection: equirectangular in **galactic** coordinates, with longitude
+  increasing to the left and latitude increasing upward, i.e.
+  `u = 0.5 − l/2π`, `v = 0.5 − b/π`. This was established by registering 39
+  catalog stars against the source image (mean residual 0.08 px in `u`, 0.59 px
+  in `v` on a 6000×3000 grid) rather than by eye, and is re-checked every CI run
+  by `npm run test:milky-way`, which aims the camera at six catalog stars and
+  reads the sky behind each one.
+- Geometry: one `SphereGeometry(1, 64, 32)` (3,968 triangles, one draw call,
+  `BackSide`, `renderOrder = -1`) on the same 1e9 km shell as the star Points,
+  forced to the far plane with the identical depth treatment as §5.
+- **Aberration.** The vertex is placed at `aberrate(d)` and the texture is
+  sampled from the *undisplaced* `d`, so a texel whose true direction is `d`
+  lands on screen exactly where a star at `d` lands. The GLSL is not a second
+  implementation: `src/render/skyAberration.ts` holds the one chunk the
+  starfield, the panorama and the constellation batch all include, and
+  `RelativisticVisualController` feeds all three the same state object.
+- Filtering: `wrapS = Repeat`, `wrapT = ClampToEdge`, `minFilter = magFilter =
+  Linear`, mipmaps off. The equirect UV is discontinuous at the wrap, so a
+  mip-selecting sampler would pick the coarsest level for that one pixel column;
+  the panorama is magnified rather than minified at every playable FOV, so no
+  mip chain is needed.
+- Display: `toneMapped: false` and a 0.35 display scale, chosen so the brightest
+  galactic-plane texels sit just under the faintest catalog stars — the real
+  stars stay the honest part of the sky.
+- Loading: strictly lazy and strictly post-activation. The mesh and its program
+  exist from world creation (so nothing compiles mid-flight) with a null sampler
+  and zero intensity; the KTX2 is fetched only from
+  `activateSpacePhaseRuntime()`. It is deliberately **absent** from
+  `data/initial-path.json`.
+
+### 5.2 Zodiacal light (T0126)
+
+- Model and constants: physics-spec §1.2. Evaluated per fragment in the same
+  material and the same draw as the panorama, from the *unaberrated* ecliptic
+  direction — the dust is at rest in the solar frame, so it aberrates with
+  everything else for free.
+- Display mapping: one unit of linear shader radiance is **100 cd/m²** (sRGB
+  reference viewing environment, IEC 61966-2-1). The band's budget is 2 nits, so
+  `I_peak = 0.02` in shader units. Because the model's three shape terms are each
+  bounded by 1, that is a hard ceiling, checked numerically in
+  `src/render/zodiacalLight.test.ts` and read back through
+  `canvas.solarVoyagerSky.zodiacalPeakNits` by the browser gate.
+- The band tapers to zero inside a 15° solar elongation, where the procedural
+  Sun's corona owns the light (physics-spec §1.2). `npm run test:procedural-sun`
+  measures the sky's contribution to the annulus around the Sun in both states
+  and asserts the Sun still reads at more than ten times the sky behind it.
+- Toggleable via settings (`sky.zodiacalLight`, default on). With both the
+  panorama and the band off the sky mesh is not drawn at all.
+- Any consumer that moves the camera outside the frame loop must call
+  `MilkyWaySky.update()` itself, or the band keeps the solar elongation and
+  heliocentric distance it had at world creation.
+
+### 5.3 Constellation lines (T0126)
+
+- The 88 IAU figures as one `LineSegments` batch: 657 segments, 1,314 vertices,
+  one draw call, zero triangles, **off by default** (`sky.constellations`).
+- Endpoints are indices into `data/stars.bin`, baked by
+  `tools/bake_constellations.py` from the pinned Yale catalog and the pinned
+  `ConstellationLines.dat` figure set, so a line can never miss its own star.
+- The buffer is preallocated for 1,024 segments at setup and its program is
+  compiled in the warm-up pass (`prepareCompilationPass()` / `hide()`, the
+  `OsculatingConicOverlay` pattern), so enabling the overlay mid-flight allocates
+  nothing and compiles nothing. The 2.6 kB payload is fetched post-activation.
+- Known approximation: one straight primitive per segment, so at high beta a long
+  figure line bows slightly off the aberrated great circle its endpoints sit on
+  (median segment 4.9°, longest 24.4°).
+
 ## 6. Launch scene (2D) — DEFERRED (optional post-v1 expansion, see roadmap)
 
 Same renderer, orthographic camera, side view: rocket sprite/low-poly model, Earth limb, atmosphere gradient by altitude, exhaust plume scaling with throttle and ambient pressure. Parallax cloud/ground layers near the pad (Alcântara coastline silhouette).
@@ -444,5 +519,14 @@ path: the original map sample and subsequent surface-detail composition remain
 unchanged.
 
 ## 12. Quality settings — adaptive governor (ADR-008)
+
+- **Skybox rung (T0126).** `RenderQualityProfile.skyboxTier` is derived from the
+  profile's tier, like `ringParticleCount`: `tier ≥ 4 → 'full'` (4096×2048
+  source), `tier ≥ 2 → 'half'` (2048×1024 source), otherwise `'off'`. It is
+  derived rather than passed so no rung is renumbered and no positional contract
+  in the 15-entry ladder moves. `'off'` skips the panorama fetch entirely and,
+  with the zodiacal band also off, skips the full-screen sky draw — the cheapest
+  single thing left to cut at tier 1. A tier raised again after load keeps the
+  texture it already has rather than re-fetching mid-flight.
 
 Quality is owned at runtime by the **adaptive quality governor** (`performance-spec.md` §3): a measured control loop (p75 frame time, hysteresis) walking an ordered knob ladder (render scale → bloom → AA → star cap → texture cap → tier thresholds) to hold the 60 fps floor. The settings menu exposes a tier lock (manual override always wins), an exposure mode (`auto`/`fixed`, §4), and shows the governor's current tier. The tier-1 rungs additionally pin `fixed` exposure, and `fixed` from either the player or the governor wins. Initial tier auto-detected from `devicePixelRatio` + a loading-screen timing probe.

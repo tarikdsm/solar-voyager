@@ -23,7 +23,7 @@ import { CameraRelativeSpaceScene } from './spaceScene.js';
 import { prepareGasGiantAnimation, type GasGiantAnimation } from './gasGiantAnimation.js';
 import type { ProceduralSunMaterialPort } from './proceduralSun.js';
 import type { ProceduralQuality } from './proceduralSunState.js';
-import type { TextureQualityCap } from './perfGovernor.js';
+import type { SkyboxQualityTier, TextureQualityCap } from './perfGovernor.js';
 import { ringDefinitionFor } from './ringCatalog.js';
 import { prepareRingSystem, type PreparedRingSystem } from './ringSystem.js';
 import { prepareSurfaceDetail, type PreparedSurfaceDetail } from './surfaceDetail.js';
@@ -55,6 +55,8 @@ export interface BodyVisualAssetLoader {
   loadSphereAlbedo(id: string, category: RuntimeAssetCategory): Promise<Texture | null>;
   loadModel(id: string): Promise<LoadedBodyModel | null>;
   setTextureTierCap?(cap: TextureQualityCap): void;
+  /** T0126 — present on the real loader; optional so test doubles stay small. */
+  loadSkyPanorama?(id: string, tier: SkyboxQualityTier): Promise<Texture | null>;
 }
 
 export type BodyModelCompiler = (root: Object3D) => Promise<void>;

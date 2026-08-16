@@ -15,12 +15,12 @@
  * update this literal — the parse is strict and will say so loudly.
  */
 
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v7';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v8';
 
 const DEFAULT_GAMEPAD_AXIS = { invert: false, sensitivity: 1 };
 
 const ENGINEER_PROFILE = JSON.stringify({
-  version: 7,
+  version: 8,
   qualityLock: 'auto',
   inputBindings: {
     throttleIncrease: 'KeyR',
@@ -68,8 +68,11 @@ const ENGINEER_PROFILE = JSON.stringify({
   render: { exposureMode: 'fixed' },
   // T0144 mixer levels at the shipped defaults. These gates never produce a
   // gesture-driven unlock they care about, so the levels are only here to satisfy
-  // the strict v7 parse; `test:audio` owns the audio behaviour.
+  // the strict v8 parse; `test:audio` owns the audio behaviour.
   audio: { master: 0.7, music: 0.5, sfx: 0.7, ui: 0.5, exteriorMusic: true },
+  // T0126 — panorama and zodiacal band off: both paint the whole background and
+  // several gates compare screenshots. `test:milky-way` covers them switched on.
+  sky: { panorama: false, zodiacalLight: false, constellations: false },
 });
 
 /** Plants an Engineer-preset profile before the app boots, on every navigation. */

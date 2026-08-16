@@ -66,6 +66,16 @@
       }
     },
     {
+      "id": "milkyway",
+      "category": "sky",
+      "triangles": 0,
+      "files": [
+        "textures/milkyway_panorama_1k.ktx2",
+        "textures/milkyway_panorama_2k.ktx2",
+        "textures/milkyway_panorama.ktx2"
+      ]
+    },
+    {
       "id": "moon",
       "category": "moon",
       "triangles": 16128,
@@ -181,6 +191,7 @@
     {
       "id": "ship",
       "category": "ship",
+      "triangles": 5538,
       "triangles": 23580,
       "files": [
         "models/ship_1k.glb",

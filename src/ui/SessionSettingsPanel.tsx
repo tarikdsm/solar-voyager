@@ -19,14 +19,14 @@ import {
   type AudioBus,
   type ExposureMode,
   type GamepadAxisId,
-  type GameSettingsV7,
+  type GameSettingsV8,
   type InputAction,
   type QualityLock,
 } from '../game/settings.js';
 
 export interface SessionSettingsPort {
   readonly initializationWarning: string | null;
-  readonly settings: GameSettingsV7;
+  readonly settings: GameSettingsV8;
   exportJson(): SessionExportResult;
   importJson(json: string): SessionActionResult;
   loadLocal(): SessionActionResult;
@@ -40,6 +40,9 @@ export interface SessionSettingsPort {
   setAudioExteriorMusic(exteriorMusic: boolean): SessionActionResult;
   setCameraFovWidening(fovWidening: boolean): SessionActionResult;
   setCameraShake(shake: boolean): SessionActionResult;
+  setSkyPanorama(enabled: boolean): SessionActionResult;
+  setSkyZodiacalLight(enabled: boolean): SessionActionResult;
+  setSkyConstellations(enabled: boolean): SessionActionResult;
   setExposureMode(exposureMode: ExposureMode): SessionActionResult;
   setHudPreset(preset: HudPreset): SessionActionResult;
   setHudBodyLabels(bodyLabels: boolean): SessionActionResult;
@@ -71,6 +74,9 @@ export interface SessionSettingsModel {
   setAudioExteriorMusic(exteriorMusic: boolean): PanelActionResult;
   setCameraFovWidening(fovWidening: boolean): PanelActionResult;
   setCameraShake(shake: boolean): PanelActionResult;
+  setSkyPanorama(enabled: boolean): PanelActionResult;
+  setSkyZodiacalLight(enabled: boolean): PanelActionResult;
+  setSkyConstellations(enabled: boolean): PanelActionResult;
   selectExposureMode(value: string): PanelActionResult;
   selectHudPreset(value: string): PanelActionResult;
   setHudBodyLabels(bodyLabels: boolean): PanelActionResult;
@@ -229,6 +235,9 @@ export function createSessionSettingsModel(
       simplify(session.setAudioExteriorMusic(exteriorMusic)),
     setCameraFovWidening: (fovWidening) => simplify(session.setCameraFovWidening(fovWidening)),
     setCameraShake: (shake) => simplify(session.setCameraShake(shake)),
+    setSkyPanorama: (enabled) => simplify(session.setSkyPanorama(enabled)),
+    setSkyZodiacalLight: (enabled) => simplify(session.setSkyZodiacalLight(enabled)),
+    setSkyConstellations: (enabled) => simplify(session.setSkyConstellations(enabled)),
     selectExposureMode: (value) =>
       isExposureMode(value)
         ? simplify(session.setExposureMode(value))
@@ -574,12 +583,18 @@ export function SessionSettingsPanel({
           </div>
         </section>
 
+        {/*
+          The deep-sky toggles share the camera section rather than opening a
+          sixth one: both groups are "what the view looks like", and the browser
+          gate holds the open panel to the 720-px viewport height.
+        */}
         <section aria-labelledby="camera-settings-title">
-          <h2 id="camera-settings-title">Camera</h2>
+          <h2 id="camera-settings-title">Camera &amp; sky</h2>
           <p class="camera-settings-hint">
             The chase camera opens its field of view under thrust and vibrates under heavy
             acceleration. Both are deliberately subtle; turn them off here if motion is
-            uncomfortable.
+            uncomfortable. The deep-sky layers sit behind everything else — scenery by default, with
+            the constellation figures available as an overlay.
           </p>
           <div class="camera-settings-grid">
             <label for="camera-fov-widening">
@@ -601,6 +616,37 @@ export function SessionSettingsPanel({
                 onChange={(event) => publish(model.setCameraShake(event.currentTarget.checked))}
               />
               Shake under high acceleration
+            </label>
+            <label for="sky-panorama">
+              <input
+                id="sky-panorama"
+                type="checkbox"
+                checked={settings.sky.panorama}
+                onChange={(event) => publish(model.setSkyPanorama(event.currentTarget.checked))}
+              />
+              Milky Way panorama
+            </label>
+            <label for="sky-zodiacal-light">
+              <input
+                id="sky-zodiacal-light"
+                type="checkbox"
+                checked={settings.sky.zodiacalLight}
+                onChange={(event) =>
+                  publish(model.setSkyZodiacalLight(event.currentTarget.checked))
+                }
+              />
+              Zodiacal light
+            </label>
+            <label for="sky-constellations">
+              <input
+                id="sky-constellations"
+                type="checkbox"
+                checked={settings.sky.constellations}
+                onChange={(event) =>
+                  publish(model.setSkyConstellations(event.currentTarget.checked))
+                }
+              />
+              Constellation lines
             </label>
           </div>
         </section>
