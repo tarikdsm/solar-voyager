@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4176;
+const PORT = resolveHarnessPort(4176);
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/depthRegression.html`;
 
 async function capture(page, suffix = '') {

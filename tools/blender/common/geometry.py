@@ -51,6 +51,46 @@ def create_uv_sphere(name, segments=128, rings=64, radius=1.0):
     return _finish_body_object(bpy.context.active_object, name)
 
 
+def create_displaced_body(name, vertices, faces):
+    """Build a small-body mesh from explicit vertex/face data.
+
+    Used for both small-body paths — the displaced geodesic sphere and the
+    decimated published shape model — so the two share one UV, smoothing and
+    export contract. The caller supplies geometry that is already normalized to
+    radius 1.0 about the origin; UVs are derived from each vertex direction, which
+    radial displacement leaves untouched.
+    """
+    if len(vertices) < 4 or len(faces) < 4:
+        raise ValueError("A displaced body needs at least four vertices and four faces")
+    mesh = bpy.data.meshes.new(f"mesh_{name}")
+    mesh.from_pydata([tuple(vertex) for vertex in vertices], [], [list(face) for face in faces])
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    return _apply_equirectangular_uv(_finish_body_object(obj, name))
+
+
+def create_anchor(name, scale):
+    """An empty node the renderer hangs effects from.
+
+    Blender 5.1 exports an unparented Empty as a plain named glTF node carrying
+    its scale, and glTF-transform's asset measurement ignores mesh-less nodes, so
+    an anchor cannot disturb the normalized-body contract.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("An anchor needs a non-empty name")
+    if not math.isfinite(scale) or scale <= 0.0:
+        raise ValueError(f"Anchor scale must be positive and finite; received {scale!r}")
+    anchor = bpy.data.objects.new(name, None)
+    anchor.empty_display_type = "PLAIN_AXES"
+    anchor.location = (0.0, 0.0, 0.0)
+    anchor.rotation_euler = (0.0, 0.0, 0.0)
+    anchor.scale = (scale, scale, scale)
+    bpy.context.scene.collection.objects.link(anchor)
+    return anchor
+
+
 def create_quad_sphere(name, subdivisions=5, radius=1.0):
     if subdivisions < 1 or radius <= 0:
         raise ValueError("Quad sphere requires subdivisions >= 1 and radius > 0")

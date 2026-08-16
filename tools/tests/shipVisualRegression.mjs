@@ -8,10 +8,11 @@ import { createServer, preview } from 'vite';
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { waitForCameraMode } from './cameraWaits.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const FIXTURE_PORT = 4203;
-const PRODUCTION_PORT = 4204;
+const FIXTURE_PORT = resolveHarnessPort(4203);
+const PRODUCTION_PORT = resolveHarnessPort(4204);
 const FIXTURE_URL = `http://${HOST}:${String(FIXTURE_PORT)}/solar-voyager/tests/render/shipVisual.html`;
 const PRODUCTION_URL = `http://${HOST}:${String(PRODUCTION_PORT)}/solar-voyager/?autostart=1`;
 const CAPTURE_FLAG_INDEX = process.argv.indexOf('--capture');

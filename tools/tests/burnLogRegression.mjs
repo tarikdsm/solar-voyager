@@ -7,9 +7,10 @@ import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4200;
+const PORT = resolveHarnessPort(4200);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 const RAW_FIELDS = [

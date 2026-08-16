@@ -17,6 +17,14 @@ import {
   type RelativisticVisualState,
 } from './relativisticVisualState.js';
 
+/**
+ * Vertical field of view, in degrees, of every camera-relative scene camera.
+ *
+ * Shared by the space view and the system map. `game/hud/bodyPicking.ts` carries
+ * the same number as `SYSTEM_MAP_CAMERA_FOV_DEG` because `game/` may not import
+ * `render/`; `systemMapScene.test.ts` asserts the two agree.
+ */
+export const SPACE_CAMERA_FOV_DEG = 75;
 export const SPACE_NEAR_KM = 0.001;
 export const SPACE_FAR_KM = 1e10;
 
@@ -127,7 +135,7 @@ export class CameraRelativeSpaceScene {
     if (!Number.isFinite(farKm) || farKm <= SPACE_NEAR_KM) {
       throw new RangeError('Camera-relative far plane must exceed the finite near plane.');
     }
-    this.camera = new PerspectiveCamera(75, 1, SPACE_NEAR_KM, farKm);
+    this.camera = new PerspectiveCamera(SPACE_CAMERA_FOV_DEG, 1, SPACE_NEAR_KM, farKm);
     this.camera.position.set(0, 0, 0);
     this.camera.matrixAutoUpdate = false;
     this.camera.updateMatrix();

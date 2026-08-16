@@ -1,0 +1,25 @@
+id: T0156
+title: Fix double-counted retrograde rotation for Venus, Uranus and Pluto
+status: TODO
+agent: ""
+branch: ""
+depends_on: [T0128]
+milestone: V2M4
+spec: |
+  data/bodies.json encodes retrograde rotation twice for three bodies, so they render prograde.
+  The schema's rule is that a negative rotation period means retrograde ABOUT THE DECLARED POLE, but
+  tools/bake_ephemerides.py transcribed the NASA fact sheets, which state retrograde twice: once as
+  an obliquity above 90 degrees and once as a negative period. venus (177.36 deg, -20997360 s),
+  uranus (97.77 deg, -62063.712 s) and pluto (122.53 deg, -551854.08 s) are affected. triton, bennu
+  and ryugu encode it once each and are correct.
+  Found by T0128, which implements the documented convention verbatim and deliberately left the data
+  alone because a bake change carries its own review surface.
+acceptance:
+  - The three periods are corrected in the bake table and regenerated into data/bodies.json, never hand-edited
+  - Venus, Uranus and Pluto rotate retrograde in the render, asserted against the bodySpin convention
+  - Bodies that already encoded retrograde once are unchanged, asserted
+  - A schema-level test rejects a future entry that encodes retrograde twice, so the class of defect cannot return
+handoff_notes: |
+  This is a data and bake change, not a render change: bodySpin.ts already implements the documented
+  convention correctly. Decide in the PR whether the catalog rule should be restated in the schema
+  docs so the next transcription cannot repeat it.

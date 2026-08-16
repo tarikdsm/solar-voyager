@@ -13,6 +13,7 @@ import {
 import type { ReadonlyVec3 } from '../core/vec3.js';
 import type { LoadedBodyModel } from './bodyAssetLoader.js';
 import type { RuntimeAssetCategory } from './assetManifest.js';
+import { BodySpin } from './bodySpin.js';
 import { BodyPointCloud } from './bodyPointCloud.js';
 import {
   prepareEarthSurfaceLayers,
@@ -39,6 +40,8 @@ export interface BodyVisualDefinition {
   readonly id: string;
   readonly category: RuntimeAssetCategory;
   readonly axialTiltRad: number;
+  /** Signed catalog value; negative is retrograde about the declared pole. */
+  readonly siderealRotationPeriodSec: number;
   readonly meanRadiusKm: number;
   readonly muKm3S2: number;
   readonly polarRadiusRatio: number;
@@ -117,6 +120,13 @@ export class BodyVisualSystem {
   private readonly fadePointStarts: Float32Array;
   private readonly fadeSphereStarts: Float32Array;
   private readonly fadeModelStarts: Float32Array;
+  /**
+   * Equatorial render radius per body: the ring catalog's reference radius when
+   * a body has one, its mean radius otherwise. Tier 2 and tier 3 share it, which
+   * is what keeps the silhouette continuous across the boundary.
+   */
+  private readonly equatorialRadiiKm: Float64Array;
+  private readonly bodySpin: BodySpin;
   private readonly sunIndex: number;
   private modelThresholdScale = 1;
   private ringParticleCount = 4096;
@@ -174,6 +184,14 @@ export class BodyVisualSystem {
         throw new RangeError(`Body "${definition.id}" must have a finite nonnegative axial tilt.`);
       }
       if (
+        !Number.isFinite(definition.siderealRotationPeriodSec) ||
+        definition.siderealRotationPeriodSec === 0
+      ) {
+        throw new RangeError(
+          `Body "${definition.id}" must have a finite nonzero sidereal rotation period.`,
+        );
+      }
+      if (
         !Number.isFinite(definition.polarRadiusRatio) ||
         definition.polarRadiusRatio <= 0 ||
         definition.polarRadiusRatio > 1
@@ -226,6 +244,8 @@ export class BodyVisualSystem {
     this.fadePointStarts = new Float32Array(count);
     this.fadeSphereStarts = new Float32Array(count);
     this.fadeModelStarts = new Float32Array(count);
+    this.equatorialRadiiKm = new Float64Array(count);
+    this.bodySpin = new BodySpin(definitions);
 
     this.pointCloud = new BodyPointCloud(colors);
     this.spaceScene.bindPackedPointPositions(this.pointCloud.points, positionsKm);
@@ -262,8 +282,16 @@ export class BodyVisualSystem {
       const texturedSphere = new Mesh(sphereGeometry, texturedMaterial);
       fallbackSphere.name = `${definition.id}-sphere-fallback`;
       texturedSphere.name = `${definition.id}-sphere-textured`;
-      fallbackSphere.scale.setScalar(definition.meanRadiusKm);
-      texturedSphere.scale.setScalar(definition.meanRadiusKm);
+      // Tier 3 bakes `polarRadiusRatio` into its mesh and scales by the same
+      // equatorial radius, so matching it here removes the 2<->3 silhouette pop.
+      // three.js' inverse-transpose normal matrix keeps the shading normals
+      // exact under this object-space non-uniform scale (bodySpin.test.ts).
+      const equatorialRadiusKm =
+        ringDefinitionFor(definition.id)?.referenceRadiusKm ?? definition.meanRadiusKm;
+      const polarRadiusKm = equatorialRadiusKm * definition.polarRadiusRatio;
+      this.equatorialRadiiKm[index] = equatorialRadiusKm;
+      fallbackSphere.scale.set(equatorialRadiusKm, polarRadiusKm, equatorialRadiusKm);
+      texturedSphere.scale.set(equatorialRadiusKm, polarRadiusKm, equatorialRadiusKm);
       fallbackSphere.visible = true;
       texturedSphere.visible = true;
       this.sphereFallbackMaterials.push(fallbackMaterial);
@@ -317,6 +345,11 @@ export class BodyVisualSystem {
     if (!Number.isFinite(nowMs)) throw new RangeError('nowMs must be finite.');
     if (!Number.isFinite(simTimeSec)) throw new RangeError('simTimeSec must be finite.');
 
+    // One arithmetic pass over the packed attitude path before the body loop
+    // reads it. Rotation is a function of simulation time only, so pause and
+    // time warp are handled by construction.
+    this.bodySpin.update(simTimeSec);
+
     const sunOffset = this.sunIndex * 3;
     const sunX = this.positionsKm[sunOffset] ?? Number.NaN;
     const sunY = this.positionsKm[sunOffset + 1] ?? Number.NaN;
@@ -348,7 +381,8 @@ export class BodyVisualSystem {
         gasGiantAnimation.update(simTimeSec);
       }
       const earthLayers = this.earthSurfaceLayers[index];
-      if (earthLayers !== null && earthLayers !== undefined) earthLayers.update(nowMs);
+      if (earthLayers !== null && earthLayers !== undefined) earthLayers.update(simTimeSec);
+      this.applyAttitude(index);
       const ringSystem = this.ringSystems[index];
       if (ringSystem !== null && ringSystem !== undefined) {
         ringSystem.update(
@@ -359,6 +393,7 @@ export class BodyVisualSystem {
           sunY - y,
           sunZ - z,
           simTimeSec,
+          this.bodySpin.spinAngleRadAt(index),
         );
       }
       const diameterPx = projectedDiameterPx(
@@ -505,10 +540,61 @@ export class BodyVisualSystem {
     this.surfaceDetails[this.indexForId(id)]?.setEnabled(enabled);
   }
 
+  /** This frame's body attitude for `id`, xyzw, written into `out`. */
+  readAttitudeInto(out: Float64Array, id: string): void {
+    if (out.length < 4) throw new RangeError('Attitude output needs four components.');
+    const offset = this.indexForId(id) * 4;
+    out[0] = this.bodySpin.attitudesXyzw[offset] as number;
+    out[1] = this.bodySpin.attitudesXyzw[offset + 1] as number;
+    out[2] = this.bodySpin.attitudesXyzw[offset + 2] as number;
+    out[3] = this.bodySpin.attitudesXyzw[offset + 3] as number;
+  }
+
+  /** This frame's rotation angle about `id`'s declared pole, radians. */
+  getSpinAngleRad(id: string): number {
+    return this.bodySpin.spinAngleRadAt(this.indexForId(id));
+  }
+
+  /** Rendered equatorial radius, shared by tier 2 and tier 3. */
+  getEquatorialRadiusKm(id: string): number {
+    return this.equatorialRadiiKm[this.indexForId(id)] as number;
+  }
+
+  /** Rendered polar radius: `equatorial x polarRadiusRatio`. */
+  getPolarRadiusKm(id: string): number {
+    const index = this.indexForId(id);
+    const definition = this.definitions[index];
+    if (definition === undefined) throw new Error('Body definition array is sparse.');
+    return (this.equatorialRadiiKm[index] as number) * definition.polarRadiusRatio;
+  }
+
   private indexForId(id: string): number {
     const index = this.idToIndex.get(id);
     if (index === undefined) throw new Error(`Unknown body visual id "${id}".`);
     return index;
+  }
+
+  /**
+   * Copies the packed attitude onto this body's three.js visuals.
+   *
+   * They are all packed visuals, so `CameraRelativeSpaceScene.updateCameraRelative`
+   * composes the matrix from position, quaternion and scale later in the same
+   * frame; recomposing here would be duplicated work.
+   */
+  private applyAttitude(index: number, target?: Object3D): void {
+    const offset = index * 4;
+    const attitudes = this.bodySpin.attitudesXyzw;
+    const x = attitudes[offset] as number;
+    const y = attitudes[offset + 1] as number;
+    const z = attitudes[offset + 2] as number;
+    const w = attitudes[offset + 3] as number;
+    if (target !== undefined) {
+      target.quaternion.set(x, y, z, w);
+      return;
+    }
+    this.sphereFallbackMeshes[index]?.quaternion.set(x, y, z, w);
+    this.sphereTexturedMeshes[index]?.quaternion.set(x, y, z, w);
+    this.modelRoots[index]?.quaternion.set(x, y, z, w);
   }
 
   private beginSphereLoad(index: number): void {
@@ -662,10 +748,14 @@ export class BodyVisualSystem {
         material.opacity = 0;
         material.depthWrite = false;
       }
-      model.root.scale.setScalar(ringDefinition?.referenceRadiusKm ?? definition.meanRadiusKm);
+      model.root.scale.setScalar(this.equatorialRadiiKm[index] as number);
       model.root.visible = true;
       this.spaceScene.bindPackedVisual(model.root, this.positionsKm, index * 3);
       modelBound = true;
+      // The model arrives mid-session; give it this frame's attitude before its
+      // warm-up render rather than one identity-oriented frame.
+      this.applyAttitude(index, model.root);
+      model.root.updateMatrix();
       await this.compileModel(model.root);
       this.modelRoots[index] = model.root;
       this.modelMaterials[index] = model.materials;

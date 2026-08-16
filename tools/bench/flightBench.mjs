@@ -14,9 +14,10 @@ import {
   summarizeFlightRun,
 } from './flightBenchUtils.mjs';
 import { assertPortAvailable } from './scaffoldBenchUtils.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4177;
+const PORT = resolveHarnessPort(4177);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const SAVE_STORAGE_KEY = 'solar-voyager.save.v2';

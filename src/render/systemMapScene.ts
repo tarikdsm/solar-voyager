@@ -19,7 +19,7 @@ import {
   elementsToStateInto,
   type OrbitalElements,
 } from '../sim/bodies/orbitalElements.js';
-import { CameraRelativeSpaceScene } from './spaceScene.js';
+import { CameraRelativeSpaceScene, SPACE_CAMERA_FOV_DEG } from './spaceScene.js';
 import { TrajectoryOverlay } from './trajectoryOverlay.js';
 
 export const SYSTEM_MAP_ORBIT_SEGMENTS = 96;
@@ -189,7 +189,7 @@ export class SystemMapScene {
     );
     contextRadiiKm[0] = catalogRadiusKm;
     const aspect = options.viewportWidthPx / options.viewportHeightPx;
-    const verticalHalfFovTangent = Math.tan((75 * Math.PI) / 360);
+    const verticalHalfFovTangent = Math.tan((SPACE_CAMERA_FOV_DEG * Math.PI) / 360);
     const limitingHalfFovTangent = Math.min(
       verticalHalfFovTangent,
       verticalHalfFovTangent * aspect,

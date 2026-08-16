@@ -5,9 +5,10 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4179;
+const PORT = resolveHarnessPort(4179);
 const VIEWPORT_SIZE = 512;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/surfaceDetail.html`;
 
@@ -229,8 +230,17 @@ try {
   const atmosphereBuffer = await page.locator('canvas').screenshot();
   const atmosphere = await pixels(atmosphereBuffer);
   const offDiscBluePixels = atmosphereBluePixels(atmosphere);
-  const cloudBefore = await page.evaluate(() => globalThis.__surfaceDetailHarness.advanceClouds(2_000));
-  const cloudAfter = await page.evaluate(() => globalThis.__surfaceDetailHarness.advanceClouds(22_000));
+  // T0128: the shell drifts on simulation time. Twenty wall seconds alone must
+  // not move it; simulation seconds must.
+  const cloudBefore = await page.evaluate(() =>
+    globalThis.__surfaceDetailHarness.advanceClouds(0, 2_000),
+  );
+  const cloudWallClockOnly = await page.evaluate(() =>
+    globalThis.__surfaceDetailHarness.advanceClouds(0, 22_000),
+  );
+  const cloudAfter = await page.evaluate(() =>
+    globalThis.__surfaceDetailHarness.advanceClouds(200_000, 22_000),
+  );
 
   const metrics = { programs, controlEnergy, detailEnergy, ...spatialMetrics, offDiscBluePixels };
   process.stdout.write(`${JSON.stringify(metrics, null, 2)}\n`);
@@ -260,7 +270,8 @@ try {
   assert.ok(Math.max(...spatialMetrics.quadrantRepeatPeaks.map((result) => result.peak)) < 0.18, `LEO detail repeats within a quadrant: ${JSON.stringify(spatialMetrics.quadrantRepeatPeaks)}`);
   assert.ok(Math.min(...spatialMetrics.quadrantEnergyGains) > 1.01, `LEO detail is not present in every quadrant: ${JSON.stringify(spatialMetrics.quadrantEnergyGains)}`);
   assert.ok(offDiscBluePixels > 40, `Earth atmosphere rim is missing: ${offDiscBluePixels}`);
-  assert.notDeepEqual(cloudAfter, cloudBefore, 'Earth cloud shell did not rotate');
+  assert.deepEqual(cloudWallClockOnly, cloudBefore, 'Earth cloud shell followed the wall clock');
+  assert.notDeepEqual(cloudAfter, cloudBefore, 'Earth cloud shell did not rotate on sim time');
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);
 

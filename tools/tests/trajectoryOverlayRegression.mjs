@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 import {
   installTrajectoryPredictionTestHorizon,
@@ -11,7 +12,7 @@ import {
 } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4190;
+const PORT = resolveHarnessPort(4190);
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/trajectoryOverlay.html`;
 const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/?autostart=1`;
 

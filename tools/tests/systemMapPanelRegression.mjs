@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4197;
+const PORT = resolveHarnessPort(4197);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/tests/render/systemMapPanel.html`;
 
 const server = await createServer({

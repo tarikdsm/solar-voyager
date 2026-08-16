@@ -12,11 +12,21 @@ import {
 
 const ATMOSPHERE_CACHE_KEY = 'solar-voyager-earth-atmosphere-v1';
 const ATMOSPHERE_SCALE = 1.012;
-const CLOUD_ROTATION_PERIOD_MS = 6 * 60 * 60 * 1_000;
-const CLOUD_ANGULAR_SPEED_RAD_PER_MS = (Math.PI * 2) / CLOUD_ROTATION_PERIOD_MS;
+/**
+ * Cloud drift *relative to the surface*, in simulation seconds.
+ *
+ * The shell is a child of the model root, so it already inherits Earth's
+ * sidereal rotation from `bodySpin.ts`; this is only the super-rotation on top.
+ * 10 m/s eastward at the equator over a 40 074.784 km circumference gives
+ * 4 007 478 s (46.4 d). The pre-T0128 value was a 6 h *wall-clock* period — a
+ * 460 m/s wind that neither paused nor followed time warp.
+ */
+const CLOUD_RELATIVE_ROTATION_PERIOD_SEC = 4_007_478;
+const CLOUD_ANGULAR_SPEED_RAD_PER_SEC = (Math.PI * 2) / CLOUD_RELATIVE_ROTATION_PERIOD_SEC;
 
 export interface PreparedEarthSurfaceLayers {
-  update(nowMs: number): void;
+  /** Simulation seconds, so pause, time warp and replay share one clock. */
+  update(simTimeSec: number): void;
   dispose(): void;
 }
 
@@ -92,11 +102,11 @@ class PreparedEarthSurfaceLayersImpl implements PreparedEarthSurfaceLayers {
     private readonly initialCloudRotationY: number,
   ) {}
 
-  update(nowMs: number): void {
-    if (!Number.isFinite(nowMs)) throw new RangeError('Earth cloud time must be finite.');
+  update(simTimeSec: number): void {
+    if (!Number.isFinite(simTimeSec)) throw new RangeError('Earth cloud time must be finite.');
     this.cloudMesh.rotation.y =
       this.initialCloudRotationY +
-      (nowMs % CLOUD_ROTATION_PERIOD_MS) * CLOUD_ANGULAR_SPEED_RAD_PER_MS;
+      (simTimeSec % CLOUD_RELATIVE_ROTATION_PERIOD_SEC) * CLOUD_ANGULAR_SPEED_RAD_PER_SEC;
     this.cloudMesh.updateMatrix();
   }
 

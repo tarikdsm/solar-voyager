@@ -166,9 +166,57 @@ Only ingest-produced KTX2 goes in `public/assets/textures/`. Adding a body:
 
 ## Asteroids & comets (simple by design)
 
-- `build_asteroid.py`: seeded icosphere, layered noise displacement + crater stamps, AO baked to vertex colors, ~3k tris.
-- Real shape models where published (Eros/NEAR, Bennu/OSIRIS-REx, 67P/Rosetta): decimated to ≤5k tris.
-- Comets get an emissive nucleus + the coma/tail handled in the renderer (sprites), not in the mesh.
+`build_asteroid.py -- --id <body>` and `build_comet.py -- --id <body>` are category
+entry points (like `build_planet.py`), parameterized by catalog id and excluded from
+`build_all.py` discovery. Both share `small_body_builder.py`; per-body authoring
+parameters live in `small_body_config.py`, never in `bodies.json`.
+
+- **Procedural path** (`--shape procedural`, and the default when no shape model is
+  available): a class-I geodesic icosphere of frequency 15 — exactly 4,500 triangles,
+  because Blender's icosphere operator jumps from 1,280 straight to 5,120 and would
+  either waste 74% of the budget or blow it. Layered value-noise fBm plus analytic
+  crater bowls displace it radially, seeded entirely by `visual.proceduralSeed`;
+  authored triaxial ratios give the silhouette.
+- **Real shape models** (`--shape real`): Eros (NEAR), Bennu (OSIRIS-REx), Ryugu
+  (Hayabusa2) and 67P (Rosetta) have public-domain plate models at the PDS Small
+  Bodies Node. The pinned Wavefront OBJ is fetched and checksum-verified by a
+  `kind="file"` recipe in `tools/fetch_textures.py` (ADR-039) into
+  `assets/textures-src/<body-id>/`, never committed, then re-verified against the same
+  pin and decimated here to ≤5,000 triangles by deterministic
+  uniform-grid vertex clustering (Blender's DECIMATE modifier is not reproducible).
+  `--shape auto` uses the model when the pinned file is present and falls back
+  otherwise; `--shape real` fails loudly instead of degrading silently.
+- Both paths emit one `mat_surface` mesh normalized to radius 1.0 plus a deterministic
+  1024×512 equirectangular albedo (required by ingest for these categories), and a
+  `SOURCES.md` naming every deliverable, the seed and the pinned download.
+- Relief is carried by geometry and by the albedo, **not** by baked vertex colours: a
+  Blender AO bake is a sampled, non-reproducible operator and nothing in `render/`
+  reads `COLOR_0`.
+- Comet nuclei are **not** emissive — they are among the darkest surfaces in the solar
+  system. The coma and tail are renderer sprites (see below).
+
+### Comet anchor nodes (API for the comet visuals)
+
+Every comet GLB carries two **mesh-less nodes at the scene root**, in the normalized
+body frame (1.0 unit = nucleus radius, +Y up after glTF export):
+
+| Node | Translation | Rotation | Uniform scale |
+|---|---|---|---|
+| `coma_anchor` | origin | identity | authored coma radius, in nucleus radii |
+| `tail_anchor` | origin | identity | authored tail length, in nucleus radii |
+
+Scale carries the magnitude (three.js loads it straight into `Object3D.scale`); no
+direction is authored, because the anti-sunward tail vector is computed at runtime from
+sim state. `build_comet.py` fails the build if a name, the mesh-less shape, the origin
+placement or the scale drifts, and `npm run test:blender` re-asserts it on the exported
+file. Renaming these nodes is a breaking change for the comet visuals.
+
+Determinism: the small-body mesh has no analytic normal, so `common/glb.py`'s
+`canonicalize_mesh_normals` re-derives every float32 normal from the exported positions
+in canonical triangle order (area-weighted, welded by exact float32 position bits) —
+the same post-export pass as `canonicalize_ellipsoid_normals`, generalized.
+`npm run test:blender` builds one procedural asteroid and one shape-model comet twice
+and requires byte-identical GLB, PNG and SOURCES.md.
 
 ## The ship
 

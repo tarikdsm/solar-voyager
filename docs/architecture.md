@@ -81,6 +81,7 @@ src/
 │   ├── diary/                              # NEW  milestones, diaryStore, album (T0146/47)
 │   ├── audio/audioDirector.ts              # NEW  snapshot→audio state (T0144)
 │   ├── restorePoints.ts                    # NEW  10 s autosave ring (T0111)
+│   ├── targetSelection.ts                  # LANDED one write point for Commands.setTarget (T0117)
 │   └── orbitCameraController.ts            # MOD  ship focus target (T0109)
 ├── render/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
@@ -127,6 +128,17 @@ step(wallDt) → advances sim time by warp × wallDt via the adaptive integrator
 
 **`Commands`** (the ONLY way player intent enters the sim; changes require an ADR):
 - `setThrottle(f)`, `setAttitudeMode(mode)`, `rotate(rates)`, `setWarp(tier)`, `setTarget(bodyId)`; (deferred launch phase adds `setPitchRate(r)`, `stage()` via ADR when built)
+
+The navigation target has exactly one writer: `game/targetSelection.ts`
+(`TargetSelectionController`, T0117). The space-view click, the system-map
+click, both target dropdowns and the camera focus ring call `selectTarget`,
+which validates the id against the catalog and notifies subscribers;
+`tests/architecture/targetWritePoint.test.ts` scans `src/` and fails if any file
+other than that controller and the composition-root `Commands` facade calls
+`setTarget`. Picking for both views is `game/hud/bodyPicking.ts`: float64
+angular-disc math against the published camera pose, never a three.js
+`Raycaster` (bodies are points and spheres at wildly different tiers, and the
+scene is camera-relative float32).
 
 `render/` and `ui/` are pure consumers of `SimSnapshot`. They never mutate sim state. UI agents and physics agents meet ONLY at these two interfaces — this is what makes parallel multi-agent work safe.
 
