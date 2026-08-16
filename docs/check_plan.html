@@ -2563,6 +2563,23 @@
       "A schema-level test rejects a future entry that encodes retrograde twice, so the class of defect cannot return"
     ],
     "handoff_notes": "This is a data and bake change, not a render change: bodySpin.ts already implements the documented\nconvention correctly. Decide in the PR whether the catalog rule should be restated in the schema\ndocs so the next transcription cannot repeat it.\n"
+  },
+  {
+    "id": "T0157",
+    "title": "Give the I/O-heavy Vitest suites a timeout that survives load",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [],
+    "milestone": "V2M6",
+    "spec": "A handful of suites do real filesystem and image work inside Vitest's 5000 ms default timeout:\ntools/assets/ingest.test.mjs, tools/textures/preparePlutoMap.test.mjs,\ntools/checks/releaseReadiness.test.mjs, tests/render/float32Boundary.test.ts and\ntests/workers/predictorAccuracy.test.ts. They pass in isolation in well under a second and time out\nunder load, and the set that fails differs run to run.\nFour v2 lanes independently reported this as a suspected regression and each had to prove it\npre-existing on a clean tree before continuing. That is the real cost: it is not a flaky test so\nmuch as a flaky verification signal, and it trains agents to discount red.\nThis is not a gate to weaken. The assertions are correct and must not change; only the time budget\nfor I/O-bound work should, and only for the suites that actually do I/O.\n",
+    "acceptance": [
+      "The I/O-bound suites carry an explicit per-suite timeout justified in a comment, rather than the global default",
+      "The full suite passes with the machine deliberately loaded, repeated enough times to mean something",
+      "No assertion, fixture or gate is weakened or skipped, and the global default is unchanged for everything else",
+      "The ENOTEMPTY and EBUSY staging-directory races observed on Windows are fixed or explained"
+    ],
+    "handoff_notes": "Observed failure modes: \"Test timed out in 5000ms\" on any of the listed suites, plus\nENOTEMPTY rmdir and EBUSY unlink on assets.ingest-staging-* directories on Windows, which suggests\nthe staging cleanup races its own writes rather than merely being slow. Fixing the race may remove\nmost of the timeouts on its own; measure before reaching for a larger number.\n"
   }
 ];
     /* TASK_DATA_END */
