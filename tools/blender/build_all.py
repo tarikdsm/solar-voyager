@@ -10,7 +10,8 @@ import sys
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 REPOSITORY_ROOT = SCRIPT_DIR.parents[1]
 CATALOG_PATH = REPOSITORY_ROOT / "data" / "bodies.json"
-EXCLUDED_BUILDERS = {"all", "planet", "test_sphere"}
+# Category-level entry points: parameterized by --id, not discoverable as a body.
+EXCLUDED_BUILDERS = {"all", "asteroid", "comet", "planet", "test_sphere"}
 
 
 def load_catalog_ids(catalog_path=CATALOG_PATH):

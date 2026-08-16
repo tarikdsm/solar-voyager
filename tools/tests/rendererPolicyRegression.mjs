@@ -4,9 +4,10 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4179;
+const PORT = resolveHarnessPort(4179);
 const PRODUCTION_URL = `http://${HOST}:${PORT}/solar-voyager/?autostart=1`;
 const CONTROL_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/hardwareWarning.html`;
 

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4180;
+const PORT = resolveHarnessPort(4180);
 const PAGE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/hudSignals.html`;
 const WARP_VALUES = [1, 5, 10, 50, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 

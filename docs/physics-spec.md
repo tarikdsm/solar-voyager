@@ -421,4 +421,290 @@ these presentation bounds do not alter the physical definitions above.
 10. **Plane-change pricing:** rotating a 30 km/s velocity vector by 90° at constant speed via continuous thrust — ledger E_spent within 2% of the analytic ∫Fc dt for the flown profile, and strictly greater than c·m·|Δp| (the impulsive lower bound).
 11. **Time dilation:** 1 year of coordinate time at γ = 2 yields τ within 1e-9 of t/2 (with dτ integrated, not recomputed).
 12. **N-body field:** single-body inverse-square acceleration relative error < 1e-14. In an ideal circular Earth-Sun barycentric rotating frame, independently solved L1 lies 1.4e6–1.6e6 km from Earth and satisfies `|g_x + n²·x| / max(|g_x|, |n²·x|) < 1e-10`; Coriolis acceleration is zero for this stationary rotating-frame point.
-13. **Hold-mode slew (§3.0.1, ADR-035):** a step of `θ_step` toward a target `θ_err` away lands on the great circle at exactly `θ_step`, and composing N steps of `θ_step/N` reproduces it to 1e-14. A 90° hold converges in `θ_err / maxSlewRadPerSimS` within one frame; a 180° reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time at every warp tier, i.e. `12.0 s / warp` of wall time (≤ 2.5 s at 5x, ≤ 0.25 s at 50x). One frame reached through the warp ladder, or integrated at a different tolerance, or published after a budget-exhausted tier was rolled back, yields the same attitude as that frame integrated in a single segment, to 1e-12. A converged prograde hold is slew-rate-independent: against an unbounded rate (which reproduces the pre-ADR-035 law up to the ≤ 5.6e-8 rad thrust-direction round trip of §3.0.1) one LEO orbit drifts < 1e-3 km. At 1x versus 100x a converged hold agrees on energy and proper Δv to 1e-12 and on position, celerity, attitude and the per-axis burn decomposition to 1e-9 km / 1e-12 km/s / 1e-12 rad.
+13. **Guidance solver (§8, ADR-037):** the 1D profile matches §8.1's closed forms
+    to 1e-9 relative when flown by the §3.1 integrator through β = 0.866; the exact
+    stop distance matches `(c²/α)(γ−1)` to 1e-12 relative over β ∈ [1e-9, 0.999],
+    where the textbook `1/√(1−β²)−1` has already lost every digit; the five canonical
+    routes (LEO→Moon/Mars/Jupiter/Neptune and a polar LEO→Sun 25 R☉ flyby) converge
+    with `ok = true` in ≤ 12 iterations and, flown open-loop, arrive within 0.1% of
+    the flown distance (measured 5e-7 to 8.7e-6); every §8.6 degenerate case returns
+    `ok = false` with NaN fields rather than a plausible profile.
+14. **Hold-mode slew (§3.0.1, ADR-035):** a step of `θ_step` toward a target `θ_err` away lands on the great circle at exactly `θ_step`, and composing N steps of `θ_step/N` reproduces it to 1e-14. A 90° hold converges in `θ_err / maxSlewRadPerSimS` within one frame; a 180° reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time at every warp tier, i.e. `12.0 s / warp` of wall time (≤ 2.5 s at 5x, ≤ 0.25 s at 50x). One frame reached through the warp ladder, or integrated at a different tolerance, or published after a budget-exhausted tier was rolled back, yields the same attitude as that frame integrated in a single segment, to 1e-12. A converged prograde hold is slew-rate-independent: against an unbounded rate (which reproduces the pre-ADR-035 law up to the ≤ 5.6e-8 rad thrust-direction round trip of §3.0.1) one LEO orbit drifts < 1e-3 km. At 1x versus 100x a converged hold agrees on energy and proper Δv to 1e-12 and on position, celerity, attitude and the per-axis burn decomposition to 1e-9 km / 1e-12 km/s / 1e-12 rad.
+
+## 8. Constant-acceleration relativistic intercept (guidance) — ADR-037
+
+The cruise autopilot's guidance model. Symbols are §3's and
+`sim/ship/relativity.ts`'s throughout: `u` is celerity (proper velocity, km/s),
+`γ = √(1+|u|²/c²)`, `v = u/γ`, `β = |v|/c`, `α` is proper acceleration, `τ` is ship
+proper time, `t` is coordinate time. Implemented by
+`sim/guidance/constantAccelIntercept.ts` and `sim/guidance/brakingEnvelope.ts`.
+
+Interfaces take `α` in **m/s²** because that is `VesselConfig`'s unit (§3.0.1); every
+formula below is in the §1 unit system, so the implementation divides by 1000 on
+entry.
+
+### 8.1 Hyperbolic motion under constant proper acceleration
+
+Take §3's equations of motion with `g = 0` and thrust along a **fixed inertial** unit
+vector `n̂`:
+
+```
+du/dt = α n̂        ⇒   u(t) = u₀ + α t n̂          (exact)
+```
+
+Celerity is *linear in coordinate time*. This is why the whole section closes in
+elementary functions rather than needing a shooting method, and it is a property of
+the celerity formulation specifically — coordinate velocity is not linear, and
+coordinate acceleration falls as `α/γ³` (§3).
+
+From rest (`u₀ = 0`) in one dimension, with `x = αt/c`:
+
+```
+γ(t) = √(1 + x²)
+v(t) = α t / γ(t)
+β(t) = x / √(1 + x²)            = tanh(asinh x)
+r(t) = (c²/α)(γ(t) − 1)
+τ(t) = (c/α) · asinh(x)
+```
+
+Equivalently, with rapidity `w = ατ/c`: `β = tanh w`, `γ = cosh w`, `u = c·sinh w`.
+This is the same motion §7.8 already regression-tests against the integrator.
+
+### 8.2 The brachistochrone: boost–flip–brake between relative rest states
+
+A symmetric profile covering distance `d` from rest to rest spends half-time `T_h`
+covering `d/2` on each leg:
+
+```
+d/2 = (c²/α)(√(1 + (αT_h/c)²) − 1)
+```
+
+Define the **relativistic depth** of the trip, `k ≡ α d / (2c²)`. Then
+`√(1+(αT_h/c)²) = 1 + k`, so `(αT_h/c)² = k(k+2)` and
+
+```
+T_h = (c/α)·√(k(k+2)) = √( d²/(4c²) + d/α )                (half the trip)
+T   = 2 T_h                                                (whole trip)
+γ_peak = 1 + k
+β_peak = √(k(k+2)) / (1 + k)                = tanh(asinh(αT_h/c))
+τ      = 2 (c/α)·asinh(√(k(k+2)))           = 2 (c/α)·arccosh(1 + k)
+```
+
+The second form of `T_h` is the one implemented: both terms under the root are
+positive, so it cancels nothing at either limit, whereas `(c/α)√(k(k+2))` and any
+form built on `γ − 1` lose their significant digits for shallow trips.
+
+Limits, both approached from above:
+
+```
+k → 0 :  T_h → √(d/α)·(1 + k/4 + O(k²))     (Newtonian, d = αT²/4)
+k → ∞ :  T_h → d/(2c)                        (photon bound)
+```
+
+Reference profiles at `α = 98.0665 m/s²` (10 g, the default vessel), measured from a
+400 km LEO at J2026:
+
+| Route | stand-off (km) | T | β_peak | 1 − τ/T |
+|---|---:|---:|---:|---:|
+| Moon, 3 radii | 5,212.2 | 1.07 h | 5.65e-4 | 5.0e-8 |
+| Mars, 3 radii | 10,168.5 | 1.404 d | 1.98e-2 | 6.6e-5 |
+| Jupiter, outside the rings | 324,000 | 1.861 d | 2.63e-2 | 1.2e-4 |
+| Neptune, outside the rings | 75,528.6 | 4.969 d | 6.99e-2 | 8.2e-4 |
+| Sun, 25 R☉ | 17,392,500 | 0.842 d | 1.19e-2 | 2.4e-5 |
+
+### 8.3 Braking envelope (exact stop distance and time)
+
+Time-reversing §8.1, the coordinate distance and time needed to brake from relative
+speed `v` (`β = v/c`, `γ_rel = 1/√(1−β²)`) to relative rest at constant `α`:
+
+```
+D_stop = (c²/α)(γ_rel − 1)
+t_stop = u_rel/α = γ_rel · v / α
+```
+
+Both exact; `t_stop` because celerity is linear (§8.1). Newtonian limit
+`D_stop → v²/(2α)`, always approached from below.
+
+Implementation conventions (`brakingEnvelope.ts`): `γ_rel − 1` is evaluated as
+`β²/(s(1+s))` with `s = √((1−β)(1+β))`, which cancels nothing at either end of the
+range — the textbook `1/√(1−β²) − 1` returns a flat zero below `β ≈ 1e-8`, where the
+true envelope is still hundreds of kilometres at torchship `α`. The speed argument is
+a **magnitude**, so its sign is irrelevant. A drive that cannot brake (`α ≤ 0`) or a
+non-subluminal argument yields `+∞`, not NaN, so that an approach-brake guard of the
+form `distance < 1.5·D_stop` fails *toward* warning; non-finite inputs yield NaN.
+
+### 8.4 Vector intercept of a rails target
+
+Ship state `(r₀, u₀, τ₀)` at `t₀`, target body `j` on rails (§2) with position
+`r_j(t)` and velocity `v_j(t)`, stand-off radius `R_arr` (§8.5). Write
+`v₀ = u₀/γ₀` for the ship's initial coordinate velocity.
+
+**Drift-frame displacement and its fixed point.** For a candidate coordinate time of
+flight `T`:
+
+```
+Δ(T) = r_j(t₀+T) − r₀ − v₀ T                  (first-order lead correction)
+d(T) = |Δ(T)| − R_arr                         (stand-off along the approach line)
+T   ←  2·T_h( d(T) )                          (§8.2)
+```
+
+seeded with `T₀ = 2·T_h(|r_j(t₀) − r₀| − R_arr)`, converged when successive `T`
+change by less than **0.5 s**, abandoned after **25** iterations.
+
+Subtracting `v₀T` puts the solve in the inertial frame drifting with the ship's
+initial velocity. In that frame the ship starts at **rest**, so §8.2 applies to the
+powered motion without approximation and the profile is symmetric:
+
+```
+n̂ = Δ(T)/|Δ(T)|
+û(t) = +n̂   for t ∈ [t₀, t₀+T/2)             (boost)
+û(t) = −n̂   for t ∈ (t₀+T/2, t₀+T]           (brake)
+flip at exactly T/2
+```
+
+The flip time carries **no** separate correction for the initial velocity component
+along `n̂`: the whole of `v₀`, parallel part included, has already been removed inside
+`Δ`. The adjustment lives in the distance, not in the schedule.
+
+**Arrival.** The profile ends at `r_j(t₀+T) − R_arr·n̂`, moving at `v₀` — at rest in
+the drift frame, *not* relative to the target. The residual the insertion phase must
+remove is `v₀ − v_j(t₀+T)`, costing the `t_stop` and `D_stop` of §8.3.
+
+**Exact profile quantities with the drift retained.** Decompose the initial celerity
+along the thrust axis, `w₀ = u₀·n̂`, `u_⊥ = u₀ − w₀n̂`, and set `A ≡ √(c² + |u_⊥|²)`.
+Thrust changes only the axial component, so `w(t) = w₀ ± αt` and
+
+```
+γ(t)   = √(A² + w(t)²)/c
+w_f    = w₀ + αT/2                                       (axial celerity at the flip)
+τ      = (2c/α)·( asinh(w_f/A) − asinh(w₀/A) )
+β_peak = |u|_max / √(c² + |u|_max²),   |u|_max = √( |u_⊥|² + max(w₀², w_f²) )
+```
+
+Both reduce to §8.2's rest-to-rest forms at `u₀ = 0`, and both are what the
+implementation reports, because a re-solve from a moving ship must not describe its
+clock or its peak speed as though it started at rest.
+
+**Exact displacement, and the error it bounds.** The same quadratures give the
+profile's true displacement in closed form:
+
+```
+Δr∥ = (2c²/α)(γ_flip − γ₀)          Δr⊥ = u_⊥ · τ
+```
+
+The transverse displacement is the transverse celerity times the *proper* time — the
+drift is retarded by exactly the trip's own time dilation. The first-order model of
+`Δ(T)` above instead carries it at `v_⊥T`, so the residual of an open-loop flight is
+`O(β_peak²)` of the drift plus `O(v_∥ · T · β_peak²)` along the axis. Flown by the
+§3.1 integrator this measures 9.1e-7 (Moon), 8.5e-7 (Mars), 1.2e-6 (Jupiter), 8.7e-6
+(Neptune) and 5.0e-7 (Sun) of the flown distance — three orders inside the 0.1%
+contract of §7.13, and far below the gravity term of §8.7 that the mid-course
+re-solve exists to absorb.
+
+### 8.5 Arrival stand-off radius
+
+With `R_col = meanRadiusKm + (atmosphereTopKm ?? 0)` the §6 collision sphere, and `h`
+the caller's requested altitude above it:
+
+```
+R_arr = max( R_col ,  h > 0 ? R_col + h : (arrival = 'orbit' ? 3·R_col : R_col) )
+```
+
+The outer `max` is a hard floor: guidance never aims inside a collision sphere,
+whatever altitude it is handed. `h = 0` with `arrival = 'flyby'` therefore means
+"skim the sphere", and a target with no catalogued radius (`R_col = 0`) is solvable
+only with an explicit `h`.
+
+The class policy the CruiseDirector applies on top of this rule — the solver cannot,
+because `data/rings.json` is game-layer data and `sim/` may not read it:
+
+| Class | `R_arr` for `arrival = 'orbit'` |
+|---|---|
+| planets, moons, dwarfs, small bodies | `3 · R_col` (the solver's own default) |
+| ringed giants | `1.2 ×` outermost ring radius |
+| Sun | `25 R☉ = 17,392,500 km` |
+
+Ringed-giant numbers, and the altitude above `R_col` that expresses them (note that
+`R_col` equals `rings.json`'s `referenceRadiusKm` for all four):
+
+| Body | `R_col` | outer ring | `R_arr` | `h` |
+|---|---:|---:|---:|---:|
+| Jupiter | 71,492 | 270,000 | 324,000 | 252,508 |
+| Saturn | 60,268 | 140,612 | 168,734.4 | 108,466.4 |
+| Uranus | 25,559 | 106,200 | 127,440 | 101,881 |
+| Neptune | 24,764 | 62,940.5 | 75,528.6 | 50,764.6 |
+
+The override is not cosmetic: `3 · R_col` at Jupiter is 214,476 km, which is
+**inside** the Thebe gossamer ring.
+
+### 8.6 Convergence, conditioning, and failure
+
+Differentiating §8.4's fixed point, `|dT/dd| = (d/(2c²) + 1/α)/T_h`, which in the
+Newtonian regime is `1/(αT_h)` — one over the profile's peak drift-frame celerity;
+and `|dd/dT| ≤ |v₀ − v_j|`. The iteration is therefore a contraction with factor
+
+```
+κ = |v₀ − v_j(t₀+T)| / (αT/2)
+```
+
+and κ is simultaneously a *physical* statement: the ship must arrive slow compared
+with how fast it flew, or it is flying past rather than arriving. The solver requires
+`κ ≤ 0.1` **at convergence**. Measured: the five canonical routes sit at 0.0019–0.036
+and converge in 2–3 iterations, while re-solves taken from 10–90% along a flown
+Neptune profile sit at 0.245–1.615 and either fail to converge or converge to a
+spurious root in which the ship drifts past the target and boosts back — a real
+solution of the stated equation, arriving at 4,000 km/s, which the plain convergence
+test cannot distinguish from a departure solve. The gap between 0.036 and 0.245 is
+the margin the 0.1 threshold sits in.
+
+An intercept is reported as failed (`ok = false`, every numeric field NaN, thrust
+axis zeroed) when any of the following holds. Callers fall back to §8.7's pursuit
+rule.
+
+1. `α` not finite, or `α ≤ 0`.
+2. `targetIndex` is not an integer index into the compiled catalog.
+3. The ship state or the start time is not finite.
+4. The requested arrival altitude is not finite, or is negative.
+5. No stand-off radius can be resolved (§8.5).
+6. `|r_j(t₀) − r₀| ≤ max(2·R_col, R_arr)` — the ship is already at the target.
+7. Any iterate yields `d ≤ 0` or a non-finite time of flight. This case also
+   protects the rails evaluator, which raises on a non-finite time; a guidance solve
+   must not throw into a frame loop.
+8. Not converged within 25 iterations.
+9. `κ > 0.1` at convergence.
+
+Cost: one full rails evaluation per iteration (all catalog bodies, ~11 µs for the
+43-body catalog), so 2–3 evaluations for a healthy route and 25 for the worst
+rejection. This is a re-solve-cadence cost, not a per-frame one.
+
+### 8.7 Model scope, and the pursuit fallback
+
+The solve is **thrust-only**: `g` is dropped from §3's equations. Over a Mars leg the
+Sun displaces the ship ≈ 9e3 km (0.012% of the trip) and Earth's field contributes
+≈ 3 km/s of unmodelled Δv while the ship is still near LEO — both far larger than
+§8.4's kinematic residual. Closing that loop is the CruiseDirector's job: re-solve
+every 300 s of simulation time, on any phase change, or when lateral drift exceeds
+0.5% of the remaining distance. The flip is likewise instantaneous in the profile,
+while a real reversal costs `π / maxSlewRadPerSimS = 12.0 s` of simulation time
+(§3.0.1); the director budgets that around `T/2`.
+
+A single fixed thrust axis cannot match both an arrival position and an arrival
+velocity, which is why §8.4 arrives at drift-frame rest and an insertion phase
+follows. Re-solving is valid only while the ship is still slow against its own
+profile (§8.6); the endgame belongs to the pursuit rule below, which needs no time of
+flight at all and is always available, including as the abort-resume mode:
+
+```
+n̂      = normalize(r_j(t) − r(t))
+d_rel   = |r_j(t) − r(t)| − R_arr
+v_rel   = v(t) − v_j(t)
+D_stop  = (c²/α)(γ_rel − 1)                        §8.3, evaluated on |v_rel|
+if d_rel > 1.2 · D_stop :  û = normalize(r_j(t + t_lead) − r(t)),  α = α_max
+else                    :  û = −normalize(v_rel),                  α = α_max
+settle when |v_rel| < 1e-3 km/s
+```
+
+with the lead `t_lead = 2·T_h(d_rel)` evaluated once from §8.2 — a closed form, not
+an iteration. The 1.2 margin is the one the approach-brake assist engages at, having
+warned at 1.5. Specified here; **implemented in the game layer** by T0116, because it
+commands throttle and attitude rather than computing a trajectory.

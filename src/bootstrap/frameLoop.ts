@@ -12,6 +12,7 @@ import type { TrajectoryPredictorClient } from '../game/trajectoryPredictorClien
 import { applyCameraPose } from '../render/cameraRig.js';
 import type { EpochWorld } from '../render/createEpochWorld.js';
 import type { RendererBootstrap } from '../render/createRenderer.js';
+import type { ExposureController } from '../render/exposureController.js';
 import type { LightingPostPipeline } from '../render/lightingPostPipeline.js';
 import type { PerfGovernor } from '../render/perfGovernor.js';
 import type { RelativisticVisualController } from '../render/relativisticVisualController.js';
@@ -64,6 +65,7 @@ export interface FrameLoopRuntime {
   readonly trajectoryPredictionStore: TrajectoryPredictionSignalStore;
   readonly updateBurnLogRuntime: (view: BurnLogView) => void;
 
+  exposureController: ExposureController | null;
   flightController: FlightController | null;
   flightInputRouter: FlightInputRouter | null;
   hudInputRouter: HudInputRouter | null;
@@ -241,6 +243,10 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
       );
       lighting.setFocusPositionOffset(cameraDirector.focusPositionOffset);
       lighting.update();
+      // T0127 — display-only, driven by the wall delta because photopic
+      // adaptation is a wall-clock phenomenon, and placed after the camera pose
+      // so it keys off the position this frame actually renders from.
+      runtime.exposureController?.update(deltaSec, cameraPositionKm, snapshot.dominantBodyIndex);
       osculatingConic.update(snapshot, canvas.width, canvas.height);
       spaceScene.updateCameraRelative(cameraPositionKm);
       telemetry.beginGpuTimer();

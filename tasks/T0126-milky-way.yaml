@@ -1,8 +1,8 @@
 id: T0126
 title: Milky Way panorama and zodiacal light
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0126-milky-way
 depends_on:
   - T0103
 milestone: V2M3

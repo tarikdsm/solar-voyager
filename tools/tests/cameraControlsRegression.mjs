@@ -5,6 +5,7 @@ import { createServer } from 'vite';
 
 import { BLEND_FRAME_COST } from './cameraWaits.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 /**
  * The camera gate: what a real browser proves about the chase camera that a
@@ -66,7 +67,7 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
  */
 
 const HOST = '127.0.0.1';
-const PORT = 4178;
+const PORT = resolveHarnessPort(4178);
 // SHIP_LENGTH_M * CHASE_DEFAULT_DISTANCE_SHIP_LENGTHS * sqrt(1 + 0.35^2), in km.
 const EXPECTED_CHASE_ARM_KM = 0.026_12 * 6 * Math.sqrt(1 + 0.35 * 0.35);
 // WARP_LADDER = [1, 5, 10, 50, 100, 1e3, ...]; five rungs reaches 1000x.

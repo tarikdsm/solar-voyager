@@ -144,15 +144,36 @@ do not match the pinned SHA-256, normalizes them to metadata-free RGB PNG with
 the pinned Sharp dependency, and writes complete attribution beside the output.
 KTX2 remains the responsibility of asset ingest.
 
+**ADR-039: sources are fetched, verified and cached — never committed.** Each
+`RECIPES` entry is a manifest record pinning `{url, sha256, license, dest}`.
+Verified bytes are cached content-addressed at `.texture-cache/<xx>/<sha256>`
+(gitignored, and excluded from the repo-content budget), so a re-run is a cache
+hit rather than a re-download. `assets/textures-src/**` is gitignored except
+`SOURCES.md`. Sources committed before ADR-039 stay tracked.
+
 ```powershell
 # Fetch every implemented recipe into assets/textures-src/
 npm run textures:fetch
 
-# Focused/offline reproduction from already verified source bytes
-python tools/fetch_textures.py --only earth-albedo `
+# Inspect the pinned manifest as JSON
+python -X utf8 tools/fetch_textures.py --print-manifest
+
+# Focused reproduction from already verified source bytes; --source verifies
+# against the pin and installs into the cache
+python -X utf8 tools/fetch_textures.py --only earth-albedo `
   --source assets/textures-src/earth/8k_earth_daymap.jpg `
   --output-root build/texture-review
+
+# Prove the cache works: no network, fails with actionable copy on a miss
+python -X utf8 tools/fetch_textures.py --only earth-albedo --offline
+
+# Share one cache between checkouts/worktrees
+$env:SOLAR_VOYAGER_TEXTURE_CACHE = 'D:\caches\solar-voyager-textures'
 ```
+
+Exit codes: `0` success, `2` failure, `3` a pinned source is neither cached nor
+reachable (the message names the file, its destination, the URL and the manual
+recovery command). A SHA-256 mismatch is always fatal and caches nothing.
 
 The initial `earth-albedo` recipe resolves the official Solar System Scope 8k
 Earth Day Map to 8192×4096. The `moon-albedo` and `moon-height` recipes resolve

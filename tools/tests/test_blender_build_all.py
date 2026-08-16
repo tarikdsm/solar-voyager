@@ -36,6 +36,25 @@ class BlenderBuildAllTests(unittest.TestCase):
             self.assertEqual(list(builders), ["earth", "saturn"])
             self.assertEqual(builders["earth"].name, "build_earth.py")
 
+    def test_category_entry_points_are_excluded_from_discovery(self):
+        self.assertEqual(
+            self.build_all.EXCLUDED_BUILDERS,
+            {"all", "asteroid", "comet", "planet", "test_sphere"},
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            for name in ("build_asteroid.py", "build_comet.py", "build_earth.py"):
+                (root / name).write_text("", encoding="utf-8")
+
+            self.assertEqual(list(self.build_all.discover_builders(root, {"earth"})), ["earth"])
+
+    def test_real_builder_directory_discovers_without_error(self):
+        builders = self.build_all.discover_builders()
+
+        self.assertNotIn("asteroid", builders)
+        self.assertNotIn("comet", builders)
+        self.assertIn("earth", builders)
+
     def test_rejects_builder_without_catalog_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)

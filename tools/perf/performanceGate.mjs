@@ -9,6 +9,7 @@ import { preview } from 'vite';
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
 import { installHighQualitySetting } from './browserSettings.mjs';
 import { measureBundleSizes } from './bundleMeasurement.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 import {
   classifyHeapConfirmation,
   createHeapSettleTracker,
@@ -22,7 +23,7 @@ import {
 } from './performanceGateUtils.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4176;
+const PORT = resolveHarnessPort(4176);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const TELEMETRY_PROPERTY = 'solarVoyagerTelemetry';
 const GOLDEN_PATH = fileURLToPath(new URL('./performance-golden.json', import.meta.url));

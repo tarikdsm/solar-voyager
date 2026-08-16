@@ -6,10 +6,21 @@ import {
   WebGLRenderer,
 } from 'three';
 
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { CopyShader } from 'three/addons/shaders/CopyShader.js';
+
 import bodiesDocument from '../../data/bodies.json';
+import { AU_KM } from '../../src/core/constants.js';
 import { EARTH_NIGHT_EMISSIVE_INTENSITY } from '../../src/render/bodyVisualSystem.js';
 import { createEpochWorld } from '../../src/render/createEpochWorld.js';
-import { LightingPostPipeline } from '../../src/render/lightingPostPipeline.js';
+import {
+  EXPOSURE_MAX,
+  EXPOSURE_MIN,
+  EXPOSURE_TAU_BRIGHT_TO_DARK_SEC,
+  EXPOSURE_TAU_DARK_TO_BRIGHT_SEC,
+  ExposureController,
+} from '../../src/render/exposureController.js';
+import { LightingPostPipeline, POST_PASS_ANCHORS } from '../../src/render/lightingPostPipeline.js';
 
 const VIEWPORT_SIZE = 512;
 /** Rotates Earth so the Pacific hemisphere is the night side under test. */
@@ -39,8 +50,37 @@ interface DirectFallbackPrograms {
   readonly glError: number;
 }
 
+interface ExposurePoseSample {
+  readonly label: string;
+  readonly heliocentricAu: number;
+  readonly sceneLuminance: number;
+  readonly targetExposure: number;
+  readonly rendererExposure: number;
+}
+
+interface ExposureSample {
+  readonly poses: readonly ExposurePoseSample[];
+  readonly minExposure: number;
+  readonly maxExposure: number;
+  readonly brightToDarkSec: number;
+  readonly darkToBrightSec: number;
+  readonly tauBrightToDarkSec: number;
+  readonly tauDarkToBrightSec: number;
+  readonly glError: number;
+}
+
+interface InsertedPassSample {
+  readonly defaultPassNames: readonly string[];
+  readonly insertedPassNames: readonly string[];
+  readonly anchors: readonly string[];
+  readonly glError: number;
+}
+
 interface LightingPostHarness {
   directFallbackPrograms(): DirectFallbackPrograms;
+  adaptiveExposure(): ExposureSample;
+  insertedPassOrder(): InsertedPassSample;
+  renderProductionSunAtExposure(exposure: number): PipelineSnapshot;
   renderEarthNight(emissionEnabled: boolean): PipelineSnapshot & {
     readonly earthLoadState: string;
     readonly earthTier: number;
@@ -126,6 +166,86 @@ const sunCameraPositionKm = {
   z: sunZ,
 };
 
+/**
+ * The four poses plan §3.5 names, as heliocentric distances along the fixture's
+ * +x axis from the real catalogued Sun position. Nothing is loaded for them: the
+ * exposure key reads the packed positions, never the scene graph.
+ */
+const EXPOSURE_POSES: readonly { readonly label: string; readonly heliocentricAu: number }[] = [
+  { label: 'near-Sun', heliocentricAu: (25 * sunDefinition.meanRadiusKm) / AU_KM },
+  { label: 'Mercury', heliocentricAu: 0.387_098 },
+  { label: 'Earth', heliocentricAu: 1 },
+  { label: 'Neptune', heliocentricAu: 30.069_9 },
+];
+
+const exposureController = new ExposureController({
+  sink: earthPipeline,
+  positionsKm: world.positionsKm,
+  sunIndex: world.sunIndex,
+  bodyRadiiKm: world.bodyRadiiKm,
+  bodyGeometricAlbedos: world.bodyGeometricAlbedos,
+});
+
+function exposureCameraAt(heliocentricAu: number): { x: number; y: number; z: number } {
+  return { x: sunX + heliocentricAu * AU_KM, y: sunY, z: sunZ };
+}
+
+/** Wall seconds until the controller has closed 63.2% of the stop gap. */
+function stopGapCrossingSec(
+  fromAu: number,
+  toAu: number,
+  fromExposure: number,
+  toExposure: number,
+): number {
+  exposureController.reset(exposureCameraAt(fromAu), -1);
+  const startStops = Math.log2(fromExposure);
+  const gapStops = Math.log2(toExposure) - startStops;
+  const crossing = Math.pow(2, startStops + gapStops * (1 - Math.exp(-1)));
+  const camera = exposureCameraAt(toAu);
+  const stepSec = 1 / 60;
+  for (let elapsedSec = 0; elapsedSec < 60; elapsedSec += stepSec) {
+    exposureController.update(stepSec, camera, -1);
+    const reached =
+      gapStops > 0
+        ? exposureController.exposure >= crossing
+        : exposureController.exposure <= crossing;
+    if (reached) return elapsedSec + stepSec;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * One real `ShaderPass` subclass per anchor, so the browser gate can assert the
+ * resulting order by class name exactly as it does for the six built-in passes.
+ */
+class InsertedScenePass extends ShaderPass {
+  constructor() {
+    super(CopyShader);
+  }
+}
+class InsertedRelativisticPass extends ShaderPass {
+  constructor() {
+    super(CopyShader);
+  }
+}
+class InsertedBloomPass extends ShaderPass {
+  constructor() {
+    super(CopyShader);
+  }
+}
+class InsertedAntiAliasingPass extends ShaderPass {
+  constructor() {
+    super(CopyShader);
+  }
+}
+
+const INSERTED_PASS_CLASSES: Record<(typeof POST_PASS_ANCHORS)[number], new () => ShaderPass> = {
+  scene: InsertedScenePass,
+  relativistic: InsertedRelativisticPass,
+  bloom: InsertedBloomPass,
+  'anti-aliasing': InsertedAntiAliasingPass,
+};
+
 function setEarthEmissionEnabled(enabled: boolean): void {
   let emissiveMaterialCount = 0;
   world.spaceScene.scene.traverse((object) => {
@@ -162,6 +282,78 @@ function pipelineSnapshot(pipeline: LightingPostPipeline): PipelineSnapshot {
 }
 
 globalThis.__lightingPostHarness = {
+  /**
+   * T0127 — the controller driving the *real* renderer through the pipeline sink.
+   * Restores exposure 1 so every other fixture measurement stays on the v1 key.
+   */
+  adaptiveExposure() {
+    const poses: ExposurePoseSample[] = [];
+    for (const pose of EXPOSURE_POSES) {
+      exposureController.reset(exposureCameraAt(pose.heliocentricAu), -1);
+      poses.push({
+        label: pose.label,
+        heliocentricAu: pose.heliocentricAu,
+        sceneLuminance: exposureController.sceneLuminance,
+        targetExposure: exposureController.targetExposure,
+        rendererExposure: renderer.toneMappingExposure,
+      });
+    }
+    const brightToDarkSec = stopGapCrossingSec(1, 30.069_9, 1, EXPOSURE_MAX);
+    const darkToBrightSec = stopGapCrossingSec(
+      30.069_9,
+      (25 * sunDefinition.meanRadiusKm) / AU_KM,
+      EXPOSURE_MAX,
+      EXPOSURE_MIN,
+    );
+    earthPipeline.setExposure(1);
+    return {
+      poses,
+      minExposure: EXPOSURE_MIN,
+      maxExposure: EXPOSURE_MAX,
+      brightToDarkSec,
+      darkToBrightSec,
+      tauBrightToDarkSec: EXPOSURE_TAU_BRIGHT_TO_DARK_SEC,
+      tauDarkToBrightSec: EXPOSURE_TAU_DARK_TO_BRIGHT_SEC,
+      glError: renderer.getContext().getError(),
+    };
+  },
+  /**
+   * T0127 — real three.js passes through `insertPass`, on a throwaway pipeline so
+   * the production-order measurements above keep their pristine six-pass chain.
+   */
+  insertedPassOrder() {
+    const defaultPassNames = earthPipeline.composer.passes.map((pass) => pass.constructor.name);
+    const insertionPipeline = new LightingPostPipeline(
+      renderer,
+      world.spaceScene.scene,
+      world.spaceScene.camera,
+    );
+    insertionPipeline.resize(VIEWPORT_SIZE, VIEWPORT_SIZE, 1);
+    for (const anchor of POST_PASS_ANCHORS) {
+      const pass = new INSERTED_PASS_CLASSES[anchor]();
+      pass.enabled = false;
+      insertionPipeline.insertPass(pass, anchor);
+    }
+    insertionPipeline.render();
+    const insertedPassNames = insertionPipeline.composer.passes.map(
+      (pass) => pass.constructor.name,
+    );
+    insertionPipeline.dispose();
+    earthPipeline.setExposure(1);
+    return {
+      defaultPassNames,
+      insertedPassNames,
+      anchors: [...POST_PASS_ANCHORS],
+      glError: renderer.getContext().getError(),
+    };
+  },
+  renderProductionSunAtExposure(exposure) {
+    earthPipeline.setExposure(exposure);
+    earthPipeline.render();
+    const snapshot = pipelineSnapshot(earthPipeline);
+    earthPipeline.setExposure(1);
+    return snapshot;
+  },
   directFallbackPrograms() {
     return {
       beforeWarmUp: directProgramsBeforeWarmUp,
