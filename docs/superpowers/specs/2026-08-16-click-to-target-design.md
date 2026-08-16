@@ -72,9 +72,9 @@ files match: `game/targetSelection.ts` (the only caller) and `bootstrap/composit
 ### API for T0119 and T0150 (do not reach into internals)
 
 - **T0119 — "engage cruise" on the map's selected body.** Read `TargetSelectionController.selectedBodyId`
-  (it equals the map focus, because a map click sets both) and put the button beside
-  `#set-cruise-target` inside `.cruise-target-control`. `CruiseTargetControl` already takes an
-  optional `children` slot for exactly this. Do **not** read `SystemMapController.focusId` — it also
+  (it equals the map focus, because a map click sets both) and pass the button as
+  `CruiseTargetControl`'s `children`; it lands beside `#map-set-cruise-target` inside the same
+  `.cruise-target-control` row (the space-view instance is `#hud-set-cruise-target`). Do **not** read `SystemMapController.focusId` — it also
   moves for camera-only focus changes that were rejected as targets.
 - **T0150 — intro step 3, "click the Moon".** `subscribe((bodyId, source) => …)` and check
   `bodyId === 'moon' && source === 'world'`. The callback fires on every selection including a
@@ -150,8 +150,12 @@ target's padding box — the canvas is the listener target and has no padding or
 `canvas.clientWidth` / `clientHeight`. No allocation, and one fewer forced layout per click.
 
 Proof is browser-side, in the repo's established style: `tools/tests/clickToTargetRegression.mjs`
-drives 120 real picks across both views and asserts `JSHeapUsedSize` growth stays inside the same
-256 KiB envelope `systemMapRegression.mjs` uses for its toggle loop.
+drives 240 real picks in the map — alternating a hit and a miss so both exits of the hit test run —
+and asserts `usedJSHeapSize` growth stays inside the same 256 KiB envelope
+`systemMapRegression.mjs` uses for its toggle loop. Measured: **170,864 B over 240 picks**. That
+residue is the diagnostic dataset writes (`pickAttempts` stringifies a counter), not the picking
+math, which touches only module-owned scratch. Nothing here runs on the animation frame, so the
+CI heap-growth-zero gate is untouched.
 
 ## 5. Files
 
