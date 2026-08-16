@@ -6,13 +6,14 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 import {
   installTrajectoryPredictionTestHorizon,
   installTrajectoryPredictionTestPointCount,
 } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4198;
+const PORT = resolveHarnessPort(4198);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 const MAXIMUM_TOGGLE_HEAP_GROWTH_BYTES = 256 * 1024;

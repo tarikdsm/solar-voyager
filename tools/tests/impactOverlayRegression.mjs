@@ -4,9 +4,10 @@ import path from 'node:path';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4187;
+const PORT = resolveHarnessPort(4187);
 const PAGE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/impactOverlay.html`;
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 

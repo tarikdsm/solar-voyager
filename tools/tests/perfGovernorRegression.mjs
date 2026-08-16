@@ -4,9 +4,10 @@ import path from 'node:path';
 
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4185;
+const PORT = resolveHarnessPort(4185);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/tests/render/perfGovernor.html`;
 const updateCommittedScreenshots = process.env.UPDATE_T0091_SCREENSHOTS === '1';
 const screenshotDirectory = path.join(

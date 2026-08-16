@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { createServer } from 'vite';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4191;
+const PORT = resolveHarnessPort(4191);
 const WIDTH = 512;
 const HEIGHT = 256;
 const FIXTURE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/tests/render/relativisticVisuals.html`;
