@@ -1,4 +1,5 @@
 import type { CameraDirector, CameraMode } from '../game/cameraDirector.js';
+import type { CaptureStatus, PhotoCaptureController } from '../game/photo/photoCapture.js';
 import type { StartupDiagnostic } from '../game/startupTracker.js';
 import type { SystemMapMode } from '../game/systemMapController.js';
 import type { TutorialController } from '../game/tutorialController.js';
@@ -9,7 +10,7 @@ import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
 
 /**
- * The frozen browser-diagnostic contract: eight `canvas.solarVoyager*` objects
+ * The frozen browser-diagnostic contract: nine `canvas.solarVoyager*` objects
  * that roughly 25 Playwright gates read by property name.
  *
  * Every definition site is a literal
@@ -69,6 +70,31 @@ export interface CameraRuntimeDiagnostics {
   readonly positionXKm: number;
   readonly positionYKm: number;
   readonly positionZKm: number;
+  /** Cinematic mode (T0125); zero and inert in every other mode. */
+  readonly cinematicRollRad: number;
+  readonly cinematicFovDeg: number;
+  readonly cinematicDrifting: boolean;
+  readonly directFocusEnabled: boolean;
+}
+
+/**
+ * Photo capture (T0125), so a browser gate can prove a capture happened without
+ * a download landing on the runner's disk: how many were taken, how many were
+ * dropped as re-entrant, what the sink named the last one and what it stamped.
+ */
+export interface PhotoRuntimeDiagnostics {
+  readonly status: CaptureStatus;
+  readonly captureCount: number;
+  readonly dropCount: number;
+  readonly lastError: string | null;
+  readonly lastFilename: string | null;
+  readonly lastSimTimeSec: number;
+  readonly lastTauSec: number;
+  readonly lastDominantBodyId: string | null;
+  readonly lastGammaMax: number;
+  readonly lastPositionXKm: number;
+  readonly lastPositionYKm: number;
+  readonly lastPositionZKm: number;
 }
 
 /**
@@ -382,6 +408,18 @@ export function createCameraRuntimeDiagnostics(
          * the process: it stays at the arm length while chasing and grows to
          * astronomical values in observatory mode.
          */
+        get cinematicRollRad() {
+          return cameraDirector.cinematicRollRad;
+        },
+        get cinematicFovDeg() {
+          return cameraDirector.cinematicFovDeg;
+        },
+        get cinematicDrifting() {
+          return cameraDirector.cinematicDrifting;
+        },
+        get directFocusEnabled() {
+          return cameraDirector.directFocusEnabled;
+        },
         get shipDistanceKm() {
           return Math.hypot(
             (shipPositionsKm[shipPositionOffset] as number) - cameraDirector.pose.positionKm.x,
@@ -394,6 +432,58 @@ export function createCameraRuntimeDiagnostics(
     ),
   ) as CameraRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerCamera', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createPhotoRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  photoCapture: PhotoCaptureController,
+  sink: { readonly lastFilename: string | null },
+): PhotoRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get status() {
+          return photoCapture.status;
+        },
+        get captureCount() {
+          return photoCapture.captureCount;
+        },
+        get dropCount() {
+          return photoCapture.dropCount;
+        },
+        get lastError() {
+          return photoCapture.lastError;
+        },
+        get lastFilename() {
+          return sink.lastFilename;
+        },
+        get lastSimTimeSec() {
+          return photoCapture.lastMeta?.simTimeSec ?? Number.NaN;
+        },
+        get lastTauSec() {
+          return photoCapture.lastMeta?.tauSec ?? Number.NaN;
+        },
+        get lastDominantBodyId() {
+          return photoCapture.lastMeta?.dominantBodyId ?? null;
+        },
+        get lastGammaMax() {
+          return photoCapture.lastMeta?.gammaMax ?? Number.NaN;
+        },
+        get lastPositionXKm() {
+          return photoCapture.lastMeta?.positionKm.x ?? Number.NaN;
+        },
+        get lastPositionYKm() {
+          return photoCapture.lastMeta?.positionKm.y ?? Number.NaN;
+        },
+        get lastPositionZKm() {
+          return photoCapture.lastMeta?.positionKm.z ?? Number.NaN;
+        },
+      },
+      null,
+    ),
+  ) as PhotoRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerPhoto', { value: diagnostics });
   return diagnostics;
 }
 

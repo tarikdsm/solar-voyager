@@ -21,6 +21,14 @@ export interface CameraControlPort {
    * fixed viewpoint, and giving it a no-op method would imply otherwise.
    */
   cycleCameraMode?(): void;
+  /**
+   * Whether the direct-focus keys below apply right now (T0125).
+   *
+   * Absent means yes, which is what the system map wants. The space camera says
+   * no in cinematic mode: `E` is that mode's roll-right binding, and every one of
+   * these keys would leave the mode anyway.
+   */
+  readonly directFocusEnabled?: boolean;
 }
 
 function formatFocusLabel(id: string): string {
@@ -111,18 +119,25 @@ export class CameraInputController {
       this.onInteraction?.(interaction);
       return;
     }
+    // Read once: `directFocusEnabled` is false only in cinematic, and the mode
+    // key stays live so the player is never trapped there.
+    const directFocus = this.controls.directFocusEnabled ?? true;
     let handled = true;
     switch (event.key.toLowerCase()) {
       case '[':
+        if (!directFocus) return;
         this.controls.cycleFocus(-1);
         break;
       case ']':
+        if (!directFocus) return;
         this.controls.cycleFocus(1);
         break;
       case 'e':
+        if (!directFocus) return;
         this.controls.focusBody('earth');
         break;
       case 'j':
+        if (!directFocus) return;
         this.controls.focusBody('jupiter');
         break;
       case 'o':

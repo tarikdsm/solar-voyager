@@ -108,15 +108,22 @@ export interface ImpactUiPort {
   readonly display: ImpactDisplaySignals;
 }
 
+/**
+ * The space HUD, hidden as one subtree.
+ *
+ * `hidden` is a single signal on purpose — the caller combines the reasons (the
+ * system map is open, T0125's cinematic camera is running) so this stays a
+ * pass-through with no hook of its own and no per-render subscription.
+ */
 export function SpaceHudSurfaces({
   children,
-  mapOpen,
+  hidden,
 }: {
   readonly children: ComponentChildren;
-  readonly mapOpen: boolean | ReadonlySignal<boolean>;
+  readonly hidden: boolean | ReadonlySignal<boolean>;
 }) {
   return (
-    <div class="space-hud-surfaces" hidden={mapOpen} aria-hidden={mapOpen}>
+    <div class="space-hud-surfaces" hidden={hidden} aria-hidden={hidden}>
       {children}
     </div>
   );
@@ -456,6 +463,13 @@ export function App({
    * it, so this is the keyboard-reachable equivalent rather than a second state.
    */
   const selectedTargetId = useComputed(() => hudState.targetBodyId.value ?? '');
+  // Both reasons the space HUD disappears, combined once: the map is open, or
+  // T0125's cinematic camera is running.
+  const spaceHudHidden = useComputed(
+    () =>
+      (systemMap?.signals.display.open.value ?? false) ||
+      (hudPreset?.signals.hudHidden.value ?? false),
+  );
   const activePreset = hudPreset?.signals.preset.value ?? 'engineer';
   // Reading the preset signal inside the render subscribes `App` to it, so a
   // preset change re-renders exactly once and the Engineer panels are genuinely
@@ -517,7 +531,7 @@ export function App({
             trajectoryPrediction={trajectoryPrediction.display}
           />
         )}
-        <SpaceHudSurfaces mapOpen={systemMap?.signals.display.open ?? false}>
+        <SpaceHudSurfaces hidden={spaceHudHidden}>
           <WorldMarkerLayer
             hud={hud}
             markers={hudState.worldMarkers}
