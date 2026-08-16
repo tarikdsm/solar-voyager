@@ -83,5 +83,10 @@ heap growth 64,200 B, both bundle budgets satisfied.
 
 `docs/bench/T0112-clean-preset.png` — the Clean preset in flight, captured from
 the production build by `tools/tests/hudPresetsRegression.mjs`: reticle, throttle
-and speed strip, cruise standby line, and the in-world body labels, with none of
-the eight v1 mission-control panels in the document.
+and speed strip, cruise standby line, preset indicator, and the in-world body
+labels, with none of the eight v1 mission-control panels in the document.
+
+Two things in the frame are not this task's: the tutorial offer (a fresh profile)
+renders its heading over its buttons, which predates this branch and belongs to a
+panel T0119/T0149 migrate; and the perf panel and settings summary are always-on
+surfaces that no preset gates.
