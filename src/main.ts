@@ -54,6 +54,7 @@ import { RenderTelemetry, exposeRenderTelemetry } from './render/telemetry.js';
 import { PerfGovernor, createPerfQualityState } from './render/perfGovernor.js';
 import { RenderQualityController } from './render/renderQualityController.js';
 import { RelativisticVisualController } from './render/relativisticVisualController.js';
+import { createStateVectorScales } from './render/stateVectorModel.js';
 import { StateVectorWidget } from './render/stateVectorWidget.js';
 import { measureStartupProbe, selectStartupQualityRung } from './render/startupQuality.js';
 import type { BurnLogEntry, BurnLogView } from './sim/ship/ledger.js';
@@ -440,6 +441,7 @@ const session = new GameSessionController({
     // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
     // and the regime scaling below depends on it — so the vessel goes first.
     flightController?.setVessel(replacement.vessel);
+    stateVectorWidget?.setScales(createStateVectorScales(replacement.vessel.restMassKg));
     // Seed the analog lever from the restored state, or the router would command
     // the fresh engine value (0) over it on the next frame. `snapshot.throttle`
     // is already regime-scaled, so the controller un-scales it and both owners
@@ -1414,7 +1416,11 @@ async function prepareApplication(): Promise<void> {
   );
   updateStartupLoadingView(startupLoadingElements, startupTracker);
   canvas.dataset.startupStage = startupTracker.stage;
-  stateVectorWidget = new StateVectorWidget();
+  // T0104 handoff: the momentum axis scales off the vessel rest mass rather
+  // than a copy of the default made before `VesselConfig` existed.
+  stateVectorWidget = new StateVectorWidget(
+    createStateVectorScales(session.simulation.vessel.restMassKg),
+  );
   postPipeline = new LightingPostPipeline(
     renderer,
     world.spaceScene.scene,

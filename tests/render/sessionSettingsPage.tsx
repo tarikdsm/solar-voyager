@@ -1,6 +1,10 @@
 import { render } from 'preact';
 
 import '../../src/style.css';
+// T0106 tracked follow-up, closed by T0112: without this the settings browser
+// regression asserted layout against unstyled markup, and stayed green while an
+// entirely unstyled section shipped.
+import '../../src/ui/app.css';
 import {
   createGameSimulationFromPersistentState,
   createNewGameSimulation,

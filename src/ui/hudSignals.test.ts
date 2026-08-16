@@ -255,3 +255,147 @@ describe('HUD formatters', () => {
     );
   });
 });
+
+describe('HUD flight strip and world markers - T0112', () => {
+  const BODY_IDS = Object.freeze(['sun', 'earth']);
+  const EARTH_RADIUS_KM = 6_371.0084;
+
+  function flightSnapshot() {
+    const snapshot = createSimulationSnapshotBuffer(BODY_IDS);
+    snapshot.dominantBodyIndex = 1;
+    snapshot.targetBodyIndex = 1;
+    snapshot.throttle = 0.42;
+    snapshot.bodyPositionsKm.set([0, 0, -1e8], 0);
+    snapshot.bodyPositionsKm.set([0, 0, -10_000], 3);
+    snapshot.shipState.set([0, 0, 0], 0);
+    return snapshot;
+  }
+
+  const POSE = Object.freeze({
+    positionKm: { x: 0, y: 0, z: 0 },
+    lookDirection: { x: 0, y: 0, z: -1 },
+    upDirection: { x: 0, y: 1, z: 0 },
+    fovDeg: 90,
+  });
+
+  /** Radii in catalog order, injected so the store never reaches for a singleton. */
+  const RADII_KM = Float64Array.from([696_340, EARTH_RADIUS_KM]);
+  const NAMES = Object.freeze(['Sun', 'Earth']);
+
+  it('picks the unit the speed deserves', () => {
+    const snapshot = flightSnapshot();
+    const store = createHudSignalStore(RADII_KM, NAMES);
+
+    snapshot.shipCoordinateVelocityKmS.set([0.25, 0, 0], 0);
+    store.publish(snapshot, 0);
+    expect(store.display.relativeSpeed.value).toBe('250 m/s');
+
+    // A decimal only where it carries information: docking speeds, not orbital ones.
+    snapshot.shipCoordinateVelocityKmS.set([0.0125, 0, 0], 0);
+    store.publish(snapshot, 500);
+    expect(store.display.relativeSpeed.value).toBe('12.5 m/s');
+
+    snapshot.shipCoordinateVelocityKmS.set([7.66, 0, 0], 0);
+    store.publish(snapshot, 1_000);
+    expect(store.display.relativeSpeed.value).toBe('7.66 km/s');
+
+    // Past one percent of light, km/s is six digits of noise.
+    snapshot.shipCoordinateVelocityKmS.set([149_896.229, 0, 0], 0);
+    store.publish(snapshot, 2_000);
+    expect(store.display.relativeSpeed.value).toBe('50.000 %c');
+  });
+
+  it('measures speed and radar altitude against the dominant body', () => {
+    const snapshot = flightSnapshot();
+    // Ship and Earth share a 30 km/s heliocentric velocity: relative speed zero.
+    snapshot.shipCoordinateVelocityKmS.set([30, 0, 0], 0);
+    snapshot.bodyVelocitiesKmS.set([30, 0, 0], 3);
+    const store = createHudSignalStore(RADII_KM, NAMES);
+
+    store.publish(snapshot, 0);
+
+    expect(store.signals.relativeSpeedKmS.value).toBeCloseTo(0, 12);
+    expect(store.signals.radarAltitudeKm.value).toBeCloseTo(10_000 - EARTH_RADIUS_KM, 6);
+    expect(store.display.throttlePercent.value).toBe('42%');
+  });
+
+  it('reports no altitude without a dominant body or a known radius', () => {
+    const snapshot = flightSnapshot();
+    snapshot.dominantBodyIndex = -1;
+    const store = createHudSignalStore(RADII_KM, NAMES);
+    store.publish(snapshot, 0);
+    expect(store.display.radarAltitude.value).toBe('—');
+
+    const unknownRadii = createHudSignalStore(new Float64Array(2), NAMES);
+    unknownRadii.publish(flightSnapshot(), 0);
+    expect(unknownRadii.display.radarAltitude.value).toBe('—');
+  });
+
+  it('surfaces the impact freeze ahead of a warp clamp on one warning line', () => {
+    const snapshot = flightSnapshot();
+    const store = createHudSignalStore(RADII_KM, NAMES);
+    store.publish(snapshot, 0);
+    expect(store.display.flightWarning.value).toBe('');
+
+    snapshot.warpClampReason = WarpClampReason.THRUST_LOCKOUT;
+    store.publish(snapshot, 1_000);
+    expect(store.display.flightWarning.value).toBe('Coast only · thrust locked above 1,000×');
+
+    snapshot.impactOccurred = 1;
+    store.publish(snapshot, 2_000);
+    expect(store.display.flightWarning.value).toBe('Surface contact — recover or respawn');
+  });
+
+  /**
+   * The marker half of the 10 Hz publisher. It is a separate entry point because
+   * the camera pose for a frame exists only after the HUD sample, but it reads
+   * the same snapshot on the same tick — one publication path, two halves.
+   */
+  it('projects the target diamond and the labels the caller asked for', () => {
+    const snapshot = flightSnapshot();
+    const store = createHudSignalStore(RADII_KM, NAMES);
+    store.publish(snapshot, 0);
+
+    store.publishWorldMarkers(snapshot, POSE, 1_600, 800, true);
+
+    const markers = store.signals.worldMarkers;
+    expect(markers.target.visible.value).toBe(true);
+    expect(markers.target.xPx.value).toBeCloseTo(800, 6);
+    expect(markers.target.yPx.value).toBeCloseTo(400, 6);
+    expect(markers.targetDistance.value).toBe('10,000 km');
+    expect(markers.labels[0]?.visible.value).toBe(true);
+    expect(markers.labels[0]?.name.value).toBe('Earth');
+    expect(markers.labels[0]?.distance.value).toBe('10,000 km');
+    expect(markers.labels[2]?.visible.value).toBe(false);
+  });
+
+  it('drops the label layer entirely when the toggle is off', () => {
+    const snapshot = flightSnapshot();
+    const store = createHudSignalStore(RADII_KM, NAMES);
+    store.publish(snapshot, 0);
+
+    store.publishWorldMarkers(snapshot, POSE, 1_600, 800, false);
+
+    for (const label of store.signals.worldMarkers.labels) {
+      expect(label.visible.value).toBe(false);
+    }
+    // The diamond is not a label and stays.
+    expect(store.signals.worldMarkers.target.visible.value).toBe(true);
+  });
+
+  it('hides every marker for a degenerate pose rather than drawing from a bad frame', () => {
+    const snapshot = flightSnapshot();
+    const store = createHudSignalStore(RADII_KM, NAMES);
+    store.publish(snapshot, 0);
+
+    store.publishWorldMarkers(
+      snapshot,
+      { ...POSE, lookDirection: { x: 0, y: 0, z: 0 } },
+      1_600,
+      800,
+      true,
+    );
+
+    expect(store.signals.worldMarkers.target.visible.value).toBe(false);
+  });
+});
