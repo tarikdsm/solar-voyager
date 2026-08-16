@@ -271,6 +271,7 @@ async function runProductionPhase(browser) {
           drawCalls: canvas.solarVoyagerTelemetry?.snapshot.drawCalls ?? -1,
           lightCount: effects.lightCount,
           modelBound: effects.modelBound,
+          navFactor: effects.navFactor,
           nonFiniteObserved: effects.nonFiniteObserved,
           plumeMagnitude: effects.plumeMagnitude,
           programCount: canvas.solarVoyagerStartup?.programCountCurrent ?? -1,
