@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+
 const HOST = '127.0.0.1';
 const PORT = 4184;
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/tests/render/perfPanel.html`;
@@ -25,6 +27,9 @@ try {
   await server.listen();
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  // Measures panel overlap against `#orbit-readout`, `#dual-clock` and
+  // `#warp-control`, all Engineer-preset surfaces since T0112.
+  await installEngineerHudPreset(page);
   const browserErrors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);

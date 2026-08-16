@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { installEngineerHudPreset } from './hudPresetProfile.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 4200;
@@ -170,6 +171,8 @@ try {
   });
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
+  // The burn log is an Engineer-preset panel from T0112 on.
+  await installEngineerHudPreset(page);
   const errors = collectBrowserErrors(page);
   await page.addInitScript(() => {
     Object.defineProperty(globalThis, '__solarVoyagerTestDisableTrajectoryPrediction', {
@@ -287,6 +290,7 @@ try {
 
   const compactContext = await browser.newContext({ viewport: { width: 390, height: 720 } });
   const compactPage = await compactContext.newPage();
+  await installEngineerHudPreset(compactPage);
   const compactErrors = collectBrowserErrors(compactPage);
   // Reuse the real save via a deterministic context transfer.
   assert.notEqual(savedDocument, null);

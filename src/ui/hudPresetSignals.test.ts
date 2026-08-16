@@ -29,8 +29,12 @@ describe('HUD preset store - T0112', () => {
     const store = createHudPresetStore('clean', true);
     const reticleSeen: boolean[] = [];
     const navballSeen: boolean[] = [];
-    const stopReticle = effect(() => reticleSeen.push(store.shows('reticle').value));
-    const stopNavball = effect(() => navballSeen.push(store.shows('navball').value));
+    const stopReticle = effect(() => {
+      reticleSeen.push(store.shows('reticle').value);
+    });
+    const stopNavball = effect(() => {
+      navballSeen.push(store.shows('navball').value);
+    });
     expect(reticleSeen).toEqual([true]);
     expect(navballSeen).toEqual([false]);
 

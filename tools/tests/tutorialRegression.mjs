@@ -20,7 +20,7 @@ const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 // LEGACY_V3_SETTINGS_STORAGE_KEY and the "Storage key" reasoning in
 // docs/superpowers/specs/2026-08-15-gamepad-design.md for why each generation
 // gets its own key instead of one bumped in place.
-const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v4';
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
 const SCREENSHOT_DIRECTORY = path.resolve('.playwright-mcp');
 
 function collectBrowserErrors(page) {

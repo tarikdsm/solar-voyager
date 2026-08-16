@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+import { installEngineerHudPreset } from './hudPresetProfile.mjs';
+
 import {
   installTrajectoryPredictionTestHorizon,
   installTrajectoryPredictionTestPointCount,
@@ -57,6 +59,8 @@ try {
   await page.close();
 
   const productionPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  // Reads `#target-selector` and the `#target-panel` labels.
+  await installEngineerHudPreset(productionPage);
   await installTrajectoryPredictionTestHorizon(productionPage, 21_600);
   await installTrajectoryPredictionTestPointCount(productionPage, 128);
   const productionErrors = [];

@@ -515,6 +515,16 @@ const tutorialRuntimeDiagnostics = Object.freeze(
 Object.defineProperty(canvas, 'solarVoyagerTutorial', { value: tutorialRuntimeDiagnostics });
 tutorialController.subscribe((progress) => {
   tutorialFrameObserver = progress.status === 'active' ? observeTutorialSnapshot : null;
+  // The guided tour walks the player through the osculating readout, the warp
+  // ladder, the target selector and the burn log — every one of them an
+  // Engineer-preset panel since T0112. Starting the tour on the Clean HUD would
+  // ask the player to find controls that are not on screen, so accepting it
+  // switches to the full instrument set. It persists: the tour genuinely changed
+  // the HUD, and one press of the preset key changes it back.
+  if (progress.status === 'active' && hudPresetStore.signals.preset.value !== 'engineer') {
+    hudPresetStore.setPreset('engineer');
+    persistHudPreferences();
+  }
 });
 tutorialFrameObserver =
   tutorialController.progress.status === 'active' ? observeTutorialSnapshot : null;

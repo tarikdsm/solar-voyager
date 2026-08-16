@@ -1,0 +1,364 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+
+import { chromium } from 'playwright';
+import { preview } from 'vite';
+
+import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
+
+/**
+ * T0112 browser regression: HUD presets, the real pause, and world markers.
+ *
+ * Runs against the production build with a *default* profile, because the
+ * default is the thing under test: v2 boots into Clean, and the panels v1 always
+ * showed must genuinely not be in the document.
+ */
+
+const HOST = '127.0.0.1';
+const PORT = 4207;
+const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/?autostart=1`;
+const SETTINGS_STORAGE_KEY = 'solar-voyager.settings.v5';
+const SCREENSHOT_DIRECTORY = path.resolve('docs/bench');
+
+/** Engineer-only panels: present exactly when the preset says so. */
+const ENGINEER_SELECTORS = Object.freeze([
+  '#orbit-readout',
+  '#dual-clock',
+  '#warp-control',
+  '#energy-panel',
+  '#target-panel',
+  '#burn-log-toggle',
+  '.state-vector-panel',
+]);
+
+function collectBrowserErrors(page) {
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('crash', () => errors.push('page crash'));
+  return errors;
+}
+
+function logPhase(phase) {
+  process.stdout.write(`[hud-presets] ${phase}\n`);
+}
+
+async function readHudState(page) {
+  return page.evaluate((engineerSelectors) => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    const overlay = globalThis.document.querySelector('.app-overlay');
+    const counts = {};
+    for (const selector of engineerSelectors) {
+      counts[selector] = globalThis.document.querySelectorAll(selector).length;
+    }
+    return {
+      counts,
+      preset: overlay?.getAttribute('data-hud-preset') ?? null,
+      paused: overlay?.getAttribute('data-paused') ?? null,
+      sceneState: canvas?.dataset.sceneState ?? null,
+      indicator:
+        globalThis.document.querySelector('#hud-preset-indicator strong')?.textContent ?? null,
+      flightStrip: globalThis.document.querySelectorAll('#flight-strip').length,
+      reticleHidden: globalThis.document.querySelector('#hud-reticle')?.hidden ?? null,
+      navball: globalThis.document.querySelectorAll('.navball').length,
+      simTimeSec: canvas?.solarVoyagerSystemMap?.simulationTimeSec ?? null,
+      storedPreset: (() => {
+        const raw = globalThis.localStorage.getItem('solar-voyager.settings.v5');
+        if (raw === null) return null;
+        try {
+          return JSON.parse(raw).hud.preset;
+        } catch {
+          return 'unparseable';
+        }
+      })(),
+    };
+  }, ENGINEER_SELECTORS);
+}
+
+function assertEngineerPanelsAbsent(state, phase) {
+  for (const selector of ENGINEER_SELECTORS) {
+    assert.equal(state.counts[selector], 0, `${selector} was still mounted in ${phase}`);
+  }
+}
+
+await assertPortAvailable(HOST, PORT);
+const server = await preview({
+  root: process.cwd(),
+  base: '/solar-voyager/',
+  logLevel: 'error',
+  preview: { host: HOST, port: PORT, strictPort: true },
+});
+let browser;
+
+try {
+  browser = await chromium.launch({
+    headless: true,
+    args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
+  });
+  const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  const errors = collectBrowserErrors(page);
+  await disableUnrelatedTrajectoryPrediction(page);
+  await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#flight-strip', { state: 'visible', timeout: 60_000 });
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('#space-canvas')?.dataset.cameraReady === 'true',
+    undefined,
+    { timeout: 60_000 },
+  );
+  logPhase('space phase ready');
+
+  // ---------------------------------------------------------------- Clean
+  const clean = await readHudState(page);
+  assert.equal(clean.preset, 'clean', 'a default profile did not boot into the Clean preset');
+  assert.equal(clean.sceneState, 'space');
+  assert.equal(clean.flightStrip, 1, 'the throttle/speed strip is missing from Clean');
+  assert.equal(clean.reticleHidden, false, 'the reticle is missing from Clean');
+  assert.equal(clean.navball, 0, 'the navball is a Pilot surface and must not be in Clean');
+  assertEngineerPanelsAbsent(clean, 'Clean');
+  assert.equal(clean.indicator, 'Clean');
+  // Clean is a real HUD, not an empty one: it must still say how fast you are going.
+  assert.match(
+    (await page.locator('#flight-strip-speed-value').textContent()) ?? '',
+    /^[\d.,]+ (?:m\/s|km\/s|%c)$/u,
+    'the Clean speed strip is not showing a context-unit speed',
+  );
+  assert.match((await page.locator('#flight-strip-throttle-value').textContent()) ?? '', /^\d+%$/u);
+  assert.equal(await page.locator('#cruise-status-phase').textContent(), 'Standby');
+  logPhase('Clean preset verified');
+
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIRECTORY, 'T0112-clean-preset.png'),
+  });
+  logPhase('Clean preset screenshot captured');
+
+  // ---------------------------------------------------------------- cycle
+  await page.keyboard.press('KeyH');
+  await page.waitForSelector('.navball', { state: 'visible', timeout: 10_000 });
+  const pilot = await readHudState(page);
+  assert.equal(pilot.preset, 'pilot');
+  assert.equal(pilot.indicator, 'Pilot');
+  assert.equal(pilot.navball, 1, 'Pilot did not add the navball');
+  assert.equal(
+    pilot.counts['#warp-control'],
+    1,
+    'Pilot did not add the warp indicator',
+  );
+  assert.equal(pilot.counts['#orbit-readout'], 0, 'Pilot leaked an Engineer panel');
+  assert.equal(pilot.storedPreset, 'pilot', 'the preset did not persist to the profile');
+
+  await page.keyboard.press('KeyH');
+  await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 10_000 });
+  const engineer = await readHudState(page);
+  assert.equal(engineer.preset, 'engineer');
+  for (const selector of ENGINEER_SELECTORS) {
+    assert.equal(engineer.counts[selector], 1, `${selector} is missing from Engineer`);
+  }
+  assert.equal(engineer.storedPreset, 'engineer');
+
+  await page.keyboard.press('KeyH');
+  await page.waitForSelector('#orbit-readout', { state: 'detached', timeout: 10_000 });
+  assert.equal((await readHudState(page)).preset, 'clean', 'the ring did not wrap');
+  logPhase('preset ring verified and persisted');
+
+  // The choice survives a reload: it is profile state, not session state.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#flight-strip', { state: 'visible', timeout: 60_000 });
+  await page.keyboard.press('KeyH');
+  await page.keyboard.press('KeyH');
+  await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 10_000 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#orbit-readout', { state: 'visible', timeout: 60_000 });
+  assert.equal(
+    await page.evaluate(
+      (key) => JSON.parse(globalThis.localStorage.getItem(key) ?? '{}').hud?.preset ?? null,
+      SETTINGS_STORAGE_KEY,
+    ),
+    'engineer',
+  );
+  logPhase('preset survives a reload');
+
+  // ---------------------------------------------------------------- world markers
+  await page.selectOption('#target-selector', 'moon');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#world-marker-target')?.hidden === false,
+    undefined,
+    { timeout: 15_000 },
+  );
+  const marker = await page.evaluate(() => {
+    const element = globalThis.document.querySelector('#world-marker-target');
+    const distance = element?.querySelector('.world-marker-distance')?.textContent ?? '';
+    const rect = element?.getBoundingClientRect();
+    return {
+      distance,
+      state: element?.getAttribute('data-state') ?? null,
+      x: rect?.left ?? -1,
+      y: rect?.top ?? -1,
+      labels: globalThis.document.querySelectorAll('.world-body-label:not([hidden])').length,
+    };
+  });
+  assert.match(marker.distance, /km$/u, `target marker distance is unreadable: ${marker.distance}`);
+  assert.ok(
+    marker.x >= -40 && marker.x <= 1_320 && marker.y >= -40 && marker.y <= 760,
+    `target marker is outside the viewport: ${JSON.stringify(marker)}`,
+  );
+  assert.ok(marker.labels > 0, 'body labels are enabled by default but none are drawn');
+
+  // The label toggle is a separate key and a separate preference.
+  await page.keyboard.press('KeyL');
+  await page.waitForFunction(
+    () => globalThis.document.querySelectorAll('.world-body-label:not([hidden])').length === 0,
+    undefined,
+    { timeout: 10_000 },
+  );
+  assert.equal(
+    await page.evaluate(
+      (key) => JSON.parse(globalThis.localStorage.getItem(key) ?? '{}').hud?.bodyLabels ?? null,
+      SETTINGS_STORAGE_KEY,
+    ),
+    false,
+  );
+  await page.keyboard.press('KeyL');
+  logPhase('world markers verified');
+
+  // ---------------------------------------------------------------- click-to-target
+  const picked = await page.evaluate(async () => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    const marker = globalThis.document.querySelector('#world-marker-target');
+    if (!(canvas instanceof globalThis.HTMLCanvasElement) || marker === null) return null;
+    const rect = marker.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const options = { bubbles: true, button: 0, clientX: x, clientY: y, pointerId: 1 };
+    canvas.dispatchEvent(new globalThis.PointerEvent('pointerdown', options));
+    canvas.dispatchEvent(new globalThis.PointerEvent('pointerup', options));
+    await Promise.resolve();
+    return canvas.dataset.pickedBodyId ?? null;
+  });
+  assert.equal(picked, 'moon', `clicking the target diamond did not pick the Moon: ${picked}`);
+  logPhase('click-to-target verified');
+
+  // ---------------------------------------------------------------- pause
+  const beforePause = await readHudState(page);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#pause-menu', { state: 'visible', timeout: 10_000 });
+  const paused = await readHudState(page);
+  assert.equal(paused.sceneState, 'paused');
+  assert.equal(paused.paused, 'true');
+  assert.equal(
+    await page.evaluate(
+      () => globalThis.document.activeElement?.id ?? null,
+    ),
+    'pause-resume',
+    'the pause dialog did not take focus',
+  );
+
+  /*
+   * The load-bearing assertion of the whole feature: simulation time must not
+   * advance while the menu is up, *and* the animation loop must keep running.
+   * Both halves matter — a pause that stops rAF lets the whole paused duration
+   * arrive as one wall delta on resume, which at high warp is years of flight in
+   * a single frame.
+   */
+  const frameCountAtPause = await page.evaluate(
+    () => globalThis.document.querySelector('#space-canvas')?.solarVoyagerTelemetry?.snapshot
+      .frameCount ?? -1,
+  );
+  await page.waitForTimeout(1_200);
+  const stillPaused = await page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return {
+      frameCount: canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? -1,
+      simTimeSec: canvas?.solarVoyagerSystemMap?.simulationTimeSec ?? null,
+    };
+  });
+  assert.equal(
+    stillPaused.simTimeSec,
+    paused.simTimeSec,
+    'simulation time advanced while paused',
+  );
+  assert.ok(
+    stillPaused.frameCount > frameCountAtPause,
+    'the animation loop stopped while paused; frames must keep rendering',
+  );
+  assert.ok(
+    paused.simTimeSec >= beforePause.simTimeSec,
+    'simulation time went backwards on pause',
+  );
+  logPhase('simulation halted, frame loop alive');
+
+  // Escape resumes and time moves again.
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#pause-menu', { state: 'hidden', timeout: 10_000 });
+  await page.waitForFunction(
+    (frozenSimTimeSec) =>
+      (globalThis.document.querySelector('#space-canvas')?.solarVoyagerSystemMap
+        ?.simulationTimeSec ?? 0) > frozenSimTimeSec,
+    paused.simTimeSec,
+    { timeout: 10_000 },
+  );
+  assert.equal((await readHudState(page)).sceneState, 'space');
+  logPhase('resume verified');
+
+  // ---------------------------------------------------------------- map owns Escape
+  await page.keyboard.press('KeyM');
+  await page.locator('#system-map-panel').waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await page.locator('#system-map-panel').waitFor({ state: 'hidden' });
+  assert.equal(
+    (await readHudState(page)).sceneState,
+    'space',
+    'Escape closed the system map and also opened the pause menu',
+  );
+  logPhase('system map keeps its Escape');
+
+  // ---------------------------------------------------------------- save and exit
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#pause-menu', { state: 'visible', timeout: 10_000 });
+  await page.locator('#pause-save').click();
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#pause-status')?.textContent === 'Session saved',
+    undefined,
+    { timeout: 10_000 },
+  );
+
+  await page.locator('#pause-exit').click();
+  await page.locator('.main-menu').waitFor({ state: 'visible', timeout: 15_000 });
+  const menu = await readHudState(page);
+  assert.equal(menu.sceneState, 'main-menu', 'exit to menu did not reach the menu state');
+  assert.equal(menu.flightStrip, 0, 'the HUD survived the return to the menu');
+  logPhase('exit to menu verified');
+
+  // The v1 landmine: the transition used to be one-way, so re-entry must work.
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForSelector('#flight-strip', { state: 'visible', timeout: 30_000 });
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.sceneState === 'space',
+    undefined,
+    { timeout: 15_000 },
+  );
+  const resources = await page.evaluate(
+    () => globalThis.document.querySelector('#space-canvas')?.solarVoyagerRuntimeResources ?? null,
+  );
+  // Re-entering must not build a second input engine, camera pair or frame loop.
+  assert.equal(resources.animationLoopStarts, 1);
+  assert.equal(resources.cameraInputControllers, 2);
+  assert.equal(resources.keyboardCommandMappers, 1);
+  assert.equal(resources.spacePhaseActivations, 1);
+  logPhase('menu return is reversible without duplicating runtime resources');
+
+  assert.deepEqual(errors, []);
+  process.stdout.write(
+    `${JSON.stringify(
+      { clean: clean.preset, pilot: pilot.preset, engineer: engineer.preset, marker, resources },
+      null,
+      2,
+    )}\n`,
+  );
+} finally {
+  if (browser !== undefined) await browser.close();
+  await server.close();
+}

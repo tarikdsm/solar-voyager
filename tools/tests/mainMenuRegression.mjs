@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { installEngineerHudPreset } from './hudPresetProfile.mjs';
 import {
   disableUnrelatedTrajectoryPrediction,
   installTrajectoryPredictionTestHorizon,
@@ -347,6 +348,18 @@ async function runLegacyV2SaveFlow(browser) {
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
   await disableUnrelatedTrajectoryPrediction(page);
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
+  // This gate uses `#orbit-readout` as its "gameplay is running" sentinel and
+  // reads `#target-selector` and the state-vector panel, all Engineer-preset
+  // surfaces since T0112.
+  await installEngineerHudPreset(page);
   await page.addInitScript(({ key, value }) => globalThis.localStorage.setItem(key, value), {
     key: SAVE_STORAGE_KEY,
     value: LEGACY_V2_SAVE_JSON,

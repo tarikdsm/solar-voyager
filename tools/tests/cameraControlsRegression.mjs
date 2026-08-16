@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import { chromium } from 'playwright';
+import sharp from 'sharp';
 import { createServer } from 'vite';
 
 import { BLEND_FRAME_COST, waitForCameraMode } from './cameraWaits.mjs';
@@ -32,22 +34,6 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
  * rendered frame while the ship actually moves, and a handful of cheap,
  * already-passing checks (the Jupiter focus label, pointer lock) that are not
  * camera-motion dependent.
- *
- * Round 6: CI's own progress log (see `logPhase` below) showed everything
- * above this comment passing in 22.4 s and then nothing for 8 minutes. The
- * next phase used to capture two production screenshots — `page.screenshot`
- * equivalents via CDP `Page.captureScreenshot` — to diff Earth against
- * Jupiter's ochre colour. That is now gone. **A phase that needs a page
- * screenshot, or any wait with no frame budget attached, is the expensive
- * kind on a software rasteriser — this file's shape is meant to make that
- * fact visible in the log the moment it happens. Do not re-add one without
- * first asking whether the property is provable more cheaply, the way the
- * Jupiter focus label below is: a synchronous DOM write
- * (`cameraInputController.ts`), not gated on a rendered frame at all.**
- * `shipVisualRegression.mjs` already captures production screenshots (opt-in,
- * evidence for a PR, not asserted in CI); `docs/bench/T0110-chase-earth.png`
- * is this task's committed visual proof. A screenshot is evidence, not an
- * assertion, and evidence does not belong on a gate's critical path.
  */
 
 const HOST = '127.0.0.1';
@@ -273,6 +259,59 @@ async function readPointerLockState(page) {
   }));
 }
 
+async function screenshotEvidence(buffer) {
+  const { data, info } = await sharp(buffer)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const centerOffset =
+    (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * info.channels;
+  const regionStartX = Math.floor(info.width * 0.3);
+  const regionEndX = Math.floor(info.width * 0.7);
+  const regionStartY = Math.floor(info.height * 0.2);
+  const regionEndY = Math.floor(info.height * 0.4);
+  let warmRed = 0;
+  let warmGreen = 0;
+  let warmBlue = 0;
+  let warmSamples = 0;
+  for (let y = regionStartY; y < regionEndY; y += 1) {
+    for (let x = regionStartX; x < regionEndX; x += 1) {
+      const offset = (y * info.width + x) * info.channels;
+      const red = data[offset];
+      const green = data[offset + 1];
+      const blue = data[offset + 2];
+      if (red === undefined || green === undefined || blue === undefined || red + green + blue < 45) {
+        continue;
+      }
+      warmRed += red;
+      warmGreen += green;
+      warmBlue += blue;
+      warmSamples += 1;
+    }
+  }
+  return {
+    centerRgb: [data[centerOffset], data[centerOffset + 1], data[centerOffset + 2]],
+    sha256: createHash('sha256').update(buffer).digest('hex'),
+    upperCenterMeanRgb: [warmRed, warmGreen, warmBlue].map((sum) => sum / warmSamples),
+    upperCenterSamples: warmSamples,
+  };
+}
+
+async function capturePageClip(page, clip) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const screenshot = await session.send('Page.captureScreenshot', {
+      captureBeyondViewport: false,
+      clip: { ...clip, scale: 1 },
+      format: 'png',
+      fromSurface: true,
+    });
+    return Buffer.from(screenshot.data, 'base64');
+  } finally {
+    await session.detach();
+  }
+}
+
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -325,6 +364,7 @@ try {
     throw error;
   }
   logPhase('camera ready');
+  const productionClip = { x: 320, y: 140, width: 640, height: 440 };
 
   // ---------------------------------------------------------------- T0110 ---
   // The shipped game starts third-person. Everything below the Jupiter phase
@@ -424,20 +464,45 @@ try {
   logPhase('mode transition to observatory verified (keypress -> mode -> focus label)');
   // ------------------------------------------------------------ end T0110 ---
 
-  // Cheap and independent of rendering: `cameraInputController.ts` writes
-  // `focusLabel.textContent` synchronously from the keydown handler, not from
-  // the render loop, so this does not wait on a rendered frame at all. The
-  // same "'j' -> Focus: Jupiter" property is also unit-tested in
-  // `src/ui/cameraInputController.test.ts` ("supports target cycling and
-  // direct Earth/Jupiter shortcuts"); it stays here anyway because what a
-  // browser uniquely adds is that a *real keypress reaches the real app*,
-  // which is cheap enough to keep. What used to follow — two production
-  // screenshots diffed for Jupiter's colour — was the expensive kind (see the
-  // file-level comment above) and is gone; `docs/bench/T0110-chase-earth.png`
-  // is this task's visual evidence instead.
+  const productionEarth = await screenshotEvidence(
+    await capturePageClip(productionPage, productionClip),
+  );
   await productionPage.keyboard.press('j');
   await waitForFocusLabel(productionPage, 'Focus: Jupiter');
-  logPhase('Jupiter focus label verified (key -> label, no render wait)');
+  await productionPage.waitForTimeout(1_800);
+  const completedFrames = await productionPage.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    return canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0;
+  });
+  await productionPage.waitForFunction(
+    (previousFrames) => {
+      const canvas = globalThis.document.querySelector('#space-canvas');
+      return (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > previousFrames;
+    },
+    completedFrames,
+    { timeout: 60_000 },
+  );
+  const productionJupiter = await screenshotEvidence(
+    await capturePageClip(productionPage, productionClip),
+  );
+  assert.notEqual(
+    productionJupiter.sha256,
+    productionEarth.sha256,
+    'production canvas did not change after the Jupiter transfer',
+  );
+  assert.ok(
+    productionJupiter.centerRgb.every((channel) => channel !== undefined) &&
+      productionJupiter.centerRgb.reduce((sum, channel) => sum + channel, 0) > 30,
+    'production Jupiter was not visible at the canvas center',
+  );
+  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.upperCenterMeanRgb;
+  assert.ok(
+    productionJupiter.upperCenterSamples > 10_000 &&
+      jupiterRed > jupiterGreen + 3 &&
+      jupiterGreen > jupiterBlue + 3,
+    `production disc lacks Jupiter's ochre color signature (${productionJupiter.upperCenterMeanRgb.join(',')})`,
+  );
+  logPhase('Jupiter focus label and screenshot evidence verified');
 
   // T0105 pointer-lock seam: double-click takes the lock, Escape releases it and
   // raises the pause intent that T0112 will turn into a real menu.
@@ -484,6 +549,10 @@ try {
         pointerLockAcquired: pointerLockAcquired.locked,
         pointerLockReleased: pointerLockReleased.locked,
         pauseRequestsAfterEscape: pointerLockReleased.pauseRequests,
+        productionEarthSha256: productionEarth.sha256,
+        productionJupiterCenterRgb: productionJupiter.centerRgb,
+        productionJupiterUpperCenterMeanRgb: productionJupiter.upperCenterMeanRgb,
+        productionJupiterSha256: productionJupiter.sha256,
       },
       null,
       2,

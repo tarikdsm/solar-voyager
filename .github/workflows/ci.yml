@@ -70,6 +70,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:tutorial
 
+      - name: HUD presets, pause and world markers regression
+        timeout-minutes: 6
+        run: npm run test:hud-presets
+
       - name: Startup quality and loading regression
         timeout-minutes: 8
         run: npm run test:startup
