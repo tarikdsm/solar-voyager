@@ -17,9 +17,12 @@ import {
   updateGamepadAxisSensitivity,
   updateGamepadCurveExponent,
   updateGamepadDeadzone,
+  updateHudBodyLabels,
+  updateHudPreset,
   updateTutorialSettings,
   type GamepadAxisId,
-  type GameSettingsV4,
+  type GameSettingsV5,
+  type HudPreset,
   type InputAction,
   type QualityLock,
   type SettingsRepository,
@@ -65,13 +68,13 @@ export interface GameSessionControllerOptions {
     simulation: SimulationCore,
     origin: SimulationReplacementOrigin,
   ) => void;
-  readonly onSettingsChanged?: (settings: GameSettingsV4, origin: SettingsChangeOrigin) => void;
+  readonly onSettingsChanged?: (settings: GameSettingsV5, origin: SettingsChangeOrigin) => void;
 }
 
 /** Coordinates atomic simulation replacement and persisted user settings. */
 export class GameSessionController {
   private currentSimulation: SimulationCore;
-  private currentSettings: GameSettingsV4;
+  private currentSettings: GameSettingsV5;
   private readonly settingsInitializationWarning: string | null;
   private readonly saveRepository: SaveRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -88,7 +91,7 @@ export class GameSessionController {
   private readonly onSimulationReplaced:
     ((simulation: SimulationCore, origin: SimulationReplacementOrigin) => void) | null;
   private readonly onSettingsChanged:
-    ((settings: GameSettingsV4, origin: SettingsChangeOrigin) => void) | null;
+    ((settings: GameSettingsV5, origin: SettingsChangeOrigin) => void) | null;
 
   constructor(options: GameSessionControllerOptions) {
     this.currentSimulation = options.initialSimulation;
@@ -108,7 +111,7 @@ export class GameSessionController {
     return this.currentSimulation;
   }
 
-  get settings(): GameSettingsV4 {
+  get settings(): GameSettingsV5 {
     return this.currentSettings;
   }
 
@@ -345,6 +348,26 @@ export class GameSessionController {
     }
   }
 
+  /** T0112 — HUD preset ring position, persisted in the profile. */
+  setHudPreset(preset: HudPreset): SessionActionResult {
+    try {
+      const candidate = updateHudPreset(this.currentSettings, preset);
+      return this.commitSettings(candidate, 'HUD preset updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update HUD preset', detail: describeError(error) };
+    }
+  }
+
+  /** T0112 — in-world body labels on or off. */
+  setHudBodyLabels(bodyLabels: boolean): SessionActionResult {
+    try {
+      const candidate = updateHudBodyLabels(this.currentSettings, bodyLabels);
+      return this.commitSettings(candidate, 'Body labels updated');
+    } catch (error: unknown) {
+      return { ok: false, message: 'Unable to update body labels', detail: describeError(error) };
+    }
+  }
+
   updateTutorial(transition: (current: TutorialProgress) => TutorialProgress): SessionActionResult {
     try {
       const candidate = updateTutorialSettings(
@@ -399,7 +422,7 @@ export class GameSessionController {
   }
 
   private commitSettings(
-    settings: GameSettingsV4,
+    settings: GameSettingsV5,
     successMessage: string,
     publish = true,
   ): SessionActionResult {
