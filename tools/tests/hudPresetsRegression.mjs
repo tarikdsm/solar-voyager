@@ -84,7 +84,7 @@ function assertEngineerPanelsAbsent(state, phase) {
   }
 }
 
-await assertPortAvailable(HOST, PORT);
+await assertPortAvailable(PORT, HOST);
 const server = await preview({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -201,13 +201,29 @@ try {
     };
   });
   assert.match(marker.distance, /km$/u, `target marker distance is unreadable: ${marker.distance}`);
+  // On screen or pinned to the edge, but always somewhere the player can see it:
+  // the diamond is the only in-world cue for where the target is.
   assert.ok(
     marker.x >= -40 && marker.x <= 1_320 && marker.y >= -40 && marker.y <= 760,
     `target marker is outside the viewport: ${JSON.stringify(marker)}`,
   );
+  assert.ok(
+    ['onscreen', 'offscreen', 'behind'].includes(marker.state),
+    `target marker has no bearing state: ${JSON.stringify(marker)}`,
+  );
   assert.ok(marker.labels > 0, 'body labels are enabled by default but none are drawn');
 
-  // The label toggle is a separate key and a separate preference.
+  /*
+   * Blur first: whether a HUD key is suppressed while a form control owns the
+   * keyboard is `blocksGameKey`'s contract and is unit-tested in
+   * `src/game/input/inputEngine.test.ts`. Asserting it here would also mean
+   * pressing a letter into a focused `<select>`, whose type-ahead would silently
+   * change the navigation target out from under the next phase.
+   */
+  await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    if (active instanceof globalThis.HTMLElement) active.blur();
+  });
   await page.keyboard.press('KeyL');
   await page.waitForFunction(
     () => globalThis.document.querySelectorAll('.world-body-label:not([hidden])').length === 0,
@@ -225,21 +241,74 @@ try {
   logPhase('world markers verified');
 
   // ---------------------------------------------------------------- click-to-target
-  const picked = await page.evaluate(async () => {
-    const canvas = globalThis.document.querySelector('#space-canvas');
-    const marker = globalThis.document.querySelector('#world-marker-target');
-    if (!(canvas instanceof globalThis.HTMLCanvasElement) || marker === null) return null;
-    const rect = marker.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-    const options = { bubbles: true, button: 0, clientX: x, clientY: y, pointerId: 1 };
-    canvas.dispatchEvent(new globalThis.PointerEvent('pointerdown', options));
-    canvas.dispatchEvent(new globalThis.PointerEvent('pointerup', options));
-    await Promise.resolve();
-    return canvas.dataset.pickedBodyId ?? null;
+  /*
+   * Aim the observatory camera at Earth first, which puts Earth's disc exactly at
+   * the viewport centre — the one screen position this harness can predict
+   * without reimplementing the projection it is supposed to be testing. The
+   * navigation target is Mars at this point, so a successful pick has to *change*
+   * it, which is what proves the click reached `Commands.setTarget` rather than
+   * merely hitting something.
+   */
+  await page.selectOption('#target-selector', 'mars');
+  await page.evaluate(() => {
+    const active = globalThis.document.activeElement;
+    if (active instanceof globalThis.HTMLElement) active.blur();
   });
-  assert.equal(picked, 'moon', `clicking the target diamond did not pick the Moon: ${picked}`);
-  logPhase('click-to-target verified');
+  await page.keyboard.press('e');
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('#camera-focus-label')?.textContent === 'Focus: Earth',
+    undefined,
+    { timeout: 15_000 },
+  );
+  // Wait on the camera's own diagnostic, not a sleep: the focus label is written
+  // from the keydown handler while the pose is still 1.5 s of cross-fade away
+  // from the body it names, and a click during the blend legitimately hits empty
+  // sky.
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('#space-canvas')?.solarVoyagerCamera?.transitioning ===
+      false,
+    undefined,
+    { timeout: 15_000 },
+  );
+
+  // Real mouse input, not synthetic `PointerEvent`s: `CameraInputController`
+  // calls `setPointerCapture` on the same gesture, which throws for a pointer id
+  // the browser never issued — and a harness that has to ignore the errors it
+  // causes is not exercising the real path.
+  const canvasBox = await page.locator('#space-canvas').boundingBox();
+  assert.ok(canvasBox !== null, 'the canvas has no layout box');
+  const centreX = canvasBox.x + canvasBox.width / 2;
+  const centreY = canvasBox.y + canvasBox.height / 2;
+  await page.mouse.click(centreX, centreY);
+  await page.waitForTimeout(150);
+  const picked = await page.evaluate(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.pickedBodyId ?? null,
+  );
+  assert.equal(picked, 'earth', `clicking the centred disc did not pick Earth: ${picked}`);
+  assert.equal(
+    await page.locator('#target-selector').inputValue(),
+    'earth',
+    'the pick did not reach Commands.setTarget',
+  );
+
+  // A drag must not re-target: releasing over a body after orbiting the camera is
+  // the gesture `CameraInputController` owns.
+  await page.evaluate(() => {
+    const canvas = globalThis.document.querySelector('#space-canvas');
+    if (canvas instanceof globalThis.HTMLCanvasElement) canvas.dataset.pickedBodyId = 'sentinel';
+  });
+  await page.mouse.move(centreX - 90, centreY);
+  await page.mouse.down();
+  await page.mouse.move(centreX - 45, centreY, { steps: 4 });
+  await page.mouse.move(centreX, centreY, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterDrag = await page.evaluate(
+    () => globalThis.document.querySelector('#space-canvas')?.dataset.pickedBodyId ?? null,
+  );
+  assert.equal(afterDrag, 'sentinel', 'releasing a drag over a body re-targeted it');
+  logPhase('click-to-target verified, drag suppressed');
 
   // ---------------------------------------------------------------- pause
   const beforePause = await readHudState(page);
@@ -248,13 +317,15 @@ try {
   const paused = await readHudState(page);
   assert.equal(paused.sceneState, 'paused');
   assert.equal(paused.paused, 'true');
-  assert.equal(
-    await page.evaluate(
-      () => globalThis.document.activeElement?.id ?? null,
-    ),
-    'pause-resume',
-    'the pause dialog did not take focus',
-  );
+  await page
+    .waitForFunction(
+      () => globalThis.document.activeElement?.id === 'pause-resume',
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      throw new Error('the pause dialog did not take focus');
+    });
 
   /*
    * The load-bearing assertion of the whole feature: simulation time must not

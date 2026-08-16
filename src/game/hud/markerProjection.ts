@@ -31,16 +31,28 @@ export const CAMERA_BASIS_COMPONENTS = 10;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 /**
+ * Nudge applied when the up hint is parallel to the look direction.
+ *
+ * Copied from three.js `Matrix4.lookAt`, which perturbs its backward axis by
+ * exactly this before recomputing rather than giving up. Matching the constant
+ * matters: the renderer keeps drawing through the degeneracy, so if the markers
+ * bailed instead they would vanish precisely when the camera looks along the
+ * ecliptic pole — and reappear a frame later, which reads as a flicker bug.
+ */
+const DEGENERATE_BASIS_NUDGE = 0.0001;
+
+/**
  * Writes the orthonormal camera basis and the projection scale into `out`.
  *
  * Layout: `[fx, fy, fz, rx, ry, rz, ux, uy, uz, tanHalfFov]`.
  *
- * Returns false — and leaves `out` untouched — when the pose cannot produce a
- * basis: a degenerate look direction, or an up *hint* parallel to it. Callers
- * hide every marker for that sample rather than drawing from a garbage frame.
+ * Returns false — and leaves `out` untouched — only when the pose cannot produce
+ * a basis at all: a zero or non-finite look direction, or a field of view outside
+ * (0, 180). An up *hint* parallel to the look direction is **not** such a case:
+ * three.js nudges its frame and keeps rendering, so this does too, or the markers
+ * would blink out exactly when the camera points along the ecliptic pole.
  * `upDirection` is a hint and not necessarily orthogonal (the T0110 `CameraPose`
- * contract), which is exactly why `u` is recovered from `r × f` instead of used
- * as given.
+ * contract), which is why `u` is recovered from `r × f` instead of used as given.
  */
 export function writeCameraBasisInto(out: Float64Array, pose: CameraPose): boolean {
   if (out.length < CAMERA_BASIS_COMPONENTS) {
@@ -58,11 +70,30 @@ export function writeCameraBasisInto(out: Float64Array, pose: CameraPose): boole
   const hintX = pose.upDirection.x;
   const hintY = pose.upDirection.y;
   const hintZ = pose.upDirection.z;
-  const crossX = forwardY * hintZ - forwardZ * hintY;
-  const crossY = forwardZ * hintX - forwardX * hintZ;
-  const crossZ = forwardX * hintY - forwardY * hintX;
-  const crossLength = Math.hypot(crossX, crossY, crossZ);
-  if (!Number.isFinite(crossLength) || crossLength === 0) return false;
+  let nudgedForwardX = forwardX;
+  let nudgedForwardY = forwardY;
+  let nudgedForwardZ = forwardZ;
+  let crossX = forwardY * hintZ - forwardZ * hintY;
+  let crossY = forwardZ * hintX - forwardX * hintZ;
+  let crossZ = forwardX * hintY - forwardY * hintX;
+  let crossLength = Math.hypot(crossX, crossY, crossZ);
+  if (!Number.isFinite(crossLength)) return false;
+  if (crossLength === 0) {
+    // three.js perturbs the axis the hint is *least* aligned with, so the nudge
+    // can never be swallowed by the same degeneracy it is fixing.
+    if (Math.abs(hintZ) === 1) nudgedForwardX -= DEGENERATE_BASIS_NUDGE;
+    else nudgedForwardZ -= DEGENERATE_BASIS_NUDGE;
+    const nudgedLength = Math.hypot(nudgedForwardX, nudgedForwardY, nudgedForwardZ);
+    if (!Number.isFinite(nudgedLength) || nudgedLength === 0) return false;
+    nudgedForwardX /= nudgedLength;
+    nudgedForwardY /= nudgedLength;
+    nudgedForwardZ /= nudgedLength;
+    crossX = nudgedForwardY * hintZ - nudgedForwardZ * hintY;
+    crossY = nudgedForwardZ * hintX - nudgedForwardX * hintZ;
+    crossZ = nudgedForwardX * hintY - nudgedForwardY * hintX;
+    crossLength = Math.hypot(crossX, crossY, crossZ);
+    if (!Number.isFinite(crossLength) || crossLength === 0) return false;
+  }
   const rightX = crossX / crossLength;
   const rightY = crossY / crossLength;
   const rightZ = crossZ / crossLength;
@@ -72,15 +103,15 @@ export function writeCameraBasisInto(out: Float64Array, pose: CameraPose): boole
   const tanHalfFov = Math.tan(fovDeg * 0.5 * DEGREES_TO_RADIANS);
   if (!Number.isFinite(tanHalfFov) || tanHalfFov <= 0) return false;
 
-  out[0] = forwardX;
-  out[1] = forwardY;
-  out[2] = forwardZ;
+  out[0] = nudgedForwardX;
+  out[1] = nudgedForwardY;
+  out[2] = nudgedForwardZ;
   out[3] = rightX;
   out[4] = rightY;
   out[5] = rightZ;
-  out[6] = rightY * forwardZ - rightZ * forwardY;
-  out[7] = rightZ * forwardX - rightX * forwardZ;
-  out[8] = rightX * forwardY - rightY * forwardX;
+  out[6] = rightY * nudgedForwardZ - rightZ * nudgedForwardY;
+  out[7] = rightZ * nudgedForwardX - rightX * nudgedForwardZ;
+  out[8] = rightX * nudgedForwardY - rightY * nudgedForwardX;
   out[9] = tanHalfFov;
   return true;
 }

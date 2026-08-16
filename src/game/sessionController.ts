@@ -19,6 +19,7 @@ import {
   updateGamepadDeadzone,
   updateHudBodyLabels,
   updateHudPreset,
+  updateHudSettings,
   updateTutorialSettings,
   type GamepadAxisId,
   type GameSettingsV5,
@@ -355,6 +356,26 @@ export class GameSessionController {
       return this.commitSettings(candidate, 'HUD preset updated');
     } catch (error: unknown) {
       return { ok: false, message: 'Unable to update HUD preset', detail: describeError(error) };
+    }
+  }
+
+  /**
+   * T0112 — both HUD preferences in one commit.
+   *
+   * The path the preset key and the label key take. Two separate commits would
+   * round-trip the first one's `onSettingsChanged` through the live store and
+   * undo the second; see `updateHudSettings`.
+   */
+  setHudPreferences(preset: HudPreset, bodyLabels: boolean): SessionActionResult {
+    try {
+      const candidate = updateHudSettings(this.currentSettings, preset, bodyLabels);
+      return this.commitSettings(candidate, 'HUD preferences updated');
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        message: 'Unable to update HUD preferences',
+        detail: describeError(error),
+      };
     }
   }
 

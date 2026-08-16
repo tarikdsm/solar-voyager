@@ -357,7 +357,6 @@ let flightController: FlightController | null = null;
 let flightInputRouter: FlightInputRouter | null = null;
 let hudInputRouter: HudInputRouter | null = null;
 let pauseRequestCount = 0;
-let hardwareWarningAcknowledged = false;
 let perfGovernor: PerfGovernor | null = null;
 let relativisticVisuals: RelativisticVisualController | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
@@ -632,16 +631,20 @@ function currentInputSnapshot() {
  * before the input engine exists):
  *
  *  - a surface-contact freeze: the core is already inert and `ImpactOverlay` is
- *    the only way out, so a pause dialog on top of it would hide recovery;
- *  - an unacknowledged hardware-acceleration warning: a mandatory pre-flight
- *    alert, and stacking a modal over a modal is worse than doing nothing.
+ *    the only way out, so a pause dialog on top of it would hide recovery.
+ *
+ * The hardware-acceleration warning deliberately does *not* suppress the pause.
+ * Making it do so was the first design here and it was wrong twice over: a
+ * software-rendering player would be unable to pause at all until they dismissed
+ * a banner, and it solved a stacking problem that belongs to CSS. The warning
+ * sits above the pause layers in the z-ladder instead, so it stays readable and
+ * clickable with the menu open.
  */
 function handlePauseRequested(): void {
   pauseRequestCount += 1;
   canvas.dataset.pauseRequests = String(pauseRequestCount);
   if (sceneManager.phase !== 'space') return;
   if (session.simulation.snapshot.impactOccurred === 1) return;
-  if (hardwareWarning !== null && !hardwareWarningAcknowledged) return;
   sceneManager.togglePause();
 }
 
@@ -886,8 +889,6 @@ function handleTutorialPerfPanelExpanded(expanded: boolean): void {
 
 function handleTutorialHardwareWarningAcknowledged(): void {
   tutorialHardwareWarningAcknowledged = true;
-  // Also the pause gate: an unacknowledged mandatory warning outranks the menu.
-  hardwareWarningAcknowledged = true;
   tutorialController.observePerformance(tutorialPerfPanelExpanded, true, true);
 }
 
@@ -1078,8 +1079,10 @@ const bodyRadiiKm = createBodyRadiiKm();
  * best-effort (the settings panel surfaces failures on its own status line).
  */
 function persistHudPreferences(): void {
-  session.setHudPreset(hudPresetStore.signals.preset.value);
-  session.setHudBodyLabels(hudPresetStore.signals.bodyLabels.value);
+  session.setHudPreferences(
+    hudPresetStore.signals.preset.value,
+    hudPresetStore.signals.bodyLabels.value,
+  );
 }
 
 sceneManager.subscribe((state) => {
@@ -1101,6 +1104,7 @@ let pickPointerId = -1;
 let pickPointerDownX = 0;
 let pickPointerDownY = 0;
 let pickPointerDownMs = 0;
+let pickAttemptCount = 0;
 
 function handleCanvasPickPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return;
@@ -1135,6 +1139,11 @@ function handleCanvasPickPointerUp(event: PointerEvent): void {
   }
   const rect = canvas.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return;
+  // Counted before the hit test, so a browser gate can tell "the gesture was
+  // recognised and hit empty sky" from "the gesture never got here" — the two
+  // failure modes look identical from `pickedBodyId` alone.
+  pickAttemptCount += 1;
+  canvas.dataset.pickAttempts = String(pickAttemptCount);
   const snapshot = session.simulation.snapshot;
   const bodyIndex = pickBodyIndexAtPixel(
     snapshot,

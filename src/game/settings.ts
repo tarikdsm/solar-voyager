@@ -872,6 +872,24 @@ export function updateCameraShake(settings: GameSettingsV5, shake: boolean): Gam
   return parseProfileSettings({ ...settings, camera: { ...settings.camera, shake } });
 }
 
+/**
+ * Returns a validated frozen profile with both HUD preferences applied at once.
+ *
+ * One commit, not two. Applying them separately makes the first commit publish
+ * `onSettingsChanged` carrying the *old* value of the second field, and any
+ * listener that mirrors settings back into live state — `main.ts` does, so the
+ * settings panel and the HUD key agree — then overwrites the change that had
+ * not been committed yet. The second write reads the clobbered value back and
+ * persists it, so the toggle silently does nothing.
+ */
+export function updateHudSettings(
+  settings: GameSettingsV5,
+  preset: HudPreset,
+  bodyLabels: boolean,
+): GameSettingsV5 {
+  return parseProfileSettings({ ...settings, hud: { preset, bodyLabels } });
+}
+
 /** Returns a validated frozen profile with a new HUD preset. */
 export function updateHudPreset(settings: GameSettingsV5, preset: HudPreset): GameSettingsV5 {
   return parseProfileSettings({ ...settings, hud: { ...settings.hud, preset } });

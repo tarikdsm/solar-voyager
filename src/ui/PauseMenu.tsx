@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import type { SessionActionResult } from '../game/sessionController.js';
 
@@ -30,7 +30,9 @@ export function PauseMenu({ actions, open }: PauseMenuProps) {
   const resumeRef = useRef<HTMLButtonElement | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Layout effect, not a passive one: a modal that appears and *then* takes
+  // focus a frame later is a modal a keyboard user can tab straight out of.
+  useLayoutEffect(() => {
     if (!open) {
       setStatus(null);
       return;

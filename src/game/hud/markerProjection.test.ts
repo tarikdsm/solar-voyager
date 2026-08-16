@@ -94,8 +94,19 @@ describe('marker camera basis - T0112', () => {
   it('refuses a degenerate pose instead of producing a garbage frame', () => {
     const basis = new Float64Array(CAMERA_BASIS_COMPONENTS);
     expect(writeCameraBasisInto(basis, pose({ lookDirection: { x: 0, y: 0, z: 0 } }))).toBe(false);
-    // Up hint parallel to the look direction: the cross product vanishes.
-    expect(writeCameraBasisInto(basis, pose({ upDirection: { x: 0, y: 0, z: -1 } }))).toBe(false);
+    // An up hint parallel to the look direction is *not* a failure: three.js
+    // nudges its frame and keeps rendering, and so does this.
+    expect(writeCameraBasisInto(basis, pose({ upDirection: { x: 0, y: 0, z: -1 } }))).toBe(true);
+    expect(Math.hypot(basis[3] as number, basis[4] as number, basis[5] as number)).toBeCloseTo(
+      1,
+      9,
+    );
+    expect(Math.hypot(basis[6] as number, basis[7] as number, basis[8] as number)).toBeCloseTo(
+      1,
+      9,
+    );
+    // The nudged forward axis is still, to a ten-thousandth, the one asked for.
+    expect(basis[2]).toBeCloseTo(-1, 6);
     expect(writeCameraBasisInto(basis, pose({ fovDeg: 0 }))).toBe(false);
     expect(writeCameraBasisInto(basis, pose({ fovDeg: 180 }))).toBe(false);
   });

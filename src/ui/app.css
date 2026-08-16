@@ -53,10 +53,13 @@
   --sv-z-toggle: 11;
   --sv-z-alert: 12;
   --sv-z-tutorial: 14;
-  --sv-z-hardware-warning: 15;
   --sv-z-pause-backdrop: 30;
   --sv-z-pause-settings: 31;
   --sv-z-pause-card: 32;
+  /* Above the pause dialog on purpose: it is a mandatory pre-flight alert, and a
+     paused player must still be able to read and dismiss it. Below the impact
+     overlay, which is the only surface that may cover everything. */
+  --sv-z-hardware-warning: 33;
   --sv-z-impact: 40;
 }
 
