@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 
 import { chromium } from 'playwright';
-import sharp from 'sharp';
 import { createServer } from 'vite';
 
 import { BLEND_FRAME_COST, waitForCameraMode } from './cameraWaits.mjs';
@@ -258,60 +256,6 @@ async function readPointerLockState(page) {
       globalThis.document.querySelector('#space-canvas')?.dataset.pauseRequests ?? null,
   }));
 }
-
-async function screenshotEvidence(buffer) {
-  const { data, info } = await sharp(buffer)
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const centerOffset =
-    (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * info.channels;
-  const regionStartX = Math.floor(info.width * 0.3);
-  const regionEndX = Math.floor(info.width * 0.7);
-  const regionStartY = Math.floor(info.height * 0.2);
-  const regionEndY = Math.floor(info.height * 0.4);
-  let warmRed = 0;
-  let warmGreen = 0;
-  let warmBlue = 0;
-  let warmSamples = 0;
-  for (let y = regionStartY; y < regionEndY; y += 1) {
-    for (let x = regionStartX; x < regionEndX; x += 1) {
-      const offset = (y * info.width + x) * info.channels;
-      const red = data[offset];
-      const green = data[offset + 1];
-      const blue = data[offset + 2];
-      if (red === undefined || green === undefined || blue === undefined || red + green + blue < 45) {
-        continue;
-      }
-      warmRed += red;
-      warmGreen += green;
-      warmBlue += blue;
-      warmSamples += 1;
-    }
-  }
-  return {
-    centerRgb: [data[centerOffset], data[centerOffset + 1], data[centerOffset + 2]],
-    sha256: createHash('sha256').update(buffer).digest('hex'),
-    upperCenterMeanRgb: [warmRed, warmGreen, warmBlue].map((sum) => sum / warmSamples),
-    upperCenterSamples: warmSamples,
-  };
-}
-
-async function capturePageClip(page, clip) {
-  const session = await page.context().newCDPSession(page);
-  try {
-    const screenshot = await session.send('Page.captureScreenshot', {
-      captureBeyondViewport: false,
-      clip: { ...clip, scale: 1 },
-      format: 'png',
-      fromSurface: true,
-    });
-    return Buffer.from(screenshot.data, 'base64');
-  } finally {
-    await session.detach();
-  }
-}
-
 const server = await createServer({
   root: process.cwd(),
   base: '/solar-voyager/',
@@ -364,7 +308,6 @@ try {
     throw error;
   }
   logPhase('camera ready');
-  const productionClip = { x: 320, y: 140, width: 640, height: 440 };
 
   // ---------------------------------------------------------------- T0110 ---
   // The shipped game starts third-person. Everything below the Jupiter phase
