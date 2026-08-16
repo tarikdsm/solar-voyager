@@ -86,10 +86,11 @@ src/
 │   ├── cameraRig.ts                        # LANDED CameraPose to PerspectiveCamera adapter (T0110)
 │   ├── shipVisual.ts                       # NEW  ship.glb binding + lights (T0109)
 │   ├── plumeVisual.ts, rcsVisual.ts        # NEW  photon-beam plume + RCS puffs (T0122)
-│   ├── planetshine.ts, milkyWay.ts, exposureController.ts, bodySpin.ts  # NEW (T0123/26/27/28)
+│   ├── exposureController.ts               # LANDED single toneMappingExposure owner (T0127)
+│   ├── planetshine.ts, milkyWay.ts, bodySpin.ts  # NEW (T0123/26/28)
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
-│   ├── lightingPostPipeline.ts             # MOD  pass-insertion API (T0127)
+│   ├── lightingPostPipeline.ts             # LANDED pass-insertion API + exposure sink (T0127)
 │   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
 ├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
 │   ├── hud/presets.ts, hud/WorldMarkers.tsx, hud/CruiseStrip.tsx  # NEW (T0112/17/19)

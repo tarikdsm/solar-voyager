@@ -3,7 +3,13 @@ import type { ReadonlyVec3 } from '../core/vec3.js';
 export type VisualTier = 1 | 2 | 3;
 
 const ASTRONOMICAL_UNIT_KM = 149_597_870.7;
-const SUN_MAGNITUDE_AT_ONE_AU = -26.74;
+
+/**
+ * Apparent magnitude of the Sun at 1 AU — the zero point every magnitude here is
+ * measured against. Exported so `exposureController.ts` can invert the same scale
+ * instead of keeping a second copy of the constant that could drift.
+ */
+export const SUN_MAGNITUDE_AT_ONE_AU = -26.74;
 const POINT_TO_SPHERE_PX = 1.8;
 const SPHERE_TO_POINT_PX = 1.2;
 const SPHERE_TO_MODEL_PX = 240;
