@@ -22,4 +22,26 @@ acceptance:
   - A ship VFX browser gate ships; the draw-call golden is re-baselined by at most 4 in its own
     commit; heap gate green with bench evidence
 handoff_notes: |
-  Use the onBeforeCompile hook pattern plus the prepareCompilationPass warm-up so there is no first-burn shader stall. Additive transparency: the beam renders after bodies with depthTest true and depthWrite false.
+  PAUSED 2026-08-16 in REVIEW as PR #85, eight commits on branch task/T0122-plume-rcs-lights, one
+  uncommitted file in .worktrees/T0122. Implementation is COMPLETE and every local gate is green; the
+  only red is the task's OWN new gate, and only on the CI runner:
+  "the simulation clock did not advance while running". The lane had just reproduced and quantified it
+  when the session was paused, and had identified the fix as the same shape as T0144's: a budget
+  counted in WALL-CLOCK time against a process that advances per RENDERED FRAME. On ubuntu with
+  SwiftShader the wall budget expires before the frame count is reached. T0144's handoff carries the
+  technique, including SV_AUDIO_THROTTLE for reproducing a slow host locally via CDP CPU throttling.
+  Do NOT widen the timing budget to clear the red: this gate is the only thing asserting the plume
+  responds within a frame and the lights freeze under pause.
+  TWO FINDINGS ALREADY LANDED ON THE BRANCH, both worth reading before touching render code:
+  forceSinglePass is load-bearing on any additive double-sided material — three renders transparent
+  plus DoubleSide in TWO passes, and additive blending is order-independent, so the second is pure
+  waste and the difference between the beam costing 1 draw call and 2.
+  A warm-up render must happen through the path the game renders through: three keys its program cache
+  on the OUTPUT COLOUR SPACE, so a material compiled against the canvas needs a second program when
+  the composer renders it into a half-float target. composition.ts now calls prepareCompilationPass()
+  again immediately before postPipeline.warmUp(), which is why the two trajectory overlays were always
+  prepared twice there. Any future task adding a scene object must do both or pay a first-use compile
+  stall the startup gate cannot see, because it only checks frame 1.
+  Draw-call golden did NOT move: the perf scenario coasts at zero throttle with no rotation command,
+  so all three new objects are invisible. Worst case a player reaches is +3, asserted in both gate
+  phases.

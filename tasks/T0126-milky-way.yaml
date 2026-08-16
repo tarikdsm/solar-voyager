@@ -23,4 +23,27 @@ acceptance:
     panorama exactly as to stars; a Milky Way browser gate ships and the asset budget check stays
     green
 handoff_notes: |
-  The panorama must pass through the SAME observer-aberration path as the starfield or high-beta views will shear the sky inconsistently. Extend the existing vertex-shader approach.
+  PAUSED 2026-08-16 in REVIEW as PR #84, ten commits on branch task/T0126-milky-way, working tree
+  clean, CI re-running at pause time on the orchestrator's merge resolution. If that run is green the
+  task is ready to merge; nothing is known to be outstanding.
+  THE PANORAMA IS GENUINELY LICENSED: ESO GigaGalaxy Zoom eso0932a (ESO/S. Brunier), CC BY 4.0, pinned
+  by SHA-256. No procedural fallback was used. Attribution is in credits.md and the asset SOURCES.md.
+  THE ZODIACAL BAND HAD A REAL MODELLING DEFECT, found because a gate measured it. e(eps) saturates
+  for eps <= 30 degrees, so the band painted a flat PEAK-brightness disc across a 60 degree cone
+  centred on the Sun, directly over the corona. Leinert tabulates zodiacal brightness only above about
+  15 degrees for exactly that reason. The band now smoothsteps to zero across that inner working
+  angle; since w <= 1 the proven I <= I_peak bound is untouched. Measured background mean luminance in
+  the 32-64 px annulus at Mercury distance: 0.102 with the sky suppressed, 19.986 with it on, 10.415
+  after the fix, against a threshold of 2.
+  A SECOND DEFECT WAS MASKING THE FIRST: proceduralSunPage moves the camera WITHOUT running the frame
+  loop, so MilkyWaySky.update() never re-ran and every distance shot carried a frozen 1 AU sky with a
+  stale Sun direction. That made the first measurement read 2.075 and look like a marginal overshoot.
+  rendering-spec 5.2 now records that any consumer moving the camera outside the frame loop must call
+  MilkyWaySky.update() itself.
+  THE ABERRATION RULE HAS A NEGATIVE CONTROL: one GLSL chunk is shared by starfield, panorama and
+  constellations; the vertex sits at aberrate(d) and the texture is sampled from the UNDISPLACED d.
+  Sampling from the aberrated direction instead fails at drift 14.36 against an allowance of 2.17.
+  Keep that control if the shader changes.
+  Settings generation chain ends at v8 (sky), after v7 (audio) and v6 (exposure). The v7 tier is real,
+  with its own strict parser and a round-trip test whose negative control is deleting the tier and
+  watching the mixer reset to 0.7/0.5.
