@@ -1,3 +1,4 @@
+import type { AudioSystem } from '../game/audio/audioSystem.js';
 import type { CameraDirector, CameraMode } from '../game/cameraDirector.js';
 import type { StartupDiagnostic } from '../game/startupTracker.js';
 import type { SystemMapMode } from '../game/systemMapController.js';
@@ -9,7 +10,7 @@ import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
 
 /**
- * The frozen browser-diagnostic contract: eight `canvas.solarVoyager*` objects
+ * The frozen browser-diagnostic contract: nine `canvas.solarVoyager*` objects
  * that roughly 25 Playwright gates read by property name.
  *
  * Every definition site is a literal
@@ -18,7 +19,7 @@ import type { BurnLogEntry } from '../sim/ship/ledger.js';
  * asserts that both the member lists and the definition sites are exactly these.
  * Extend them; never drop a field (`AGENTS.md` Global Constraints).
  *
- * `solarVoyagerTelemetry` is the ninth canvas property and is not here:
+ * `solarVoyagerTelemetry` is the tenth canvas property and is not here:
  * `render/telemetry.ts` owns it behind `RENDER_TELEMETRY_PROPERTY`.
  */
 
@@ -122,6 +123,51 @@ export interface BurnLogRuntimeDiagnostics {
   completedCount: number;
   publishCount: number;
   structuralRebuildCount: number;
+}
+
+/**
+ * T0144 (ADR-041) — the audio subsystem, observable from a browser gate.
+ *
+ * `contextState` is `'none'` until a user gesture arrives, which is the whole
+ * autoplay contract made testable: a harness that never clicks must see
+ * `'none'`, `unlocked === false` and `contextCreationCount === 0` for the life
+ * of the page.
+ *
+ * `RuntimeResourceCounts` deliberately does not carry `audioContextCreations`
+ * instead: two `deepEqual` whole-shape pins in `tools/tests/mainMenuRegression.mjs`
+ * compare that object in full, and the count is gesture-dependent — it would make
+ * an unrelated gate's fixture depend on how the harness happens to reach the
+ * space phase.
+ */
+export interface AudioRuntimeDiagnostics {
+  readonly identity: 'solarVoyagerAudio.v1';
+  readonly unlocked: boolean;
+  readonly contextState: string;
+  readonly contextCreationCount: number;
+  readonly unlockAttemptCount: number;
+  readonly paramWriteCount: number;
+  readonly suspendedByVisibility: boolean;
+  readonly musicContext: string;
+  /**
+   * Live equal-power crossfade weights, in `MUSIC_CONTEXTS` order.
+   *
+   * Exposed because a browser gate cannot otherwise tell "the mix is settled"
+   * from "the 4 s opening crossfade is still running": the bus gains go quiet
+   * long before the layer weights do, and the weights are what keep writing.
+   * T0145 reads the same array to prove its stems crossfade.
+   */
+  readonly musicLayerGains: Float64Array;
+  readonly perspective: string;
+  readonly warningActive: boolean;
+  readonly masterGain: number;
+  readonly musicBusGain: number;
+  readonly sfxBusGain: number;
+  readonly uiBusGain: number;
+  readonly engineGain: number;
+  readonly engineCutoffHz: number;
+  readonly engineDetuneCents: number;
+  readonly warpMuffle: number;
+  readonly gammaStress: number;
 }
 
 export interface TutorialRuntimeDiagnostics {
@@ -394,6 +440,79 @@ export function createCameraRuntimeDiagnostics(
     ),
   ) as CameraRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerCamera', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createAudioRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  audio: AudioSystem,
+): AudioRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        identity: 'solarVoyagerAudio.v1',
+        get unlocked() {
+          return audio.engine.unlocked;
+        },
+        get contextState() {
+          return audio.engine.contextState;
+        },
+        get contextCreationCount() {
+          return audio.engine.contextCreationCount;
+        },
+        get unlockAttemptCount() {
+          return audio.engine.unlockAttemptCount;
+        },
+        get paramWriteCount() {
+          return audio.engine.paramWriteCount;
+        },
+        get suspendedByVisibility() {
+          return audio.engine.suspendedByVisibility;
+        },
+        get musicContext() {
+          return audio.mix.musicContext;
+        },
+        get musicLayerGains() {
+          return audio.mix.musicLayerGains;
+        },
+        get perspective() {
+          return audio.mix.perspective;
+        },
+        get warningActive() {
+          return audio.mix.warningActive;
+        },
+        get masterGain() {
+          return audio.mix.masterGain;
+        },
+        get musicBusGain() {
+          return audio.mix.musicBusGain;
+        },
+        get sfxBusGain() {
+          return audio.mix.sfxBusGain;
+        },
+        get uiBusGain() {
+          return audio.mix.uiBusGain;
+        },
+        get engineGain() {
+          return audio.mix.engineGain;
+        },
+        get engineCutoffHz() {
+          return audio.mix.engineCutoffHz;
+        },
+        get engineDetuneCents() {
+          return audio.mix.engineDetuneCents;
+        },
+        get warpMuffle() {
+          return audio.mix.warpMuffle;
+        },
+        get gammaStress() {
+          return audio.mix.gammaStress;
+        },
+      },
+      null,
+    ),
+  ) as AudioRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerAudio', { value: diagnostics });
   return diagnostics;
 }
 

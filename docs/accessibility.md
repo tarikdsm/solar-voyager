@@ -27,6 +27,11 @@ claim of formal WCAG conformance.
   instrument density is adjustable without discovering a shortcut. In-world markers are decorative
   duplicates of information the panels also carry as text, and are marked `aria-hidden`; body labels
   remain readable text.
+- Audio is never the sole carrier of information: every cue duplicates something the HUD already
+  states as text, so the game is fully playable in silence. A four-channel mixer (master, music,
+  ship and effects, interface) lives in Session & settings, each channel is independently settable
+  to zero, and the levels persist in the profile. Sound starts only after a deliberate interaction
+  with the game and never on page load.
 - The interface honors `prefers-reduced-motion: reduce`; quality can be manually locked to reduce
   visual load. A detected software renderer produces a readable warning and conservative effects.
 - Desktop and compact layouts retain keyboard reachability, contrast, and a minimum practical control
@@ -37,8 +42,8 @@ claim of formal WCAG conformance.
 The three-dimensional space scene itself has no complete nonvisual equivalent or live verbal
 description. Spatial planning, body surface detail, trajectory geometry, and relativistic visual
 effects therefore still depend on vision. The game has no touch-specific control scheme, captions are
-not applicable because it ships no speech or essential audio, and extremely high browser zoom may
-require additional panel scrolling.
+not applicable because it ships no speech and no audio that carries information the HUD does not
+also state as text, and extremely high browser zoom may require additional panel scrolling.
 
 Browser, operating-system, GPU-driver, or assistive-technology combinations vary. Please report a
 reproducible accessibility defect with browser/version, operating system, viewport or zoom, input

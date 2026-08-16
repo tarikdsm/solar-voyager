@@ -30,6 +30,7 @@
     "test:perf-panel": "node tools/tests/perfPanelRegression.mjs",
     "test:perf-governor": "node tools/tests/perfGovernorRegression.mjs",
     "test:perf-gates": "node tools/perf/performanceGate.mjs",
+    "test:audio": "node tools/tests/audioEngineRegression.mjs",
     "test:session-settings": "node tools/tests/sessionSettingsRegression.mjs",
     "test:main-menu": "node tools/tests/mainMenuRegression.mjs",
     "test:system-map-panel": "node tools/tests/systemMapPanelRegression.mjs",

@@ -144,6 +144,10 @@ jobs:
       - name: Adaptive quality governor regression
         run: npm run test:perf-governor
 
+      - name: Audio engine regression
+        timeout-minutes: 6
+        run: npm run test:audio
+
       - name: Session settings regression
         run: npm run test:session-settings
 
