@@ -8,9 +8,11 @@ import type { CameraPose } from '../cameraDirector.js';
  * float64 body positions and the published `CameraPose` — is what keeps
  * `src/render/spaceScene.ts` the only float64→float32 site in the codebase
  * (Global Constraints; `tests/render/float32Boundary.test.ts` enforces it by
- * scanning for `Math.fround(`). There is no `Math.fround` in this file and there
- * must never be one: the whole point is that a marker on Eris at 1e10 km is
- * placed from the same doubles the physics uses.
+ * scanning every source file for the float32 rounding call). There is no such
+ * call in this file and there must never be one: the whole point is that a
+ * marker on Eris at 1e10 km is placed from the same doubles the physics uses.
+ * The scan is a plain substring search, so even naming the function in a comment
+ * would fail it — which is why this paragraph talks around it.
  *
  * The basis below must agree bit-for-bit in *convention* with
  * `render/cameraRig.ts`, which hands `pose.lookDirection` to

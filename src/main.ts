@@ -15,6 +15,9 @@ import {
   type InputPointerMotionEvent,
   type PointerLockSurface,
 } from './game/input/inputEngine.js';
+import { createBodyRadiiKm } from './game/hud/bodyMarkerCatalog.js';
+import { pickBodyIndexAtPixel } from './game/hud/bodyPicking.js';
+import { HudInputRouter } from './game/hud/hudInputRouter.js';
 import { SaveRepository } from './game/saveLoad.js';
 import { SceneManager } from './game/sceneManager.js';
 import { replacementInvalidatesRestorePoints, RestorePointRing } from './game/restorePoints.js';
@@ -62,6 +65,7 @@ import { App } from './ui/App.js';
 import { CameraInputController } from './ui/cameraInputController.js';
 import { SharedCameraControls } from './ui/sharedCameraControls.js';
 import { createPerfPanelStore } from './ui/hud/perfPanelStore.js';
+import { createHudPresetStore } from './ui/hudPresetSignals.js';
 import { createHudSignalStore } from './ui/hudSignals.js';
 import { createStateVectorSignalStore } from './ui/stateVectorSignals.js';
 import { createSystemMapSignalStore } from './ui/systemMapSignals.js';
@@ -350,7 +354,9 @@ let systemMapCameraInput: CameraInputController | null = null;
 let inputEngine: InputEngine | null = null;
 let flightController: FlightController | null = null;
 let flightInputRouter: FlightInputRouter | null = null;
+let hudInputRouter: HudInputRouter | null = null;
 let pauseRequestCount = 0;
+let hardwareWarningAcknowledged = false;
 let perfGovernor: PerfGovernor | null = null;
 let relativisticVisuals: RelativisticVisualController | null = null;
 let stateVectorWidget: StateVectorWidget | null = null;
@@ -468,6 +474,8 @@ const session = new GameSessionController({
     if (origin === 'restore') flightController?.resetAxes();
     else flightController?.releaseAxes();
     world?.cameraDirector.applyCameraSettings(settings.camera);
+    hudPresetStore.setPreset(settings.hud.preset);
+    hudPresetStore.setBodyLabels(settings.hud.bodyLabels);
     perfGovernor?.setLock(settings.qualityLock, performance.now());
   },
 });
@@ -587,6 +595,8 @@ function handlePageHide(event: PageTransitionEvent): void {
   cameraInput?.dispose();
   systemMapCameraInput?.dispose();
   canvas.removeEventListener('dblclick', handleCanvasDoubleClick);
+  canvas.removeEventListener('pointerdown', handleCanvasPickPointerDown);
+  canvas.removeEventListener('pointerup', handleCanvasPickPointerUp);
   inputEngine?.dispose();
   disposeStateVectorLayoutObservation?.();
   world?.systemMap.dispose();
@@ -598,13 +608,29 @@ function currentInputSnapshot() {
 }
 
 /**
- * Placeholder pause seam. T0112 replaces this with the real pause menu; T0105
- * only proves the intent is raised, so the request is recorded where a browser
- * gate can observe it without touching the frozen diagnostic contracts.
+ * Escape reached the input engine (T0105 seam, T0112 menu).
+ *
+ * The counter is the frozen observable `test:camera-controls` asserts — exactly
+ * one increment per Escape — and it is raised *before* the suppressions below, so
+ * "the intent was heard" and "a menu opened" stay separately observable.
+ *
+ * Two things outrank pause and neither can be detected through `preventDefault`,
+ * which is how the system map and the burn-log rows already suppress it
+ * (`blocksGameKey` honours `defaultPrevented`, and both attach their listeners
+ * before the input engine exists):
+ *
+ *  - a surface-contact freeze: the core is already inert and `ImpactOverlay` is
+ *    the only way out, so a pause dialog on top of it would hide recovery;
+ *  - an unacknowledged hardware-acceleration warning: a mandatory pre-flight
+ *    alert, and stacking a modal over a modal is worse than doing nothing.
  */
 function handlePauseRequested(): void {
   pauseRequestCount += 1;
   canvas.dataset.pauseRequests = String(pauseRequestCount);
+  if (sceneManager.phase !== 'space') return;
+  if (session.simulation.snapshot.impactOccurred === 1) return;
+  if (hardwareWarning !== null && !hardwareWarningAcknowledged) return;
+  sceneManager.togglePause();
 }
 
 /** Browser adapter for the input engine's pointer-lock port. */
@@ -848,6 +874,8 @@ function handleTutorialPerfPanelExpanded(expanded: boolean): void {
 
 function handleTutorialHardwareWarningAcknowledged(): void {
   tutorialHardwareWarningAcknowledged = true;
+  // Also the pause gate: an unacknowledged mandatory warning outranks the menu.
+  hardwareWarningAcknowledged = true;
   tutorialController.observePerformance(tutorialPerfPanelExpanded, true, true);
 }
 
@@ -898,16 +926,26 @@ function renderFrame(nowMs: number): void {
     cameraPositionKm,
   } = world;
   const deltaSec = telemetry.beginFrame(nowMs);
+  // T0112 — a real pause. The animation loop deliberately keeps running: the
+  // wall delta is derived from the previous frame's timestamp, so stopping rAF
+  // would hand `step()` the entire paused duration on resume — at 1e7x warp a
+  // two-minute menu visit is sixty-three years of flight in one frame. Holding
+  // the simulation at zero while the scene still renders is what makes the pause
+  // safe as well as pretty. Design doc section 6.2.
+  const halted = sceneManager.state !== 'space';
+  const simDeltaSec = halted ? 0 : deltaSec;
   const simulationStartMs = performance.now();
-  if (inputEngine !== null && flightInputRouter !== null && flightController !== null) {
-    flightInputRouter.apply(inputEngine.poll(deltaSec));
+  if (!halted && inputEngine !== null && flightInputRouter !== null && flightController !== null) {
+    const inputFrame = inputEngine.poll(deltaSec);
+    flightInputRouter.apply(inputFrame);
+    hudInputRouter?.apply(inputFrame);
     flightController.update(deltaSec);
   }
-  const snapshot = session.simulation.step(deltaSec);
+  const snapshot = halted ? session.simulation.snapshot : session.simulation.step(deltaSec);
   // ADR-036 — one capture per 10 s of wall time, skipped while frozen. The
   // publish below short-circuits on the frame where nothing about the overlay
   // has changed, which is every frame that is not a crash.
-  restorePoints.update(session.simulation, deltaSec);
+  restorePoints.update(session.simulation, simDeltaSec);
   impactStore.publish(snapshot, restorePoints.count);
   world.positionsKm.set(snapshot.bodyPositionsKm);
   // Before the camera reads its focus offset, so a ship-focused camera tracks
@@ -931,7 +969,8 @@ function renderFrame(nowMs: number): void {
   trajectoryPredictorClient?.update(snapshot);
   const simulationEndMs = performance.now();
   const uiStartMs = simulationEndMs;
-  if (hudStore.publish(snapshot, nowMs)) {
+  const hudPublished = hudStore.publish(snapshot, nowMs);
+  if (hudPublished) {
     burnLogStore.publish();
     updateBurnLogRuntime(session.simulation.burnLog);
     tutorialFrameObserver?.(snapshot);
@@ -942,8 +981,22 @@ function renderFrame(nowMs: number): void {
   // T0110 — the director runs both cameras and publishes one pose; the rig is
   // the only place that touches three.js. `world.cameraPositionKm` is a live
   // reference to that pose, so every camera-relative consumer below sees it.
-  cameraDirector.update(deltaSec, snapshot);
+  cameraDirector.update(simDeltaSec, snapshot);
   applyCameraPose(spaceScene.camera, cameraDirector.pose);
+  // The one place the in-world markers are published, and it has to be here:
+  // the pose for this frame exists only after `cameraDirector.update`, while the
+  // HUD sample happened above. Gating on `hudPublished` keeps both halves on the
+  // same 100 ms tick and the same snapshot, which is what "one publication path"
+  // means (design doc section 1).
+  if (hudPublished) {
+    hudStore.publishWorldMarkers(
+      snapshot,
+      cameraDirector.pose,
+      Math.max(1, canvas.clientWidth),
+      Math.max(1, canvas.clientHeight),
+      hudPresetStore.signals.bodyLabels.value,
+    );
+  }
   if (systemMapController.mode === 'system-map') {
     world.systemMap.update(deltaSec);
     telemetry.beginGpuTimer();
@@ -999,6 +1052,94 @@ function renderFrame(nowMs: number): void {
 }
 
 const sceneManager = new SceneManager(session);
+const hudPresetStore = createHudPresetStore(
+  session.settings.hud.preset,
+  session.settings.hud.bodyLabels,
+);
+/** Catalog mean radii for angular-disc picking, in `snapshot.bodyIds` order. */
+const bodyRadiiKm = createBodyRadiiKm();
+
+/**
+ * Preset and label changes are persisted, but a failed write must not desync the
+ * live HUD from what the player just asked for: the ring has already moved when
+ * this runs, so the store is the source of truth and the profile write is
+ * best-effort (the settings panel surfaces failures on its own status line).
+ */
+function persistHudPreferences(): void {
+  session.setHudPreset(hudPresetStore.signals.preset.value);
+  session.setHudBodyLabels(hudPresetStore.signals.bodyLabels.value);
+}
+
+sceneManager.subscribe((state) => {
+  canvas.dataset.sceneState = state;
+  // Drop every latched key on both edges: a key held while clicking a menu
+  // button must not fire into the ship on resume, and a key held at the moment
+  // of pausing must not stay down for the whole menu visit. `resetAxes`, not
+  // `releaseAxes` — the latter issues `rotate(0,0,0)` and would silently stop a
+  // spinning ship every time the player paused.
+  inputEngine?.releaseHeldKeys();
+  flightController?.resetAxes();
+  if (state !== 'space') inputEngine?.releasePointerLock();
+});
+canvas.dataset.sceneState = sceneManager.state;
+
+const CLICK_PICK_MAX_MOVEMENT_PX = 4;
+const CLICK_PICK_MAX_DURATION_MS = 400;
+let pickPointerId = -1;
+let pickPointerDownX = 0;
+let pickPointerDownY = 0;
+let pickPointerDownMs = 0;
+
+function handleCanvasPickPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return;
+  pickPointerId = event.pointerId;
+  pickPointerDownX = event.clientX;
+  pickPointerDownY = event.clientY;
+  pickPointerDownMs = event.timeStamp;
+}
+
+/**
+ * Click-to-target (spec section 7).
+ *
+ * `CameraInputController` owns orbit-drag on the same canvas, so a release is
+ * only a click if the pointer barely moved and the press was brief — otherwise
+ * letting go of a drag over Jupiter would silently re-target. A miss clears
+ * nothing: deselecting stays the dropdown's job, which remains the documented
+ * fallback.
+ */
+function handleCanvasPickPointerUp(event: PointerEvent): void {
+  const pointerId = pickPointerId;
+  pickPointerId = -1;
+  if (event.pointerId !== pointerId || event.button !== 0) return;
+  if (world === null || sceneManager.state !== 'space') return;
+  if (systemMapController.mode !== 'space') return;
+  if (inputEngine?.pointerLocked === true) return;
+  if (event.timeStamp - pickPointerDownMs > CLICK_PICK_MAX_DURATION_MS) return;
+  if (
+    Math.hypot(event.clientX - pickPointerDownX, event.clientY - pickPointerDownY) >
+    CLICK_PICK_MAX_MOVEMENT_PX
+  ) {
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const snapshot = session.simulation.snapshot;
+  const bodyIndex = pickBodyIndexAtPixel(
+    snapshot,
+    world.cameraDirector.pose,
+    bodyRadiiKm,
+    rect.width,
+    rect.height,
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+  );
+  if (bodyIndex < 0) return;
+  const bodyId = snapshot.bodyIds[bodyIndex];
+  if (bodyId === undefined) return;
+  canvas.dataset.pickedBodyId = bodyId;
+  sessionCommands.setTarget(bodyId);
+}
+
 const autostart = new URLSearchParams(window.location.search).get('autostart') === '1';
 if (autostart) {
   const result = sceneManager.startNewGame();
@@ -1031,7 +1172,17 @@ function renderApplication(): void {
       commands: sessionCommands,
       hardwareWarning,
       hud: hudStore.display,
+      hudPreset: hudPresetStore,
       hudState: hudStore.signals,
+      pause: {
+        resume: () => {
+          sceneManager.resume();
+        },
+        save: () => session.saveLocal(),
+        exitToMenu: () => {
+          sceneManager.returnToMainMenu();
+        },
+      },
       impact: {
         actions: impactActions,
         display: impactStore.display,
@@ -1360,10 +1511,22 @@ async function activateSpacePhaseRuntime(): Promise<void> {
     commands: sessionCommands,
     snapshot: currentInputSnapshot,
   });
+  hudInputRouter = new HudInputRouter({
+    cyclePreset: () => {
+      hudPresetStore.cyclePreset();
+      persistHudPreferences();
+    },
+    toggleBodyLabels: () => {
+      hudPresetStore.toggleBodyLabels();
+      persistHudPreferences();
+    },
+  });
   inputEngine.setThrottleAxis(
     flightController.adoptCommandedThrottle(session.simulation.snapshot.throttle),
   );
   canvas.addEventListener('dblclick', handleCanvasDoubleClick);
+  canvas.addEventListener('pointerdown', handleCanvasPickPointerDown);
+  canvas.addEventListener('pointerup', handleCanvasPickPointerUp);
   // Frozen CI contract field: it counts one input owner per space-phase
   // activation, which is now the input engine rather than v1's mapper.
   runtimeResources.keyboardCommandMappers += 1;

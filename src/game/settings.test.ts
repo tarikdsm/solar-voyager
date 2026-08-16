@@ -290,12 +290,13 @@ describe('game settings', () => {
     // Still a valid document: it round-trips and rebinds normally.
     expect(() => parseGameSettings(parsed)).not.toThrow();
     const profile = parseProfileSettings({
-      version: 4,
+      version: 5,
       qualityLock: 'auto',
       inputBindings: parsed.inputBindings,
       tutorial: { status: 'unoffered', stepId: 'focus-target' },
       gamepad: DEFAULT_GAME_SETTINGS.gamepad,
       camera: DEFAULT_GAME_SETTINGS.camera,
+      hud: DEFAULT_GAME_SETTINGS.hud,
     });
     expect(rebindInput(profile, 'killRotation', 'KeyB').inputBindings.killRotation).toBe('KeyB');
   });
@@ -461,13 +462,16 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(4);
+      expect(result.settings.version).toBe(5);
       expect(result.settings.qualityLock).toBe('medium');
       expect(result.settings.inputBindings.pitchUp).toBe('KeyI');
       expect(result.settings.inputBindings.pitchDown).toBe('KeyK');
-      // Actions the v2 fixture predates (T0106's cruise pair) are backfilled.
+      // Actions the v2 fixture predates (T0106's cruise pair, T0112's HUD pair)
+      // are backfilled.
       expect(result.settings.inputBindings.cruiseEngage).toBe('KeyG');
       expect(result.settings.inputBindings.cruiseAbort).toBe('KeyV');
+      expect(result.settings.inputBindings.hudPresetCycle).toBe('KeyH');
+      expect(result.settings.inputBindings.hudBodyLabelsToggle).toBe('KeyL');
       expect(result.settings.tutorial).toEqual({ status: 'skipped', stepId: 'focus-target' });
       expect(result.settings.gamepad).toEqual(DEFAULT_GAMEPAD_SETTINGS);
       expect(result.settings.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
@@ -489,7 +493,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: false, settings: DEFAULT_GAME_SETTINGS });
-      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 4/u);
+      if (!result.ok) expect(result.error).toMatch(/profile settings version must be 5/u);
     });
 
     it('fails closed when writing a migrated legacy profile fails', () => {
@@ -571,7 +575,7 @@ describe('game settings', () => {
       );
     });
 
-    it('migrates a stored v3 profile to v4 and writes it forward to the current key', () => {
+    it('migrates a stored v3 profile across two generations to the current key', () => {
       const storage = new MemoryStorage();
       const document = profileV3Document();
       storage.values.set(LEGACY_V3_SETTINGS_STORAGE_KEY, JSON.stringify(document));
@@ -579,7 +583,7 @@ describe('game settings', () => {
       const result = new SettingsRepository(storage).load();
 
       expect(result).toMatchObject({ ok: true, source: 'migrated' });
-      expect(result.settings.version).toBe(4);
+      expect(result.settings.version).toBe(5);
       expect(result.settings.qualityLock).toBe('high');
       expect(result.settings.tutorial).toEqual({
         status: 'completed',
