@@ -113,6 +113,7 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     masterGain: 'readonly number',
     musicBusGain: 'readonly number',
     musicContext: 'readonly string',
+    musicLayerGains: 'readonly Float64Array',
     paramWriteCount: 'readonly number',
     perspective: 'readonly string',
     sfxBusGain: 'readonly number',

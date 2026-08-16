@@ -148,6 +148,15 @@ export interface AudioRuntimeDiagnostics {
   readonly paramWriteCount: number;
   readonly suspendedByVisibility: boolean;
   readonly musicContext: string;
+  /**
+   * Live equal-power crossfade weights, in `MUSIC_CONTEXTS` order.
+   *
+   * Exposed because a browser gate cannot otherwise tell "the mix is settled"
+   * from "the 4 s opening crossfade is still running": the bus gains go quiet
+   * long before the layer weights do, and the weights are what keep writing.
+   * T0145 reads the same array to prove its stems crossfade.
+   */
+  readonly musicLayerGains: Float64Array;
   readonly perspective: string;
   readonly warningActive: boolean;
   readonly masterGain: number;
@@ -462,6 +471,9 @@ export function createAudioRuntimeDiagnostics(
         },
         get musicContext() {
           return audio.mix.musicContext;
+        },
+        get musicLayerGains() {
+          return audio.mix.musicLayerGains;
         },
         get perspective() {
           return audio.mix.perspective;

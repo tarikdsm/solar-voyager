@@ -30,6 +30,12 @@ import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTest
  * Run `npm run build` first: this drives the production bundle through `preview`,
  * like every other gate that exercises the real app.
  *
+ * **`SV_AUDIO_THROTTLE=<rate>` throttles the page CPU** (CDP
+ * `Emulation.setCPUThrottlingRate`). Everything this gate measures is bounded in
+ * rendered frames, not seconds, and the first version of it was a stopwatch that
+ * passed on a developer machine and failed on the CI runner. `SV_AUDIO_THROTTLE=12`
+ * reproduces a runner-speed host locally; use it before touching any timing here.
+ *
  * The seeded profile is only here to skip the tutorial overlay, which otherwise
  * sits over the settings panel and intercepts the pointer. It carries the shipped
  * mixer defaults verbatim, so the "the shipped default is 0.7" assertions below
@@ -92,6 +98,7 @@ async function readAudio(page) {
       masterGain: audio.masterGain,
       musicBusGain: audio.musicBusGain,
       musicContext: audio.musicContext,
+      musicLayerGains: Array.from(audio.musicLayerGains),
       paramWriteCount: audio.paramWriteCount,
       perspective: audio.perspective,
       sfxBusGain: audio.sfxBusGain,
@@ -124,42 +131,156 @@ async function setPageHidden(page, hidden) {
   }, hidden);
 }
 
-/** Rendered frames a sample must cover before "nothing changed" means anything. */
+/** Rendered frames a window must cover before "nothing changed" means anything. */
 const SETTLE_FRAME_QUORUM = 8;
+/**
+ * Rendered frames the mix is allowed to keep moving for before we call it stuck.
+ *
+ * Counted in **frames, not seconds**, because everything the director animates is
+ * defined in frames: the 4 s music crossfade advances by the telemetry-clamped
+ * frame delta (0.1 s), so it needs 40 rendered frames whatever the frame rate.
+ * A wall-clock budget is a bet on the host's speed — this budget is 6x the real
+ * cost and holds on a 1 fps software rasteriser exactly as it does at 60 fps.
+ */
+const SETTLE_FRAME_BUDGET = 240;
+/** Wall cap so a dead frame loop fails in minutes with a diagnosis, not never. */
+const SETTLE_WALL_CAP_MS = 180_000;
 
 /**
- * Waits until the mix stops writing params **across rendered frames**.
+ * Write-resolution epsilons, mirroring `src/game/audio/audioEngine.ts`.
  *
- * Wall clock alone is not enough, and that is the lesson `cameraWaits.mjs`
- * already paid for: the opening crossfade advances by the clamped frame delta
- * (0.1 s), so it needs ~40 frames, and on the software rasteriser this gate runs
- * on the loop can go 400 ms without rendering one. A quiet wall-clock window is
- * then indistinguishable from a settled mix. Requiring `SETTLE_FRAME_QUORUM`
- * rendered frames with zero writes makes the answer frame-rate independent.
+ * Hand-written rather than imported — this is browser-side fixture code, and the
+ * `hudPresetProfile.mjs` rule applies: importing the app's own constant would let
+ * a change pass this gate by moving both sides at once. Both ways of drifting are
+ * safe here. Loosen the engine's epsilon and this gate keeps checking at the old,
+ * tighter resolution; tighten it and the engine writes where this gate expects
+ * stillness, which fails loudly.
  */
-async function waitForSettledMix(page, attempts = 60) {
-  let previous = await readAudio(page);
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    await page.waitForTimeout(400);
-    const current = await readAudio(page);
-    const framesRendered = current.frameCount - previous.frameCount;
-    if (current.paramWriteCount === previous.paramWriteCount) {
-      if (framesRendered >= SETTLE_FRAME_QUORUM) return current;
-    } else previous = current;
-  }
-  throw new Error(`the audio mix never settled: still writing after ${String(attempts)} samples`);
+const GAIN_EPSILON = 1e-4;
+const FREQUENCY_EPSILON_HZ = 0.5;
+const DETUNE_EPSILON_CENTS = 0.05;
+
+/**
+ * The director's decision output, quantised to what the engine actually acts on.
+ *
+ * Exact equality is the wrong comparison and was the second version of this bug:
+ * `gammaStress` is derived from the ship's speed, which dithers forever in orbit,
+ * so `musicBusGain` and `engineDetuneCents` drift by ~1e-11 per frame and never
+ * repeat a value. The engine correctly refuses to write any of it — it is 7 to 9
+ * orders of magnitude below the epsilons above — so "unchanged" has to mean
+ * "unchanged at the resolution the engine writes at", not "bit-identical".
+ * Quantising here is what makes "an unchanged decision costs zero writes" a real
+ * guarantee rather than a race against the physics.
+ */
+function mixFingerprint(sample) {
+  const quantise = (value, epsilon) => Math.round(value / epsilon);
+  return JSON.stringify({
+    engineCutoffHz: quantise(sample.engineCutoffHz, FREQUENCY_EPSILON_HZ),
+    engineDetuneCents: quantise(sample.engineDetuneCents, DETUNE_EPSILON_CENTS),
+    engineGain: quantise(sample.engineGain, GAIN_EPSILON),
+    masterGain: quantise(sample.masterGain, GAIN_EPSILON),
+    musicBusGain: quantise(sample.musicBusGain, GAIN_EPSILON),
+    musicLayerGains: sample.musicLayerGains.map((gain) => quantise(gain, GAIN_EPSILON)),
+    sfxBusGain: quantise(sample.sfxBusGain, GAIN_EPSILON),
+    uiBusGain: quantise(sample.uiBusGain, GAIN_EPSILON),
+  });
 }
 
-/** Counts param writes over a window covering at least `SETTLE_FRAME_QUORUM` frames. */
-async function measureSteadyWrites(page, settled, attempts = 30) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+/** Names the fields that moved between two samples, for a failure message. */
+function describeMixDrift(before, after) {
+  const moved = [];
+  for (const key of [
+    'engineCutoffHz',
+    'engineDetuneCents',
+    'engineGain',
+    'masterGain',
+    'musicBusGain',
+    'musicLayerGains',
+    'sfxBusGain',
+    'uiBusGain',
+    'musicContext',
+    'perspective',
+    'warningActive',
+  ]) {
+    const from = JSON.stringify(before[key]);
+    const to = JSON.stringify(after[key]);
+    if (from !== to) moved.push(`${key}: ${from} -> ${to}`);
+  }
+  return moved;
+}
+
+/**
+ * Waits until the director's published decision state stops moving.
+ *
+ * Settled means **the state is byte-identical across a window covering at least
+ * `SETTLE_FRAME_QUORUM` rendered frames** — not "N samples elapsed". The
+ * distinction is the whole point: the opening crossfade is a legitimate,
+ * frame-counted change, and the first version of this probe counted wall-clock
+ * samples instead, so it passed on a fast host and failed on a slow one without
+ * anything being wrong. If the state genuinely never stops moving, the frame
+ * budget trips and the message names the fields that kept changing.
+ */
+async function waitForSettledMix(page) {
+  const startedMs = Date.now();
+  let anchor = await readAudio(page);
+  let anchorPrint = mixFingerprint(anchor);
+  const origin = anchor;
+  for (;;) {
     await page.waitForTimeout(400);
     const current = await readAudio(page);
-    if (current.frameCount - settled.frameCount >= SETTLE_FRAME_QUORUM) {
-      return { current, writes: current.paramWriteCount - settled.paramWriteCount };
+    const currentPrint = mixFingerprint(current);
+    if (currentPrint === anchorPrint) {
+      if (current.frameCount - anchor.frameCount >= SETTLE_FRAME_QUORUM) return current;
+    } else {
+      anchor = current;
+      anchorPrint = currentPrint;
+    }
+    const framesRendered = current.frameCount - origin.frameCount;
+    if (framesRendered > SETTLE_FRAME_BUDGET) {
+      throw new Error(
+        `the audio mix never settled: still moving after ${String(framesRendered)} rendered ` +
+          `frames (budget ${String(SETTLE_FRAME_BUDGET)}). Fields still moving: ` +
+          `${describeMixDrift(origin, current).join('; ')}. ` +
+          `${JSON.stringify({ current, origin })}`,
+      );
+    }
+    if (Date.now() - startedMs > SETTLE_WALL_CAP_MS) {
+      throw new Error(
+        `the audio mix never settled: only ${String(framesRendered)} frames rendered in ` +
+          `${String(Math.round((Date.now() - startedMs) / 1_000))} s, so this is the frame loop ` +
+          `or the runner, not the mix. ${JSON.stringify({ current, origin })}`,
+      );
     }
   }
-  throw new Error('the frame loop never rendered enough frames to measure steady flight');
+}
+
+/**
+ * Counts param writes over a window in which the decision state did not change.
+ *
+ * The assertion this feeds is "an unchanged decision costs zero writes", which is
+ * the actual zero-allocation guarantee. A window in which the state *did* move is
+ * not evidence either way, so it is retried rather than passed or failed.
+ */
+async function measureSteadyWrites(page, settled) {
+  let anchor = settled;
+  let anchorPrint = mixFingerprint(anchor);
+  for (;;) {
+    await page.waitForTimeout(400);
+    const current = await readAudio(page);
+    if (mixFingerprint(current) !== anchorPrint) {
+      anchor = await waitForSettledMix(page);
+      anchorPrint = mixFingerprint(anchor);
+      continue;
+    }
+    const framesObserved = current.frameCount - anchor.frameCount;
+    if (framesObserved >= SETTLE_FRAME_QUORUM) {
+      return {
+        current,
+        framesObserved,
+        writes: current.paramWriteCount - anchor.paramWriteCount,
+      };
+    }
+  }
 }
 
 function logPhase(phase) {
@@ -183,6 +304,13 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
   const { errors, warnings } = collectBrowserOutput(page);
+  // Slow-host reproduction; inert unless the variable is set (see the header).
+  if (process.env.SV_AUDIO_THROTTLE !== undefined) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', {
+      rate: Number(process.env.SV_AUDIO_THROTTLE),
+    });
+  }
   await disableUnrelatedTrajectoryPrediction(page);
   await installEngineerHudPreset(page);
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
@@ -240,13 +368,16 @@ try {
   // claim is "a frame that changes nothing costs nothing", not "audio never
   // writes".
   const settled = await waitForSettledMix(page);
-  const { current: steadyAfter, writes: steadyWrites } = await measureSteadyWrites(page, settled);
+  const {
+    current: steadyAfter,
+    framesObserved: steadyFrames,
+    writes: steadyWrites,
+  } = await measureSteadyWrites(page, settled);
   assert.equal(
     steadyWrites,
     0,
-    `steady flight rewrote ${String(steadyWrites)} params across ` +
-      `${String(steadyAfter.frameCount - settled.frameCount)} frames of unchanged state: ` +
-      `${JSON.stringify({ after: steadyAfter, settled })}`,
+    `an unchanged decision cost ${String(steadyWrites)} param writes across ` +
+      `${String(steadyFrames)} rendered frames: ${JSON.stringify({ after: steadyAfter, settled })}`,
   );
 
   // ── 3. Kubrick mode. `]` steps the focus ring off the ship into observatory. ──
@@ -322,7 +453,7 @@ try {
   const vacuum = await readAudio(page);
   assert.equal(vacuum.musicBusGain, 0, 'the score survived exteriorMusic being turned off');
   assert.equal(vacuum.sfxBusGain, 0);
-  logPhase('mixer levels reach the live mix and the v6 profile');
+  logPhase('mixer levels reach the live mix and the v7 profile');
 
   assertNoAutoplayWarning(warnings, 'end of run');
   assert.deepEqual(errors, []);
@@ -351,7 +482,8 @@ try {
         },
         mixer: { storedFinal },
         steadyFlight: {
-          framesObserved: steadyAfter.frameCount - settled.frameCount,
+          framesObserved: steadyFrames,
+          framesToSettle: settled.frameCount,
           paramWrites: steadyWrites,
         },
         visibility: { resumedState: resumed.contextState },
