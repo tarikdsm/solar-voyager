@@ -9,9 +9,10 @@ import { createServer } from 'vite';
 import { qualityRunOrder, summarizeQualitySamples } from './proceduralSunQualityBenchUtils.mjs';
 import { qualityMeasurementPlan } from './gasGiantQualityBenchUtils.mjs';
 import { hardwareGpuPreferenceArg } from './scaffoldBenchUtils.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4188;
+const PORT = resolveHarnessPort(4188);
 const REQUIRE_HARDWARE_GPU = process.argv.includes('--require-hardware-gpu');
 const FORCE_LOW_POWER_GPU = process.argv.includes('--force-low-power-gpu');
 

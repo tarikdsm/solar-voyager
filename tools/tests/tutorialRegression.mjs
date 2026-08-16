@@ -6,13 +6,14 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { resolveHarnessPort } from '../harnessPort.mjs';
 import {
   installTrajectoryPredictionTestHorizon,
   installTrajectoryPredictionTestPointCount,
 } from './trajectoryPredictionTestIsolation.mjs';
 
 const HOST = '127.0.0.1';
-const PORT = 4201;
+const PORT = resolveHarnessPort(4201);
 const PAGE_URL = `http://${HOST}:${String(PORT)}/solar-voyager/`;
 // T0110: the live profile key is generation-specific and moves with every
 // schema generation (T0127 took it to v6). Older keys are migrate-on-read
