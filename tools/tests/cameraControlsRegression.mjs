@@ -464,45 +464,20 @@ try {
   logPhase('mode transition to observatory verified (keypress -> mode -> focus label)');
   // ------------------------------------------------------------ end T0110 ---
 
-  const productionEarth = await screenshotEvidence(
-    await capturePageClip(productionPage, productionClip),
-  );
+  // Cheap and independent of rendering: `cameraInputController.ts` writes
+  // `focusLabel.textContent` synchronously from the keydown handler, not from
+  // the render loop, so this does not wait on a rendered frame at all. The
+  // same "'j' -> Focus: Jupiter" property is also unit-tested in
+  // `src/ui/cameraInputController.test.ts` ("supports target cycling and
+  // direct Earth/Jupiter shortcuts"); it stays here anyway because what a
+  // browser uniquely adds is that a *real keypress reaches the real app*,
+  // which is cheap enough to keep. What used to follow — two production
+  // screenshots diffed for Jupiter's colour — was the expensive kind (see the
+  // file-level comment above) and is gone; `docs/bench/T0110-chase-earth.png`
+  // is this task's visual evidence instead.
   await productionPage.keyboard.press('j');
   await waitForFocusLabel(productionPage, 'Focus: Jupiter');
-  await productionPage.waitForTimeout(1_800);
-  const completedFrames = await productionPage.evaluate(() => {
-    const canvas = globalThis.document.querySelector('#space-canvas');
-    return canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0;
-  });
-  await productionPage.waitForFunction(
-    (previousFrames) => {
-      const canvas = globalThis.document.querySelector('#space-canvas');
-      return (canvas?.solarVoyagerTelemetry?.snapshot.frameCount ?? 0) > previousFrames;
-    },
-    completedFrames,
-    { timeout: 60_000 },
-  );
-  const productionJupiter = await screenshotEvidence(
-    await capturePageClip(productionPage, productionClip),
-  );
-  assert.notEqual(
-    productionJupiter.sha256,
-    productionEarth.sha256,
-    'production canvas did not change after the Jupiter transfer',
-  );
-  assert.ok(
-    productionJupiter.centerRgb.every((channel) => channel !== undefined) &&
-      productionJupiter.centerRgb.reduce((sum, channel) => sum + channel, 0) > 30,
-    'production Jupiter was not visible at the canvas center',
-  );
-  const [jupiterRed, jupiterGreen, jupiterBlue] = productionJupiter.upperCenterMeanRgb;
-  assert.ok(
-    productionJupiter.upperCenterSamples > 10_000 &&
-      jupiterRed > jupiterGreen + 3 &&
-      jupiterGreen > jupiterBlue + 3,
-    `production disc lacks Jupiter's ochre color signature (${productionJupiter.upperCenterMeanRgb.join(',')})`,
-  );
-  logPhase('Jupiter focus label and screenshot evidence verified');
+  logPhase('Jupiter focus label verified (key -> label, no render wait)');
 
   // T0105 pointer-lock seam: double-click takes the lock, Escape releases it and
   // raises the pause intent that T0112 will turn into a real menu.
@@ -549,10 +524,6 @@ try {
         pointerLockAcquired: pointerLockAcquired.locked,
         pointerLockReleased: pointerLockReleased.locked,
         pauseRequestsAfterEscape: pointerLockReleased.pauseRequests,
-        productionEarthSha256: productionEarth.sha256,
-        productionJupiterCenterRgb: productionJupiter.centerRgb,
-        productionJupiterUpperCenterMeanRgb: productionJupiter.upperCenterMeanRgb,
-        productionJupiterSha256: productionJupiter.sha256,
       },
       null,
       2,
