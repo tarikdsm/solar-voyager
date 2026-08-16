@@ -38,6 +38,27 @@ blender --background --python tools/blender/render_ship_previews.py -- \
 | Authored `ship.glb`                   |  174,332 B |  823,936 B |
 | Length                                |    26.12 m |    26.12 m |
 
+Runtime total, all 15 published files (3 tier GLBs + 4 maps x 3 tiers):
+**2,679,928 B = 2.56 MiB** against the 8 MiB ship budget. The normal map is 76 %
+of it, because normals encode to UASTC while the other three go to BasisLZ.
+
+## Golden movement
+
+`npm run test:perf-gates` re-baselined in its own commit:
+
+| Golden               |    Old |     New |   Delta |
+| -------------------- | -----: | ------: | ------: |
+| `workload.drawCalls` |     33 |      27 |      -6 |
+| `workload.triangles` | 82,429 | 100,471 | +18,042 |
+
+The delta is exactly and only the ship: +18,042 is 23,580 - 5,538, and -6 is
+18 mesh nodes - 24. The perf scenario resolves the ship mesh since T0110 made
+chase the default camera. The heap gate was not touched and stayed settled
+(15,628 B delta against a 196,608 B budget).
+
+A full `npm run assets:ingest` changed only the ship's 15 files; every other
+asset re-encoded byte-identically.
+
 ## Determinism
 
 `npm run test:blender` regenerates the authored maps from nothing, builds the
