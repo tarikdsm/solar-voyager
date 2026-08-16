@@ -1,6 +1,6 @@
 id: T0125
 title: Cinematic free camera and photo capture
-status: REVIEW
+status: DONE
 agent: claude
 branch: task/T0125-cinematic-photo-mode
 depends_on:
@@ -20,4 +20,40 @@ acceptance:
   - No steady-state allocation; capture may allocate transiently with the excluded window documented
     for the heap gate
 handoff_notes: |
-  The CaptureSink interface is consumed by T0147. Keep the signature capture(blob, meta) returning a promise.
+  A MODE-SCOPED BINDING MUST SCOPE THE CLAIM, NOT JUST THE EFFECT. This is the rule any later task
+  binding [, ], E, J or O inherits, and it is in the design doc section 2.4.
+  The defect that produced it: InputEngine.handleKeyDown calls preventDefault() for ANY resolved
+  binding before any notion of camera mode exists, blocksGameKey's first clause is
+  event.defaultPrevented, and the InputEngine listener registers before the camera controller's. So
+  binding KeyE to cinematic roll swallowed the keystroke in EVERY camera mode and broke focus-Earth
+  for every player — even though CameraDirector.rollCameraBy correctly returned false outside
+  cinematic, i.e. the EFFECT was already scoped. test:system-map pressing 'e' in the space view was
+  catching a real product defect, not a flake. The mechanism was proven by disabling the new guard and
+  watching inputEngine.test.ts go red on exactly that assertion.
+  The fix enforces scoping where a key is CLAIMED: InputEngineOptions.isActionActive is consulted
+  before the claim, so a suppressed action produces no preventDefault, no edge and no held state, and
+  the key falls through untouched. Composition wires it to CINEMATIC_ONLY_ACTIONS against
+  cameraDirector.mode.
+  BINDINGS: Q/E roll and , / . field of view mean that ONLY while the cinematic camera runs; outside
+  it E focuses Earth and the others do nothing. P (photo) is deliberately NOT mode-scoped — a photo is
+  worth taking from any camera. Inside cinematic, directFocusEnabled stands the focus keys down
+  because every one of them would leave the shot; O is the way out. Both meanings are in
+  docs/controls.md.
+  CaptureSink IS API FOR T0147: capture(blob, meta) returning a promise. This task ships the download
+  sink; T0147 supplies the IndexedDB one. CaptureMeta carries simTimeSec, tauSec, positionKm,
+  dominantBodyId and gammaMax. The filename scheme is documented in controls.md. The heap gate's
+  excluded window for the transient capture allocation is documented rather than left for the gate to
+  discover.
+  T0144's AudioDirector already maps cinematic as an EXTERIOR camera for Kubrick mode; that mapping
+  was inherited, not re-derived.
+  MERGE LESSON, shared with T0126: bootstrap/diagnostics.ts factories share a skeleton, so git
+  interleaves their hunks and a line-wise resolution splices one function's getters into another's
+  frame. A first attempt at exactly that silently dropped this task's four cinematic members from
+  CameraRuntimeDiagnostics; diagnosticsContract.test.ts caught it. Take one side whole and graft the
+  other's complete blocks on.
+  Verification: 1526 Vitest passed / 3 skipped; lint, typecheck, format, build; test:system-map (the
+  original failure) exit 0, camera-controls, hud-presets, and test:cinematic-photo green — rolled
+  0.573 rad without jumping to Earth, FOV 31 to 90 clamped, drift running, captured a verified 48,922 B
+  PNG. Two new regression tests lock the mechanism: an inactive action leaves its key entirely alone,
+  and the default predicate claims everything so unwired callers are unaffected. No golden or budget
+  moved.
