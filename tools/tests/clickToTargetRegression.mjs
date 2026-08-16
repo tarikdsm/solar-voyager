@@ -57,8 +57,11 @@ async function readTargetState(page) {
       pickAttempts: Number(canvas?.dataset.pickAttempts ?? '0'),
       mapCruiseTarget:
         globalThis.document.querySelector('#map-cruise-target')?.textContent ?? null,
-      hudCruiseTarget:
-        globalThis.document.querySelector('#hud-cruise-target')?.textContent ?? null,
+      // The space HUD affordance names its selection in the button itself: the
+      // cruise row is anchored at the bottom centre and a second line of readout
+      // would push the whole HUD cluster over the middle of the viewport.
+      hudButtonLabel:
+        globalThis.document.querySelector('#hud-set-cruise-target')?.textContent ?? null,
     };
   });
 }
@@ -137,13 +140,15 @@ try {
   await page.waitForSelector('#target-selector', { state: 'visible', timeout: 15_000 });
   await page.selectOption('#target-selector', 'mars');
   await page.waitForFunction(
-    () => globalThis.document.querySelector('#hud-cruise-target')?.textContent === 'Mars',
+    () =>
+      globalThis.document.querySelector('#hud-set-cruise-target')?.textContent ===
+      'Set Mars as cruise target',
     undefined,
     { timeout: 15_000 },
   );
   const afterPanel = await readTargetState(page);
   assert.equal(afterPanel.targetBodyId, 'mars', 'the target panel fallback did not reach setTarget');
-  assert.equal(afterPanel.hudCruiseTarget, 'Mars');
+  assert.equal(afterPanel.hudButtonLabel, 'Set Mars as cruise target');
   logPhase('target panel fallback verified; space-view affordance names the target');
 
   assert.equal(

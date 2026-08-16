@@ -2030,10 +2030,18 @@
   transform-origin: left center;
 }
 
+/*
+ * One line, always. The section is stacked directly above the navball and grows
+ * *upward*, so a second line moves the whole bottom cluster over the middle of
+ * the viewport — over the planet the player is looking at, and over the pixels
+ * click-to-target needs. `nowrap` plus an ellipsising detail line keeps the
+ * height T0112 laid out, whatever the affordance's button label says.
+ */
 .cruise-status {
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  flex-wrap: nowrap;
+  gap: 0.25rem 0.5rem;
+  align-items: baseline;
   padding: 0.25rem 0.75rem;
   border-radius: 0.5rem;
   background: rgb(2 6 23 / 48%);
@@ -2041,10 +2049,14 @@
   font-size: 0.7rem;
 }
 
+/*
+ * `display: contents`, so the phase text and the affordance share one flex row.
+ * The cruise section is anchored at the bottom centre and grows upward: an extra
+ * line here moves the navball and the whole cluster over the middle of the
+ * viewport, which is exactly what the player is trying to look at.
+ */
 .cruise-status-line {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
+  display: contents;
 }
 
 /*
@@ -2054,6 +2066,7 @@
  */
 .cruise-target-control {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
@@ -2066,9 +2079,16 @@
   margin: 0;
 }
 
+/*
+ * Sized to fit *inside* the cruise row's existing line box. The section is
+ * stacked above the navball and grows upward, so every pixel the button is
+ * taller than the text beside it moves the whole HUD cluster further over the
+ * middle of the viewport.
+ */
 .cruise-target-button {
-  padding: 0.2rem 0.55rem;
+  padding: 0 0.45rem;
   border: 1px solid rgb(148 163 184 / 38%);
+  line-height: 1.3;
   border-radius: 0.35rem;
   background: rgb(15 23 42 / 72%);
   color: var(--sv-text-strong);
@@ -2093,6 +2113,10 @@
   margin-top: 0.35rem;
 }
 
+.cruise-target-control[data-view='hud'] {
+  align-items: baseline;
+}
+
 .cruise-status[hidden] {
   display: none;
 }
@@ -2104,8 +2128,12 @@
 }
 
 .cruise-status-detail {
+  min-width: 0;
+  overflow: hidden;
   color: rgb(203 213 225 / 52%);
   font-size: 0.62rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .flight-warning {

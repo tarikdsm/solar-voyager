@@ -234,6 +234,7 @@ export function SystemMapPanelView({
         <CruiseTargetControl
           view="map"
           selectedBodyId={map.signals.focusBodyId}
+          showCurrentTarget
           targetLabel={targetBody}
           onSetCruiseTarget={(bodyId) => model.selectBody(bodyId, 'map')}
         />

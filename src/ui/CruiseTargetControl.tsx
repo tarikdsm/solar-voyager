@@ -25,6 +25,17 @@ export interface CruiseTargetControlProps {
   readonly selectedBodyId: ReadonlySignal<string>;
   /** Already-formatted name of the target the simulation currently carries. */
   readonly targetLabel: ReadonlySignal<string>;
+  /**
+   * Whether to draw the current-target readout beside the button.
+   *
+   * Off in the space HUD, deliberately. The cruise row sits at the bottom centre
+   * of the viewport and every line it gains pushes the whole cluster up over the
+   * planet the player is looking at — which is how the first draft of this
+   * control covered the middle of the screen and broke the T0112 pick gate. The
+   * button already names the body, the target diamond already marks it, so the
+   * readout is redundant there and load-bearing only in the map panel.
+   */
+  readonly showCurrentTarget?: boolean;
   readonly onSetCruiseTarget: (bodyId: string) => void;
   /** T0119's slot. */
   readonly children?: ComponentChildren;
@@ -34,6 +45,7 @@ export function CruiseTargetControl({
   view,
   selectedBodyId,
   targetLabel,
+  showCurrentTarget = false,
   onSetCruiseTarget,
   children,
 }: CruiseTargetControlProps) {
@@ -48,10 +60,12 @@ export function CruiseTargetControl({
   const disabled = useComputed(() => selectedBodyId.value.length === 0);
   return (
     <div class="cruise-target-control" data-view={view}>
-      <p class="cruise-target-current">
-        <span class="hud-kicker">Cruise target</span>
-        <strong id={`${view}-cruise-target`}>{targetLabel}</strong>
-      </p>
+      {showCurrentTarget ? (
+        <p class="cruise-target-current">
+          <span class="hud-kicker">Cruise target</span>
+          <strong id={`${view}-cruise-target`}>{targetLabel}</strong>
+        </p>
+      ) : null}
       <button
         id={`${view}-set-cruise-target`}
         class="cruise-target-button"
