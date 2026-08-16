@@ -174,6 +174,17 @@ properties of this choice matter:
   fields. Widening the shared object beyond what is genuinely shared would be the opposite of the
   point.
 
+**One new ordering constraint, stated so it is not broken by accident.** `runtime` is a `const`
+declared after every readonly dependency it holds (so, after `sceneManager` and `hudPresetStore`),
+but a dozen hoisted function declarations above it read `runtime.*` — `invalidateTrajectoryPrediction`,
+`handleTrajectoryPredictionResult`, `handlePageHide`, `resizeRenderer`, the session controller's two
+callbacks. That is safe only because none of them *executes* before the declaration is evaluated,
+which holds today for three checked reasons: `new GameSessionController(...)` fires neither callback
+from its constructor; neither `TutorialController.subscribe` nor `SceneManager.subscribe` emits on
+subscription; and the `?autostart=1` branch — the first thing that can reach
+`onSimulationReplaced` — sits below the declaration. Anything moved above `runtime` must not call
+into it.
+
 ## 5. Invariants transcribed, not re-derived
 
 Enumerated here because each one is a place where "tidying while moving" would silently break a gate.
