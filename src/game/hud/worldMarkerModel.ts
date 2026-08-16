@@ -46,6 +46,16 @@ export const MARKER_EDGE_INSET_PX = 28;
 /** Labels are suppressed this close to the edge, where they would be clipped. */
 const LABEL_EDGE_MARGIN_PX = 8;
 
+/**
+ * Minimum separation between two labels, in CSS pixels.
+ *
+ * Sized to one label row: the text is 0.62 rem with a distance beside it, so two
+ * labels closer than this overprint into an unreadable smear. Roughly the width
+ * of "Ganymede 628 Mkm" and the height of one line.
+ */
+const LABEL_MIN_SEPARATION_X_PX = 150;
+const LABEL_MIN_SEPARATION_Y_PX = 15;
+
 export interface WorldMarkerBuffer {
   /** False when the pose had no usable basis; every marker is hidden. */
   valid: boolean;
@@ -332,4 +342,41 @@ function writeBodyLabels(
     }
     insertLabel(buffer, bodyIndex, distanceKm, xPx, yPx);
   }
+  dropCollidingLabels(buffer);
+}
+
+/**
+ * Drops labels that would overprint a nearer one.
+ *
+ * A post-pass rather than a check inside `insertLabel`, because the slots are
+ * only in distance order once the whole scan has finished — deciding as we go
+ * would let a far body claim a spot and then block the near body that arrives
+ * later. Nearest wins, which is also the one the player is most likely to care
+ * about. Compaction is in place; no allocation.
+ */
+function dropCollidingLabels(buffer: WorldMarkerBuffer): void {
+  let kept = 0;
+  for (let candidate = 0; candidate < buffer.labelCount; candidate += 1) {
+    const xPx = buffer.labelPixels[candidate * 2] as number;
+    const yPx = buffer.labelPixels[candidate * 2 + 1] as number;
+    let collides = false;
+    for (let placed = 0; placed < kept; placed += 1) {
+      if (
+        Math.abs((buffer.labelPixels[placed * 2] as number) - xPx) < LABEL_MIN_SEPARATION_X_PX &&
+        Math.abs((buffer.labelPixels[placed * 2 + 1] as number) - yPx) < LABEL_MIN_SEPARATION_Y_PX
+      ) {
+        collides = true;
+        break;
+      }
+    }
+    if (collides) continue;
+    if (kept !== candidate) {
+      buffer.labelBodyIndices[kept] = buffer.labelBodyIndices[candidate] as number;
+      buffer.labelDistancesKm[kept] = buffer.labelDistancesKm[candidate] as number;
+      buffer.labelPixels[kept * 2] = xPx;
+      buffer.labelPixels[kept * 2 + 1] = yPx;
+    }
+    kept += 1;
+  }
+  buffer.labelCount = kept;
 }

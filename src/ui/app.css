@@ -399,6 +399,13 @@
   grid-area: right;
   align-items: flex-end;
   justify-content: flex-start;
+  /*
+   * Clears the system-map and burn-log toggles, which are still absolutely
+   * positioned at the top-right corner and migrate in T0119/T0149. Until they
+   * join the grid the rail has to leave their strip alone, or the preset
+   * indicator lands underneath them.
+   */
+  padding-top: 3.25rem;
 }
 
 .hud-rail-head {

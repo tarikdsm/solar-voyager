@@ -141,6 +141,14 @@ Everything writes into caller-owned `Float64Array`s. No allocation, no `Vector3`
   insertion pass over a fixed `Int32Array`. Eight is a legibility budget, not a performance one: 43
   labels is a wall of text.
 
+  Eight turned out not to be enough on its own. The first Clean-preset screenshot showed four labels
+  overprinting into an unreadable smear around the ecliptic, because "nearest eight" says nothing
+  about where they land. A post-pass (`dropCollidingLabels`) walks the distance-sorted slots and drops
+  any label within 150 x 15 px of one already kept, compacting in place. Nearest wins, which is also
+  the one the player is most likely to want. It is a post-pass rather than a check inside the
+  insertion, because the slots are only in distance order once the whole scan has finished — deciding
+  as we go would let a far body claim a spot and then block the near body that arrives later.
+
 The ship is excluded structurally, not by a filter: `snapshot.bodyPositionsKm` is catalog bodies
 only. (`EpochWorld.positionsKm` is the array with the ship triple appended, and it lives in
 `render/`.) The model asserts `bodyPositionsKm.length === bodyIds.length · 3` so a future change that
@@ -229,23 +237,37 @@ Escape already has three owners. The ladder, from highest priority:
    focus to their toggle.
 3. **Pause.**
 
-This resolves the brief's "pause is conditional today" note, and it resolves it *without a new
-arbitration mechanism*: `InputEngine.handleKeyDown` already runs `blocksGameKey(event)` before the
-Escape branch, and `blocksGameKey` returns true for `defaultPrevented`. Levels 1 and 2 therefore
-suppress the pause automatically — provided their listeners run first. They do, deterministically:
-`SystemMapPanel` attaches its `window` listener during the Preact mount inside `prepareApplication()`,
-and `InputEngine` is constructed in `activateSpacePhaseRuntime()`, which `await`s `applicationReady`
-first. Same target, same phase, registration order. The burn-log handler is on the row element, which
-bubbles before `window` regardless.
+Level 2 is deterministic for free: the burn-log handler is on the row element, which bubbles to
+`window` before any window listener, so `blocksGameKey`'s `defaultPrevented` check sees it.
 
-Two further suppressions are explicit predicates in `main.ts`, because no `preventDefault` exists to
+**Level 1 is not, and this is the part the brief was pointing at.** The first implementation here
+leaned on the same mechanism: `SystemMapPanel` calls `preventDefault()`, `InputEngine.handleKeyDown`
+runs `blocksGameKey` before its Escape branch, therefore the map suppresses the pause — *provided the
+map's `window` listener was registered first*. The reasoning was that `SystemMapPanel` mounts during
+`renderApplication()` inside `prepareApplication()` while `InputEngine` is constructed in
+`activateSpacePhaseRuntime()`, which `await`s `applicationReady`. That is true with `?autostart=1`,
+and false from the main menu: there the panel does not exist until the phase flips, so it mounts in a
+Preact microtask that races the engine construction — and `test:tutorial` duly found one Escape
+closing the map *and* pausing the game.
+
+So the rule is stated, not inferred. `handlePauseRequested` checks
+`systemMapController.mode !== 'space'` and returns. Either listener ordering now produces the same
+outcome: the map closes, nothing pauses. The lesson is worth keeping: *listener registration order is
+not a contract*, and two entry paths into the same screen will eventually disagree about it.
+
+One further suppression is an explicit predicate for the same reason — no `preventDefault` exists to
 lean on:
 
 - **Impact freeze** (`impactOccurred === 1`) — the core is already inert and `ImpactOverlay` is the
   only exit. A pause menu stacked over it would hide restore/respawn.
-- **Unacknowledged hardware-acceleration warning** — a mandatory pre-flight alert. Pausing under it
-  would put a modal over a modal; `test:renderer-policy` also proves the warning stays reachable
-  after Escape, and the cheapest way to keep that true is to not open anything.
+
+The **hardware-acceleration warning deliberately does not suppress the pause**, though an earlier
+draft of this document said it should. That was wrong twice over: it would deny pause to every
+software-rendering player until they dismissed a banner, and it solved a stacking problem that
+belongs to CSS. The warning moves above the pause layers in the z-ladder instead
+(`--sv-z-hardware-warning: 33`, between the pause card at 32 and the impact overlay at 40), so it
+stays readable and clickable with the menu open — which is also what keeps `test:renderer-policy`'s
+"I understand" click honest.
 
 `canvas.dataset.pauseRequests` still increments on **every** Escape that reaches `InputEngine`,
 suppressed or not. That is the T0105 seam `test:camera-controls` asserts, and the pause menu is
@@ -256,8 +278,10 @@ layered on top of it rather than replacing it. The new observable is `canvas.dat
 `ui/PauseMenu.tsx`: `role="dialog" aria-modal="true"`, focus moves to **Resume** on open and returns
 to the canvas on close, Escape closes it, Tab is trapped inside. Four actions: Resume, Settings
 (expands the existing `SessionSettingsPanel` — one settings UI, not two), Save (`session.saveLocal()`
-with the existing status line), Exit to menu. Z-index 30: above every HUD surface, below the impact
-overlay's 40.
+with the existing status line), Exit to menu. Backdrop at z-index 30, card at 32, with the settings
+panel lifted to 31 while paused so the Settings button opens something the player can actually see.
+Focus moves to Resume in a **layout** effect, not a passive one: a modal that appears and takes focus
+a frame later is a modal a keyboard user can tab straight out of.
 
 ## 7. CSS: tokens and a grid
 
@@ -268,12 +292,35 @@ T0119/T0149").
 **Tokens** — a `:root` block: colour ramp, panel surface/border/blur, spacing scale, radii, type
 scale, and a named z-layer ladder that replaces the current scattered magic numbers (7 through 40).
 
-**Grid** — `.hud-grid` inside `.space-hud-surfaces`, a nine-area
-`grid-template-areas` overlay sized to the viewport with `pointer-events: none`, panels opting back
-in. Migrated off absolute insets: `orbit-readout`, `dual-clock`, `warp-control`, `energy-panel`,
-`target-panel`, `state-vector-panel`, `navball`, `camera-help` — the eight v1 panels. Not migrated
-(deferred, unchanged): the system-map, burn-log, perf and session-settings panels and their toggles,
-the tutorial overlay, the hardware warning, the trajectory-impact warning, the impact overlay.
+**Grid** — `.hud-grid` inside `.space-hud-surfaces`, sized to the viewport with
+`pointer-events: none`, panels opting back in. Migrated off absolute insets: `orbit-readout`,
+`dual-clock`, `warp-control`, `energy-panel`, `target-panel`, `state-vector-panel`, `navball`,
+`camera-help` — the eight v1 panels. Not migrated (deferred, unchanged): the system-map, burn-log,
+perf and session-settings panels and their toggles, the tutorial overlay, the hardware warning, the
+trajectory-impact warning, the impact overlay.
+
+The template is **two full-height rails and a bottom-centre cluster**:
+
+```
+'left top-center    right'
+'left center        right'
+'left bottom-center right'
+```
+
+It started as a tidier nine-area grid with top/middle/bottom on both sides, and that version was
+broken in a way worth recording. The middle row is `minmax(0, 1fr)`; once the fixed-height panels
+above and below filled a 720 px viewport it collapsed to zero, and a panel placed in it was squeezed
+from 124 px to 22 px. `.hud-panel` carries `contain: strict`, so the panel then *clipped its own
+buttons out of existence* — laid out, invisible, unclickable, and completely silent. `test:hud-signals`
+caught it by failing to click a warp button. A rail that spans every row cannot collapse, and
+`.hud-area > * { flex: 0 0 auto }` means a panel keeps its declared height even when the rail runs
+out of room; the rail scrolls instead of crushing its contents.
+
+One more sharp edge, from the same family: `SessionSettingsPanel` is keyed on tutorial status, so it
+remounts whenever the tutorial advances. Placing it as a direct sibling of the other panels made
+Preact recreate the nodes after it, and `BurnLogPanel` keeps its expanded flag in a per-instance
+signal — so finishing the tutorial silently collapsed a burn log the player had open. It lives in its
+own `.hud-rail-head` wrapper now, which contains the churn.
 
 The compact-viewport media query and the `prefers-reduced-motion` block are preserved verbatim for
 the deferred panels; `src/ui/App.test.tsx` asserts three regexes over this file
@@ -390,3 +437,10 @@ skipped), then one at a time (concurrent headless Chromium here produces spuriou
 
 Bench evidence: `docs/bench/T0112-summary.md` with before/after `npm run bench` JSON, since the
 marker publisher and the pause branch are on the frame path.
+
+Legacy gates that assert against the v1 mission-control panels seed an Engineer profile through one
+shared helper (`tools/tests/hudPresetProfile.mjs`) rather than the Clean default being weakened to
+keep them green. `flightBench` instead presses the preset key twice, because
+`installHighQualitySetting` plants a *v2* profile specifically so every bench run exercises the full
+settings migration chain — writing the current key there would short-circuit tier 1 and retire that
+coverage.

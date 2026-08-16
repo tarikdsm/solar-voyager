@@ -41,7 +41,8 @@ function scene(): SimulationSnapshotBuffer {
   const snapshot = createSimulationSnapshotBuffer(BODY_IDS);
   setBody(snapshot, 0, [0, 0, -1e8]);
   setBody(snapshot, 1, [0, 0, -10_000]);
-  setBody(snapshot, 2, [1_000, 0, -10_000]);
+  // Far enough off-axis that its label clears Earth's (see LABEL_MIN_SEPARATION).
+  setBody(snapshot, 2, [6_000, 0, -10_000]);
   setBody(snapshot, 3, [0, 0, 5_000]); // behind the camera
   snapshot.shipState.set([0, 0, 0], 0);
   snapshot.dominantBodyIndex = 1;
@@ -180,11 +181,12 @@ describe('world marker model - T0112', () => {
       true,
     );
 
-    // Mars is behind the camera and drops out; the rest are ordered by range.
-    expect(buffer.labelCount).toBe(3);
-    expect([...buffer.labelBodyIndices.slice(0, 3)]).toEqual([1, 2, 0]);
+    // Mars is behind the camera and drops out; Earth and the Sun are both on the
+    // view axis, so the Sun's label would overprint Earth's and the nearer one
+    // wins. The Moon is off to the side and survives.
+    expect(buffer.labelCount).toBe(2);
+    expect([...buffer.labelBodyIndices.slice(0, 2)]).toEqual([1, 2]);
     expect(buffer.labelDistancesKm[0]).toBeCloseTo(10_000, 6);
-    expect(buffer.labelDistancesKm[2]).toBeCloseTo(1e8, 3);
   });
 
   it('does no label work at all when the toggle is off', () => {
@@ -220,13 +222,34 @@ describe('world marker model - T0112', () => {
       true,
     );
 
-    expect(buffer.labelCount).toBe(BODY_LABEL_SLOT_COUNT);
+    // Every candidate is on the view axis, so all but the nearest overprint it
+    // and are dropped: the slot budget is filled before de-collision, and one
+    // legible label beats eight stacked on the same pixel.
+    expect(buffer.labelCount).toBe(1);
     expect(buffer.labelBodyIndices[0]).toBe(manyIds.length - 1);
-    for (let slot = 1; slot < BODY_LABEL_SLOT_COUNT; slot += 1) {
-      expect(buffer.labelDistancesKm[slot] as number).toBeGreaterThan(
-        buffer.labelDistancesKm[slot - 1] as number,
-      );
-    }
+  });
+
+  it('keeps labels that are far enough apart to read', () => {
+    const ids = Object.freeze(['a', 'b', 'c']);
+    const snapshot = createSimulationSnapshotBuffer(ids);
+    snapshot.dominantBodyIndex = -1;
+    snapshot.targetBodyIndex = -1;
+    // Spread across the frame: at 1600x800 with a 90 degree field these land
+    // hundreds of pixels apart.
+    setBody(snapshot, 0, [0, 0, -10_000]);
+    setBody(snapshot, 1, [4_000, 2_000, -10_000]);
+    setBody(snapshot, 2, [-4_000, -2_000, -10_000]);
+
+    const buffer = writeWorldMarkersInto(
+      createWorldMarkerBuffer(),
+      snapshot,
+      pose(),
+      WIDTH_PX,
+      HEIGHT_PX,
+      true,
+    );
+
+    expect(buffer.labelCount).toBe(3);
   });
 
   it('reuses one buffer and clears stale markers between samples', () => {
