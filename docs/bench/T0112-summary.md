@@ -81,10 +81,19 @@ budgets satisfied, retained heap 72,572 B against the 196,608 B ceiling.
 
 ### The CI heap failure, and why the ceiling did not move
 
-CI reported 1,580,288 B of retained growth on the production page while the same
-gate measured 62,700 B locally. Diagnosed by measuring rather than guessing; every
-figure below is a 30 s window at 640×360 with a forced double GC at each end, the
-gate's own method.
+**Corrected figures.** An earlier revision of this section reported the CI failure
+as 1,580,288 B. That number was the **allocation fixture** — the gate's negative
+control, which retains 256 kB every frame by design; 1,580,288 / 262,144 = 6.03
+frames of its signature. Its finding is printed first and in a shape
+indistinguishable from a real one, which is how it was misread. The actual
+production failure was **299,104 B**, 1.52x the 196,608 B ceiling, against
+62,700 B measured locally — a 4.8x environment gap, not 25x.
+
+The decay curve below was collected while chasing the wrong magnitude. It still
+holds and still matters — it is what rules out a leak and establishes
+pre-existence — but what it explains is a _1.5x_ overshoot, not an 8x one. Every
+figure is a 30 s window at 640x360 with a forced double GC at each end, the
+gate's own method:
 
 | Configuration                                             | Retained delta |
 | --------------------------------------------------------- | -------------: |
@@ -95,37 +104,78 @@ gate's own method.
 | HEAD, window opened 45 s after readiness                  |       75,779 B |
 | HEAD, window opened 90 s after readiness                  |       14,507 B |
 
-What this shows:
+1. **Not a leak.** The growth decays monotonically with how long the page is left
+   alone and then stops. A leak does not stop.
+2. **Not this task's.** The identical measurement on the branch base gives
+   494,527 B. T0112 adds roughly 27 kB, about 5%.
+3. **Not the obvious suspects.** Disabling the restore-point ring changed nothing
+   (520,731 B); disabling the predictor changed nothing (531,027 B); DOM node
+   count is constant across every window, and T0112 _cuts_ it from 10,307 to 415
+   because Clean unmounts panels rather than hiding them.
 
-1. **It is not a leak.** The growth decays monotonically with how long the page is
-   left alone — 522 kB → 76 kB → 15 kB — and stops entirely once startup settling
-   finishes. A leak does not stop.
-2. **It is not this task's.** The identical measurement on the branch base gives
-   494,527 B. T0112 adds roughly 27 kB, about 5%, which is inside the run-to-run
-   spread of the configurations above (494–531 kB).
-3. **It is not the obvious suspects.** Disabling the restore-point ring changed
-   nothing (520,731 B); disabling the predictor changed nothing (531,027 B); DOM
-   node count is constant across every window (and T0112 _cuts_ it from 10,307 to
-   415, because Clean unmounts the panels rather than hiding them).
+**The first fix did not work.** Commit `c457c30` replaced the flat 60 s wait with
+a settle loop that required two consecutive quiet 5 s steps. CI run 31932517649
+failed the same gate at **277,252 B** — a 7% move, inside noise. Worse, the loop
+reported `settled: true` at 65,000 ms and was immediately wrong: the next 30 s
+window grew 277 kB, about 46 kB per 5 s against a 16,384 B quiet budget. Ten
+seconds of evidence is not enough to certify a thirty second window; the page was
+in a lull, not a steady state.
 
-The real defect was in the gate: it waited a flat `HEAP_SETTLE_MS = 60_000` and
-then measured. A flat wait is a guess about a machine — generous on a desktop,
-too short on a software rasterizer, where settling runs well past a minute. When
-it was too short the window opened _inside_ the warm-up and reported it as
-retained growth.
+**What the gate does now.**
 
-`settleHeapUntilStable` replaces the guess with a measurement: sample the heap
-every 5 s until two consecutive steps grow by no more than half the ceiling's
-per-step share (16,384 B here), then measure, capped at 180 s. On this machine it
-now finishes in 50 s — faster than the old fixed wait — and it will be patient on
-a slow runner. **The ceiling did not move and the window is still 30 s.** It
-cannot mask a leak: a real one never stabilises, the cap expires, and the window
-measures it regardless. The allocation-fixture negative control, which allocates
-256 kB every frame, still trips the gate at 4,475,352 B.
+- **Six consecutive quiet steps, not two** — at least as much quiet evidence as
+  the window it certifies (`heapSettleRequiredSteps`). The CI pattern (five quiet
+  steps then a 46 kB burst) is a regression test in
+  `performanceGateUtils.test.mjs`.
+- **Failing to settle is a finding**, not a log line. `validateHeapSettling`
+  turns `settled: false` into a gate failure naming the quiet-step count, the
+  peak step growth and the budget. Before this, the loop could know it had never
+  reached a steady state and the gate would still exit green — demonstrated with
+  a 4,000 B/s injected leak (345 MB/day) that passed.
+- **The cap is wall clock**, including the GC round-trips, not a sum of timeouts.
+- **A missing or non-integer ceiling throws** instead of defaulting to Infinity,
+  which would have made every step "quiet" and settled unconditionally.
 
-Left for a separate decision: _what_ is still settling for 60–90 s under software
-rasterization on a page that has already reported a stable draw-call and triangle
-workload. It is pre-existing, it is bounded, and it is not this task's to chase.
+**What it still does not do.** It is _not_ leak-proof, and it is more permissive
+than the fixed wait it replaced for one shape of defect: growth whose rate decays
+is simply waited out, now for up to 180 s instead of 60 s. A leak slower than the
+per-step budget — 2 kB/s, or 172 MB/day — settles cleanly and must be caught by
+the per-window ceiling instead; that limit is stated as a test rather than left to
+be discovered. What the gate now guarantees is narrower and worth more: it never
+reports a number it knows it could not trust.
+
+**Coverage.** The decision logic is extracted as `createHeapSettleTracker` and
+tested deterministically: a constant 4 kB/s leak never settles, a 2 kB/s leak does
+(the documented limit), the CI lull-then-burst pattern does not, and decaying
+warm-up growth settles once it falls inside the budget. The synthetic leak was
+first written as a browser fixture and dropped: the page's own warm-up takes
+~111 s to settle here, so any cap cheap enough to run on every CI job would have
+reported "did not settle" with or without the injected leak — a control that
+proves nothing. The gate additionally throws if a production measurement produces
+no settling observation, so the wiring cannot silently regress.
+
+**Measured, properly settled, on this machine:**
+
+| Tree                  | Settled after | Retained delta |
+| --------------------- | ------------: | -------------: |
+| Branch base `b29ec08` |       111.6 s |       16,228 B |
+| HEAD                  |        65.7 s |       71,632 B |
+| HEAD (second run)     |       111.2 s |       27,812 B |
+
+Both are far under the 196,608 B ceiling, and the spread between HEAD runs is
+wider than the base-to-HEAD difference. **The ceiling did not move and the window
+is still 30 s.**
+
+**Open, and honestly unresolved:** whether a properly-settled measurement on the
+CI runner lands under the ceiling. It cannot be determined from here — this
+machine settles in 65–112 s and CI's warm-up evidently runs longer. If CI settles,
+the number it reports is now trustworthy; if it cannot settle within 180 s, the
+gate fails with an explicit "never settled" finding instead of a misleading heap
+figure. Either outcome is the truth, which the previous version could not
+promise. The unanswered question underneath it — what is still allocating in
+238 kB steps a minute and a half after a page has reported a stable draw-call,
+triangle, texture, geometry and program workload — is pre-existing, reproduces on
+the branch base, and is not this task's to chase.
 
 ## Visual evidence
 

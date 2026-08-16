@@ -45,6 +45,11 @@ jobs:
         run: npm run check:licenses -- --dist
 
       - name: Performance gates
+        # The heap gate now settles by measurement with a 180 s wall-clock cap and
+        # runs an extra settling fixture, so the worst case is a couple of minutes
+        # longer than it was. This step had no bound at all while its neighbours
+        # have 5-8.
+        timeout-minutes: 20
         run: npm run test:perf-gates
 
       - name: Injected smoke error regressions
