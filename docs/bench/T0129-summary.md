@@ -97,8 +97,8 @@ total is 59 % of its 1,000,000 B budget.
 
 **No golden and no budget was re-baselined by this task.** `tools/perf/performanceGate.mjs`'s golden
 (draw calls 33 ±10 %, triangles 82,429 ±10 %, heap 196,608 B, bundle 400,000 / 1,000,000 B) is
-untouched; `npm run test:perf-gates` measured draw calls 33, triangles 82,429 and a 26,512 B
-production heap delta, settling in six consecutive quiet steps.
+untouched; `npm run test:perf-gates` on the final merged tree measured draw calls 33, triangles
+82,429 and a 27,384 B production heap delta, settling in six consecutive quiet steps.
 
 ## Handoff finding for whoever benches next on this host
 
