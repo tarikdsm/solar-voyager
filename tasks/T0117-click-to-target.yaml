@@ -1,8 +1,8 @@
 id: T0117
 title: Select cruise and nav target by clicking bodies in world and in map
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0117-click-to-target
 depends_on:
   - T0112
 milestone: V2M2

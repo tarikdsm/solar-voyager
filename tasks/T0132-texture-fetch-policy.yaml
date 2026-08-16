@@ -1,6 +1,6 @@
 id: T0132
 title: Checksummed on-demand source fetching; stop committing 8K sources
-status: IN_PROGRESS
+status: REVIEW
 agent: claude
 branch: task/T0132-texture-fetch-policy
 depends_on:
