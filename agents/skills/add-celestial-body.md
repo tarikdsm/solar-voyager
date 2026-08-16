@@ -12,7 +12,7 @@ Checklist for adding a body to the catalog. Specs: `docs/physics-spec.md` §2, `
    See "Source manifest entries" below for the exact shape.
 5. **Asset:**
    - Planet/major moon: params into the relevant `tools/blender/build_*.py`, source texture per the asset-pipeline credit table, run headless build, check the printed manifest against budgets.
-   - Asteroid/comet: seed + shape params in bodies.json; `build_asteroid.py`/`build_comet.py` generates it (or decimate a published shape model to ≤5k tris).
+   - Asteroid/comet: `blender --background --python tools/blender/build_asteroid.py -- --id <body>` (or `build_comet.py`). Seed comes from `visual.proceduralSeed`; authored silhouette/relief params live in `tools/blender/small_body_config.py`, never in `bodies.json`. Add a `kind="file"` recipe and copy its `source_url`/`sha256` into `SHAPE_MODEL_SOURCES` to enable `--shape real`; without a pin the builder refuses that path rather than silently going procedural.
 6. **Visual ladder:** confirm tier thresholds work (sprite magnitude uses radius/albedo from the catalog automatically); add ring/coma config if applicable.
 7. **Verify:** `npm test` (rails bounds), `npm run check:budgets`, `npm run test:tools`, load the dev build and fly to the body (both far sprite and close model).
 
@@ -63,6 +63,7 @@ cannot reach the host, the error names the missing file, where it belongs, the
 URL and the `--source` command that adopts a hand-downloaded copy after
 verifying it. Set `SOLAR_VOYAGER_TEXTURE_CACHE` to share one cache between
 checkouts or worktrees.
+>>>>>>> origin/main
 
 ## Gotchas
 
