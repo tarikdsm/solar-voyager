@@ -20,6 +20,7 @@
     "test:procedural-sun": "node tools/tests/proceduralSunRegression.mjs",
     "test:gas-giants": "node tools/tests/gasGiantAnimationRegression.mjs",
     "test:camera-controls": "node tools/tests/cameraControlsRegression.mjs",
+    "test:cinematic-photo": "node tools/tests/cinematicPhotoRegression.mjs",
     "test:renderer-policy": "node tools/tests/rendererPolicyRegression.mjs",
     "test:telemetry": "node tools/tests/telemetryRegression.mjs",
     "test:hud-signals": "node tools/tests/hudSignalsRegression.mjs",
