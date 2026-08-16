@@ -205,11 +205,21 @@ music continues, and the crossfade advances, because audio is driven by the
 **wall** delta, never `simDeltaSec` — a 4 s transition on a zeroed delta would
 freeze mid-blend for the whole menu visit.
 
-### 7. Settings: profile generation v6
+### 7. Settings: profile generation v7
 
-New key `solar-voyager.settings.v6`; the v5 key becomes read-and-migrate tier 2;
-`migrateProfileV5ToV6` attaches `DEFAULT_AUDIO_SETTINGS` as a whole-document
-migration (there is nothing inside a v5 document to backfill `audio` from). Same
+**Amended at merge time.** This was written as v6; T0127 (adaptive exposure) landed
+its own v6 on `main` first, adding `render.exposureMode`. The mixer therefore
+becomes **v7**, and the two stay *separate* migration tiers (v5→v6 attaches the
+exposure mode, v6→v7 attaches the mixer) rather than being folded into one
+generation. Folding them would have been fewer lines and a lie: the chain is the
+only record of what was added when, and a player whose profile predates only one
+of the two features must be migrated through only the tier that concerns them.
+`LEGACY_V6_SETTINGS_STORAGE_KEY` is the new read-and-migrate tier 2, so the
+`SettingsRepository.load()` ladder is now seven tiers deep.
+
+New key `solar-voyager.settings.v7`; the v6 key becomes read-and-migrate tier 2;
+`migrateProfileV6ToV7` attaches `DEFAULT_AUDIO_SETTINGS` as a whole-document
+migration (there is nothing inside a v6 document to backfill `audio` from). Same
 dedicated-key-per-generation reasoning as ADR-034 §4 and T0106's design doc: a
 downgraded build reads its own key and cannot clobber the newer document.
 

@@ -254,11 +254,15 @@ zeroed by `Commands.setThrottle` anyway, so a continuous drive tone up there wou
 burn that is not happening; and discrete SFX at 10⁷× would be a machine gun. Music is deliberately
 untouched by warp: it is not diegetic, it is the only thing that should survive a time skip.
 
-## 6. Settings: profile generation v6
+## 6. Settings: profile generation v7
 
-Fifth generation of the same pattern, sixth document version. New key
-`solar-voyager.settings.v6`, `LEGACY_V5_SETTINGS_STORAGE_KEY` added as read-and-migrate tier 2,
-`migrateProfileV5ToV6` attaching `DEFAULT_AUDIO_SETTINGS`. Whole-document migration, not a per-field
+> **Amended when this branch merged `main`.** Written as v6; T0127 shipped its own v6
+> (`render.exposureMode`) first, so the mixer is **v7** and the two remain separate tiers —
+> v5→v6 attaches the exposure mode, v6→v7 attaches the mixer. The ladder is now seven tiers.
+
+Sixth generation of the same pattern, seventh document version. New key
+`solar-voyager.settings.v7`, `LEGACY_V6_SETTINGS_STORAGE_KEY` added as read-and-migrate tier 2,
+`migrateProfileV6ToV7` attaching `DEFAULT_AUDIO_SETTINGS`. Whole-document migration, not a per-field
 backfill, for the reason each previous generation gives: `audio` is a brand-new required object and
 there is nothing inside a v5 document to recover it from.
 
@@ -284,7 +288,7 @@ Blast radius of the key bump, all updated in this PR:
 `tools/tests/hudPresetProfile.mjs`, `tools/tests/hudPresetsRegression.mjs`,
 `tools/tests/tutorialRegression.mjs`, `docs/architecture.md`. `tools/perf/browserSettings.mjs`
 deliberately stays on the **v2** key: its whole job is to exercise the full migration chain on every
-perf run, and it now exercises one tier more.
+perf run, and it now exercises six tiers.
 
 ## 7. Frame path: what actually runs at 60 Hz
 
@@ -345,7 +349,7 @@ without making an unrelated gate's fixture depend on gesture ordering.
    panel past those bounds — the mixer is five compact controls in the existing grid classes for
    that reason.
 6. **`hudPresetProfile.mjs` hand-writes the profile document on purpose** ("importing the app's own
-   constant would let a schema change pass its gate by moving both sides at once"). The v6 bump has
+   constant would let a schema change pass its gate by moving both sides at once"). The v7 bump has
    to be transcribed there by hand, and that is correct, not duplication.
 
 ## 10. Verification list
