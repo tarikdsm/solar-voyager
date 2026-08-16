@@ -49,6 +49,21 @@ export interface CruiseScenarioResult {
   readonly presetAltitudeKm: number;
   readonly relativeSpeedKmS: number;
   readonly energySpentJ: number;
+  /** Ledger energy at the handover to `insert`, i.e. the profile's own cost. */
+  readonly profileEnergySpentJ: number;
+  /**
+   * `m c alpha T` — the exact ADR-007 / physics-spec §5 cost of the adopted §8.4
+   * profile: the ledger is the photon-drive bound `E = int m alpha c dt`, so a
+   * constant-alpha burn of coordinate duration `T` costs exactly this.
+   */
+  readonly profilePhotonEnergyJ: number;
+  readonly profileEnergyRatio: number;
+  /** Coordinate seconds of thrust accumulated over the whole run, throttle-weighted. */
+  readonly thrustCoordSec: number;
+  /** `energySpentJ / (m c alpha t_thrust)` — the no-side-channel identity, expect 1. */
+  readonly ledgerIdentityRatio: number;
+  /** The plan's kinetic bound `2(gamma_peak-1) m c^2`, reported for comparison. */
+  readonly kineticBoundJ: number;
   readonly analyticEnergyJ: number;
   readonly energyRatio: number;
   readonly peakBeta: number;
@@ -121,6 +136,9 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
   let maxWarp = 1;
   let abortFrame = -1;
   let decompressedFrame = -1;
+  let thrustCoordSec = 0;
+  let profileEnergySpentJ = Number.NaN;
+  let previousSimTimeSec = simulation.snapshot.simTimeSec;
   let snapshot = simulation.snapshot;
   const abortAtFrame = options.abortAtFrame ?? -1;
   const framesAfterAbort = options.framesAfterAbort ?? 600;
@@ -137,8 +155,18 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
     if (abortFrame >= 0 && frames - abortFrame >= framesAfterAbort) break;
     director.update(frameDtSec);
     if (!director.active) controller.update(frameDtSec);
+    const previousThrottle = snapshot.throttle;
     snapshot = simulation.step(frameDtSec);
     frames += 1;
+    // Throttle-weighted coordinate thrust time. Sampled at both ends of the step
+    // and averaged, because the only frames where the two differ are the ones a
+    // phase boundary lands in.
+    thrustCoordSec +=
+      0.5 * (previousThrottle + snapshot.throttle) * (snapshot.simTimeSec - previousSimTimeSec);
+    previousSimTimeSec = snapshot.simTimeSec;
+    if (!Number.isFinite(profileEnergySpentJ) && director.phase === 'insert') {
+      profileEnergySpentJ = snapshot.energySpentJ - baselineEnergyJ;
+    }
     if (snapshot.speedFractionOfLight > peakBeta) peakBeta = snapshot.speedFractionOfLight;
     if (snapshot.effectiveWarp > maxWarp) maxWarp = snapshot.effectiveWarp;
     if (abortFrame >= 0 && decompressedFrame < 0 && snapshot.requestedWarp <= 100) {
@@ -161,8 +189,11 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
   );
   const speedOfLightMS = SPEED_OF_LIGHT_KM_S * 1_000;
   const gammaPeak = 1 / Math.sqrt(1 - peakBeta * peakBeta);
-  const analyticEnergyJ = 2 * (gammaPeak - 1) * vessel.restMassKg * speedOfLightMS * speedOfLightMS;
+  const kineticBoundJ = 2 * (gammaPeak - 1) * vessel.restMassKg * speedOfLightMS * speedOfLightMS;
   const energySpentJ = snapshot.energySpentJ - baselineEnergyJ;
+  const photonPerCoordSecJ = vessel.restMassKg * vessel.alphaMaxMS2 * speedOfLightMS;
+  const profilePhotonEnergyJ = photonPerCoordSecJ * director.profileCoordSec;
+  const ledgerEnergyJ = photonPerCoordSecJ * thrustCoordSec;
   const controllable =
     Number.isFinite(snapshot.shipState[0] as number) &&
     Number.isFinite(snapshot.shipCoordinateVelocityKmS[0] as number) &&
@@ -183,8 +214,15 @@ export function runCruiseScenario(options: CruiseScenarioOptions): CruiseScenari
     presetAltitudeKm: presetRadiusKm - collisionRadiusKm,
     relativeSpeedKmS,
     energySpentJ,
-    analyticEnergyJ,
-    energyRatio: analyticEnergyJ > 0 ? energySpentJ / analyticEnergyJ : Number.NaN,
+    profileEnergySpentJ,
+    profilePhotonEnergyJ,
+    profileEnergyRatio:
+      profilePhotonEnergyJ > 0 ? profileEnergySpentJ / profilePhotonEnergyJ : Number.NaN,
+    thrustCoordSec,
+    ledgerIdentityRatio: ledgerEnergyJ > 0 ? energySpentJ / ledgerEnergyJ : Number.NaN,
+    kineticBoundJ,
+    analyticEnergyJ: kineticBoundJ,
+    energyRatio: kineticBoundJ > 0 ? energySpentJ / kineticBoundJ : Number.NaN,
     peakBeta,
     maxWarp,
     resolveFailures: director.resolveFailures,

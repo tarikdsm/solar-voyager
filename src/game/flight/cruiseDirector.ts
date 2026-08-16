@@ -212,6 +212,8 @@ export class CruiseDirector {
   private lastResolveSimSec = Number.NaN;
   private engageSimSec = Number.NaN;
   private profileProperRatio = 1;
+  private profileCoordSecState = Number.NaN;
+  private profilePeakBetaState = Number.NaN;
   private lastDriftCheckSimSec = Number.NaN;
   private lastDominantBodyIndex = -1;
   private trimCount = 0;
@@ -299,6 +301,16 @@ export class CruiseDirector {
     return this.etaProperSecState;
   }
 
+  /** Coordinate time of flight of the adopted §8.4 profile; NaN in pursuit mode. */
+  get profileCoordSec(): number {
+    return this.profileCoordSecState;
+  }
+
+  /** `peakBeta` of the adopted profile; NaN in pursuit mode. */
+  get profilePeakBeta(): number {
+    return this.profilePeakBetaState;
+  }
+
   /** Rate at which the stand-off distance is closing, km/s (HUD + gates). */
   get closingSpeedKmS(): number {
     return this.pursuitClosingKmS;
@@ -376,6 +388,16 @@ export class CruiseDirector {
     this.modeState = this.solve(snapshot) ? 'profile' : 'pursuit';
     this.enterAlign('boost');
     return true;
+  }
+
+  /**
+   * Any player input while cruise is engaged (design §4.3: "touching the stick
+   * ... pauses cruise"). Decompresses and hands the ship back; `engage()` is the
+   * documented resume, and resumes in pursuit mode when the solve refuses.
+   */
+  notifyPlayerInput(): void {
+    this.warpPilot.triggerDecompression();
+    if (this.active) this.finish('aborted');
   }
 
   /** Hands the ship back to the player; decompression continues until <= 100x. */
@@ -541,6 +563,8 @@ export class CruiseDirector {
       this.solution.totalCoordSec > 0
         ? this.solution.totalProperSec / this.solution.totalCoordSec
         : 1;
+    this.profileCoordSecState = this.solution.totalCoordSec;
+    this.profilePeakBetaState = this.solution.peakBeta;
     this.profileAxis.set(this.solution.aimUnit);
     this.aim.set(this.profileAxis);
     this.desiredAim.set(this.profileAxis);

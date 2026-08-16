@@ -2,9 +2,11 @@ import { h, render } from 'preact';
 
 import {
   createGameSimulationFromPersistentState,
+  compileCanonicalCatalog,
   createNewGameSimulation,
   createRespawnPersistentState,
 } from '../game/createNewGameSimulation.js';
+import { CruiseDirector } from '../game/flight/cruiseDirector.js';
 import { FlightController } from '../game/flight/flightController.js';
 import { FlightInputRouter } from '../game/flight/flightInputRouter.js';
 import { createBodyRadiiKm } from '../game/hud/bodyMarkerCatalog.js';
@@ -351,6 +353,8 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       // ADR-034 §4: a restored session runs its persisted vessel, not DEFAULT_VESSEL,
       // and the regime scaling below depends on it — so the vessel goes first.
       runtime.flightController?.setVessel(replacement.vessel);
+      runtime.cruiseDirector?.abort();
+      runtime.cruiseDirector?.setVessel(replacement.vessel);
       runtime.stateVectorWidget?.setScales(createStateVectorScales(replacement.vessel.restMassKg));
       // Seed the analog lever from the restored state, or the router would command
       // the fresh engine value (0) over it on the next frame. `snapshot.throttle`
@@ -804,6 +808,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     trajectoryPredictionStore,
     updateBurnLogRuntime,
 
+    cruiseDirector: null,
     flightController: null,
     flightInputRouter: null,
     hudInputRouter: null,
@@ -1165,10 +1170,20 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       vessel: session.simulation.vessel,
     });
     runtime.flightController = flightController;
-    runtime.flightInputRouter = new FlightInputRouter(flightController, {
+    const cruiseDirector = new CruiseDirector({
+      commands: sessionCommands,
+      snapshot: currentInputSnapshot,
+      vessel: session.simulation.vessel,
+      catalog: compileCanonicalCatalog(),
+      controller: flightController,
+    });
+    runtime.cruiseDirector = cruiseDirector;
+    const flightInputRouter = new FlightInputRouter(flightController, {
       commands: sessionCommands,
       snapshot: currentInputSnapshot,
     });
+    flightInputRouter.setCruiseDirector(cruiseDirector);
+    runtime.flightInputRouter = flightInputRouter;
     runtime.hudInputRouter = new HudInputRouter({
       cyclePreset: () => {
         hudPresetStore.cyclePreset();
