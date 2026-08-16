@@ -6,10 +6,23 @@
 - Every frame, for each visual: `scenePos = toFloat32(bodyPos_f64 − cameraPos_f64)`. The three.js camera sits at the scene origin `(0,0,0)` permanently.
 - **1 scene unit = 1 km.** Near objects get sub-millimeter-true positions; distant objects' float32 error is sub-pixel by construction.
 - Never store or accumulate positions in float32 — recompute from float64 each frame.
+- **Non-finite guard policy is split by consequence (T0129).** Ship, body, packed-geometry and
+  polyline bindings validate at bind time and again every frame, and throw `RangeError` on a
+  non-finite value: a NaN there is a physics bug and must stop the frame. *Effect* bindings
+  (`bindEffectVisual` / `bindPackedEffectVisual` — plume, RCS, in-world markers, sky panorama)
+  degrade instead: the write is skipped, the visual holds its last good position, one console
+  warning is emitted per binding per session, and `CameraRelativeSpaceScene.effectBindingTelemetry`
+  records `nonFiniteObserved`, a live `degradedBindingCount`, a monotonic `skippedBindCount` and
+  `lastDegradedLabel`. Recovery is automatic when the source becomes finite again. Policy module:
+  `src/render/effectBindingGuard.ts`.
 
 ## 2. Depth (ADR-008)
 
-Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — faster (keeps early-Z) and more precise; fall back to `logarithmicDepthBuffer: true`. Near plane 0.001 (1 m), far 1e10 km (beyond Eris). No manual depth partitioning. Both paths CI-tested for z-artifacts (Earth from 200 km and from 1 AU). Context creation policy (high-performance, software-rasterizer detection): `docs/performance-spec.md` §2.
+Prefer **`reversedDepthBuffer: true`** when `EXT_clip_control` is available — faster (keeps early-Z) and more precise; fall back to `logarithmicDepthBuffer: true`. Near plane 0.001 km (1 m), far **2.5e10 km** — Eris reaches 1.4617e10 km at aphelion, so the previous 1e10 km plane clipped it out of the view entirely (T0129). No manual depth partitioning. Both paths CI-tested for z-artifacts at three ranges: Earth from 200 km, Earth from 1 AU, and Eris from 1.429e10 km.
+
+Smallest resolvable separation, with `ε = 2⁻²⁴` as the float32 relative step or the unorm absolute quantum: reversed depth gives `ε·L·(1 − L/far)` and logarithmic gives `ε·(1+L)·ln(1+L)` (float) or `ε·(1+L)·ln(1+far)` (unorm). Reversed depth is therefore effectively far-plane-independent, and the whole cost of the 1e10 → 2.5e10 raise is `ln(2.5e10)/ln(1e10) = 4.0 %` of logarithmic resolution. Measured floors: 0.39 m / 3.4 m at LEO range, 365 km / 19,930 km at Eris range. Derivation and rejected alternatives: `docs/superpowers/specs/2026-08-16-far-plane-strategy-design.md` §1.
+
+Context creation policy (high-performance, software-rasterizer detection): `docs/performance-spec.md` §2.
 
 ## 3. Visual ladder — 3 tiers per body (by projected angular size)
 
@@ -159,8 +172,11 @@ poses:
   first-order quaternion lag, so the camera rolls with the ship. Integration is
   the exact critically damped solution over the frame, giving zero overshoot at
   any frame delta and a 2 % settle in 0.729 s (`ω = 8 rad/s`).
-- **observatory**: v1's `OrbitCameraController`, unchanged, reporting the scene
-  camera's default `+Y` up so every existing framing is bit-identical.
+- **observatory**: v1's `OrbitCameraController`, reporting the scene camera's
+  default `+Y` up so every existing framing is bit-identical. Its wheel range is
+  `[radius + max(2 m, radius·1e-6), 2e10 km]`; the outer limit frames the whole
+  catalog and sits inside the §2 far plane (T0129). The system map passes its own
+  catalog-derived maximum and is unaffected.
 
 Mode changes animate with the same primitives as a focus transfer
 (`game/cameraTransition.ts`): smootherstep on the anchor, **logarithmic** on the

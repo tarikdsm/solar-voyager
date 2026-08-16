@@ -92,7 +92,8 @@ src/
 │   ├── atmosphereScattering.ts, eclipseShadows.ts, godRaysPass.ts       # NEW (T0140/41/42)
 │   ├── proceduralSun*.ts                   # MOD  corona/prominences v2 (T0141)
 │   ├── lightingPostPipeline.ts             # LANDED pass-insertion API + exposure sink (T0127)
-│   └── spaceScene.ts                       # MOD  far-plane strategy (T0129)
+│   ├── effectBindingGuard.ts               # LANDED effect-binding degrade policy (T0129)
+│   └── spaceScene.ts                       # LANDED far plane 2.5e10 + effect bindings (T0129)
 ├── ui/                                     # MOD  presets, markers, pause, diary UI, mixer
 │   ├── hud/presets.ts, hud/WorldMarkers.tsx, hud/CruiseStrip.tsx  # NEW (T0112/17/19)
 │   └── PauseMenu.tsx, DiaryPanel.tsx, AlbumGrid.tsx                # NEW (T0112/46/47)
