@@ -25,6 +25,7 @@ function fixture(postProcessingAvailable = true) {
   };
   const relativisticVisuals = { setQualityEnabled: vi.fn() };
   const exposure = { setGovernorMode: vi.fn() };
+  const shipEffects = { applyQuality: vi.fn() };
   const controller = new RenderQualityController({
     assetLoader,
     exposure,
@@ -33,10 +34,12 @@ function fixture(postProcessingAvailable = true) {
     proceduralSun,
     renderer,
     relativisticVisuals,
+    shipEffects,
     starfield,
     visualSystem,
   });
   return {
+    shipEffects,
     assetLoader,
     controller,
     exposure,

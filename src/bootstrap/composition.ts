@@ -87,6 +87,7 @@ import {
   createPhotoRuntimeDiagnostics,
   createExposureRuntimeDiagnostics,
   createRuntimeResourceCounts,
+  createShipEffectsRuntimeDiagnostics,
   createShipRuntimeDiagnostics,
   createSystemMapRuntimeDiagnostics,
   createTutorialRuntimeDiagnostics,
@@ -1164,6 +1165,12 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     const cameraDirector = world.cameraDirector;
     cameraDirector.applyCameraSettings(session.settings.camera);
     createShipRuntimeDiagnostics(canvas, shipVisual, cameraDirector);
+    // T0122 — the effects verify their transcribed anchors and adopt the authored
+    // light materials the moment the lazily fetched model resolves.
+    shipVisual.setModelReadyObserver((modelRoot, materials) => {
+      world.shipEffects.bindModel(modelRoot, materials);
+    });
+    createShipEffectsRuntimeDiagnostics(canvas, world.shipEffects);
     const shipPositionsKm = world.positionsKm;
     const shipPositionOffset = world.shipPositionOffset;
     createCameraRuntimeDiagnostics(canvas, cameraDirector, shipPositionsKm, shipPositionOffset);
@@ -1271,6 +1278,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       proceduralSun: world.proceduralSun,
       renderer,
       relativisticVisuals,
+      shipEffects: world.shipEffects,
       starfield: world.starfield,
       visualSystem: world.visualSystem,
     });

@@ -19,6 +19,7 @@ import { CameraRelativeSpaceScene } from './spaceScene.js';
 import { SolarLighting } from './solarLighting.js';
 import { OsculatingConicOverlay } from './osculatingConicOverlay.js';
 import { ProceduralSun } from './proceduralSun.js';
+import { ShipEffects } from './shipEffects.js';
 import {
   ShipVisual,
   SHIP_ASSET_ID,
@@ -38,6 +39,8 @@ export interface EpochWorld {
   readonly spaceScene: CameraRelativeSpaceScene;
   readonly visualSystem: BodyVisualSystem;
   readonly shipVisual: ShipVisual;
+  /** Photon beam, nozzle glow, RCS puffs and the running lights (T0122). */
+  readonly shipEffects: ShipEffects;
   readonly starfield: Starfield;
   readonly lighting: SolarLighting;
   readonly proceduralSun: ProceduralSun;
@@ -322,6 +325,12 @@ export async function createEpochWorld(
     compileModel,
     lazyLoadingEnabled: false,
   });
+  const shipEffects = new ShipEffects({
+    spaceScene,
+    shipVisual,
+    positionsKm,
+    shipIndex,
+  });
 
   await visualSystem.initializeEager();
   options.onProgress?.('hero-spheres');
@@ -336,11 +345,16 @@ export async function createEpochWorld(
   spaceScene.updateCameraRelative(cameraPositionKm);
   osculatingConic.line.visible = true;
   trajectoryOverlay.prepareCompilationPass(cameraPositionKm, cameraDirector.pose.lookDirection);
+  // T0122 — the beam, the glow and the puff pool must be lit and on screen for
+  // this one render, or the first throttle input of the session pays for their
+  // shader compile. Same contract as the trajectory overlay above.
+  shipEffects.prepareCompilationPass();
   await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
   renderer.render(spaceScene.scene, spaceScene.camera);
   options.onProgress?.('flight-shaders');
   osculatingConic.line.visible = false;
   trajectoryOverlay.hide();
+  shipEffects.endCompilationPass();
   visualSystem.initializeView(
     cameraPositionKm,
     initialViewportHeightPx,
@@ -359,6 +373,7 @@ export async function createEpochWorld(
     spaceScene,
     visualSystem,
     shipVisual,
+    shipEffects,
     starfield,
     lighting,
     proceduralSun,

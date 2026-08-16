@@ -120,6 +120,7 @@ const controller = new RenderQualityController({
   proceduralSun: world.proceduralSun,
   renderer,
   relativisticVisuals,
+  shipEffects: world.shipEffects,
   starfield: world.starfield,
   visualSystem: world.visualSystem,
 });

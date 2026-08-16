@@ -186,6 +186,17 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
     // Before the camera reads its focus offset, so a ship-focused camera tracks
     // this step's position instead of the previous one.
     world.shipVisual.writeState(snapshot.shipState, snapshot.attitudeQuaternion);
+    // T0122 — engine VFX read the same snapshot, one line later, so the beam and
+    // the puffs can never lag the hull they hang off by a frame. `simDeltaSec`,
+    // not `deltaSec`: the derived rotation rate must be in simulated rad/s at
+    // every warp tier, and a paused frame must produce no rate at all.
+    world.shipEffects.writeState(
+      snapshot.attitudeQuaternion,
+      snapshot.throttle,
+      snapshot.powerDrawW,
+      snapshot.simTimeSec,
+      simDeltaSec,
+    );
     if (systemMapRuntimeDiagnostics !== null) {
       systemMapRuntimeDiagnostics.simulationTimeSec = snapshot.simTimeSec;
       systemMapRuntimeDiagnostics.targetBodyId =
@@ -265,6 +276,9 @@ export function createFrameLoop(runtime: FrameLoopRuntime): (nowMs: number) => v
         nowMs,
         snapshot.simTimeSec,
       );
+      // Before `shipVisual.update`, which is where the reflected and plume
+      // magnitudes are combined into the one point-cloud slot (T0122).
+      world.shipEffects.update(cameraPositionKm);
       world.shipVisual.update(
         cameraPositionKm,
         Math.max(1, canvas.clientHeight),

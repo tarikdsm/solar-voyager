@@ -65,7 +65,7 @@ I(θ) = P · [ f_iso/(4π) + (1 − f_iso)·(n+1)·max(0, cos θ)^n / (2π) ]   
   collimated. Without it a beam seen from the side is exactly invisible, which is
   correct for an ideal laser and useless for a game.
 - `n = 64` — the collimation exponent. Half-power half-angle
-  `arccos(0.5^(1/64)) = 0.147 rad = 8.4°`.
+  `arccos(0.5^(1/64)) = 0.1469 rad = 8.42°`.
 - Both terms integrate to their fractions of `P` over their solid angles
   (`∫ cos^n θ dΩ = 2π/(n+1)` over a hemisphere), so `∫ I dΩ = P` exactly. The
   pattern redistributes power; it never invents any.
