@@ -2580,6 +2580,23 @@
       "The ENOTEMPTY and EBUSY staging-directory races observed on Windows are fixed or explained"
     ],
     "handoff_notes": "Observed failure modes: \"Test timed out in 5000ms\" on any of the listed suites, plus\nENOTEMPTY rmdir and EBUSY unlink on assets.ingest-staging-* directories on Windows, which suggests\nthe staging cleanup races its own writes rather than merely being slow. Fixing the race may remove\nmost of the timeouts on its own; measure before reaching for a larger number.\n"
+  },
+  {
+    "id": "T0158",
+    "title": "Stop gates from rewriting committed capture records",
+    "status": "TODO",
+    "agent": "",
+    "branch": "",
+    "depends_on": [],
+    "milestone": "V2M6",
+    "spec": "docs/bench/T0112-clean-preset.png is a committed record, and two gates regenerate it in place:\nnpm run test:hud-presets and npm run test:perf-gates. Every task that runs either one leaves a\nmodified binary in the working tree, so it conflicts on every parallel branch and it silently\nchanges whenever an unrelated gate runs. Two v2 lanes hit it; one staged a regenerated capture by\naccident with git add -A and had to restore it.\nA capture that documents what the HUD looked like at one moment should not be an output of a gate\nthat asserts something else. Either the gates write to an ignored path and the record is refreshed\ndeliberately, or the record is a real golden with a real comparison — but not both.\n",
+    "acceptance": [
+      "No gate rewrites a committed file as a side effect; a clean tree stays clean after any gate run",
+      "Capture records are refreshed by an explicit command, or promoted to compared goldens with a documented tolerance",
+      "The policy is written down where an agent running gates will read it",
+      "Existing committed captures keep their history; no bulk churn"
+    ],
+    "handoff_notes": "Check for other files in the same shape before fixing only this one — anything under docs/bench that\na gate writes rather than a human commits. The heap-gate and bench JSON outputs are the obvious\nnext candidates.\n"
   }
 ];
     /* TASK_DATA_END */
