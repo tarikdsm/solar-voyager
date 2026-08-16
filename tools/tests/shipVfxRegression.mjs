@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import { createServer, preview } from 'vite';
 
 import { assertPortAvailable } from '../bench/scaffoldBenchUtils.mjs';
+import { installHighQualitySetting } from '../perf/browserSettings.mjs';
 import { disableUnrelatedTrajectoryPrediction } from './trajectoryPredictionTestIsolation.mjs';
 import { resolveHarnessPort } from '../harnessPort.mjs';
 
@@ -231,6 +232,12 @@ async function runProductionPhase(browser) {
   const context = await browser.newContext({ viewport: { width: 1_280, height: 720 } });
   const page = await context.newPage();
   const browserErrors = collectBrowserErrors(page);
+  // The governor is doing its job on a software rasterizer: auto quality drops
+  // to a rung where the puff pool is empty and the beam is quarter-tessellated.
+  // The high-quality lock is what lets this gate assert the *shipped* rung, the
+  // way the perf gate does; the governor's own ladder is covered by the fixture
+  // phase and by `perfGovernor.test.ts`.
+  await installHighQualitySetting(page);
   await disableUnrelatedTrajectoryPrediction(page);
 
   try {
@@ -269,6 +276,7 @@ async function runProductionPhase(browser) {
           programCount: canvas.solarVoyagerStartup?.programCountCurrent ?? -1,
           rcsFiring: effects.rcsFiring,
           rcsLiveCapacity: effects.rcsLiveCapacity,
+          simTimeSec: canvas.solarVoyagerSystemMap?.simulationTimeSec ?? -1,
           skippedBindCount: effects.skippedBindCount,
           throttle: effects.throttle,
         };
@@ -286,6 +294,38 @@ async function runProductionPhase(browser) {
     assert.equal(idle.rcsLiveCapacity, 16, `puff pool opened at ${String(idle.rcsLiveCapacity)}`);
 
     await page.locator('#space-canvas').click({ position: { x: 8, y: 8 } });
+    // The click is its own baseline. Focusing the canvas runs the click-to-target
+    // path (T0117) and lets the trajectory predictor publish, both of which can
+    // compile programs that have nothing to do with the drive; measuring the VFX
+    // deltas from here attributes a compile to the effect that caused it instead
+    // of to whichever interaction happened to come first.
+    await page.waitForTimeout(1_500);
+    const focused = await readEffects();
+
+    // Puffs first, then the burn, so a first-use shader compile is attributed to
+    // the effect that caused it instead of to whichever ran first.
+    await page.keyboard.down(PITCH_KEY);
+    await page.waitForFunction(
+      () =>
+        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShipEffects?.rcsFiring ===
+        true,
+      undefined,
+      { timeout: 15_000 },
+    );
+    const puffing = await readEffects();
+    await page.keyboard.up(PITCH_KEY);
+    assert.equal(puffing.rcsFiring, true, 'a manual pitch fired no puffs');
+    assert.equal(
+      puffing.programCount,
+      focused.programCount,
+      `the first puff compiled ${String(puffing.programCount - focused.programCount)} shader program(s)`,
+    );
+    const puffingDelta = puffing.drawCalls - focused.drawCalls;
+    assert.ok(
+      puffingDelta >= 0 && puffingDelta <= MAX_NEW_DRAW_CALLS,
+      `puffing moved draw calls by ${String(puffingDelta)}`,
+    );
+
     for (let press = 0; press < 12; press += 1) await page.keyboard.press(THROTTLE_KEY);
     await page.waitForFunction(
       () =>
@@ -303,48 +343,58 @@ async function runProductionPhase(browser) {
     );
     assert.equal(
       burning.programCount,
-      idle.programCount,
-      `the first burn compiled ${String(burning.programCount - idle.programCount)} shader program(s)`,
+      puffing.programCount,
+      `the first burn compiled ${String(burning.programCount - puffing.programCount)} shader program(s)`,
     );
-    const drawCallDelta = burning.drawCalls - idle.drawCalls;
+    const drawCallDelta = burning.drawCalls - focused.drawCalls;
     assert.ok(
       drawCallDelta >= 0 && drawCallDelta <= MAX_NEW_DRAW_CALLS,
       `burning moved draw calls by ${String(drawCallDelta)}, budget ${String(MAX_NEW_DRAW_CALLS)}`,
     );
 
-    await page.keyboard.down(PITCH_KEY);
-    await page.waitForFunction(
-      () =>
-        globalThis.document.querySelector('#space-canvas')?.solarVoyagerShipEffects?.rcsFiring ===
-        true,
-      undefined,
-      { timeout: 15_000 },
-    );
-    const puffing = await readEffects();
-    await page.keyboard.up(PITCH_KEY);
-    assert.equal(puffing.rcsFiring, true, 'a manual pitch fired no puffs');
-    const puffingDelta = puffing.drawCalls - idle.drawCalls;
+    // The beacon is driven by SIMULATION time, which is what makes pause freeze
+    // it (T0112). Sampling for a flash would be a lottery on a software
+    // rasterizer — a 90 ms pulse in a 1.6 s period, watched at a handful of
+    // frames per second — so the deterministic waveform is asserted in the
+    // fixture phase and this phase asserts the property that actually matters:
+    // a frozen simulation clock freezes the light.
+    const running = [await readEffects(), null];
+    await page.waitForTimeout(400);
+    running[1] = await readEffects();
     assert.ok(
-      puffingDelta <= MAX_NEW_DRAW_CALLS,
-      `burning and puffing moved draw calls by ${String(puffingDelta)}`,
+      (running[1]?.simTimeSec ?? 0) > (running[0]?.simTimeSec ?? 0),
+      'the simulation clock did not advance while running',
     );
-
-    // The beacon strobes on simulation time, so it must move while the sim runs.
-    const beaconSamples = [];
-    for (let sample = 0; sample < 24; sample += 1) {
-      beaconSamples.push(
-        await page.evaluate(
-          () =>
-            globalThis.document.querySelector('#space-canvas')?.solarVoyagerShipEffects
-              ?.beaconFactor ?? 0,
-        ),
+    for (const sample of running) {
+      assert.ok(
+        Number.isFinite(sample?.beaconFactor) &&
+          (sample?.beaconFactor ?? -1) >= 0.25 &&
+          (sample?.beaconFactor ?? -1) <= 6,
+        `beacon factor outside its published band: ${String(sample?.beaconFactor)}`,
       );
-      await page.waitForTimeout(60);
     }
-    assert.ok(
-      Math.max(...beaconSamples) > Math.min(...beaconSamples) + 0.5,
-      `the beacon never flashed: ${JSON.stringify(beaconSamples)}`,
+
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#pause-menu', { state: 'visible', timeout: 10_000 });
+    const pausedFirst = await readEffects();
+    await page.waitForTimeout(500);
+    const pausedSecond = await readEffects();
+    assert.equal(
+      pausedSecond.simTimeSec,
+      pausedFirst.simTimeSec,
+      'the simulation clock advanced while paused',
     );
+    assert.equal(
+      pausedSecond.beaconFactor,
+      pausedFirst.beaconFactor,
+      'pause did not freeze the anti-collision beacon',
+    );
+    assert.equal(
+      pausedSecond.navFactor,
+      pausedFirst.navFactor,
+      'pause did not freeze the navigation lights',
+    );
+    await page.keyboard.press('Escape');
 
     const final = await readEffects();
     assert.equal(final.nonFiniteObserved, false, 'an effect binding degraded in the shipped game');
@@ -352,7 +402,7 @@ async function runProductionPhase(browser) {
     assert.equal(final.skippedBindCount, 0, 'the guard skipped a bind in the shipped game');
 
     assert.deepEqual(browserErrors, []);
-    return { burning, drawCallDelta, idle, puffing };
+    return { burning, drawCallDelta, focused, idle, paused: pausedSecond, puffing };
   } finally {
     await context.close();
   }

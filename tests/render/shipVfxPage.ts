@@ -134,9 +134,6 @@ shipVisual.setModelReadyObserver((modelRoot, materials) => {
 shipVisual.writeState(shipStateKm, attitudeQuaternion);
 shipEffects.writeState(attitudeQuaternion, 0, 0, 0, 0);
 
-const renderTarget = new WebGLRenderTarget(VIEWPORT_SIZE, VIEWPORT_SIZE);
-const pixels = new Uint8Array(VIEWPORT_SIZE * VIEWPORT_SIZE * 4);
-
 /**
  * Integrates one body-frame rate into the live attitude.
  *
@@ -169,13 +166,29 @@ function distanceForDiameterPx(diameterPx: number): number {
   return SHIP_BOUNDING_RADIUS_KM / Math.sin(angularDiameterRad / 2);
 }
 
+const renderTarget = new WebGLRenderTarget(VIEWPORT_SIZE, VIEWPORT_SIZE);
+const pixels = new Uint8Array(VIEWPORT_SIZE * VIEWPORT_SIZE * 4);
+
 /**
  * The whole point of `prepareCompilationPass`: every plume and puff program is
  * built here, while a loading screen would be up, so the first burn compiles
  * nothing. `programCount()` is what the gate compares before and after.
+ *
+ * Warmed through **both** output paths on purpose. three's program cache key
+ * includes the output colour space, so a material rendered into a linear
+ * `WebGLRenderTarget` gets a different program from the same material rendered
+ * to the sRGB canvas. This fixture measures pixels through a render target and
+ * mirrors each frame onto the canvas, so warming only one of the two would make
+ * the gate report a "first-burn compile" that is an artifact of the harness
+ * rather than a defect in the game. The shipped renderer has one consistent
+ * path (the post pipeline), so it only ever needs one.
  */
 shipEffects.prepareCompilationPass();
 spaceScene.updateCameraRelative(cameraPositionKm);
+renderer.setRenderTarget(renderTarget);
+await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
+renderer.render(spaceScene.scene, spaceScene.camera);
+renderer.setRenderTarget(null);
 await renderer.compileAsync(spaceScene.scene, spaceScene.camera);
 renderer.render(spaceScene.scene, spaceScene.camera);
 shipEffects.endCompilationPass();

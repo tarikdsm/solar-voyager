@@ -234,6 +234,11 @@ export class PlumeVisual {
       // Both shells of the tube blend, so the column has a bright core and the
       // grazing term still lifts the silhouette (design doc §3).
       side: DoubleSide,
+      // three renders a transparent double-sided material in TWO passes (back
+      // faces, then front) to get the sorting right. Additive blending is
+      // order-independent, so that second pass buys nothing and costs a draw
+      // call — which is the difference between the beam costing one and two.
+      forceSinglePass: true,
       transparent: true,
     });
     const previousCompile = material.onBeforeCompile;

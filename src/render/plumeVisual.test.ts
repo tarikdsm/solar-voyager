@@ -139,6 +139,9 @@ describe('plume material policy', () => {
         expect(material.depthTest).toBe(true);
       }
       expect(visual.beam.material.side).toBe(DoubleSide);
+      // Without this three splits the transparent double-sided beam into a
+      // back-face and a front-face pass, doubling its draw-call cost.
+      expect(visual.beam.material.forceSinglePass).toBe(true);
       expect(visual.beam.renderOrder).toBe(2);
       expect(visual.glow.renderOrder).toBe(2);
     } finally {

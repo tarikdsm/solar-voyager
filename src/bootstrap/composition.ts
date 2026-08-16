@@ -1303,10 +1303,18 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       world.systemMap.cameraPositionKm,
       world.systemMap.cameraController.lookDirection,
     );
+    // T0122 — repeated here, not just in `createEpochWorld`. three keys its
+    // program cache on the output colour space, so a material compiled against
+    // the canvas needs a second program when the composer renders it into a
+    // half-float target. `createEpochWorld`'s pass covers the canvas variant;
+    // this one covers the post path the game actually renders through, which is
+    // exactly why the trajectory overlays above are prepared twice too.
+    world.shipEffects.prepareCompilationPass();
     postPipeline.warmUp(postProcessingEnabled);
     world.systemMap.render(renderer);
     world.trajectoryOverlay.hide();
     world.systemMap.trajectoryOverlay.hide();
+    world.shipEffects.endCompilationPass();
     stateVectorWidget.update(session.simulation.snapshot, world.spaceScene.camera);
     await stateVectorWidget.prepare(renderer);
     startupTracker.advance('post-ready');
