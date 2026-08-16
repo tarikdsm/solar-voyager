@@ -1,6 +1,6 @@
 id: T0129
 title: Extend depth coverage to the full catalog and raise camera range
-status: IN_PROGRESS
+status: REVIEW
 agent: claude
 branch: task/T0129-far-plane-strategy
 depends_on:
