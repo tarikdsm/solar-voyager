@@ -1,8 +1,8 @@
 id: T0131
 title: build_asteroid.py and build_comet.py with shape-model ingest
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0131-asteroid-comet-builders
 depends_on:
   - T0103
 milestone: V2M4

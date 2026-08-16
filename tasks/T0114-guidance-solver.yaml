@@ -1,8 +1,8 @@
 id: T0114
 title: Constant-acceleration relativistic intercept solver (physics-spec section 8)
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0114-guidance-solver
 depends_on:
   - T0104
 milestone: V2M2
