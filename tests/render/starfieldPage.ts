@@ -20,6 +20,13 @@ import {
 const VIEWPORT_SIZE = 384;
 const SAMPLE_RADIUS_PX = 4;
 const ALNILAM_INDEX = 1897;
+/** Eris's heliocentric distance at the J2026 epoch (`data/bodies.json`). */
+const ERIS_DISTANCE_KM = 1.429e10;
+const NEAR_OCCLUDER_DISTANCE_KM = 1e6;
+const NEAR_OCCLUDER_RADIUS_KM = 50_000;
+/** Same 0.05 rad apparent radius as the near control, at 14x the star sphere. */
+const FAR_OCCLUDER_RADIUS_KM =
+  (NEAR_OCCLUDER_RADIUS_KM / NEAR_OCCLUDER_DISTANCE_KM) * ERIS_DISTANCE_KM;
 const ORION_STARS = [
   { name: 'Rigel', index: 1708 },
   { name: 'Bellatrix', index: 1785 },
@@ -55,6 +62,7 @@ interface StarfieldHarness {
   render(fovDegrees: number, cameraPositionKm: ReadonlyVec3): StarfieldSnapshot;
   renderDarkControl(): StarfieldSnapshot;
   renderOcclusionControl(): StarfieldSnapshot;
+  renderFarOcclusionControl(): StarfieldSnapshot;
   renderIsolatedOrion(): readonly StarSample[];
 }
 
@@ -91,21 +99,38 @@ spaceScene.scene.add(starfield.points);
 spaceScene.camera.aspect = 1;
 
 const alnilamOffset = ALNILAM_INDEX * catalog.strideFloats;
-const occluder = new Mesh(
-  new SphereGeometry(50_000, 16, 8),
-  new MeshBasicMaterial({ color: 0x000000 }),
-);
-occluder.position
-  .set(
-    catalog.data[alnilamOffset] as number,
-    catalog.data[alnilamOffset + 1] as number,
-    catalog.data[alnilamOffset + 2] as number,
-  )
-  .multiplyScalar(1e6);
-occluder.matrixAutoUpdate = false;
-occluder.updateMatrix();
-occluder.visible = false;
-spaceScene.scene.add(occluder);
+
+function createAlnilamOccluder(radiusKm: number, distanceKm: number): Mesh {
+  const mesh = new Mesh(
+    new SphereGeometry(radiusKm, 16, 8),
+    new MeshBasicMaterial({ color: 0x000000 }),
+  );
+  mesh.position
+    .set(
+      catalog.data[alnilamOffset] as number,
+      catalog.data[alnilamOffset + 1] as number,
+      catalog.data[alnilamOffset + 2] as number,
+    )
+    .multiplyScalar(distanceKm);
+  mesh.matrixAutoUpdate = false;
+  mesh.updateMatrix();
+  mesh.visible = false;
+  spaceScene.scene.add(mesh);
+  return mesh;
+}
+
+const occluder = createAlnilamOccluder(NEAR_OCCLUDER_RADIUS_KM, NEAR_OCCLUDER_DISTANCE_KM);
+/**
+ * T0129 — the far-pinning witness.
+ *
+ * Stars are forced to the selected strategy's far plane (`z = 0` reversed,
+ * `z = w` otherwise), so their 1e9 km sphere radius must be irrelevant to depth.
+ * This occluder sits at Eris's distance, 14x beyond that sphere and past the
+ * pre-T0129 far plane entirely. If the pinning is correct it still hides the
+ * star behind it; if anyone ever gives stars their real radius, this case fails
+ * and the 1e6 km one does not.
+ */
+const farOccluder = createAlnilamOccluder(FAR_OCCLUDER_RADIUS_KM, ERIS_DISTANCE_KM);
 
 const orionCenter = new Vector3();
 for (const star of ORION_STARS) {
@@ -224,6 +249,12 @@ globalThis.__starfieldHarness = {
     occluder.visible = true;
     const snapshot = renderSnapshot(60, origin);
     occluder.visible = false;
+    return snapshot;
+  },
+  renderFarOcclusionControl() {
+    farOccluder.visible = true;
+    const snapshot = renderSnapshot(60, origin);
+    farOccluder.visible = false;
     return snapshot;
   },
   renderIsolatedOrion() {

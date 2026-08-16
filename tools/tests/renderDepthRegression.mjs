@@ -6,6 +6,14 @@ import { createServer } from 'vite';
 const HOST = '127.0.0.1';
 const PORT = 4176;
 const FIXTURE_URL = `http://${HOST}:${PORT}/solar-voyager/tests/render/depthRegression.html`;
+/**
+ * Every case the fixture must report, by name.
+ *
+ * Named rather than counted: the previous positional loop would have passed a
+ * silently reordered or renamed case. `eris-1.43e10-km` is T0129's far-body
+ * case and is the one that fails if `SPACE_FAR_KM` regresses below the catalog.
+ */
+const REQUIRED_CASES = ['earth-200-km', 'earth-1-au', 'eris-1.43e10-km'];
 
 async function capture(page, suffix = '') {
   await page.goto(`${FIXTURE_URL}${suffix}`, { waitUntil: 'networkidle' });
@@ -13,11 +21,22 @@ async function capture(page, suffix = '') {
   return page.evaluate(() => globalThis.__depthRegressionResult);
 }
 
+function findCase(result, name) {
+  const depthCase = result.cases.find((candidate) => candidate.name === name);
+  assert.ok(depthCase, `${result.mode}: case "${name}" is missing`);
+  return depthCase;
+}
+
 function assertVisibleAndStable(result) {
   assert.equal(result.glError, 0, `${result.mode} emitted a WebGL error`);
-  assert.equal(result.cases.length, 2);
+  assert.deepEqual(
+    result.cases.map((depthCase) => depthCase.name),
+    REQUIRED_CASES,
+    `${result.mode}: case list changed`,
+  );
 
-  for (const depthCase of result.cases) {
+  for (const name of REQUIRED_CASES) {
+    const depthCase = findCase(result, name);
     assert.equal(depthCase.centerFront, true, `${depthCase.name}: foreground lost depth test`);
     assert.ok(depthCase.frontPixels > 100, `${depthCase.name}: foreground is not visible`);
     assert.ok(depthCase.rearPixels > 100, `${depthCase.name}: depth witness is not visible`);
@@ -69,6 +88,20 @@ try {
   assert.ok(
     standardControl.cases.some((depthCase) => !depthCase.centerFront),
     'standard-depth control unexpectedly passed; regression is not sensitive to depth precision',
+  );
+  // The control separates the two failure modes the far case could hide behind.
+  // Its rear disc still renders at 1.43e10 km, so the far plane genuinely covers
+  // Eris under every strategy; only the depth *precision* is missing, which is
+  // exactly what the reversed and logarithmic paths above supply.
+  const controlFarCase = findCase(standardControl, 'eris-1.43e10-km');
+  assert.ok(
+    controlFarCase.rearPixels > 100,
+    'far-body case is clipped by the far plane, not merely losing depth precision',
+  );
+  assert.equal(
+    controlFarCase.centerFront,
+    false,
+    'standard depth resolved 1e6 km at 1.43e10 km; the far case is no longer a precision test',
   );
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(consoleErrors, []);

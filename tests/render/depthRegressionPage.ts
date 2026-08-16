@@ -11,13 +11,31 @@ import { CameraRelativeSpaceScene } from '../../src/render/spaceScene.js';
 
 const AU_KM = 149_597_870.7;
 const EARTH_RADIUS_KM = 6_371.0084;
+const ERIS_RADIUS_KM = 1_200;
+/**
+ * Eris's heliocentric distance at the J2026 epoch, from `data/bodies.json`
+ * (`a = 1.017e10 km`, `e = 0.4372`, `M = 3.6917 rad`). It sits 43 % beyond the
+ * pre-T0129 far plane of 1e10 km, which is why it did not render at all.
+ */
+const ERIS_DISTANCE_KM = 1.429e10;
+/**
+ * Depth witness separation for the far case.
+ *
+ * The coarsest resolvable separation at this range is ~20,400 km (logarithmic
+ * depth, unorm24 buffer, `far = 2.5e10`); see the design doc §1 for the
+ * derivation. 1e6 km is 49x that floor, so the case asserts that depth still
+ * *functions* at 1.4e10 km without pretending it is precise there.
+ */
+const FAR_WITNESS_SEPARATION_KM = 1e6;
 const CANVAS_SIZE = 256;
 
 interface DepthCaseDefinition {
-  readonly name: 'earth-200-km' | 'earth-1-au';
+  readonly name: 'earth-200-km' | 'earth-1-au' | 'eris-1.43e10-km';
   readonly cameraPositionKm: ReadonlyVec3;
   readonly frontPositionKm: ReadonlyVec3;
+  readonly frontRadiusKm: number;
   readonly rearPositionKm: ReadonlyVec3;
+  readonly rearRadiusKm: number;
   readonly fovDeg: number;
 }
 
@@ -47,15 +65,32 @@ const cases: readonly DepthCaseDefinition[] = [
     name: 'earth-200-km',
     cameraPositionKm: { x: AU_KM, y: 0, z: EARTH_RADIUS_KM + 200 },
     frontPositionKm: { x: AU_KM, y: 0, z: 0 },
+    frontRadiusKm: EARTH_RADIUS_KM * 0.75,
     rearPositionKm: { x: AU_KM, y: 0, z: -1 },
+    rearRadiusKm: EARTH_RADIUS_KM,
     fovDeg: 160,
   },
   {
     name: 'earth-1-au',
     cameraPositionKm: { x: 0, y: 0, z: 0 },
     frontPositionKm: { x: 0, y: 0, z: -AU_KM },
+    frontRadiusKm: EARTH_RADIUS_KM * 0.75,
     rearPositionKm: { x: 0, y: 0, z: -AU_KM - 500 },
+    rearRadiusKm: EARTH_RADIUS_KM,
     fovDeg: 0.01,
+  },
+  // T0129 — the far end of the catalog. Eris at its epoch distance, observed
+  // from Earth's heliocentric position so the float64 subtraction is the real
+  // one. Its 1,200 km radius subtends 8.39e-8 rad from here, which the 2e-5 deg
+  // field of view maps to ~61 px of the 256 px viewport.
+  {
+    name: 'eris-1.43e10-km',
+    cameraPositionKm: { x: AU_KM, y: 0, z: 0 },
+    frontPositionKm: { x: AU_KM, y: 0, z: -ERIS_DISTANCE_KM },
+    frontRadiusKm: ERIS_RADIUS_KM,
+    rearPositionKm: { x: AU_KM, y: 0, z: -ERIS_DISTANCE_KM - FAR_WITNESS_SEPARATION_KM },
+    rearRadiusKm: ERIS_RADIUS_KM * (4 / 3),
+    fovDeg: 2e-5,
   },
 ];
 
@@ -115,8 +150,8 @@ function classifyPixels(
 
 function renderCase(renderer: WebGLRenderer, definition: DepthCaseDefinition): DepthCaseResult {
   const spaceScene = new CameraRelativeSpaceScene();
-  const rearGeometry = new CircleGeometry(EARTH_RADIUS_KM, 96);
-  const frontGeometry = new CircleGeometry(EARTH_RADIUS_KM * 0.75, 96);
+  const rearGeometry = new CircleGeometry(definition.rearRadiusKm, 96);
+  const frontGeometry = new CircleGeometry(definition.frontRadiusKm, 96);
   const rearMaterial = new MeshBasicMaterial({ color: 0x0040ff });
   const frontMaterial = new MeshBasicMaterial({ color: 0xff2000, depthFunc: LessDepth });
   const rear = new Mesh(rearGeometry, rearMaterial);
