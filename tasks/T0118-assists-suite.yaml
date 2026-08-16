@@ -1,8 +1,8 @@
 id: T0118
 title: Bind all holds; approach-brake and manual flip assists; per-assist toggles
-status: TODO
-agent: ""
-branch: ""
+status: IN_PROGRESS
+agent: claude
+branch: task/T0118-assists-suite
 depends_on:
   - T0116
 milestone: V2M2
