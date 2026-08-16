@@ -1,3 +1,65 @@
+/*
+ * Design tokens (T0112).
+ *
+ * v1 spelled every colour, inset and z-index inline, 2,003 lines of them, and
+ * the only way to know whether two panels agreed was to read both. These are the
+ * values that were already in the file, named once. The z-layer ladder in
+ * particular replaces eight scattered magic numbers whose ordering was only
+ * discoverable by grepping for `z-index`.
+ *
+ * The eight v1 instrument panels are placed by `.hud-grid` below. The remaining
+ * absolutely-positioned surfaces (system map, burn log, perf, session settings,
+ * tutorial, warnings, impact overlay) are deliberately untouched here and migrate
+ * in T0119/T0149.
+ */
+:root {
+  /* Surfaces */
+  --sv-ink: #0f172a;
+  --sv-panel-bg: linear-gradient(145deg, rgb(2 6 23 / 82%), rgb(8 47 73 / 48%));
+  --sv-panel-bg-quiet: linear-gradient(145deg, rgb(2 6 23 / 38%), rgb(8 47 73 / 24%));
+  --sv-panel-border: 1px solid rgb(125 211 252 / 20%);
+  --sv-panel-radius: 0.7rem;
+  --sv-panel-shadow: inset 0 1px 0 rgb(224 242 254 / 8%), 0 0.75rem 2.5rem rgb(0 0 0 / 28%);
+  --sv-panel-blur: blur(0.55rem);
+
+  /* Type */
+  --sv-text: #e0f2fe;
+  --sv-text-strong: #f0f9ff;
+  --sv-text-muted: rgb(186 230 253 / 64%);
+  --sv-text-dim: rgb(203 213 225 / 82%);
+  --sv-accent: #67e8f9;
+  --sv-warn: #fde68a;
+  --sv-danger: #fca5a5;
+
+  /* Rhythm */
+  --sv-gap-xs: 0.25rem;
+  --sv-gap-sm: 0.45rem;
+  --sv-gap: 0.75rem;
+  --sv-edge: clamp(0.75rem, 2vw, 1.5rem);
+  --sv-panel-width: min(16rem, calc(100vw - 1.5rem));
+
+  /*
+   * Z-layer ladder, lowest first. The two rules that matter and were previously
+   * implicit: the pause backdrop covers every HUD surface, and the impact
+   * overlay covers the pause backdrop — a surface-contact freeze must never be
+   * hidden behind a menu whose Resume button cannot fix it.
+   */
+  --sv-z-hud: 5;
+  --sv-z-marker: 6;
+  --sv-z-menu: 7;
+  --sv-z-settings: 8;
+  --sv-z-perf: 9;
+  --sv-z-panel: 10;
+  --sv-z-toggle: 11;
+  --sv-z-alert: 12;
+  --sv-z-tutorial: 14;
+  --sv-z-hardware-warning: 15;
+  --sv-z-pause-backdrop: 30;
+  --sv-z-pause-settings: 31;
+  --sv-z-pause-card: 32;
+  --sv-z-impact: 40;
+}
+
 .app-overlay {
   position: fixed;
   inset: 0;
@@ -23,7 +85,7 @@
 }
 
 .main-menu {
-  z-index: 7;
+  z-index: var(--sv-z-menu);
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(19rem, 0.92fr);
   gap: clamp(1.25rem, 3vw, 2.5rem);
@@ -258,20 +320,97 @@
 }
 
 .hud-panel {
-  border: 1px solid rgb(125 211 252 / 20%);
-  background: linear-gradient(145deg, rgb(2 6 23 / 82%), rgb(8 47 73 / 48%));
-  box-shadow:
-    inset 0 1px 0 rgb(224 242 254 / 8%),
-    0 0.75rem 2.5rem rgb(0 0 0 / 28%);
-  color: #e0f2fe;
+  border: var(--sv-panel-border);
+  background: var(--sv-panel-bg);
+  box-shadow: var(--sv-panel-shadow);
+  color: var(--sv-text);
   contain: strict;
   font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(0.55rem);
+  backdrop-filter: var(--sv-panel-blur);
+}
+
+/*
+ * The HUD layout (T0112).
+ *
+ * Nine named areas over the viewport. Panels declare which area they live in and
+ * nothing else: no `top`, no `left`, no `translateX(-50%)` centring trick, and no
+ * per-panel media query to undo all three on a small screen. Adding a panel is
+ * one `grid-area`, and the compact layout below re-flows the whole thing by
+ * changing the template rather than by re-positioning nine elements.
+ *
+ * `pointer-events: none` on the grid and its areas keeps the canvas draggable
+ * through the gaps; interactive panels opt back in individually.
+ */
+.hud-grid {
+  position: absolute;
+  z-index: var(--sv-z-hud);
+  inset: 0;
+  display: grid;
+  grid-template-areas:
+    'top-left    top-center    top-right'
+    'left        center        right'
+    'bottom-left bottom-center bottom-right';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--sv-gap);
+  padding: var(--sv-edge);
+  pointer-events: none;
+}
+
+.hud-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sv-gap);
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.hud-area > * {
+  pointer-events: auto;
+}
+
+.hud-area-top-left {
+  grid-area: top-left;
+}
+
+.hud-area-top-right {
+  grid-area: top-right;
+  align-items: flex-end;
+}
+
+.hud-area-left {
+  grid-area: left;
+  justify-content: flex-start;
+}
+
+.hud-area-right {
+  grid-area: right;
+  align-items: flex-end;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.hud-area-bottom-left {
+  grid-area: bottom-left;
+  justify-content: flex-end;
+}
+
+.hud-area-bottom-center {
+  grid-area: bottom-center;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.hud-area-bottom-right {
+  grid-area: bottom-right;
+  align-items: flex-end;
+  justify-content: flex-end;
 }
 
 .system-map-toggle {
   position: absolute;
-  z-index: 11;
+  z-index: var(--sv-z-toggle);
   top: clamp(0.75rem, 2vw, 1.5rem);
   right: clamp(0.75rem, 2vw, 1.5rem);
   min-height: 2.7rem;
@@ -305,7 +444,7 @@
 
 .system-map-panel {
   position: absolute;
-  z-index: 10;
+  z-index: var(--sv-z-panel);
   top: 5rem;
   right: clamp(0.75rem, 2vw, 1.5rem);
   width: min(20rem, calc(100vw - 1.5rem));
@@ -405,7 +544,7 @@
 
 .burn-log-toggle {
   position: absolute;
-  z-index: 11;
+  z-index: var(--sv-z-toggle);
   bottom: clamp(1rem, 3vh, 2rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
   min-height: 2.7rem;
@@ -439,7 +578,7 @@
 
 .burn-log-panel {
   position: absolute;
-  z-index: 10;
+  z-index: var(--sv-z-panel);
   bottom: 5rem;
   left: clamp(0.75rem, 2vw, 1.5rem);
   display: grid;
@@ -609,7 +748,7 @@
 
 .perf-panel {
   position: absolute;
-  z-index: 9;
+  z-index: var(--sv-z-perf);
   top: clamp(0.75rem, 2vw, 1.5rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
   width: min(40rem, calc(100vw - 1.5rem));
@@ -743,7 +882,7 @@
 
 .session-settings {
   position: absolute;
-  z-index: 8;
+  z-index: var(--sv-z-settings);
   top: clamp(4.25rem, 7vw, 5rem);
   left: clamp(0.75rem, 2vw, 1.5rem);
   width: min(18rem, calc(100vw - 1.5rem));
@@ -989,7 +1128,7 @@
 
 .tutorial-overlay {
   position: fixed;
-  z-index: 14;
+  z-index: var(--sv-z-tutorial);
   bottom: 5rem;
   left: 1rem;
   width: min(27rem, calc(100vw - 2rem));
@@ -1006,13 +1145,10 @@
 }
 
 .orbit-readout {
-  position: absolute;
-  top: clamp(8rem, 19vh, 10rem);
-  left: clamp(0.75rem, 2vw, 1.5rem);
-  width: min(16rem, calc(100vw - 1.5rem));
+  width: var(--sv-panel-width);
   height: 15.5rem;
   padding: 0.9rem 1rem;
-  border-radius: 0.7rem;
+  border-radius: var(--sv-panel-radius);
 }
 
 .orbit-readout header {
@@ -1063,16 +1199,13 @@
 }
 
 .dual-clock {
-  position: absolute;
-  top: clamp(0.75rem, 2vw, 1.5rem);
-  right: clamp(0.75rem, 2vw, 1.5rem);
   display: grid;
-  grid-template-columns: minmax(11rem, 1fr) auto minmax(10rem, 1fr);
+  grid-template-columns: minmax(9rem, 1fr) auto minmax(8rem, 1fr);
   align-items: center;
-  width: min(36rem, calc(100vw - 1.5rem));
+  width: min(30rem, calc(100vw - 1.5rem));
   height: 3.75rem;
   padding: 0.55rem 0.8rem;
-  border-radius: 0.7rem;
+  border-radius: var(--sv-panel-radius);
 }
 
 .clock-block {
@@ -1104,15 +1237,11 @@
 }
 
 .warp-control {
-  position: absolute;
-  top: 5.5rem;
-  left: 50%;
   width: min(21rem, calc(100vw - 2rem));
   height: 7.75rem;
   padding: 0.65rem 0.75rem;
-  border-radius: 0.7rem;
+  border-radius: var(--sv-panel-radius);
   pointer-events: auto;
-  transform: translateX(-50%);
 }
 
 .warp-control header {
@@ -1176,16 +1305,12 @@
 
 .energy-panel,
 .target-panel {
-  position: absolute;
-  right: clamp(0.75rem, 2vw, 1.5rem);
-  width: min(16rem, calc(100vw - 1.5rem));
+  width: var(--sv-panel-width);
   padding: 0.85rem 1rem;
-  border-radius: 0.7rem;
+  border-radius: var(--sv-panel-radius);
 }
 
 .energy-panel {
-  bottom: 6.5rem;
-  right: calc(clamp(0.75rem, 2vw, 1.5rem) + 17rem);
   height: 17rem;
 }
 
@@ -1232,7 +1357,6 @@
 }
 
 .target-panel {
-  top: 6.75rem;
   height: 13.75rem;
   pointer-events: auto;
 }
@@ -1256,14 +1380,11 @@
 }
 
 .state-vector-panel {
-  position: absolute;
-  right: clamp(0.75rem, 2vw, 1.5rem);
-  bottom: 6.5rem;
-  width: min(16rem, calc(100vw - 1.5rem));
+  width: var(--sv-panel-width);
   height: 18rem;
   padding: 0.7rem 0.8rem 0.65rem;
-  border-radius: 0.7rem;
-  background: linear-gradient(145deg, rgb(2 6 23 / 38%), rgb(8 47 73 / 24%));
+  border-radius: var(--sv-panel-radius);
+  background: var(--sv-panel-bg-quiet);
   pointer-events: auto;
   backdrop-filter: none;
 }
@@ -1414,14 +1535,10 @@
 }
 
 .navball {
-  position: absolute;
-  bottom: 5.75rem;
-  left: 50%;
   width: 14.5rem;
   height: 16rem;
   padding: 0.65rem 0.8rem 0.55rem;
   border-radius: 0.9rem;
-  transform: translateX(-50%);
 }
 
 .navball header {
@@ -1563,18 +1680,18 @@
 }
 
 .camera-help {
-  position: absolute;
-  bottom: clamp(1rem, 3vh, 2rem);
-  left: 50%;
-  width: min(calc(100vw - 2rem), 44rem);
+  width: min(calc(100vw - 2rem), 26rem);
   padding: 0.65rem 1rem;
   border: 1px solid rgb(148 163 184 / 18%);
   border-radius: 0.75rem;
   background: rgb(2 6 23 / 62%);
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
-  text-align: center;
-  transform: translateX(-50%);
+  text-align: left;
   backdrop-filter: blur(0.5rem);
+}
+
+.camera-help[hidden] {
+  display: none;
 }
 
 .camera-help p {
@@ -1597,7 +1714,7 @@
 
 .hardware-warning {
   position: absolute;
-  z-index: 15;
+  z-index: var(--sv-z-hardware-warning);
   top: 1rem;
   left: 1rem;
   width: min(34rem, calc(100vw - 2rem));
@@ -1614,7 +1731,7 @@
 
 .trajectory-impact-warning {
   position: fixed;
-  z-index: 12;
+  z-index: var(--sv-z-alert);
   top: 4.75rem;
   left: 50%;
   width: min(28rem, calc(100vw - 2rem));
@@ -1694,6 +1811,356 @@
   background: rgb(254 243 199 / 22%);
 }
 
+/* ------------------------------------------------------------------
+   T0112 — Clean preset surfaces, world markers and the pause dialog.
+   ------------------------------------------------------------------ */
+
+/*
+ * The reticle and the marker layer are `fixed`, not grid children.
+ *
+ * They annotate the *canvas*, which is a full-viewport `100vw x 100vh` element
+ * behind the overlay, and `game/hud/markerProjection.ts` projects into exactly
+ * that frame. Anchoring them to the viewport keeps DOM pixels and projected
+ * pixels the same number in both the desktop grid and the compact scrolling
+ * layout, where a grid child would drift as the column scrolls.
+ */
+.hud-reticle {
+  position: fixed;
+  z-index: var(--sv-z-marker);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.hud-reticle[hidden] {
+  display: none;
+}
+
+.hud-reticle-ring,
+.hud-reticle-tick {
+  fill: none;
+  stroke: rgb(125 211 252 / 62%);
+  stroke-width: 1.25;
+}
+
+.hud-reticle-center {
+  fill: rgb(224 242 254 / 88%);
+}
+
+.world-marker-layer {
+  position: fixed;
+  z-index: var(--sv-z-marker);
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.world-marker-group[hidden] {
+  display: none;
+}
+
+.world-marker,
+.world-body-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  /* Only transform and opacity animate (performance-spec section 5): a marker
+     that moves must never invalidate layout. `will-change` is deliberately
+     absent — a dozen promoted layers costs more than it saves at 10 Hz. */
+  margin: -0.75rem 0 0 -0.75rem;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 120ms linear;
+}
+
+.world-marker[hidden],
+.world-body-label[hidden] {
+  display: none;
+}
+
+.world-marker svg {
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.world-marker-diamond {
+  fill: rgb(103 232 249 / 12%);
+  stroke: var(--sv-accent);
+  stroke-width: 1.5;
+}
+
+.world-marker-target[data-state='offscreen'] .world-marker-diamond,
+.world-marker-target[data-state='behind'] .world-marker-diamond {
+  fill: none;
+  stroke-dasharray: 3 2;
+}
+
+.world-marker-target[data-state='behind'] {
+  opacity: 0.6;
+}
+
+.world-marker-distance {
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: rgb(2 6 23 / 62%);
+  color: var(--sv-text-strong);
+  font-size: 0.66rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.world-marker-ring {
+  fill: none;
+  stroke: rgb(253 230 138 / 78%);
+  stroke-width: 1.4;
+}
+
+.world-marker-pip {
+  fill: rgb(253 230 138 / 78%);
+}
+
+.world-marker-cross {
+  fill: none;
+  stroke: rgb(253 230 138 / 78%);
+  stroke-width: 1.4;
+}
+
+.world-body-label {
+  gap: 0.35rem;
+  margin: -0.4rem 0 0 0.55rem;
+  color: var(--sv-text-dim);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 0.35rem rgb(2 6 23 / 92%);
+  white-space: nowrap;
+}
+
+.world-body-label-name {
+  color: var(--sv-text);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.flight-strip {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 1.1rem;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border: var(--sv-panel-border);
+  border-radius: var(--sv-panel-radius);
+  background: rgb(2 6 23 / 62%);
+  box-shadow: var(--sv-panel-shadow);
+  color: var(--sv-text);
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: var(--sv-panel-blur);
+}
+
+.flight-strip > div {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: start;
+}
+
+.flight-strip > div[hidden] {
+  display: none;
+}
+
+.flight-strip strong {
+  color: var(--sv-text-strong);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flight-strip-throttle {
+  grid-template-columns: auto minmax(6rem, 10rem) auto;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.flight-strip-bar {
+  width: 100%;
+  height: 0.4rem;
+  overflow: hidden;
+  border: 1px solid rgb(125 211 252 / 28%);
+  border-radius: 0.2rem;
+  background: rgb(15 23 42 / 88%);
+}
+
+.flight-strip-bar-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #2dd4bf, #67e8f9);
+  transform-origin: left center;
+}
+
+.cruise-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgb(2 6 23 / 48%);
+  color: var(--sv-text-dim);
+  font-size: 0.7rem;
+}
+
+.cruise-status[hidden] {
+  display: none;
+}
+
+.cruise-status strong {
+  color: var(--sv-text-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cruise-status-detail {
+  color: rgb(203 213 225 / 52%);
+  font-size: 0.62rem;
+}
+
+.flight-warning {
+  min-height: 1.1rem;
+  padding: 0.2rem 0.75rem;
+  margin: 0;
+  border-radius: 0.4rem;
+  background: rgb(69 26 3 / 72%);
+  color: var(--sv-warn);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.flight-warning[hidden],
+.flight-warning[data-empty='true'] {
+  display: none;
+}
+
+.hud-preset-indicator {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.2rem 0.55rem;
+  margin: 0;
+  border: 1px solid rgb(125 211 252 / 18%);
+  border-radius: 0.4rem;
+  background: rgb(2 6 23 / 62%);
+  color: var(--sv-text);
+  font-size: 0.68rem;
+}
+
+.hud-preset-indicator strong {
+  color: var(--sv-text-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hud-settings-hint {
+  margin: 0 0 0.45rem;
+  color: rgb(203 213 225 / 72%);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.hud-settings-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hud-settings-grid > label:last-child {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--sv-text);
+  font-size: 0.72rem;
+}
+
+/* Pause dialog. */
+.pause-menu {
+  position: fixed;
+  z-index: var(--sv-z-pause-backdrop);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(2 6 23 / 72%);
+  pointer-events: auto;
+  backdrop-filter: blur(0.35rem);
+}
+
+.pause-menu[hidden] {
+  display: none;
+}
+
+.pause-menu-card {
+  z-index: var(--sv-z-pause-card);
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid rgb(125 211 252 / 28%);
+  border-radius: 0.9rem;
+  background: linear-gradient(145deg, rgb(2 6 23 / 96%), rgb(8 47 73 / 86%));
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 55%);
+  color: var(--sv-text);
+  text-align: center;
+}
+
+.pause-menu-card h2 {
+  margin: 0.2rem 0 1rem;
+  color: var(--sv-text-strong);
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.pause-menu-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pause-menu-actions button {
+  min-height: 2.6rem;
+  padding: 0 1rem;
+  border: 1px solid rgb(125 211 252 / 32%);
+  border-radius: 0.5rem;
+  background: rgb(15 23 42 / 88%);
+  color: var(--sv-text-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.pause-menu-actions button:hover,
+.pause-menu-actions button:focus-visible {
+  border-color: #5eead4;
+  background: rgb(15 118 110 / 55%);
+}
+
+.pause-menu-actions .pause-menu-primary {
+  border-color: #5eead4;
+  background: #0f766e;
+}
+
+.pause-menu-status {
+  margin: 1rem 0 0;
+  color: var(--sv-text-dim);
+  font-size: 0.7rem;
+}
+
+/*
+ * While paused the settings panel has to sit above the backdrop, or the pause
+ * menu's Settings button would expand a panel nobody can see or click. One rule
+ * instead of a second copy of the whole settings UI inside the dialog.
+ */
+.app-overlay[data-paused='true'] .session-settings {
+  z-index: var(--sv-z-pause-settings);
+  pointer-events: auto;
+}
+
 @media (width <= 1100px), (height <= 44rem) {
   .app-overlay {
     display: flex;
@@ -1703,8 +2170,21 @@
     overflow-y: auto;
   }
 
+  /*
+   * `display: contents` twice, so the grid's areas dissolve and every panel
+   * becomes a direct flex child of `.app-overlay` again. That is what keeps the
+   * `order:` values below meaningful — they are siblings once more — and it is
+   * the whole compact re-flow, replacing what used to be nine per-panel
+   * position resets.
+   */
+  .hud-grid,
+  .hud-area {
+    display: contents;
+  }
+
   .hud-panel,
   .camera-help,
+  .flight-strip,
   .session-settings,
   .tutorial-overlay {
     position: relative;
@@ -1714,6 +2194,26 @@
     margin: 0;
     pointer-events: auto;
     transform: none;
+  }
+
+  .flight-strip {
+    grid-auto-flow: row;
+    order: 2;
+  }
+
+  .cruise-status,
+  .flight-warning,
+  .hud-preset-indicator {
+    order: 2;
+    flex: 0 0 auto;
+    align-self: stretch;
+  }
+
+  /* The canvas is behind a scrolling column here; markers would point at
+     nothing. The Engineer panels carry the same information as text. */
+  .hud-reticle,
+  .world-marker-layer {
+    display: none;
   }
 
   .system-map-toggle {
@@ -1840,6 +2340,8 @@
 
   .camera-help {
     order: 9;
+    width: 100%;
+    text-align: center;
   }
 
   .clock-block:last-child {
@@ -1895,7 +2397,11 @@
   .system-map-panel,
   .system-map-toggle,
   .burn-log-panel,
-  .burn-log-toggle {
+  .burn-log-toggle,
+  .world-marker,
+  .world-body-label,
+  .flight-strip-bar-fill,
+  .pause-menu {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
@@ -1906,7 +2412,7 @@
    T0112 owns the HUD rebuild and will re-home this alongside the other dialogs. */
 .impact-overlay {
   position: fixed;
-  z-index: 40;
+  z-index: var(--sv-z-impact);
   top: 50%;
   left: 50%;
   width: min(26rem, calc(100vw - 2rem));
