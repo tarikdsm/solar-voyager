@@ -355,9 +355,7 @@
     }
   ],
   "stability": {
-    "findings": [
-      "Benchmark p99Ms variance must be < 5.0%; measured 17.18%."
-    ],
+    "findings": ["Benchmark p99Ms variance must be < 5.0%; measured 17.18%."],
     "limitFraction": 0.05
   }
 }
