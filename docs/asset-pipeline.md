@@ -132,9 +132,37 @@ source workspace `SOURCES.md`.
 The Moon recipes pin NASA SVS's 8k LROC color TIFF and LOLA elevation TIFF.
 They prepare a 4096×2048 albedo and a filtered 2048×1024 authoring height field;
 `tools/textures/prepareMoonMaps.mjs` derives the macro normal and seeded 1k
-regolith detail pair. The raw TIFF downloads are verified but not committed.
+regolith detail pair. The raw TIFF downloads are verified but not committed;
+since ADR-039 they are retained in the verified-source cache instead of being
+re-downloaded on each run.
 
-Source textures: prefer documenting download+processing in `tools/fetch_textures.py` (re-runnable by any agent); hand-downloaded files may be committed under `assets/textures-src/<body-id>/` when no stable scripted source exists. Only ingest-produced KTX2 goes in `public/assets/textures/`.
+## Source-texture policy — fetched, verified, cached, never committed (ADR-039)
+
+Source imagery does **not** enter the repository. Every source is one manifest
+entry in `RECIPES` (`tools/fetch_textures.py`) pinning `{url, sha256, license,
+dest}`; the tool fetches it, rejects bytes that do not match the pinned SHA-256,
+and caches the verified file content-addressed under `.texture-cache/`
+(override with `--cache-root` or `SOLAR_VOYAGER_TEXTURE_CACHE`). A second run is
+a cache hit and does not touch the network.
+
+- `assets/textures-src/**` is gitignored **except `SOURCES.md`**. Attribution is
+  a licence obligation and stays committed; the pixels are regenerable.
+- Sources committed before ADR-039 (earth, jupiter, moon, neptune, pluto,
+  saturn, uranus) remain tracked and unchanged — git does not apply `.gitignore`
+  to tracked files, and no history was rewritten.
+- `.texture-cache/` is excluded from the repo-content budget in
+  `tools/checks/assetBudgets.mjs`; the budget measures what a clone costs, not
+  what a machine has fetched. The rationale is in the check's own comment and in
+  ADR-039.
+- Offline: `--offline` (or any unreachable host) prints the missing file name,
+  its `dest`, the cache slot, the URL, the licence and the `--source` command
+  that adopts a hand-downloaded copy after verifying it. Exit code 3 means
+  "source unavailable"; 2 means the run failed for another reason.
+- `kind="file"` sources (published shape models, `.tab`/`.obj`) are verified and
+  copied byte-for-byte instead of going through Sharp.
+
+Only ingest-produced KTX2 goes in `public/assets/textures/`. Adding a body:
+`agents/skills/add-celestial-body.md` carries the manifest-entry template.
 
 ## Asteroids & comets (simple by design)
 
@@ -198,6 +226,7 @@ and requires byte-identical GLB, PNG and SOURCES.md.
 
 | Item | Limit |
 |---|---|
+| Repo content (excludes the ADR-039 source cache) | < 300 MiB |
 | `public/assets/` total | < 150 MB |
 | Hero planet (Earth/Mars/Moon: glb + all textures, post-ingest) | < 20 MB |
 | Other planet | < 12 MB |

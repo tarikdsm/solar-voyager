@@ -7,14 +7,67 @@ Checklist for adding a body to the catalog. Specs: `docs/physics-spec.md` §2, `
 1. **Catalog entry** in `data/bodies.json`: id (lowercase canonical name), name, GM (km³/s², from JPL), radius km, parent body id, osculating elements at J2026 epoch `{a, e, i, Ω, ω, M₀}` (parent-relative for moons), rotation period, axial tilt, geometric albedo, SOI radius (compute `a·(m/M)^(2/5)`), `surface` descriptor stub, visual tier params (albedo color for the point sprite), asset ref + procedural seed if applicable.
 2. **Ephemerides check vectors:** run `tools/bake_ephemerides.py --only <id>` to (re)generate the body's elements AND its entries in `data/ephemerides-check.json` (state vectors at epoch, +30 d, +365 d). Never hand-type elements.
 3. **Regression test:** add the body to the rails-accuracy test (`tests/sim/rails.test.ts`); bounds per physics-spec §2 table.
-4. **Asset:** 
+4. **Source textures — fetched, never committed (ADR-039).** Add one manifest
+   entry per source to `RECIPES` in `tools/fetch_textures.py`, then fetch it.
+   See "Source manifest entries" below for the exact shape.
+5. **Asset:**
    - Planet/major moon: params into the relevant `tools/blender/build_*.py`, source texture per the asset-pipeline credit table, run headless build, check the printed manifest against budgets.
    - Asteroid/comet: `blender --background --python tools/blender/build_asteroid.py -- --id <body>` (or `build_comet.py`). Seed comes from `visual.proceduralSeed`; authored silhouette/relief params live in `tools/blender/small_body_config.py`, never in `bodies.json`. Add a `kind="file"` recipe and copy its `source_url`/`sha256` into `SHAPE_MODEL_SOURCES` to enable `--shape real`; without a pin the builder refuses that path rather than silently going procedural.
-5. **Visual ladder:** confirm tier thresholds work (sprite magnitude uses radius/albedo from the catalog automatically); add ring/coma config if applicable.
-6. **Verify:** `npm test` (rails bounds), `npm run check:budgets`, load the dev build and fly to the body (both far sprite and close model).
+6. **Visual ladder:** confirm tier thresholds work (sprite magnitude uses radius/albedo from the catalog automatically); add ring/coma config if applicable.
+7. **Verify:** `npm test` (rails bounds), `npm run check:budgets`, `npm run test:tools`, load the dev build and fly to the body (both far sprite and close model).
+
+## Source manifest entries (ADR-039)
+
+**Never commit source imagery.** `assets/textures-src/**` is gitignored except
+for `SOURCES.md`; the bytes are fetched, verified against a pinned SHA-256, and
+cached in `.texture-cache/`. Attribution is committed, pixels are not.
+
+Add one entry per source to `RECIPES` in `tools/fetch_textures.py`. The four
+fields the policy pins are `url`, `sha256`, `license` and `dest` — `dest` is
+derived as `assets/textures-src/<body_id>/<output_name>`, so you set the parts.
+
+```python
+"mercury-albedo": TextureRecipe(
+    id="mercury-albedo",          # "<body>-<role>"; the --only key
+    body_id="mercury",            # lowercase slug, matches data/bodies.json
+    role="albedo",                # albedo | normal | height | clouds | emissive | shape
+    source_url="https://.../mercury_messenger_8k.jpg",   # HTTPS, exact bytes
+    product_url="https://.../",                          # human landing page
+    license="CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+    credit="Mercury texture: <author>, CC BY 4.0.",      # verbatim into SOURCES.md
+    sha256="…64 lowercase hex…",  # also the cache key
+    width=8192, height=4096,      # must be 2:1 equirectangular
+    output_name="mercury_albedo.jpg",
+    output_format="jpeg", quality=90,
+),
+```
+
+Getting the checksum: fetch once with a deliberately wrong `sha256`; the
+mismatch error prints the measured digest. Verify the file is what you expect
+**before** pinning what it measured — the checksum records a reviewed file, it
+does not bless an arbitrary one.
+
+Optional fields: `contrast`, `grayscale`, `normalize`, `blur` (processing);
+`max_bytes` when a source exceeds the 64 MiB default;
+`kind="file"` for non-image sources such as a published shape model, which are
+copied byte-for-byte instead of going through Sharp.
+
+```powershell
+python -X utf8 tools/fetch_textures.py --only mercury-albedo   # fetch + verify + cache
+python -X utf8 tools/fetch_textures.py --print-manifest        # inspect the pinned set
+python -X utf8 tools/fetch_textures.py --only mercury-albedo --offline   # prove the cache works
+```
+
+A second run is a cache hit and does not touch the network. On a machine that
+cannot reach the host, the error names the missing file, where it belongs, the
+URL and the `--source` command that adopts a hand-downloaded copy after
+verifying it. Set `SOLAR_VOYAGER_TEXTURE_CACHE` to share one cache between
+checkouts or worktrees.
+>>>>>>> origin/main
 
 ## Gotchas
 
 - Moons' elements are PARENT-relative; heliocentric elements for a moon are a bug the rails test will catch.
 - Hyperbolic/near-parabolic comets: make sure e > 1 uses the hyperbolic Kepler branch.
 - Keep `bodies.json` ordered: Sun, planets in order, then moons grouped by parent, then dwarfs, asteroids, comets.
+- `SOURCES.md` is generated by the fetch tool and **must** be committed — it is the licence record. If `git status` shows a new body's `.jpg`/`.png` as untracked-but-not-ignored, the gitignore policy is not doing its job; fix that rather than committing the file.
