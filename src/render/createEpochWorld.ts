@@ -148,6 +148,7 @@ export async function createEpochWorld(
       id: body.id,
       category: runtimeCategory(body.kind),
       axialTiltRad: body.axialTiltRad,
+      siderealRotationPeriodSec: body.siderealRotationPeriodSec,
       meanRadiusKm: body.meanRadiusKm,
       muKm3S2: body.muKm3S2,
       polarRadiusRatio: body.polarRadiusRatio,
