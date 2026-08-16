@@ -9,7 +9,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
 /**
  * The frozen browser-diagnostic contract, locked in the fast lane.
  *
- * Nine `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
+ * Eleven `Object.defineProperty(canvas, 'solarVoyager*')` objects carry every
  * observation roughly 25 Playwright gates make about the running game. They are
  * read from `page.evaluate` callbacks by property name, so TypeScript never sees
  * those reads and a dropped or renamed field surfaces — if at all — as a failure
@@ -18,7 +18,7 @@ import { StartupTracker } from '../../src/game/startupTracker.js';
  * is the only one that pins a whole shape (`RuntimeResourceCounts`, twice, with
  * `deepEqual`).
  *
- * This test is the whole-shape gate for all nine, and it is deliberately
+ * This test is the whole-shape gate for all eleven, and it is deliberately
  * location-independent: it scans `src/` rather than naming the file that happens
  * to own the contract today, so moving the definitions (T0113 moves them out of
  * `main.ts`) does not require editing it. Extend it when a diagnostic gains a
@@ -40,6 +40,7 @@ const DIAGNOSTIC_PROPERTIES = [
   'solarVoyagerPhoto',
   'solarVoyagerRuntimeResources',
   'solarVoyagerShip',
+  'solarVoyagerShipEffects',
   'solarVoyagerStartup',
   'solarVoyagerSystemMap',
   'solarVoyagerTutorial',
@@ -99,8 +100,32 @@ const EXPECTED_MEMBERS: Readonly<Record<string, Readonly<Record<string, string>>
     modelOpacity: 'readonly number',
     noseAlignment: 'readonly number',
     noseNodeAlignment: 'readonly number',
+    pointMagnitude: 'readonly number',
     pointOpacity: 'readonly number',
     resolved: 'readonly boolean',
+  },
+  // canvas.solarVoyagerShipEffects
+  ShipEffectsRuntimeDiagnostics: {
+    anchorErrorM: 'readonly number',
+    anchorsVerified: 'readonly boolean',
+    beaconFactor: 'readonly number',
+    beamIntensity: 'readonly number',
+    beamLengthM: 'readonly number',
+    beamSegments: 'readonly number',
+    burning: 'readonly boolean',
+    cosExhaustAngle: 'readonly number',
+    degradedBindingCount: 'readonly number',
+    degradedRateSteps: 'readonly number',
+    lightCount: 'readonly number',
+    modelBound: 'readonly boolean',
+    navFactor: 'readonly number',
+    nonFiniteObserved: 'readonly boolean',
+    plumeMagnitude: 'readonly number',
+    rcsFiring: 'readonly boolean',
+    rcsLiveCapacity: 'readonly number',
+    rcsLivePuffCount: 'readonly number',
+    skippedBindCount: 'readonly number',
+    throttle: 'readonly number',
   },
   // canvas.solarVoyagerAudio
   AudioRuntimeDiagnostics: {
@@ -371,7 +396,7 @@ beforeAll(async () => {
 }, 30_000);
 
 describe('canvas diagnostic definition sites', () => {
-  test('src defines exactly the nine contract properties, once each', () => {
+  test('src defines exactly the eleven contract properties, once each', () => {
     const sites = collectDefinitionSites(sources);
     const properties = sites
       .map((site) => site.property)

@@ -6,12 +6,13 @@ import type { TutorialController } from '../game/tutorialController.js';
 import type { BodyModelLoadState } from '../render/bodyVisualSystem.js';
 import type { EpochWorld } from '../render/createEpochWorld.js';
 import type { ExposureController } from '../render/exposureController.js';
+import type { ShipEffects } from '../render/shipEffects.js';
 import { SHIP_ASSET_ID, type ShipVisual } from '../render/shipVisual.js';
 import type { BurnLogEntry } from '../sim/ship/ledger.js';
 import type { AudioSystem } from '../game/audio/audioSystem.js';
 
 /**
- * The frozen browser-diagnostic contract: ten `canvas.solarVoyager*` objects
+ * The frozen browser-diagnostic contract: eleven `canvas.solarVoyager*` objects
  * that roughly 25 Playwright gates read by property name.
  *
  * Every definition site is a literal
@@ -51,9 +52,40 @@ export interface ShipRuntimeDiagnostics {
   readonly diameterPx: number;
   readonly pointOpacity: number;
   readonly modelOpacity: number;
+  /** Reflected + plume magnitude actually written to the point cloud (T0122). */
+  readonly pointMagnitude: number;
   readonly noseAlignment: number;
   readonly noseNodeAlignment: number;
   readonly focused: boolean;
+}
+
+/**
+ * Ship engine VFX (T0122), so a browser gate can prove the plume, the puffs and
+ * the blink from outside the process — and so T0129's effect-binding telemetry
+ * finally has a producer to publish it (`nonFiniteObserved`,
+ * `degradedBindingCount`, `skippedBindCount`).
+ */
+export interface ShipEffectsRuntimeDiagnostics {
+  readonly beamLengthM: number;
+  readonly beamIntensity: number;
+  readonly beamSegments: number;
+  readonly burning: boolean;
+  readonly throttle: number;
+  readonly cosExhaustAngle: number;
+  readonly plumeMagnitude: number;
+  readonly rcsFiring: boolean;
+  readonly rcsLivePuffCount: number;
+  readonly rcsLiveCapacity: number;
+  readonly degradedRateSteps: number;
+  readonly lightCount: number;
+  readonly beaconFactor: number;
+  readonly navFactor: number;
+  readonly modelBound: boolean;
+  readonly anchorErrorM: number;
+  readonly anchorsVerified: boolean;
+  readonly nonFiniteObserved: boolean;
+  readonly degradedBindingCount: number;
+  readonly skippedBindCount: number;
 }
 
 export interface CameraRuntimeDiagnostics {
@@ -333,6 +365,9 @@ export function createShipRuntimeDiagnostics(
         get modelOpacity() {
           return shipVisual.modelOpacity;
         },
+        get pointMagnitude() {
+          return shipVisual.pointMagnitude;
+        },
         get noseAlignment() {
           return shipVisual.noseAlignment;
         },
@@ -347,6 +382,81 @@ export function createShipRuntimeDiagnostics(
     ),
   ) as ShipRuntimeDiagnostics;
   Object.defineProperty(canvas, 'solarVoyagerShip', { value: diagnostics });
+  return diagnostics;
+}
+
+export function createShipEffectsRuntimeDiagnostics(
+  canvas: HTMLCanvasElement,
+  shipEffects: ShipEffects,
+): ShipEffectsRuntimeDiagnostics {
+  const diagnostics = Object.freeze(
+    Object.setPrototypeOf(
+      {
+        get beamLengthM() {
+          return shipEffects.beamLengthM;
+        },
+        get beamIntensity() {
+          return shipEffects.beamIntensity;
+        },
+        get beamSegments() {
+          return shipEffects.beamSegments;
+        },
+        get burning() {
+          return shipEffects.burning;
+        },
+        get throttle() {
+          return shipEffects.throttle;
+        },
+        get cosExhaustAngle() {
+          return shipEffects.cosExhaustAngle;
+        },
+        get plumeMagnitude() {
+          return shipEffects.plumeMagnitude;
+        },
+        get rcsFiring() {
+          return shipEffects.rcsFiring;
+        },
+        get rcsLivePuffCount() {
+          return shipEffects.rcsLivePuffCount;
+        },
+        get rcsLiveCapacity() {
+          return shipEffects.rcsLiveCapacity;
+        },
+        get degradedRateSteps() {
+          return shipEffects.degradedRateSteps;
+        },
+        get lightCount() {
+          return shipEffects.lightCount;
+        },
+        get beaconFactor() {
+          return shipEffects.beaconFactor;
+        },
+        get navFactor() {
+          return shipEffects.navFactor;
+        },
+        get modelBound() {
+          return shipEffects.modelBound;
+        },
+        get anchorErrorM() {
+          return shipEffects.anchorErrorM;
+        },
+        get anchorsVerified() {
+          return shipEffects.anchorsVerified;
+        },
+        get nonFiniteObserved() {
+          return shipEffects.nonFiniteObserved;
+        },
+        get degradedBindingCount() {
+          return shipEffects.degradedBindingCount;
+        },
+        get skippedBindCount() {
+          return shipEffects.skippedBindCount;
+        },
+      },
+      null,
+    ),
+  ) as ShipEffectsRuntimeDiagnostics;
+  Object.defineProperty(canvas, 'solarVoyagerShipEffects', { value: diagnostics });
   return diagnostics;
 }
 

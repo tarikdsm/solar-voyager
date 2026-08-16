@@ -87,6 +87,7 @@ import {
   createPhotoRuntimeDiagnostics,
   createExposureRuntimeDiagnostics,
   createRuntimeResourceCounts,
+  createShipEffectsRuntimeDiagnostics,
   createShipRuntimeDiagnostics,
   createSystemMapRuntimeDiagnostics,
   createTutorialRuntimeDiagnostics,
@@ -1164,6 +1165,12 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
     const cameraDirector = world.cameraDirector;
     cameraDirector.applyCameraSettings(session.settings.camera);
     createShipRuntimeDiagnostics(canvas, shipVisual, cameraDirector);
+    // T0122 — the effects verify their transcribed anchors and adopt the authored
+    // light materials the moment the lazily fetched model resolves.
+    shipVisual.setModelReadyObserver((modelRoot, materials) => {
+      world.shipEffects.bindModel(modelRoot, materials);
+    });
+    createShipEffectsRuntimeDiagnostics(canvas, world.shipEffects);
     const shipPositionsKm = world.positionsKm;
     const shipPositionOffset = world.shipPositionOffset;
     createCameraRuntimeDiagnostics(canvas, cameraDirector, shipPositionsKm, shipPositionOffset);
@@ -1271,6 +1278,7 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       proceduralSun: world.proceduralSun,
       renderer,
       relativisticVisuals,
+      shipEffects: world.shipEffects,
       starfield: world.starfield,
       visualSystem: world.visualSystem,
     });
@@ -1295,10 +1303,18 @@ export async function startApplication(shell: BootstrapShell): Promise<void> {
       world.systemMap.cameraPositionKm,
       world.systemMap.cameraController.lookDirection,
     );
+    // T0122 — repeated here, not just in `createEpochWorld`. three keys its
+    // program cache on the output colour space, so a material compiled against
+    // the canvas needs a second program when the composer renders it into a
+    // half-float target. `createEpochWorld`'s pass covers the canvas variant;
+    // this one covers the post path the game actually renders through, which is
+    // exactly why the trajectory overlays above are prepared twice too.
+    world.shipEffects.prepareCompilationPass();
     postPipeline.warmUp(postProcessingEnabled);
     world.systemMap.render(renderer);
     world.trajectoryOverlay.hide();
     world.systemMap.trajectoryOverlay.hide();
+    world.shipEffects.endCompilationPass();
     stateVectorWidget.update(session.simulation.snapshot, world.spaceScene.camera);
     await stateVectorWidget.prepare(renderer);
     startupTracker.advance('post-ready');

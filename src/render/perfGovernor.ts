@@ -27,7 +27,24 @@ export interface RenderQualityProfile {
    */
   readonly exposureMode: ExposureMode;
   readonly modelThresholdScale: number;
+  /**
+   * Radial segments of the photon beam (T0122).
+   *
+   * Derived from `tier` for the same reason `ringParticleCount` is: the ladder
+   * cannot drift out of step with the rung it belongs to, and the fifteen
+   * `profile(...)` call sites stay untouched. Values must stay on
+   * `PLUME_BEAM_SEGMENT_LADDER`; the beam snaps down to the next coarser
+   * tessellation rather than asking for geometry that was never built.
+   */
+  readonly plumeBeamSegments: number;
   readonly proceduralQuality: ProceduralSunQuality;
+  /**
+   * Bells the RCS pool may light at once (T0122); the pool itself is always 16.
+   *
+   * The lowest tier drops puffs entirely — at that point the device is already
+   * dropping frames and a cosmetic sprite is the cheapest thing to lose.
+   */
+  readonly rcsPuffCap: number;
   readonly renderScale: number;
   readonly ringParticleCount: number;
   readonly rung: number;
@@ -57,7 +74,9 @@ function profile(
     downAction,
     exposureMode: (tier <= 1 ? 'fixed' : 'auto') as ExposureMode,
     modelThresholdScale,
+    plumeBeamSegments: tier >= 5 ? 24 : tier >= 2 ? 12 : 6,
     proceduralQuality,
+    rcsPuffCap: tier >= 3 ? 16 : tier === 2 ? 8 : 0,
     renderScale,
     ringParticleCount,
     rung,

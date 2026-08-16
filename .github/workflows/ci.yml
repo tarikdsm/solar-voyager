@@ -124,6 +124,10 @@ jobs:
         timeout-minutes: 8
         run: npm run test:ship-visual
 
+      - name: Ship VFX regression (plume, RCS puffs, running lights)
+        timeout-minutes: 10
+        run: npm run test:ship-vfx
+
       - name: Cruise director regression (unattended LEO->Jupiter + abort fuzz)
         timeout-minutes: 25
         run: npm run test:cruise

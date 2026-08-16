@@ -41,6 +41,7 @@
     "test:hud-presets": "node tools/tests/hudPresetsRegression.mjs",
     "test:click-to-target": "node tools/tests/clickToTargetRegression.mjs",
     "test:ship-visual": "node tools/tests/shipVisualRegression.mjs",
+    "test:ship-vfx": "node tools/tests/shipVfxRegression.mjs",
     "test:startup": "node tools/tests/startupRegression.mjs",
     "test:cruise": "node tools/tests/cruiseDirectorRegression.mjs",
     "test:smoke": "node tools/tests/applicationSmoke.mjs",

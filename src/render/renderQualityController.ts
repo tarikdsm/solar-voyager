@@ -41,6 +41,11 @@ export interface QualityExposurePort {
   setGovernorMode(mode: ExposureMode): void;
 }
 
+/** T0122 — beam tessellation and RCS puff cap; the profile carries both. */
+export interface QualityShipEffectsPort {
+  applyQuality(profile: RenderQualityProfile): void;
+}
+
 export interface RenderQualityControllerOptions {
   readonly assetLoader: QualityAssetLoaderPort;
   readonly exposure: QualityExposurePort;
@@ -49,6 +54,7 @@ export interface RenderQualityControllerOptions {
   readonly proceduralSun: QualityProceduralPort;
   readonly renderer: WebGLRenderer;
   readonly relativisticVisuals: QualityRelativisticVisualPort;
+  readonly shipEffects: QualityShipEffectsPort;
   readonly starfield: QualityStarfieldPort;
   readonly visualSystem: QualityVisualSystemPort;
 }
@@ -62,6 +68,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
   private readonly postProcessingAvailable: boolean;
   private readonly proceduralSun: QualityProceduralPort;
   private readonly relativisticVisuals: QualityRelativisticVisualPort;
+  private readonly shipEffects: QualityShipEffectsPort;
   private readonly starfield: QualityStarfieldPort;
   private readonly visualSystem: QualityVisualSystemPort;
   private appliedRung = -1;
@@ -73,6 +80,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.postProcessingAvailable = options.postProcessingAvailable;
     this.proceduralSun = options.proceduralSun;
     this.relativisticVisuals = options.relativisticVisuals;
+    this.shipEffects = options.shipEffects;
     this.starfield = options.starfield;
     this.visualSystem = options.visualSystem;
     this.basePixelRatio = options.renderer.getPixelRatio();
@@ -93,6 +101,7 @@ export class RenderQualityController implements RenderQualityApplicationPort {
     this.visualSystem.setProceduralQuality(profile.proceduralQuality);
     this.visualSystem.setRingParticleCount(profile.ringParticleCount);
     this.relativisticVisuals.setQualityEnabled(this.postProcessingAvailable && profile.tier >= 3);
+    this.shipEffects.applyQuality(profile);
     this.exposure.setGovernorMode(profile.exposureMode);
     this.appliedRung = profile.rung;
   }

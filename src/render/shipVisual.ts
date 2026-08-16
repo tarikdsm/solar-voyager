@@ -14,6 +14,7 @@ import { STATE_RX, STATE_RY, STATE_RZ } from '../sim/ship/relativity.js';
 import type { LoadedBodyModel } from './bodyAssetLoader.js';
 import type { BodyPointCloud } from './bodyPointCloud.js';
 import type { BodyModelLoadState } from './bodyVisualSystem.js';
+import { addMagnitudes } from './plumeRadiance.js';
 import { AMBIENT_LIGHT_INTENSITY } from './solarLighting.js';
 import type { CameraRelativeSpaceScene } from './spaceScene.js';
 import {
@@ -82,6 +83,15 @@ export interface ShipVisualAssetLoader {
 }
 
 export type ShipModelCompiler = (root: Object3D) => Promise<void>;
+
+/**
+ * Notified once, when the lazily fetched model is bound and ready.
+ *
+ * T0122's effects are precompiled long before the asset arrives, so they need a
+ * moment to verify their transcribed anchors against the real nodes and to adopt
+ * the authored light materials.
+ */
+export type ShipModelReadyObserver = (root: Object3D, materials: readonly Material[]) => void;
 
 export interface ShipVisualOptions {
   readonly spaceScene: CameraRelativeSpaceScene;
@@ -181,6 +191,9 @@ export class ShipVisual {
   private fadeStartMs = 0;
   private fadePointStart = 1;
   private fadeModelStart = 0;
+  private plumeMagnitude = Number.POSITIVE_INFINITY;
+  private currentPointMagnitude = Number.POSITIVE_INFINITY;
+  private modelReadyObserver: ShipModelReadyObserver | null = null;
 
   constructor(options: ShipVisualOptions) {
     const { positionsKm, shipIndex } = options;
@@ -286,7 +299,7 @@ export class ShipVisual {
     if (displayResolved !== this.displayResolved) this.beginFade(displayResolved, nowMs);
     this.advanceFade(nowMs);
 
-    const magnitude = apparentMagnitude(
+    const reflectedMagnitude = apparentMagnitude(
       this.shipIndex,
       this.sunIndex,
       SHIP_BOUNDING_RADIUS_KM,
@@ -294,6 +307,12 @@ export class ShipVisual {
       this.positionsKm,
       cameraPositionKm,
     );
+    // T0122 — the artificial star. A burning photon drive radiates `P = m·α·c`,
+    // which is 16 magnitudes brighter than the reflected hull at 1 AU, so the
+    // plume is added into this same slot in *flux* (rendering-spec §3.4) rather
+    // than through a second sprite with its own brightness ladder.
+    const magnitude = addMagnitudes(reflectedMagnitude, this.plumeMagnitude);
+    this.currentPointMagnitude = magnitude;
     this.pointCloud.writeAppearance(
       this.shipIndex,
       diameterPx,
@@ -307,6 +326,47 @@ export class ShipVisual {
   /** Allows the model fetch once the space phase owns the frame loop. */
   enableLazyLoading(): void {
     this.lazyLoadingEnabled = true;
+  }
+
+  /**
+   * Registers the one-shot model-ready hook, firing immediately if it is late.
+   *
+   * Setup-time only: the observer is a closure and the frame path never touches
+   * it (`docs/performance-spec.md` §5).
+   */
+  setModelReadyObserver(observer: ShipModelReadyObserver): void {
+    this.modelReadyObserver = observer;
+    const root = this.modelRoot;
+    const materials = this.modelMaterials;
+    if (this.modelLoadState === LOAD_READY && root !== null && materials !== null) {
+      observer(root, materials);
+    }
+  }
+
+  /**
+   * Adds one frame's plume flux to the point sprite (T0122).
+   *
+   * `Number.POSITIVE_INFINITY` — the default and the coasting value — is zero
+   * flux, so a ship with no plume system wired renders exactly as it did before.
+   * `ShipEffects` writes this immediately before {@link update}.
+   */
+  setPlumeMagnitude(magnitude: number): void {
+    this.plumeMagnitude = Number.isNaN(magnitude) ? Number.POSITIVE_INFINITY : magnitude;
+  }
+
+  /**
+   * Copies the composed model-to-world quaternion out, without allocating.
+   *
+   * The VFX root has to carry exactly the ship's rendered orientation. Handing
+   * out the number rather than re-deriving `q_attitude ⊗ q_modelToBody` in a
+   * second module is what keeps the two from drifting apart.
+   */
+  writeRenderQuaternionInto(target: Float64Array): void {
+    if (target.length < 4) throw new RangeError('Quaternion target must hold four components.');
+    target[0] = this.renderQuaternion[0] as number;
+    target[1] = this.renderQuaternion[1] as number;
+    target[2] = this.renderQuaternion[2] as number;
+    target[3] = this.renderQuaternion[3] as number;
   }
 
   get loadState(): BodyModelLoadState {
@@ -327,6 +387,11 @@ export class ShipVisual {
 
   get modelOpacity(): number {
     return this.currentModelOpacity;
+  }
+
+  /** Combined reflected + plume magnitude last written to the point cloud. */
+  get pointMagnitude(): number {
+    return this.currentPointMagnitude;
   }
 
   get root(): Object3D | null {
@@ -458,6 +523,7 @@ export class ShipVisual {
       this.baseTransparencies = baseTransparencies;
       this.baseForceSinglePasses = baseForceSinglePasses;
       this.modelLoadState = LOAD_READY;
+      this.modelReadyObserver?.(model.root, model.materials);
     } catch {
       if (bound) {
         this.spaceScene.unbindVisual(model.root);
